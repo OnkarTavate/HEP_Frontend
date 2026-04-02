@@ -105,9 +105,22 @@ const LoginPage = () => {
       return;
     }
 
-    // Temporary logic since we don't have AuthContext yet
     if (formData.username && formData.password) {
-      console.log("Login successful!");
+      // 1. Determine the role based on the username for the demo
+      let userRole = "Applicant";
+      if (formData.username.includes("admin")) userRole = "Admin";
+      if (formData.username.includes("pass")) userRole = "Pass Officer";
+      if (formData.username.includes("traffic")) userRole = "Traffic Officer";
+
+      // 2. Save the user to localStorage so the Dashboard lets us in
+      const userProfile = {
+        username: formData.username,
+        role: userRole,
+      };
+      localStorage.setItem("user", JSON.stringify(userProfile));
+
+      // 3. Navigate to the dashboard
+      console.log("Login successful! Saved to localStorage.");
       router.push("/dashboard");
     } else {
       setError("Please enter valid credentials");

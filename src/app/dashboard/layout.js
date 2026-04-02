@@ -60,7 +60,7 @@ const getNavigationItems = (role) => {
       ...baseItems,
       {
         name: "Traffic Approval",
-        href: "/dashboard/traffic-approval",
+        href: "/dashboard/approval_admin",
         icon: Truck,
       },
       { name: "Gate Log", href: "/dashboard/gate-log", icon: FileText },
@@ -123,36 +123,25 @@ export default function DashboardLayout({ children }) {
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-white">
-      {/* Logo */}
-      <div className="p-6 border-b border-slate-100">
+      {/* Logo Section */}
+      <div className="p-6 border-b border-orange-100">
         <Link href="/dashboard" className="flex items-center gap-3 group">
-          <div className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-amber-500 shadow-lg shadow-primary/25 group-hover:shadow-primary/40 transition-shadow">
+          {/* Changed to use gradient-orange class from your CSS */}
+          <div className="relative flex items-center justify-center w-11 h-11 rounded-xl gradient-orange shadow-lg shadow-orange-600/20">
             <Ship className="h-6 w-6 text-white" />
           </div>
           <div>
             <h1 className="font-bold text-slate-800 text-lg leading-tight">
               Port Gate
             </h1>
-            <p className="text-xs text-primary font-medium">
+            <p className="text-xs text-orange-600 font-medium">
               Automation System
             </p>
           </div>
         </Link>
       </div>
 
-      {/* Search */}
-      <div className="px-4 pt-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search..."
-            className="w-full h-10 pl-10 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all"
-          />
-        </div>
-      </div>
-
-      {/* Navigation */}
+      {/* Navigation - Update Active State */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         <p className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
           Menu
@@ -163,24 +152,22 @@ export default function DashboardLayout({ children }) {
             <Link
               key={item.name}
               href={item.href}
-              onClick={() => setIsMobileMenuOpen(false)}
               className={cn(
                 "group relative flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
                 isActive
-                  ? "bg-gradient-to-r from-primary to-amber-500 text-white shadow-lg shadow-primary/25"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                  ? "gradient-orange text-white shadow-lg shadow-orange-600/20" // Use our saffron gradient
+                  : "text-slate-600 hover:text-orange-600 hover:bg-orange-50"
               )}
             >
               <item.icon
                 className={cn(
-                  "h-5 w-5 transition-transform group-hover:scale-110",
+                  "h-5 w-5",
                   isActive
                     ? "text-white"
-                    : "text-slate-400 group-hover:text-primary"
+                    : "text-slate-400 group-hover:text-orange-600"
                 )}
               />
               <span className="flex-1">{item.name}</span>
-              {isActive && <ChevronRight className="h-4 w-4 text-white/70" />}
             </Link>
           );
         })}
