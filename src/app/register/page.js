@@ -14,6 +14,7 @@ import {
   MapPin,
   Contact2,
   FileText,
+  Loader2, // Added a loader icon
 } from "lucide-react";
 
 // Map the identification fields cleanly to match the backend schema exactly
@@ -44,6 +45,7 @@ const identificationTypes = [
 export default function RegisterPage() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // NEW: Prevents double-clicks
   const [referenceNo, setReferenceNo] = useState("");
   const [entityFileName, setEntityFileName] = useState("");
 
@@ -65,7 +67,7 @@ export default function RegisterPage() {
   // Fetch User Types and Captcha from API
   const fetchInitialData = async () => {
     try {
-      const url = "http://localhost:5001/api/user-types/getUserTypes";
+      const url = `${process.env.NEXT_PUBLIC_AGENT_API}/user-types/getUserTypes`;
       const response = await axios.get(url, { withCredentials: true });
       const data = response.data;
 
@@ -110,11 +112,14 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Prevent double submissions
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
     const formData = new FormData();
     const formElements = e.target.elements;
 
     // FIND THE ACTUAL NAME FOR THE SELECTED USER TYPE
-    // The DB expects the string (e.g., "Steamer Agent"), not the ID integer.
     const selectedTypeObj = userTypes.find(
       (type) => type.id.toString() === selectedUserTypeId.toString(),
     );
@@ -123,44 +128,44 @@ export default function RegisterPage() {
       : selectedUserTypeId;
 
     // 1. Append Text Fields FIRST
-    formData.append("userTypeName", userTypeName);
-    formData.append("userTypeId", selectedUserTypeId);
-    formData.append("mobileNo", formElements.mobileNo.value);
-    formData.append("entityName", formElements.entityName.value);
-    formData.append("email", formElements.email.value);
+    formData.append("userTypeName", userTypeName || "");
+    formData.append("userTypeId", selectedUserTypeId || "");
+    formData.append("mobileNo", formElements.mobileNo.value || "");
+    formData.append("entityName", formElements.entityName.value || "");
+    formData.append("email", formElements.email.value || "");
 
-    formData.append("addressLine", formElements.addressLine.value);
-    formData.append("city", formElements.city.value);
-    formData.append("state", formElements.state.value);
-    formData.append("pincode", formElements.pincode.value);
-    formData.append("country", formElements.country.value);
+    formData.append("addressLine", formElements.addressLine.value || "");
+    formData.append("city", formElements.city.value || "");
+    formData.append("state", formElements.state.value || "");
+    formData.append("pincode", formElements.pincode.value || "");
+    formData.append("country", formElements.country.value || "");
 
-    formData.append("gstinNumber", formElements.gstinNumber.value);
-    formData.append("panNumber", formElements.panNumber.value);
+    formData.append("gstinNumber", formElements.gstinNumber.value || "");
+    formData.append("panNumber", formElements.panNumber.value || "");
     formData.append("tanNumber", formElements.tanNumber.value || "");
 
     formData.append("remark", formElements.remark?.value || "");
 
-    formData.append("title", formElements.title.value);
-    formData.append("firstName", formElements.firstName.value);
-    formData.append("lastName", formElements.lastName.value);
-    formData.append("contactMobile", formElements.contactMobile.value);
-    formData.append("contactEmail", formElements.contactEmail.value);
+    formData.append("title", formElements.title.value || "");
+    formData.append("firstName", formElements.firstName.value || "");
+    formData.append("lastName", formElements.lastName.value || "");
+    formData.append("contactMobile", formElements.contactMobile.value || "");
+    formData.append("contactEmail", formElements.contactEmail.value || "");
 
     formData.append(
       "termsAccepted",
       formElements.termsAccepted.checked ? "true" : "false",
     );
 
-    // Append the newly configured Captcha fields
-    formData.append("captchaValue", captchaInput);
-    formData.append("captchaToken", captchaToken);
+    // Captcha validation fields
+    formData.append("captchaValue", captchaInput || "");
+    formData.append("captchaToken", captchaToken || "");
 
-    // 2. Append File Fields
-    const entityFile = document.getElementById("entityFileInput").files[0];
-    const gstFile = document.getElementById("gstFileInput").files[0];
-    const panFile = document.getElementById("panFileInput").files[0];
-    const tanFile = document.getElementById("tanFileInput").files[0];
+    // 2. Append File Fields Safely
+    const entityFile = document.getElementById("entityFileInput")?.files[0];
+    const gstFile = document.getElementById("gstFileInput")?.files[0];
+    const panFile = document.getElementById("panFileInput")?.files[0];
+    const tanFile = document.getElementById("tanFileInput")?.files[0];
 
     if (entityFile) formData.append("entityFile", entityFile);
     if (gstFile) formData.append("gstinDoc", gstFile);
@@ -168,13 +173,8 @@ export default function RegisterPage() {
     if (tanFile) formData.append("tanDoc", tanFile);
 
     try {
-      // 3. Post to backend using Axios
-      for (let pair of formData.entries()) {
-        console.log(pair[0], pair[1]);
-      }
-
       const response = await axios.post(
-        "http://localhost:5001/api/agents/registerAgent",
+        `${process.env.NEXT_PUBLIC_AGENT_API}/agents/registerAgent`,
         formData,
         { withCredentials: true },
       );
@@ -188,24 +188,16 @@ export default function RegisterPage() {
     } catch (error) {
       console.error("Error submitting form:", error);
 
-      // Handle HTML server crashes safely
-      if (error.response) {
-        const contentType = error.response.headers["content-type"];
-        if (contentType && contentType.includes("text/html")) {
-          alert(
-            "Backend Server Crashed! Please check your terminal running port 5001 to see the exact error.",
-          );
-        } else {
-          alert(
-            error.response.data.message ||
-              "Registration failed. Please check your inputs.",
-          );
-        }
-        // Refresh captcha on validation failure
+      if (error.response && error.response.data) {
+        console.error("Backend Rejection Reason:", error.response.data.message);
+        alert(`Registration Failed: ${error.response.data.message}`);
         fetchInitialData();
       } else {
         alert("Network error occurred. Ensure your backend server is running.");
       }
+    } finally {
+      // Re-enable the button if it failed
+      setIsSubmitting(false);
     }
   };
 
@@ -218,7 +210,6 @@ export default function RegisterPage() {
     </div>
   );
 
-  // Determine the dynamic upload label based on the selected User Type ID
   const selectedTypeObj = userTypes.find(
     (type) => type.id.toString() === selectedUserTypeId.toString(),
   );
@@ -670,10 +661,20 @@ export default function RegisterPage() {
 
                       <button
                         type="submit"
-                        className="gradient-orange hover:opacity-90 text-white font-bold py-4 px-16 rounded-2xl shadow-lg shadow-orange-600/25 transition-all text-lg flex items-center gap-2 w-full md:w-auto justify-center"
+                        disabled={isSubmitting} // DISBLES BUTTON ON CLICK
+                        className={`gradient-orange hover:opacity-90 text-white font-bold py-4 px-16 rounded-2xl shadow-lg shadow-orange-600/25 transition-all text-lg flex items-center gap-2 w-full md:w-auto justify-center ${isSubmitting ? "opacity-70 cursor-not-allowed" : ""}`}
                       >
-                        <ShieldCheck className="h-6 w-6" />
-                        Submit Registration
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                            Submitting...
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="h-6 w-6" />
+                            Submit Registration
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

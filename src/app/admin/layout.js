@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import axios from "axios";
+
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -18,72 +20,19 @@ import {
   Ship,
   LayoutDashboard,
   FileText,
-  CheckSquare,
-  Truck,
-  CreditCard,
-  Users,
   LogOut,
   Menu,
   Bell,
-  Wallet,
-  ChevronRight,
   Search,
-  Sparkles,
   HelpCircle,
-  Lock, // Added Lock icon for Forgot Password
+  Lock,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-import axios from "axios";
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
-// Navigation items based on user role
 
-const getNavigationItems = (role) => {
-  const baseItems = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  ];
-
-  const roleItems = {
-    Applicant: [
-      ...baseItems,
-      { name: "Apply Pass", href: "/dashboard/apply-pass", icon: FileText },
-      { name: "My Passes", href: "/dashboard/my-passes", icon: CreditCard },
-      { name: "Wallet", href: "/dashboard/wallet", icon: Wallet },
-    ],
-    "Pass Officer": [
-      ...baseItems,
-      {
-        name: "Pass Approval",
-        href: "/dashboard/pass-approval",
-        icon: CheckSquare,
-      },
-      { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
-    ],
-    "Traffic Officer": [
-      ...baseItems,
-      {
-        name: "Traffic Approval",
-        href: "/dashboard/approval_admin",
-        icon: Truck,
-      },
-      { name: "Gate Log", href: "/dashboard/gate-log", icon: FileText },
-    ],
-    Admin: [
-      ...baseItems,
-      // Master Directory removed
-      { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
-    ],
-    "Super Admin": [
-      ...baseItems,
-      // Master Directory removed
-      { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
-    ],
-  };
-
-  return roleItems[role] || baseItems;
-};
-
-export default function DashboardLayout({ children }) {
+export default function AdminLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState(null);
@@ -92,7 +41,14 @@ export default function DashboardLayout({ children }) {
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      // Security Check: Only Admins can load this layout
+      const role = (parsedUser.role || "").toLowerCase();
+      if (role !== "admin" && role !== "administrator") {
+        router.push("/");
+        return;
+      }
+      setUser(parsedUser);
     } else {
       router.push("/");
     }
@@ -101,26 +57,19 @@ export default function DashboardLayout({ children }) {
   const handleLogout = async () => {
     try {
       const token = localStorage.getItem("accessToken");
-
       if (token) {
         await axios.post(
           `${AUTH_API}/auth/logout`,
           {},
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          },
+          { headers: { Authorization: `Bearer ${token}` } },
         );
       }
     } catch (err) {
       console.error("Logout error:", err);
     } finally {
-      // ✅ Always clear frontend state
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
-
       router.push("/");
     }
   };
@@ -133,19 +82,23 @@ export default function DashboardLayout({ children }) {
             <Ship className="h-14 w-14 text-primary animate-pulse mx-auto" />
             <div className="absolute inset-0 h-14 w-14 mx-auto rounded-full bg-primary/20 animate-ping" />
           </div>
-          <p className="text-slate-500 mt-6">Loading...</p>
+          <p className="text-slate-500 mt-6">Loading Admin...</p>
         </div>
       </div>
     );
   }
 
-  const navigationItems = getNavigationItems(user.role);
+  // Strictly Admin Navigation Items
+  const navigationItems = [
+    { name: "Admin Console", href: "/admin", icon: ShieldCheck },
+    { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
+  ];
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-white">
       {/* Logo Section */}
       <div className="p-6 border-b border-orange-100">
-        <Link href="/dashboard" className="flex items-center gap-3 group">
+        <Link href="/admin" className="flex items-center gap-3 group">
           <div className="relative flex items-center justify-center w-11 h-11 rounded-xl gradient-orange shadow-lg shadow-orange-600/20">
             <Ship className="h-6 w-6 text-white" />
           </div>
@@ -153,9 +106,7 @@ export default function DashboardLayout({ children }) {
             <h1 className="font-bold text-slate-800 text-lg leading-tight">
               Port Gate
             </h1>
-            <p className="text-xs text-orange-600 font-medium">
-              Automation System
-            </p>
+            <p className="text-xs text-orange-600 font-medium">Admin System</p>
           </div>
         </Link>
       </div>
@@ -163,7 +114,7 @@ export default function DashboardLayout({ children }) {
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         <p className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-          Menu
+          Global Menu
         </p>
         {navigationItems.map((item) => {
           const isActive = pathname === item.href;
@@ -211,13 +162,11 @@ export default function DashboardLayout({ children }) {
               variant="outline"
               className="w-full h-8 text-xs border-primary/30 text-primary hover:bg-primary hover:text-white"
             >
-              Get Support
+              System Logs
             </Button>
           </div>
         </div>
       </div>
-
-      {/* Lower Left User Info Component has been REMOVED */}
     </div>
   );
 
@@ -263,17 +212,17 @@ export default function DashboardLayout({ children }) {
                   const currentItem = navigationItems.find(
                     (item) => item.href === pathname,
                   );
-                  const Icon = currentItem?.icon || LayoutDashboard;
+                  const Icon = currentItem?.icon || ShieldCheck;
                   return <Icon className="h-5 w-5 text-primary" />;
                 })()}
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-800">
                   {navigationItems.find((item) => item.href === pathname)
-                    ?.name || "Dashboard"}
+                    ?.name || "Global Master Admin"}
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Port Gate Automation System
+                  System Configuration Portal
                 </p>
               </div>
             </div>
@@ -322,9 +271,11 @@ export default function DashboardLayout({ children }) {
                     </Avatar>
                     <div className="hidden md:block text-left">
                       <p className="text-sm font-medium text-slate-800 leading-tight">
-                        {user?.username ? user.username.split("@")[0] : "User"}
+                        {user?.username ? user.username.split("@")[0] : "Admin"}
                       </p>
-                      <p className="text-xs text-slate-500">{user.role}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        {user.role}
+                      </p>
                     </div>
                   </Button>
                 </DropdownMenuTrigger>
@@ -332,33 +283,30 @@ export default function DashboardLayout({ children }) {
                   <DropdownMenuLabel>
                     <div>
                       <p className="font-semibold text-slate-800">
-                        {user?.username || "User"}
+                        {user?.username || "Admin"}
                       </p>
-                      <p className="text-xs text-slate-500 font-normal">
+                      <p className="text-xs text-slate-500 font-normal mt-0.5">
                         {user.role}
                       </p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
 
-                  {/* Forgot Password Added Here */}
                   <DropdownMenuItem
                     className="cursor-pointer"
                     onClick={() => router.push("/forgot-password")}
                   >
                     <Lock className="h-4 w-4 mr-2 text-slate-500" />
-                    Forgot Password
+                    Change Password
                   </DropdownMenuItem>
-
-                  {/* Settings Removed from Here */}
 
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={handleLogout}
-                    className="text-red-600 cursor-pointer"
+                    className="text-red-600 cursor-pointer focus:text-red-600"
                   >
                     <LogOut className="h-4 w-4 mr-2" />
-                    Sign Out
+                    Secure Sign Out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
