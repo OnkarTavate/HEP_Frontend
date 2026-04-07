@@ -416,6 +416,7 @@ import {
   Clock,
 } from "lucide-react";
 
+import { jwtDecode } from "jwt-decode";
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
 
 const LoginPage = () => {
@@ -523,70 +524,37 @@ const LoginPage = () => {
     }
 
     try {
-      console.log("AUTH_API:", AUTH_API);
-      const res = await axios.post(
-        `${AUTH_API}/auth/login`,
-        {
-          loginId: formData.username.trim(),
-          password: formData.password,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      const res = await axios.post(`${AUTH_API}/auth/login`, {
+        loginId: formData.username.trim(),
+        password: formData.password,
+      });
 
       const data = res.data;
 
+      console.log("LOGIN RESPONSE:", data);
+
       if (data.success) {
+        // ✅ Store tokens
         localStorage.setItem("accessToken", data.accessToken);
         localStorage.setItem("refreshToken", data.refreshToken);
 
-        // 1. BULLETPROOF EXTRACTION: Handle variations in API response (e.g. roleName vs role)
-        const userPayload = data.user || data.data || {};
-        const exactRole =
-          data.role || userPayload.role || userPayload.roleName || "";
-        const roleLower = exactRole.toLowerCase();
-
-        // Ensure we catch "department" or "departmentName"
-        const department =
-          data.department ||
-          userPayload.department ||
-          userPayload.departmentName ||
-          "";
-
-        // 2. Save the full user object
+        // ✅ Store ONLY what backend gives (role)
         const user = {
           username: formData.username,
-          role: exactRole,
-          department: department,
+          role: data.role, // IMPORTANT
         };
 
         localStorage.setItem("user", JSON.stringify(user));
 
-        // 3. 🚀 FOOLPROOF ROLE-BASED ROUTING 🚀
-        // If they are a Master Admin
-        if (
-          roleLower === "admin" ||
-          roleLower === "super admin" ||
-          roleLower === "administrator"
-        ) {
+        // 🚀 ROLE-BASED ROUTING (TEMP SOLUTION)
+        if (data.role === "Admin" || data.role === "Administrator") {
+          console.log("➡️ Redirecting to /admin");
           router.push("/admin");
-        }
-        // If their role contains the word "approval" OR they belong to these specific departments
-        else if (
-          roleLower.includes("approval") ||
-          roleLower.includes("approver") ||
-          department === "Traffic" ||
-          department === "Marine" ||
-          department === "Vendor Pass" ||
-          department === "EDP"
-        ) {
-          router.push("/approval_admin");
-        }
-        // Normal applicants/companies go here
-        else {
+        } else if (data.role === "Approval") {
+          console.log("➡️ Redirecting to /traffic_approval");
+          router.push("/traffic_approval"); // TEMP (all approvals go here)
+        } else {
+          console.log("➡️ Redirecting to /dashboard");
           router.push("/dashboard");
         }
       } else {
@@ -594,6 +562,7 @@ const LoginPage = () => {
       }
     } catch (err) {
       console.error("Login error:", err);
+
       if (err.response) {
         setError(err.response.data?.message || "Login failed");
       } else {
