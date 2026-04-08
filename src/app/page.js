@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+import { toast } from "sonner";
 import {
   Ship,
   Lock,
@@ -16,6 +17,8 @@ import {
   Search,
   CheckCircle,
   XCircle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 import { jwtDecode } from "jwt-decode";
@@ -38,6 +41,7 @@ const LoginPage = () => {
   const [trackResult, setTrackResult] = useState(null);
   const [trackLoading, setTrackLoading] = useState(false);
   const [trackError, setTrackError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const fetchCaptcha = async () => {
     setIsCaptchaLoading(true);
@@ -72,21 +76,23 @@ const LoginPage = () => {
     setTrackResult(null);
 
     try {
-      // Calls your backend trackRequest controller
       const res = await axios.get(`${AGENT_API}/agents/getTrackRequest`, {
         params: { referenceNumber: trackReference.trim() },
       });
 
       if (res.data.success && res.data.data) {
         setTrackResult(res.data.data);
+        toast.success("Application status retrieved!"); // <-- Success Toast!
       } else {
-        setTrackError("No registration found with this reference number.");
+        // setTrackError("No registration found with this reference number.");
+        toast.error("No registration found with this reference number."); // <-- Error Toast!
       }
     } catch (err) {
       console.error("Track Error:", err);
       setTrackError(
         "Failed to fetch status. Please verify the reference number.",
       );
+      toast.error("Failed to fetch status."); // <-- Error Toast!
     } finally {
       setTrackLoading(false);
     }
@@ -172,14 +178,11 @@ const LoginPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+    setError(""); // You can remove this state entirely later if you only want to use toasts
 
+    // Validating all required fields at once
     if (!formData.username || !formData.password || !formData.captcha) {
-      setError("Please fill in all fields including the security code.");
-      return;
-    }
-    if (!formData.username || !formData.password) {
-      setError("Please enter valid credentials");
+      toast.warning("Please fill in all fields including the security code.");
       return;
     }
 
@@ -208,6 +211,8 @@ const LoginPage = () => {
 
         localStorage.setItem("user", JSON.stringify(user));
 
+        toast.success("Login successful!"); // ✅ Success Toast
+
         // 🚀 ROLE-BASED ROUTING (TEMP SOLUTION)
         if (data.role === "Admin" || data.role === "Administrator") {
           console.log("➡️ Redirecting to /admin");
@@ -220,16 +225,19 @@ const LoginPage = () => {
           router.push("/dashboard");
         }
       } else {
-        setError(data.message || "Invalid username or password");
+        toast.error(data.message || "Invalid username or password"); // ❌ Error Toast
+        fetchCaptcha(); // Refresh captcha on failed attempt
       }
     } catch (err) {
       console.error("Login error:", err);
 
       if (err.response) {
-        setError(err.response.data?.message || "Login failed");
+        toast.error(err.response.data?.message || "Login failed"); // ❌ Error Toast
       } else {
-        setError("Server not reachable");
+        toast.error("Server not reachable"); // ❌ Error Toast
       }
+
+      fetchCaptcha(); // Refresh captcha on failed attempt
     }
   };
 
@@ -371,15 +379,27 @@ const LoginPage = () => {
                     <div className="relative">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                       <input
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         placeholder="Enter your password"
                         value={formData.password}
                         onChange={(e) =>
                           setFormData({ ...formData, password: e.target.value })
                         }
-                        className="w-full pl-12 pr-4 h-14 bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                        className="w-full pl-12 pr-12 h-14 bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
                         required
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-600 transition-colors focus:outline-none"
+                        title={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5" />
+                        ) : (
+                          <Eye className="h-5 w-5" />
+                        )}
+                      </button>
                     </div>
                   </div>
 

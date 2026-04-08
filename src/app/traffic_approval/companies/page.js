@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { toast } from "sonner";
 import {
   Search,
   Building2,
@@ -34,6 +35,10 @@ export default function TrafficCompanyApprovals() {
   const [viewingDocUrl, setViewingDocUrl] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [iframeLoading, setIframeLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    decision: null,
+  });
 
   useEffect(() => {
     fetchDashboardData();
@@ -56,41 +61,51 @@ export default function TrafficCompanyApprovals() {
     }
   };
 
-  const handleAction = async (decision) => {
-    // 1. Frontend Validation (Matches your backend's rejection requirement)
+  // 1. Validates input and opens the centered confirmation modal
+  const handleActionClick = (decision) => {
     if (decision === "rejected" && !remarks.trim()) {
-      alert("Please provide a reason for rejection in the remarks field.");
+      toast.warning("Remarks Required", {
+        description:
+          "Please provide a reason for rejection in the remarks field.",
+      });
       return;
     }
+    // Opens the center modal instead of window.confirm
+    setConfirmDialog({ isOpen: true, decision });
+  };
 
-    if (!window.confirm(`Are you sure you want to ${decision} this company?`))
-      return;
+  // 2. Executes the API call when "Yes, Proceed" is clicked in the modal
+  const processDecision = async () => {
+    const { decision } = confirmDialog;
+    setConfirmDialog({ isOpen: false, decision: null }); // Close modal immediately
+
+    const loadingToastId = toast.loading(`Processing ${decision} request...`);
 
     try {
-      // 2. API Trigger: Matches router.put("/agent-request") in your userRoutes.js
       const response = await axios.put(`${BASE_URL}/user/agent-request`, {
         agentId: selectedRequest.id,
-        decision: decision, // Sends "approved" or "rejected"
+        decision: decision,
         rejectedReason: decision === "rejected" ? remarks : null,
       });
 
       if (response.data.success) {
-        alert(
-          `Company ${decision} successfully! Email notifications have been triggered.`,
-        );
+        toast.success(`Company ${decision.toUpperCase()}`, {
+          id: loadingToastId,
+          description: "Email notifications have been triggered successfully.",
+        });
 
-        // 3. Cleanup & Refresh UI
         setSelectedRequest(null);
         setRemarks("");
         fetchDashboardData();
       }
     } catch (error) {
       console.error("Action failed:", error);
-      // Grabs the exact error message from your backend if it fails
-      alert(
-        error.response?.data?.message ||
+      toast.error("Action Failed", {
+        id: loadingToastId,
+        description:
+          error.response?.data?.message ||
           "Failed to process action. Please check your backend services.",
-      );
+      });
     }
   };
 
@@ -449,14 +464,14 @@ export default function TrafficCompanyApprovals() {
 
             <div className="flex justify-end gap-3 p-4 border-t border-slate-200 bg-white">
               <button
-                onClick={() => handleAction("rejected")}
+                onClick={() => handleActionClick("rejected")}
                 className="bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all"
               >
                 <XCircle className="h-5 w-5" />
                 Reject
               </button>
               <button
-                onClick={() => handleAction("approved")}
+                onClick={() => handleActionClick("approved")}
                 className="bg-[#10b981] text-white px-8 py-2.5 rounded-lg shadow-md font-bold hover:bg-[#059669] flex items-center gap-2 transition-all"
               >
                 <CheckCircle2 className="h-5 w-5" />
@@ -529,6 +544,61 @@ export default function TrafficCompanyApprovals() {
                     title="Document Viewer"
                     onLoad={() => setIframeLoading(false)} // Hides spinner when PDF renders
                   />
+                </div>
+              </div>
+            </div>
+          )}
+          {/* 🚀 CENTERED CONFIRMATION MODAL 🚀 */}
+          {confirmDialog.isOpen && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 transform scale-100 animate-in zoom-in-95 duration-200">
+                <div className="p-6 text-center space-y-4">
+                  <div
+                    className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-2 ${confirmDialog.decision === "approved" ? "bg-emerald-100" : "bg-red-100"}`}
+                  >
+                    {confirmDialog.decision === "approved" ? (
+                      <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+                    ) : (
+                      <ShieldAlert className="h-8 w-8 text-red-600" />
+                    )}
+                  </div>
+                  <h3 className="text-xl font-bold text-[#0a1e4d]">
+                    Confirm Action
+                  </h3>
+                  <p className="text-slate-500 text-sm">
+                    Are you sure you want to{" "}
+                    <strong
+                      className={
+                        confirmDialog.decision === "approved"
+                          ? "text-emerald-600"
+                          : "text-red-600"
+                      }
+                    >
+                      {confirmDialog.decision}
+                    </strong>{" "}
+                    this company?
+                  </p>
+                </div>
+
+                <div className="flex border-t border-slate-100">
+                  <button
+                    onClick={() =>
+                      setConfirmDialog({ isOpen: false, decision: null })
+                    }
+                    className="flex-1 px-4 py-4 text-slate-500 font-bold hover:bg-slate-50 transition-colors border-r border-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={processDecision}
+                    className={`flex-1 px-4 py-4 text-white font-bold transition-colors ${
+                      confirmDialog.decision === "approved"
+                        ? "bg-[#10b981] hover:bg-[#059669]"
+                        : "bg-red-500 hover:bg-red-600"
+                    }`}
+                  >
+                    Yes, Proceed
+                  </button>
                 </div>
               </div>
             </div>
