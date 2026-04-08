@@ -161,7 +161,7 @@ export default function AdminDashboard() {
           onClick={() => setShowCreateAdmin(true)}
           className="bg-[#2b17ff] hover:bg-[#1a0ecc] text-white rounded-lg h-11 px-6 shadow-md transition-all"
         >
-          <UserPlus className="mr-2 h-4 w-4" /> Create New Account
+          <UserPlus className="mr-2 h-4 w-4" /> Create Department Admin
         </Button>
       </header>
 

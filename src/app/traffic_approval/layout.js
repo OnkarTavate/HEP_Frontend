@@ -176,7 +176,7 @@ export default function TrafficLayout({ children }) {
                     onClick={handleLogout}
                     className="text-red-600 cursor-pointer focus:text-red-600"
                   >
-                    <LogOut className="h-4 w-4 mr-2" /> Secure Sign Out
+                    <LogOut className="h-4 w-4 mr-2" />  Sign Out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

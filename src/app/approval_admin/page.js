@@ -1404,7 +1404,7 @@ function TrafficPassView({
                   ].map((doc, idx) => (
                     <a
                       key={idx}
-                      href={`http://localhost:5001/${selectedRequest.entityFile}`}
+                      href={`http://10.63.171.86:5001/${selectedRequest.entityFile}`}
                       target="_blank"
                       className="flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:bg-orange-50 group"
                     >
@@ -1718,7 +1718,7 @@ function MarineView({
                   ].map((doc, idx) => (
                     <a
                       key={idx}
-                      href={`http://localhost:5001/${selectedRequest.entityFile}`}
+                      href={`http://10.63.171.86:5001/${selectedRequest.entityFile}`}
                       target="_blank"
                       className="flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:bg-teal-50 group"
                     >
@@ -2026,7 +2026,7 @@ function VendorView({
                   ].map((doc, idx) => (
                     <a
                       key={idx}
-                      href={`http://localhost:5001/${selectedRequest.entityFile}`}
+                      href={`http://10.63.171.86:5001/${selectedRequest.entityFile}`}
                       target="_blank"
                       className="flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:bg-purple-50 group"
                     >

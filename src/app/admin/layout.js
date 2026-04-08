@@ -306,7 +306,7 @@ export default function AdminLayout({ children }) {
                     className="text-red-600 cursor-pointer focus:text-red-600"
                   >
                     <LogOut className="h-4 w-4 mr-2" />
-                    Secure Sign Out
+                    Sign Out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

@@ -11,6 +11,9 @@ import {
   FileText,
   Eye,
   History,
+  Maximize,
+  Minimize,
+  Loader2,
 } from "lucide-react";
 
 const BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API;
@@ -28,10 +31,19 @@ export default function TrafficCompanyApprovals() {
   // Modal States
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [remarks, setRemarks] = useState("");
+  const [viewingDocUrl, setViewingDocUrl] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [iframeLoading, setIframeLoading] = useState(true);
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    if (viewingDocUrl) {
+      setIframeLoading(true);
+    }
+  }, [viewingDocUrl]);
 
   const fetchDashboardData = async () => {
     try {
@@ -351,60 +363,71 @@ export default function TrafficCompanyApprovals() {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   {selectedRequest.entityFile && (
-                    <a
-                      href={`${DOC_BASE_URL}/${selectedRequest.entityFile}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group"
+                    <button
+                      onClick={() =>
+                        setViewingDocUrl(
+                          `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=entity`,
+                        )
+                      }
+                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group w-full text-left"
                     >
-                      <FileText className="text-blue-500 h-5 w-5" />
+                      <FileText className="text-blue-500 h-5 w-5 shrink-0" />
                       <span className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-700">
                         Entity Document
                       </span>
-                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500" />
-                    </a>
+                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500 shrink-0" />
+                    </button>
                   )}
+
                   {selectedRequest.gstinDoc && (
-                    <a
-                      href={`${DOC_BASE_URL}/${selectedRequest.gstinDoc}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group"
+                    <button
+                      onClick={() =>
+                        setViewingDocUrl(
+                          `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=gst`,
+                        )
+                      }
+                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group w-full text-left"
                     >
-                      <FileText className="text-blue-500 h-5 w-5" />
+                      <FileText className="text-blue-500 h-5 w-5 shrink-0" />
                       <span className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-700">
                         GSTIN Document
                       </span>
-                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500" />
-                    </a>
+                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500 shrink-0" />
+                    </button>
                   )}
+
                   {selectedRequest.panDoc && (
-                    <a
-                      href={`${DOC_BASE_URL}/${selectedRequest.panDoc}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group"
+                    <button
+                      onClick={() =>
+                        setViewingDocUrl(
+                          `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=pan`,
+                        )
+                      }
+                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group w-full text-left"
                     >
-                      <FileText className="text-blue-500 h-5 w-5" />
+                      <FileText className="text-blue-500 h-5 w-5 shrink-0" />
                       <span className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-700">
                         PAN Document
                       </span>
-                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500" />
-                    </a>
+                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500 shrink-0" />
+                    </button>
                   )}
+
                   {selectedRequest.tanDoc && (
-                    <a
-                      href={`${DOC_BASE_URL}/${selectedRequest.tanDoc}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group"
+                    <button
+                      onClick={() =>
+                        setViewingDocUrl(
+                          `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=tan`,
+                        )
+                      }
+                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group w-full text-left"
                     >
-                      <FileText className="text-blue-500 h-5 w-5" />
+                      <FileText className="text-blue-500 h-5 w-5 shrink-0" />
                       <span className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-700">
                         TAN Document
                       </span>
-                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500" />
-                    </a>
+                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500 shrink-0" />
+                    </button>
                   )}
                 </div>
               </div>
@@ -430,17 +453,86 @@ export default function TrafficCompanyApprovals() {
                 className="bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all"
               >
                 <XCircle className="h-5 w-5" />
-                Reject Application
+                Reject
               </button>
               <button
                 onClick={() => handleAction("approved")}
                 className="bg-[#10b981] text-white px-8 py-2.5 rounded-lg shadow-md font-bold hover:bg-[#059669] flex items-center gap-2 transition-all"
               >
                 <CheckCircle2 className="h-5 w-5" />
-                Approve Company
+                Approve
               </button>
             </div>
           </div>
+          {/* PDF VIEWER OVERLAY */}
+          {viewingDocUrl && (
+            <div
+              className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-all duration-300 ${
+                isFullscreen ? "p-0" : "p-4 md:p-8"
+              }`}
+            >
+              <div
+                className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${
+                  isFullscreen
+                    ? "max-w-full rounded-none border-none"
+                    : "max-w-6xl rounded-xl border border-slate-700"
+                }`}
+              >
+                {/* Viewer Header */}
+                <div className="flex justify-between items-center px-4 py-3 bg-slate-800 text-white">
+                  <h3 className="font-bold flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-blue-400" />
+                    Document Viewer
+                  </h3>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsFullscreen(!isFullscreen)}
+                      className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg transition-colors"
+                      title={isFullscreen ? "Exit Fullscreen" : "Maximize"}
+                    >
+                      {isFullscreen ? (
+                        <Minimize className="h-5 w-5" />
+                      ) : (
+                        <Maximize className="h-5 w-5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setViewingDocUrl(null);
+                        setIsFullscreen(false);
+                      }}
+                      className="bg-slate-700 hover:bg-red-500 p-2 rounded-lg transition-colors"
+                      title="Close Viewer"
+                    >
+                      <XCircle className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Iframe Container */}
+                <div className="flex-1 w-full bg-slate-100 relative">
+                  {/* Loading State Overlay */}
+                  {iframeLoading && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50">
+                      <Loader2 className="h-10 w-10 text-[#ff6b00] animate-spin mb-4" />
+                      <p className="text-slate-500 font-bold animate-pulse">
+                        Fetching secure document...
+                      </p>
+                    </div>
+                  )}
+
+                  <iframe
+                    src={viewingDocUrl}
+                    className="w-full h-full border-none relative z-0"
+                    title="Document Viewer"
+                    onLoad={() => setIframeLoading(false)} // Hides spinner when PDF renders
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
