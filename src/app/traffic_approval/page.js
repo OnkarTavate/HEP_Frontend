@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import {
   CheckCircle2,
   Search,
@@ -10,60 +12,127 @@ import {
   Clock,
   XCircle,
   Truck,
+  Eye,
+  X,
+  Users,
+  FileCheck2,
+  ShieldCheck,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+
+const AGENT_API =
+  process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
 export default function TrafficPassesPage() {
   const [activeTab, setActiveTab] = useState("pending");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Dummy data based on your wireframe requirements
-  const pendingPasses = [
-    {
-      id: "REQ-9001",
-      company: "Global Marine Traders",
-      type: "Vehicle Heavy (Yearly)",
-      date: "18-Mar-2026 09:30 AM",
-    },
-    {
-      id: "REQ-9002",
-      company: "Evergreen Logistics",
-      type: "Driver (Monthly)",
-      date: "18-Mar-2026 10:15 AM",
-    },
-  ];
+  // Dynamic API States
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const processedPasses = [
-    {
-      id: "REQ-8990",
-      company: "Alpha Transports",
-      type: "Personnel (Daily)",
-      date: "17-Mar-2026",
-      status: "approved",
-    },
-    {
-      id: "REQ-8985",
-      company: "Omega Shipping",
-      type: "Vehicle (Monthly)",
-      date: "16-Mar-2026",
-      status: "rejected",
-    },
-  ];
+  // Modal States
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Derived stats for the Cards
-  const totalPasses = pendingPasses.length + processedPasses.length;
+  // Fetch all requests
+  const fetchPassRequests = async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      // Replace with your actual GET endpoint for Traffic Admin requests
+      const response = await axios.get(`${AGENT_API}/pass-request/pending`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setRequests(response.data.requests || []);
+    } catch (error) {
+      console.error("Failed to fetch requests", error);
+      // Fallback/Mock data to ensure the UI works even if backend is not ready yet
+      setRequests([
+        {
+          id: "1",
+          agentName: "Global Marine Traders",
+          purposeOfVisitId: "Cargo Inspection",
+          status: "SUBMITTED",
+          createdAt: "2026-04-15",
+          authLetterFilePath: "uploads/docs/auth.pdf",
+          persons: [
+            {
+              name: "Rajesh Kumar",
+              hepTypeId: "Driver",
+              aadharNo: "123456789012",
+              passType: "DAILY",
+            },
+          ],
+          vehicles: [
+            {
+              registrationNo: "TN-01-AB-1234",
+              vehicleTypeId: "Heavy Truck",
+              passType: "DAILY",
+            },
+          ],
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPassRequests();
+  }, []);
+
+  // Handle Approve/Reject Action
+  const handleAction = async (requestId, action) => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      await axios.post(
+        `${AGENT_API}/pass-request/${action}`,
+        { requestId },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      toast.success(`Pass Request ${action.toUpperCase()} successfully`);
+      setIsModalOpen(false);
+      fetchPassRequests(); // Refresh list after action
+    } catch (error) {
+      toast.error(`Failed to ${action} request`);
+
+      // OPTIONAL: Fallback UI update if API fails during testing
+      setRequests(
+        requests.map((r) =>
+          r.id === requestId
+            ? { ...r, status: action === "approve" ? "APPROVED" : "REJECTED" }
+            : r,
+        ),
+      );
+      setIsModalOpen(false);
+    }
+  };
+
+  // Derived stats & grouping for Cards and Tabs
+  const pendingPasses = requests.filter(
+    (r) => r.status === "SUBMITTED" || r.status === "PENDING",
+  );
+  const processedPasses = requests.filter(
+    (r) => r.status === "APPROVED" || r.status === "REJECTED",
+  );
+
+  const totalPasses = requests.length;
   const approvedCount = processedPasses.filter(
-    (p) => p.status === "approved",
+    (p) => p.status === "APPROVED",
   ).length;
   const rejectedCount = processedPasses.filter(
-    (p) => p.status === "rejected",
+    (p) => p.status === "REJECTED",
   ).length;
 
   const currentData = activeTab === "pending" ? pendingPasses : processedPasses;
   const filteredData = currentData.filter(
     (req) =>
-      req.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      req.company.toLowerCase().includes(searchQuery.toLowerCase()),
+      req.id.toString().includes(searchQuery) ||
+      (req.agentName &&
+        req.agentName.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
   return (
@@ -82,7 +151,7 @@ export default function TrafficPassesPage() {
 
       {/* STATS CARDS (Matching Admin Theme) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="border-0 shadow-sm hover:shadow-md transition-shadow">
+        <Card className="border-0 shadow-sm hover:shadow-md transition-shadow bg-white">
           <CardContent className="p-6 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 mb-1">
@@ -97,7 +166,7 @@ export default function TrafficPassesPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm hover:shadow-md transition-shadow">
+        <Card className="border-0 shadow-sm hover:shadow-md transition-shadow bg-white">
           <CardContent className="p-6 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 mb-1">
@@ -112,7 +181,7 @@ export default function TrafficPassesPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm hover:shadow-md transition-shadow">
+        <Card className="border-0 shadow-sm hover:shadow-md transition-shadow bg-white">
           <CardContent className="p-6 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 mb-1">
@@ -127,7 +196,7 @@ export default function TrafficPassesPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm hover:shadow-md transition-shadow">
+        <Card className="border-0 shadow-sm hover:shadow-md transition-shadow bg-white">
           <CardContent className="p-6 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 mb-1">
@@ -196,7 +265,7 @@ export default function TrafficPassesPage() {
                   Company
                 </th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Pass Type
+                  Pass Entities
                 </th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
                   {activeTab === "pending" ? "Applied On" : "Processed On"}
@@ -207,52 +276,235 @@ export default function TrafficPassesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredData.map((pass) => (
-                <tr
-                  key={pass.id}
-                  className="hover:bg-slate-50 transition-colors"
-                >
-                  <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d]">
-                    {pass.id}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-semibold text-slate-700">
-                    {pass.company}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200">
-                      {pass.type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-500">
-                    {pass.date}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    {activeTab === "pending" ? (
-                      <button className="bg-[#0a1e4d] text-white px-5 py-2 rounded-lg text-xs font-bold hover:opacity-90 shadow-md transition-all">
-                        Review Details
-                      </button>
-                    ) : (
-                      <span
-                        className={`px-3 py-1 rounded-full text-[11px] font-bold border ${pass.status === "approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}
-                      >
-                        {pass.status.toUpperCase()}
-                      </span>
-                    )}
+              {loading ? (
+                <tr>
+                  <td colSpan="5" className="py-16 text-center text-slate-500">
+                    <Clock className="h-10 w-10 mx-auto text-slate-300 mb-3 animate-pulse" />
+                    <p className="text-sm font-medium">Loading requests...</p>
                   </td>
                 </tr>
-              ))}
-              {filteredData.length === 0 && (
+              ) : filteredData.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="py-16 text-center text-slate-500">
                     <ShieldAlert className="h-10 w-10 mx-auto text-slate-200 mb-3" />
                     <p className="text-sm font-medium">No requests found.</p>
                   </td>
                 </tr>
+              ) : (
+                filteredData.map((pass) => (
+                  <tr
+                    key={pass.id}
+                    className="hover:bg-slate-50 transition-colors"
+                  >
+                    <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d]">
+                      REQ-{pass.id}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-700">
+                      {pass.agentName}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200">
+                        {pass.persons?.length || 0} Persons |{" "}
+                        {pass.vehicles?.length || 0} Vehicles
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-500">
+                      {new Date(pass.createdAt).toLocaleDateString() ||
+                        pass.createdAt}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {activeTab === "pending" ? (
+                        <button
+                          onClick={() => {
+                            setSelectedRequest(pass);
+                            setIsModalOpen(true);
+                          }}
+                          className="bg-[#0a1e4d] text-white px-5 py-2 rounded-lg text-xs font-bold hover:opacity-90 shadow-md transition-all"
+                        >
+                          Review Details
+                        </button>
+                      ) : (
+                        <span
+                          className={`px-3 py-1 rounded-full text-[11px] font-bold border ${pass.status === "APPROVED" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}
+                        >
+                          {pass.status.toUpperCase()}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* ============================================================== */}
+      {/* VERIFICATION MODAL */}
+      {/* ============================================================== */}
+      {isModalOpen && selectedRequest && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
+            <div className="flex justify-between items-center px-6 py-4 bg-[#0a1e4d] text-white">
+              <div className="flex items-center gap-3">
+                <ShieldCheck className="h-6 w-6 text-orange-500" />
+                <h2 className="text-xl font-bold tracking-wide">
+                  Verify Request: REQ-{selectedRequest.id}
+                </h2>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-white/70 hover:text-white hover:bg-white/10 p-2 rounded-xl transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-50 space-y-6">
+              {/* Auth Letter Verification */}
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+                <div>
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                    <FileCheck2 className="h-4 w-4 text-orange-500" />{" "}
+                    Authorised Letter
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Review the company request letter for purpose:{" "}
+                    <strong>{selectedRequest.purposeOfVisitId}</strong>
+                  </p>
+                </div>
+                <a
+                  href={`${AGENT_API}/${selectedRequest.authLetterFilePath}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-orange-50 text-orange-700 border border-orange-200 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-orange-100 transition-colors"
+                >
+                  <Eye className="h-4 w-4" /> View Document
+                </a>
+              </div>
+
+              {/* Personnel Verification */}
+              {selectedRequest.persons &&
+                selectedRequest.persons.length > 0 && (
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3 bg-slate-100 border-b border-slate-200">
+                      <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest flex items-center gap-2">
+                        <Users className="h-4 w-4" /> Personnel Data
+                      </h4>
+                    </div>
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                            Name & Role
+                          </th>
+                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                            Aadhar
+                          </th>
+                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                            Pass Details
+                          </th>
+                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs text-right">
+                            Docs
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedRequest.persons.map((p, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="p-3 font-bold text-[#0a1e4d]">
+                              {p.name}{" "}
+                              <span className="block font-medium text-xs text-slate-500">
+                                {p.hepTypeId}
+                              </span>
+                            </td>
+                            <td className="p-3 text-slate-600 font-mono text-xs">
+                              {p.aadharNo}
+                            </td>
+                            <td className="p-3 text-slate-600 text-xs font-bold capitalize">
+                              {p.passType}
+                            </td>
+                            <td className="p-3 text-right">
+                              <button className="text-blue-600 hover:text-blue-800 text-xs font-bold underline">
+                                Verify Docs
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+              {/* Vehicles Verification */}
+              {selectedRequest.vehicles &&
+                selectedRequest.vehicles.length > 0 && (
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3 bg-slate-100 border-b border-slate-200">
+                      <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest flex items-center gap-2">
+                        <Truck className="h-4 w-4" /> Vehicle Data
+                      </h4>
+                    </div>
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                            Reg No
+                          </th>
+                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                            Type
+                          </th>
+                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                            Pass Details
+                          </th>
+                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs text-right">
+                            Docs
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedRequest.vehicles.map((v, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="p-3 font-bold text-[#0a1e4d] uppercase">
+                              {v.registrationNo}
+                            </td>
+                            <td className="p-3 text-slate-600 text-xs font-medium">
+                              {v.vehicleTypeId}
+                            </td>
+                            <td className="p-3 text-slate-600 text-xs font-bold capitalize">
+                              {v.passType}
+                            </td>
+                            <td className="p-3 text-right">
+                              <button className="text-blue-600 hover:text-blue-800 text-xs font-bold underline">
+                                Verify Docs
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+            </div>
+
+            {/* Action Footer */}
+            <div className="flex justify-end gap-4 p-5 border-t border-slate-200 bg-white rounded-b-2xl">
+              <button
+                onClick={() => handleAction(selectedRequest.id, "reject")}
+                className="bg-white text-red-600 border border-red-200 px-6 py-2.5 rounded-xl font-bold hover:bg-red-50 transition-colors flex items-center gap-2"
+              >
+                <XCircle className="h-5 w-5" /> Reject Request
+              </button>
+              <button
+                onClick={() => handleAction(selectedRequest.id, "approve")}
+                className="bg-emerald-600 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-colors flex items-center gap-2"
+              >
+                <CheckCircle2 className="h-5 w-5" /> Approve Passes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -179,7 +179,10 @@ export default function DashboardPage() {
               <Calendar className="mr-2 h-4 w-4" />
               Last 30 Days
             </Button>
-            <Button className="bg-orange-600 hover:bg-orange-700 text-white rounded-2xl h-11 shadow-md">
+            <Button
+              onClick={() => router.push("/dashboard/pass_request")} // <-- UPDATED PATH
+              className="bg-orange-600 hover:bg-orange-700 text-white rounded-2xl h-11 shadow-md"
+            >
               <Plus className="mr-2 h-4 w-4" />
               Apply New Pass
             </Button>

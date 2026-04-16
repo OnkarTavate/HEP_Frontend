@@ -31,6 +31,7 @@ import {
   Sparkles,
   HelpCircle,
   Lock, // Added Lock icon for Forgot Password
+  Database,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -38,18 +39,23 @@ import axios from "axios";
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
 // Navigation items based on user role
 
+// Navigation items based on user role
 const getNavigationItems = (role) => {
   const baseItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   ];
 
+  const applicantItems = [
+    ...baseItems,
+    { name: "Apply Pass", href: "/dashboard/pass_request", icon: FileText },
+    { name: "Master Record", href: "/dashboard/master_record", icon: Database }, // <-- UPDATED PATH HERE
+    { name: "Wallet", href: "/dashboard/wallet", icon: Wallet },
+  ];
+
   const roleItems = {
-    Applicant: [
-      ...baseItems,
-      { name: "Apply Pass", href: "/dashboard/apply-pass", icon: FileText },
-      { name: "My Passes", href: "/dashboard/my-passes", icon: CreditCard },
-      { name: "Wallet", href: "/dashboard/wallet", icon: Wallet },
-    ],
+    user: applicantItems,
+    Applicant: applicantItems,
+
     "Pass Officer": [
       ...baseItems,
       {
@@ -70,17 +76,15 @@ const getNavigationItems = (role) => {
     ],
     Admin: [
       ...baseItems,
-      // Master Directory removed
       { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
     ],
     "Super Admin": [
       ...baseItems,
-      // Master Directory removed
       { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
     ],
   };
 
-  return roleItems[role] || baseItems;
+  return roleItems[role] || roleItems[role?.toLowerCase()] || baseItems;
 };
 
 export default function DashboardLayout({ children }) {
