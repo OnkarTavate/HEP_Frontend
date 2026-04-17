@@ -22,8 +22,7 @@ import {
   FileCheck2,
 } from "lucide-react";
 
-const AGENT_API =
-  process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
+const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 
 const getCurrentDateTime = () => {
   const now = new Date();
@@ -63,7 +62,9 @@ export default function PassRequestPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [paymentMode, setPaymentMode] = useState("Account");
-
+  const [loadingPasses, setLoadingPasses] = useState(false);
+  const [currentUser, setCurrentUser] = useState({});
+  const [selectedPassDetails, setSelectedPassDetails] = useState(null);
   const [modals, setModals] = useState({
     person: false,
     vehicle: false,
@@ -81,10 +82,10 @@ export default function PassRequestPage() {
   const [masterVehiclesDB, setMasterVehiclesDB] = useState({});
 
   const [generalForm, setGeneralForm] = useState({
-    companyName: "Global Marine Traders",
-    email: "admin@gmt.com",
-    mobile: "9876543210",
-    balance: "7725.00",
+    companyName: "Loading...",
+    email: "Loading...",
+    mobile: "Loading...",
+    balance: "7725.00", // Keep mock for now if wallet isn't built
     utilizedBalance: "0.00",
     purpose: "",
     purposeOther: "",
@@ -183,6 +184,17 @@ export default function PassRequestPage() {
   });
 
   useEffect(() => {
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        setCurrentUser(JSON.parse(userStr));
+      }
+    } catch (error) {
+      console.error("Failed to parse user from local storage", error);
+    }
+  }, []);
+
+  useEffect(() => {
     const fetchMasterData = async () => {
       try {
         const token = localStorage.getItem("accessToken");
@@ -233,6 +245,49 @@ export default function PassRequestPage() {
     fetchMasterData();
   }, []);
 
+  // --- FETCH LOGGED-IN AGENT PROFILE ---
+  useEffect(() => {
+    const fetchAgentProfile = async () => {
+      try {
+        let token = localStorage.getItem("accessToken");
+        if (!token) return;
+
+        // Remove extra quotes if present
+        token = token.replace(/^["']|["']$/g, "");
+
+        // Call your backend agent profile route
+        const response = await axios.get(`${AGENT_API}/agents/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.data && response.data.success) {
+          const agentData = response.data.data;
+
+          // Populate the General Form with the DB data
+          setGeneralForm((prev) => ({
+            ...prev,
+            companyName: agentData.entityName || "N/A",
+            email: agentData.email || "N/A",
+            mobile: agentData.mobileNo || "N/A",
+          }));
+        }
+      } catch (error) {
+        console.error("Failed to fetch agent profile:", error);
+        toast.error("Failed to load company profile data.");
+
+        // Fallback if API fails
+        setGeneralForm((prev) => ({
+          ...prev,
+          companyName: "Error loading profile",
+          email: "-",
+          mobile: "-",
+        }));
+      }
+    };
+
+    fetchAgentProfile();
+  }, []);
+
   useEffect(() => {
     const pData = JSON.parse(localStorage.getItem("masterPersonnel") || "[]");
     const vData = JSON.parse(localStorage.getItem("masterVehicles") || "[]");
@@ -275,6 +330,55 @@ export default function PassRequestPage() {
     );
     setVehicleForm((prev) => ({ ...prev, amount: amt, dateTo: newDateTo }));
   }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom]);
+
+  const fetchSubmittedPasses = async () => {
+    setLoadingPasses(true);
+    try {
+      const token = localStorage.getItem("accessToken");
+
+      if (!token) {
+        toast.error("Authentication token missing. Please log in again.");
+        setLoadingPasses(false);
+        return;
+      }
+
+      const response = await axios.get(
+        `${AGENT_API}/pass-request/my-pass-requests`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (response.data && response.data.success) {
+        setSubmittedPasses(response.data.data);
+      } else {
+        setSubmittedPasses([]);
+      }
+    } catch (error) {
+      console.error("Error fetching pass requests:", error);
+      toast.error(
+        error.response?.data?.message || "Failed to load submitted passes.",
+      );
+      setSubmittedPasses([]);
+    } finally {
+      setLoadingPasses(false);
+    }
+  };
+
+  // Trigger fetch when "view" tab is selected
+  useEffect(() => {
+    if (activeTab === "view") {
+      fetchSubmittedPasses();
+    }
+  }, [activeTab]);
+
+  const handlePrintQR = async (pass) => {
+    const passIdStr = pass.id ? `REQ-${pass.id}` : pass.passId || `REQ-XXXX`;
+
+    toast.info(`Calling QR microservice for ${passIdStr}...`);
+  };
 
   const calculateTotals = () => {
     let base = 0;
@@ -479,7 +583,10 @@ export default function PassRequestPage() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem("accessToken");
+      // 1. CLEAN TOKEN: Prevents malformed JWT backend crashes
+      let token = localStorage.getItem("accessToken");
+      if (token) token = token.replace(/^["']|["']$/g, "");
+
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       const formData = new FormData();
 
@@ -488,12 +595,15 @@ export default function PassRequestPage() {
           ? 6
           : parseInt(generalForm.purpose, 10);
 
+      // 2. SAFE EXTRACTION: Prevent undefined values breaking the DB insertion
       const getEnumValue = (arr, id, fallback) => {
         if (!id) return fallback;
         const item = arr.find(
           (x) => String(x.id) === String(id) || String(x.value) === String(id),
         );
-        return item ? item.value : fallback;
+        return item
+          ? item.value || item.label || item.name || fallback
+          : fallback;
       };
 
       // =========================
@@ -544,8 +654,6 @@ export default function PassRequestPage() {
           idProofNumber: p.idProofNumber,
           passType: getEnumValue(masterData.passTypes, p.passType, "DAILY"),
           passPeriod: parseInt(p.passPeriod, 10) || 1,
-
-          // ✅ FIX: Strip the "T00:00" time string to prevent Postgres syntax errors
           dateFrom: p.dateFrom.split("T")[0],
           dateTo: computedDateTo,
           amount: parseFloat(p.amount) || 0,
@@ -572,11 +680,8 @@ export default function PassRequestPage() {
           vehicleTypeId: parseInt(v.type, 10) || 1,
           registrationNo: v.regNo,
           rfidCardNumber: v.cardNumber,
-
-          // ✅ FIX: Force empty strings to be strict 'null' to prevent Postgres date crash
           insuranceExpiry: v.insuranceExpiry || null,
           rcValidity: v.rcValidity || null,
-
           accessAreaId: getEnumValue(
             masterData.accessAreas,
             v.accessArea,
@@ -584,8 +689,6 @@ export default function PassRequestPage() {
           ),
           passType: getEnumValue(masterData.passTypes, v.passType, "DAILY"),
           passPeriod: parseInt(v.passPeriod, 10) || 1,
-
-          // ✅ FIX: Strip the "T00:00" time string to prevent Postgres syntax errors
           dateFrom: v.dateFrom.split("T")[0],
           dateTo: computedDateTo,
           amount: parseFloat(v.amount) || 0,
@@ -596,9 +699,14 @@ export default function PassRequestPage() {
       // PAYLOAD
       // =========================
       const requestPayload = {
-        agentId: parseInt(user.id, 10) || parseInt(user.agentId, 10) || 1, // ✅ Strictly send integer ID
+        agentId: parseInt(user.id, 10) || parseInt(user.agentId, 10) || 1,
         purposeOfVisitId: finalPurpose,
         paymentMode: paymentMode.toUpperCase(),
+        // 3. INJECT MISSING TOTALS required by your PostgreSQL Schema
+        baseTotal: parseFloat(totals.base) || 0.0,
+        grossTotal: parseFloat(totals.base) || 0.0,
+        gstAmount: parseFloat(totals.gst) || 0.0,
+        netAmount: parseFloat(totals.net) || 0.0,
         persons: formattedPersons,
         vehicles: formattedVehicles,
       };
@@ -638,6 +746,9 @@ export default function PassRequestPage() {
             passId: `REQ-${Math.floor(Math.random() * 10000)}`,
             applicant: user.firstName || "Applicant",
             status: "Pending Approval",
+            createdAt: new Date().toISOString(),
+            paymentMode: paymentMode.toUpperCase(),
+            netAmount: totals.net,
           },
           ...submittedPasses,
         ]);
@@ -649,9 +760,7 @@ export default function PassRequestPage() {
       }
     } catch (error) {
       toast.error(
-        error.message ||
-          error.response?.data?.message ||
-          "Submission failed. Server Error.",
+        error.response?.data?.message || "Submission failed. Server Error.",
       );
       console.error("Submit Error:", error);
     } finally {
@@ -807,14 +916,14 @@ export default function PassRequestPage() {
                     +91 {generalForm.mobile}
                   </p>
                 </div>
-                <div>
+                {/* <div>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     Utilized Balance
                   </p>
                   <p className="text-sm font-black text-red-600 mt-1">
                     ₹ {generalForm.utilizedBalance}
                   </p>
-                </div>
+                </div> */}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1.5">
@@ -1237,6 +1346,157 @@ export default function PassRequestPage() {
         </div>
       )}
 
+      {/* VIEW SUBMITTED PASSES TAB */}
+      {activeTab === "view" && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <h3 className="font-black text-[#0a1e4d] flex items-center gap-2 uppercase text-sm tracking-wider">
+                <FileText className="h-5 w-5 text-orange-500" /> My Pass
+                Requests
+              </h3>
+              <button
+                onClick={fetchSubmittedPasses}
+                disabled={loadingPasses}
+                className="bg-white text-[#0a1e4d] px-4 py-2 rounded-lg border border-slate-200 text-xs font-bold hover:bg-slate-50 disabled:opacity-50 transition-colors flex items-center gap-2 shadow-sm"
+              >
+                {loadingPasses ? "Refreshing..." : "Refresh List"}
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-[#0a1e4d] text-white">
+                  <tr>
+                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider">
+                      Request ID
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider">
+                      Application Date
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider">
+                      Payment Mode
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider text-right">
+                      Net Amount
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider text-center">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {loadingPasses ? (
+                    <tr>
+                      <td
+                        colSpan="6"
+                        className="p-12 text-center text-sm font-bold text-slate-400"
+                      >
+                        <div className="flex justify-center items-center gap-2">
+                          <span className="animate-pulse">
+                            Loading pass records...
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : submittedPasses.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan="6"
+                        className="p-12 text-center text-sm font-medium text-slate-400 italic"
+                      >
+                        No pass requests found in the database.
+                      </td>
+                    </tr>
+                  ) : (
+                    submittedPasses.map((pass, idx) => {
+                      // Robust DB mapping handling camelCase, snake_case, and flat text from PostgreSQL
+                      const passIdStr = pass.id
+                        ? `REQ-${pass.id}`
+                        : pass.passId || `REQ-XXXX`;
+
+                      const createdAtStr =
+                        pass.createdAt ||
+                        pass.created_at ||
+                        pass.createdat ||
+                        pass.submittedAt ||
+                        pass.submitted_at ||
+                        pass.submittedat;
+
+                      const paymentModeStr =
+                        pass.paymentMode ||
+                        pass.payment_mode ||
+                        pass.paymentmode ||
+                        "-";
+
+                      const netAmountVal =
+                        pass.netAmount ||
+                        pass.net_amount ||
+                        pass.netamount ||
+                        pass.baseTotal ||
+                        pass.basetotal ||
+                        "0.00";
+
+                      const currentStatus = (
+                        pass.status || "PENDING"
+                      ).toUpperCase();
+
+                      const isApproved =
+                        currentStatus === "APPROVED" ||
+                        currentStatus === "ISSUED";
+
+                      return (
+                        <tr
+                          key={pass.id || idx}
+                          onClick={() => setSelectedPassDetails(pass)}
+                          className="hover:bg-blue-50/50 transition-colors cursor-pointer"
+                        >
+                          <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d] border-r border-slate-100">
+                            {passIdStr}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-600 font-medium border-r border-slate-100">
+                            {createdAtStr
+                              ? new Date(createdAtStr).toLocaleString("en-IN", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "-"}
+                          </td>
+                          <td className="px-6 py-4 text-sm font-bold text-slate-600 border-r border-slate-100">
+                            {paymentModeStr}
+                          </td>
+                          <td className="px-6 py-4 text-sm font-black text-[#0a1e4d] text-right border-r border-slate-100">
+                            ₹ {parseFloat(netAmountVal).toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 text-center border-r border-slate-100">
+                            <span
+                              className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                                currentStatus === "SUBMITTED"
+                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                  : isApproved
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : currentStatus === "REJECTED"
+                                      ? "bg-red-50 text-red-700 border border-red-200"
+                                      : "bg-amber-50 text-amber-700 border border-amber-200"
+                              }`}
+                            >
+                              {currentStatus}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      )}
+
       {/* PERSON MODAL */}
       {modals.person && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
@@ -1438,7 +1698,6 @@ export default function PassRequestPage() {
                       />
                     </div>
                   </div>
-
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Nationality <span className="text-red-500">*</span>
@@ -2245,6 +2504,462 @@ export default function PassRequestPage() {
                   ? "Update Vehicle"
                   : "Add Vehicle"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* PASS DETAILS READ-ONLY MODAL */}
+      {selectedPassDetails && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-[#0a1e4d] text-white">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-orange-400" />
+                Submitted Application Details
+              </h2>
+              <button
+                onClick={() => setSelectedPassDetails(null)}
+                className="text-white/70 hover:text-white transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6 bg-slate-50">
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <h3 className="font-black text-slate-800 mb-4 border-b border-slate-100 pb-2 text-sm uppercase tracking-wider">
+                  General Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Pass ID
+                    </label>
+                    <input
+                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold text-[#0a1e4d] cursor-not-allowed"
+                      readOnly
+                      type="text"
+                      value={`REQ-${selectedPassDetails.id || selectedPassDetails.passId || "XXXX"}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Company
+                    </label>
+                    <input
+                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm text-slate-700 cursor-not-allowed"
+                      readOnly
+                      type="text"
+                      value={generalForm.companyName || "Global Marine Traders"}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Application Date
+                    </label>
+                    <input
+                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm text-slate-700 cursor-not-allowed"
+                      readOnly
+                      type="text"
+                      value={
+                        selectedPassDetails.createdAt ||
+                        selectedPassDetails.created_at ||
+                        selectedPassDetails.submittedAt ||
+                        selectedPassDetails.submitted_at ||
+                        selectedPassDetails.createdat ||
+                        selectedPassDetails.submittedat
+                          ? new Date(
+                              selectedPassDetails.createdAt ||
+                                selectedPassDetails.created_at ||
+                                selectedPassDetails.submittedAt ||
+                                selectedPassDetails.submitted_at ||
+                                selectedPassDetails.createdat ||
+                                selectedPassDetails.submittedat,
+                            ).toLocaleString("en-IN", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "-"
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Payment Mode
+                    </label>
+                    <input
+                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm text-slate-700 cursor-not-allowed"
+                      readOnly
+                      type="text"
+                      value={
+                        selectedPassDetails.paymentMode ||
+                        selectedPassDetails.payment_mode ||
+                        selectedPassDetails.paymentmode ||
+                        "-"
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Net Amount
+                    </label>
+                    <input
+                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-black text-[#0a1e4d] cursor-not-allowed"
+                      readOnly
+                      type="text"
+                      value={`₹ ${parseFloat(selectedPassDetails.netAmount || selectedPassDetails.net_amount || selectedPassDetails.netamount || selectedPassDetails.baseTotal || selectedPassDetails.basetotal || "0").toFixed(2)}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Status
+                    </label>
+                    <input
+                      className={`w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold cursor-not-allowed ${
+                        (selectedPassDetails.status || "").toUpperCase() ===
+                        "APPROVED"
+                          ? "text-emerald-600"
+                          : "text-orange-600"
+                      }`}
+                      readOnly
+                      type="text"
+                      value={(
+                        selectedPassDetails.status || "PENDING"
+                      ).toUpperCase()}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <h3 className="font-black text-slate-800 mb-3 border-b border-slate-100 pb-2 text-sm uppercase tracking-wider">
+                    Persons Included
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                            Name
+                          </th>
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-right">
+                            Amount
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedPassDetails.persons &&
+                        selectedPassDetails.persons.length > 0 ? (
+                          selectedPassDetails.persons.map((p, i) => (
+                            <tr key={i} className="hover:bg-slate-50">
+                              <td className="p-3 text-sm font-medium text-slate-800">
+                                {p.name || p.person_name}
+                              </td>
+                              <td className="p-3 text-sm font-bold text-slate-600 text-right">
+                                ₹{parseFloat(p.amount || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td
+                              colSpan="2"
+                              className="p-4 text-sm text-slate-400 text-center italic"
+                            >
+                              Data not fetched. Need deep DB relation.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <h3 className="font-black text-slate-800 mb-3 border-b border-slate-100 pb-2 text-sm uppercase tracking-wider">
+                    Vehicles Included
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                            Reg. No
+                          </th>
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-right">
+                            Amount
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedPassDetails.vehicles &&
+                        selectedPassDetails.vehicles.length > 0 ? (
+                          selectedPassDetails.vehicles.map((v, i) => (
+                            <tr key={i} className="hover:bg-slate-50">
+                              <td className="p-3 text-sm font-bold text-[#0a1e4d] uppercase">
+                                {v.registrationNo ||
+                                  v.registration_no ||
+                                  v.regNo}
+                              </td>
+                              <td className="p-3 text-sm font-bold text-slate-600 text-right">
+                                ₹{parseFloat(v.amount || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td
+                              colSpan="2"
+                              className="p-4 text-sm text-slate-400 text-center italic"
+                            >
+                              Data not fetched. Need deep DB relation.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end p-5 border-t border-slate-200 bg-white rounded-b-2xl">
+              <button
+                onClick={() => setSelectedPassDetails(null)}
+                className="bg-[#0a1e4d] text-white px-8 py-2.5 rounded-xl shadow-lg font-bold hover:bg-opacity-90 transition-colors uppercase tracking-wider text-sm"
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* RATE CARD MODAL */}
+      {modals.rateCard && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[90vh] border border-slate-200 overflow-hidden">
+            <div className="flex justify-between items-center px-6 py-4 bg-[#0a1e4d] text-white">
+              <h2 className="text-xl font-bold tracking-wide flex items-center gap-2">
+                <Calculator className="h-5 w-5 text-orange-400" />
+                Rate Master - HEP Rate Details
+              </h2>
+              <button
+                onClick={() => toggleModal("rateCard", false)}
+                className="text-white/70 hover:text-white hover:bg-white/10 p-2 rounded-xl transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
+              <p className="text-sm font-semibold text-slate-700 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                The following are rates(Excluding GST) RFID based Harbour Entry
+                Permits.
+              </p>
+
+              <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse bg-white">
+                  <thead className="bg-slate-100 border-b border-slate-200">
+                    <tr>
+                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider border-r border-slate-200 w-12 text-center">
+                        SNo
+                      </th>
+                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider border-r border-slate-200 whitespace-nowrap">
+                        Type Of Hep
+                      </th>
+                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider border-r border-slate-200">
+                        Description
+                      </th>
+                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider text-right border-r border-slate-200 whitespace-nowrap">
+                        Daily ₹
+                      </th>
+                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider text-right border-r border-slate-200 whitespace-nowrap">
+                        Monthly ₹
+                      </th>
+                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider text-right border-r border-slate-200 whitespace-nowrap">
+                        Annual ₹
+                      </th>
+                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider text-right whitespace-nowrap">
+                        Auction ₹
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    <tr className="hover:bg-slate-50">
+                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
+                        1
+                      </td>
+                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
+                        Driver
+                      </td>
+                      <td className="p-3 text-sm text-slate-600 border-r border-slate-100">
+                        Person
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        10.20
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        153.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        407.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right">
+                        100.00
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50">
+                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
+                        2
+                      </td>
+                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
+                        Personal
+                      </td>
+                      <td className="p-3 text-sm text-slate-600 border-r border-slate-100">
+                        Person
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        10.20
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        153.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        407.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right">
+                        100.00
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50">
+                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
+                        3
+                      </td>
+                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
+                        Seafarers
+                      </td>
+                      <td className="p-3 text-sm text-slate-600 border-r border-slate-100">
+                        Person
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        10.20
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
+                        0.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
+                        0.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-400 text-right">
+                        0.00
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50">
+                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
+                        4
+                      </td>
+                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
+                        Vehicle
+                      </td>
+                      <td className="p-3 text-xs text-slate-600 border-r border-slate-100 leading-relaxed">
+                        ARTICULATED, BACK-HOES, Bus, CAR, CEMENT MIXER, CONCRETE
+                        MIXER LORRY, CYCLE RICKSHAW, DEFENCE TANK, Four wheeler,
+                        INDIVIDUAL ONLY, JEEP, LIGHT VEHICLE, LORRY, OPEN LORRY,
+                        OPEN TRACTOR, OPEN TRUCK, PFS VEHICLE, RECOVERY,
+                        ROADROLLER, Tanker, Tarus, TAURUS TIPPER, TAXI, Tipper,
+                        TRACTOR TRAILER, TRAILER LORRY, Trailors, TRI CYCLE,
+                        Trucks, VAN
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        25.50
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        306.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        2035.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-400 text-right">
+                        0.00
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50">
+                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
+                        5
+                      </td>
+                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
+                        Vehicle
+                      </td>
+                      <td className="p-3 text-xs text-slate-600 border-r border-slate-100 leading-relaxed">
+                        (JCB)EARTHMOVER, CRANE, DOZERS, DUMPERS, EXCAVATORS,
+                        Forklift, MOBILE CRANE, PAY LOADER, Poclain
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        40.70
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        458.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        3053.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-400 text-right">
+                        0.00
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50">
+                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
+                        6
+                      </td>
+                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
+                        Visitor
+                      </td>
+                      <td className="p-3 text-sm text-slate-600 border-r border-slate-100">
+                        Person
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        10.20
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
+                        0.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
+                        0.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-400 text-right">
+                        0.00
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50">
+                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
+                        7
+                      </td>
+                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
+                        Visitor
+                      </td>
+                      <td className="p-3 text-sm text-slate-600 border-r border-slate-100">
+                        Four wheeler
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
+                        25.50
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
+                        0.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
+                        0.00
+                      </td>
+                      <td className="p-3 text-sm font-bold text-slate-400 text-right">
+                        0.00
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
