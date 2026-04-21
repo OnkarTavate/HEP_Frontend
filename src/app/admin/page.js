@@ -18,6 +18,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 const BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API;
+const AUTH_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -94,9 +95,13 @@ export default function AdminDashboard() {
         text: "Passwords do not match",
       });
     }
-
+    const token = localStorage.getItem("accessToken");
     try {
-      await axios.post(`${BASE_URL}/user/create-user`, newAdmin);
+      await axios.post(`${AUTH_BASE_URL}/admin/create-dept-user`, newAdmin,{
+        headers:{
+          Authorization: `Bearer ${token}`
+        }
+      }),
       setCreateMessage({
         type: "success",
         text: "Account successfully created!",

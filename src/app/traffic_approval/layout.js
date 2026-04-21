@@ -59,8 +59,30 @@ export default function TrafficLayout({ children }) {
   }, [router]);
 
   const handleLogout = async () => {
-    localStorage.clear();
-    router.push("/");
+    try {
+      const token = localStorage.getItem("accessToken");
+
+      if (token) {
+        await axios.post(
+          `${AUTH_API}/auth/logout`,
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+      }
+    } catch (err) {
+      console.error("Logout error:", err);
+    } finally {
+      // ✅ Always clear frontend state
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("user");
+
+      router.push("/");
+    }
   };
 
   if (!user) return <div className="p-12 text-center">Loading...</div>;
@@ -176,7 +198,7 @@ export default function TrafficLayout({ children }) {
                     onClick={handleLogout}
                     className="text-red-600 cursor-pointer focus:text-red-600"
                   >
-                    <LogOut className="h-4 w-4 mr-2" />  Sign Out
+                    <LogOut className="h-4 w-4 mr-2" /> Sign Out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

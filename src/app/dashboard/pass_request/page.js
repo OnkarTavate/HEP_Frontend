@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import Select from "react-select";
 import {
   Wallet,
   Info,
@@ -128,6 +129,22 @@ export default function PassRequestPage() {
     amount: 10.2,
   };
   const [personForm, setPersonForm] = useState(initialPersonForm);
+
+  const personOptions = [
+    { value: "", label: "-- Apply Fresh (Manual Entry) --" },
+    ...Object.values(masterPersonsDB).map((p) => ({
+      value: String(p.id),
+      label: `${p.name} - Aadhar: ${p.aadhar || ""}`,
+    })),
+  ];
+
+  const vehicleOptions = [
+    { value: "", label: "-- Apply Fresh (Manual Entry) --" },
+    ...Object.values(masterVehiclesDB).map((v) => ({
+      value: String(v.id),
+      label: `${v.registrationNo || v.regNo || ""}`,
+    })),
+  ];
 
   const initialVehicleForm = {
     masterId: "",
@@ -289,15 +306,40 @@ export default function PassRequestPage() {
   }, []);
 
   useEffect(() => {
-    const pData = JSON.parse(localStorage.getItem("masterPersonnel") || "[]");
-    const vData = JSON.parse(localStorage.getItem("masterVehicles") || "[]");
-    const pDict = {};
-    pData.forEach((p) => (pDict[p.id] = p));
-    setMasterPersonsDB(pDict);
-    const vDict = {};
-    vData.forEach((v) => (vDict[v.id] = v));
-    setMasterVehiclesDB(vDict);
-  }, [modals.person, modals.vehicle]);
+    const fetchMasterRecords = async () => {
+      try {
+        let token = localStorage.getItem("accessToken");
+        if (!token) return;
+
+        token = token.replace(/^["']|["']$/g, "");
+
+        const res = await axios.get(
+          `${AGENT_API}/pass-request/my-master-records`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+
+        if (res.data?.success) {
+          const persons = res.data.data.persons || [];
+          const vehicles = res.data.data.vehicles || [];
+
+          const pDict = {};
+          persons.forEach((p) => (pDict[p.id] = p));
+
+          const vDict = {};
+          vehicles.forEach((v) => (vDict[v.id] = v));
+
+          setMasterPersonsDB(pDict);
+          setMasterVehiclesDB(vDict);
+        }
+      } catch (err) {
+        console.error("Master records fetch failed", err);
+      }
+    };
+
+    fetchMasterRecords();
+  }, []);
 
   const toggleModal = (modalName, state) => {
     setModals({ ...modals, [modalName]: state });
@@ -404,13 +446,14 @@ export default function PassRequestPage() {
         return;
       }
       setPersonForm({
-        ...personForm,
+        ...initialPersonForm,
         masterId: id,
-        name: data.name,
+        name: data.name || "",
         hepType: data.designation === "Driver" ? "1" : "2",
-        aadharNo: data.aadhar,
-        mobile: data.phone,
+        aadharNo: data.aadhar || "",
+        mobile: data.phone || "",
         email: data.email || "",
+        idProofType: data.idProofType || "1",
       });
       toast.success("Person details auto-filled");
     } else {
@@ -420,20 +463,25 @@ export default function PassRequestPage() {
 
   const handleMasterVehicleSelect = (e) => {
     const id = e.target.value;
+
     if (id && masterVehiclesDB[id]) {
       const data = masterVehiclesDB[id];
+
       if (data.isActive === false) {
         toast.error(
-          `ERROR: Vehicle ${data.regNo} is BLOCKED in the Master Directory.`,
+          `ERROR: Vehicle ${data.registrationNo || data.regNo} is BLOCKED in the Master Directory.`,
         );
         setVehicleForm(initialVehicleForm);
         return;
       }
+
       setVehicleForm({
-        ...vehicleForm,
+        ...initialVehicleForm,
         masterId: id,
-        regNo: data.regNo,
+        regNo: data.registrationNo || data.regNo || "",
+        type: data.vehicleTypeId || data.type || "",
       });
+
       toast.success("Vehicle details auto-filled");
     } else {
       setVehicleForm(initialVehicleForm);
@@ -598,12 +646,17 @@ export default function PassRequestPage() {
       // 2. SAFE EXTRACTION: Prevent undefined values breaking the DB insertion
       const getEnumValue = (arr, id, fallback) => {
         if (!id) return fallback;
+
         const item = arr.find(
           (x) => String(x.id) === String(id) || String(x.value) === String(id),
         );
-        return item
-          ? item.value || item.label || item.name || fallback
-          : fallback;
+
+        let value = item ? item.value || item.label || item.name : fallback;
+
+        // 🔧 FIX: convert YEARLY → ANNUAL to match DB enum
+        if (value === "YEARLY") value = "ANNUAL";
+
+        return value;
       };
 
       // =========================
@@ -646,11 +699,7 @@ export default function PassRequestPage() {
           ),
           withTwoWheeler: p.withTwoWheeler,
           vehicleNo: p.vehicleNo,
-          idProofType: getEnumValue(
-            masterData.idProofTypes,
-            p.idProofType,
-            null,
-          ),
+          idProofType: getEnumValue(masterData.idProofTypes, p.idProofType, ""),
           idProofNumber: p.idProofNumber,
           passType: getEnumValue(masterData.passTypes, p.passType, "DAILY"),
           passPeriod: parseInt(p.passPeriod, 10) || 1,
@@ -699,7 +748,7 @@ export default function PassRequestPage() {
       // PAYLOAD
       // =========================
       const requestPayload = {
-        agentId: parseInt(user.id, 10) || parseInt(user.agentId, 10) || 1,
+        // agentId: parseInt(user.id, 10) || parseInt(user.agentId, 10) || 1,
         purposeOfVisitId: finalPurpose,
         paymentMode: paymentMode.toUpperCase(),
         // 3. INJECT MISSING TOTALS required by your PostgreSQL Schema
@@ -717,18 +766,38 @@ export default function PassRequestPage() {
       // =========================
       // FILES APPENDING
       // =========================
-      if (persons.length > 0) {
-        if (persons[0].photo) formData.append("personPhoto", persons[0].photo);
-        if (persons[0].aadharFile)
-          formData.append("personAadhar", persons[0].aadharFile);
-        if (persons[0].idProofFile)
-          formData.append("personIdProof", persons[0].idProofFile);
-      }
 
-      if (vehicles.length > 0) {
-        if (vehicles[0].rcDocument)
-          formData.append("vehicleRC", vehicles[0].rcDocument);
-      }
+      // ===== CHANGE START =====
+      // Send files for every person (indexed)
+
+      persons.forEach((p) => {
+        if (p.photo) formData.append("personPhoto", p.photo);
+        if (p.aadharFile) formData.append("personAadhar", p.aadharFile);
+        if (p.idProofFile) formData.append("personIdProof", p.idProofFile);
+
+        if (p.driverLicence) formData.append("driverLicense", p.driverLicence);
+        if (p.policeVerification)
+          formData.append("policeVerification", p.policeVerification);
+        if (p.proofOfEmployment)
+          formData.append("employmentProof", p.proofOfEmployment);
+        if (p.copyOfLicence) formData.append("chaLicenseCopy", p.copyOfLicence);
+        if (p.passportDoc) formData.append("passportDoc", p.passportDoc);
+      });
+
+      // Send files for every vehicle
+
+      vehicles.forEach((v) => {
+        if (v.rcDocument) formData.append("vehicleRC", v.rcDocument);
+        if (v.insuranceDocument)
+          formData.append("vehicleInsurance", v.insuranceDocument);
+        if (v.permit) formData.append("vehiclePermit", v.permit);
+        if (v.fitnessCert) formData.append("vehicleFitness", v.fitnessCert);
+        if (v.requestLetter)
+          formData.append("vehicleRequestLetter", v.requestLetter);
+        if (v.taxDoc) formData.append("vehicleTax", v.taxDoc);
+        if (v.emissionCert) formData.append("vehicleEmission", v.emissionCert);
+      });
+      // ===== CHANGE END =====
 
       const response = await axios.post(
         `${AGENT_API}/pass-request/createPassRequest`,
@@ -1527,18 +1596,20 @@ export default function PassRequestPage() {
                   <label className="text-xs font-black text-[#0a1e4d] uppercase tracking-wider whitespace-nowrap">
                     Fast-Fill from Master Directory:
                   </label>
-                  <select
-                    value={personForm.masterId}
-                    onChange={handleMasterPersonSelect}
-                    className="w-full max-w-md h-11 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none px-3 font-semibold text-slate-700"
-                  >
-                    <option value="">-- Apply Fresh (Manual Entry) --</option>
-                    {Object.values(masterPersonsDB).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} - Aadhar: {p.aadhar}
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    options={personOptions}
+                    value={personOptions.find(
+                      (opt) => opt.value === String(personForm.masterId || ""),
+                    )}
+                    onChange={(selected) => {
+                      const id = selected?.value || "";
+                      handleMasterPersonSelect({ target: { value: id } });
+                    }}
+                    placeholder="Search person..."
+                    isClearable
+                    className="max-w-md w-full"
+                    classNamePrefix="react-select"
+                  />
                 </div>
               )}
 
@@ -2179,18 +2250,20 @@ export default function PassRequestPage() {
                   <label className="text-xs font-black text-[#0a1e4d] uppercase tracking-wider whitespace-nowrap">
                     Select from Vehicle Fleet:
                   </label>
-                  <select
-                    value={vehicleForm.masterId}
-                    onChange={handleMasterVehicleSelect}
-                    className="w-full max-w-md h-11 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none px-3 font-semibold text-slate-700"
-                  >
-                    <option value="">-- Apply Fresh (Manual Entry) --</option>
-                    {Object.values(masterVehiclesDB).map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.regNo}
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    options={vehicleOptions}
+                    value={vehicleOptions.find(
+                      (opt) => opt.value === String(vehicleForm.masterId || ""),
+                    )}
+                    onChange={(selected) => {
+                      const id = selected?.value || "";
+                      handleMasterVehicleSelect({ target: { value: id } });
+                    }}
+                    placeholder="Search vehicle..."
+                    isClearable
+                    className="max-w-md w-full"
+                    classNamePrefix="react-select"
+                  />
                 </div>
               )}
 

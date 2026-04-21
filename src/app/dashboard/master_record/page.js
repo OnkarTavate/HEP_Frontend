@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 import {
   Search,
   Users,
@@ -14,62 +15,84 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+const AGENT_API =
+  process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
+
 export default function MasterRecordsPage() {
   const [activeTab, setActiveTab] = useState("personnel");
   const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  // --- Mock Database States ---
-  // In a real app, these will be fetched via axios from your backend
-  const [personnel, setPersonnel] = useState([
-    {
-      id: "CPA-9921",
-      name: "Rajesh Kumar",
-      designation: "Driver",
-      aadhar: "**** **** 4291",
-      phone: "+91 98401 23456",
-      dateAdded: "12 Jan 2024",
-      isActive: true,
-    },
-    {
-      id: "CPA-8742",
-      name: "Anjali Sharma",
-      designation: "Personnel",
-      aadhar: "**** **** 8812",
-      phone: "+91 91760 98765",
-      dateAdded: "05 Mar 2024",
-      isActive: true,
-    },
-    {
-      id: "CPA-4431",
-      name: "Vikram Sethi",
-      designation: "Driver",
-      aadhar: "**** **** 1029",
-      phone: "+91 88251 11223",
-      dateAdded: "22 Apr 2024",
-      isActive: false,
-    }, // Blocked User
-  ]);
+  // Dynamic DB States
+  const [personnel, setPersonnel] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const [stats, setStats] = useState({ personCount: 0, vehicleCount: 0 });
 
-  const [vehicles, setVehicles] = useState([
-    {
-      id: "VEH-1029",
-      regNo: "TN-07-AL-4432",
-      type: "Heavy Truck",
-      owner: "Global Marine Traders",
-      fcExpiry: "12 Dec 2026",
-      dateAdded: "12 Jan 2024",
-      isActive: true,
-    },
-    {
-      id: "VEH-1055",
-      regNo: "TN-01-AB-1234",
-      type: "Four Wheeler",
-      owner: "Admin Pool",
-      fcExpiry: "05 Sep 2025",
-      dateAdded: "05 Mar 2024",
-      isActive: false,
-    }, // Blocked Vehicle
-  ]);
+  // Fetch Master Directory from Backend
+  const fetchMasterRecords = async () => {
+    try {
+      setLoading(true);
+      let token = localStorage.getItem("accessToken");
+      if (token) token = token.replace(/^["']|["']$/g, "");
+
+      const response = await axios.get(
+        `${AGENT_API}/pass-request/my-master-records`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      if (response.data && response.data.success) {
+        const { persons, vehicles, personCount, vehicleCount } =
+          response.data.data;
+
+        // Map DB array to Personnel State
+        setPersonnel(
+          persons.map((p) => ({
+            id: p.id,
+            name: p.name,
+            designation: p.designationName || "N/A",
+            aadhar: p.aadharNo,
+            phone: p.mobile,
+            dateAdded: new Date(p.createdAt).toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            }),
+            isActive: true, // backend query currently only returns isActive=true
+          })),
+        );
+
+        // Map DB array to Vehicles State
+        setVehicles(
+          vehicles.map((v) => ({
+            id: v.id,
+            regNo: v.registrationNo,
+            type: v.vehicleTypeName || "N/A",
+            owner: v.referenceNo || "N/A",
+            fcExpiry: "N/A", // Not stored in this DB query currently
+            dateAdded: new Date(v.createdAt).toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            }),
+            isActive: true,
+          })),
+        );
+
+        setStats({ personCount, vehicleCount });
+      }
+    } catch (error) {
+      console.error("Failed to fetch master records", error);
+      toast.error("Failed to load Master Directory from database.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMasterRecords();
+  }, []);
 
   // --- Handlers ---
   const togglePersonStatus = (id) => {
@@ -126,6 +149,7 @@ export default function MasterRecordsPage() {
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.aadhar.includes(searchQuery),
   );
+
   const filteredVehicles = vehicles.filter((v) =>
     v.regNo.toLowerCase().includes(searchQuery.toLowerCase()),
   );
@@ -174,9 +198,6 @@ export default function MasterRecordsPage() {
               className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all shadow-sm"
             />
           </div>
-          <button className="w-full md:w-auto bg-orange-600 text-white px-6 py-2.5 rounded-xl shadow-lg shadow-orange-600/20 text-sm font-bold hover:bg-orange-700 transition-all uppercase tracking-wider flex items-center justify-center gap-2">
-            <PlusCircle className="h-4 w-4" /> Add New Record
-          </button>
         </div>
 
         {/* PERSONNEL TABLE */}
@@ -209,54 +230,65 @@ export default function MasterRecordsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredPersonnel.map((p) => (
-                  <tr
-                    key={p.id}
-                    className={`hover:bg-slate-50 transition-colors ${!p.isActive ? "bg-red-50/30 opacity-70" : ""}`}
-                  >
-                    <td className="px-6 py-4 border-r border-slate-100">
-                      <p className="text-sm font-bold text-[#0a1e4d]">
-                        {p.name}
-                      </p>
-                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                        ID: {p.id}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100">
-                      {p.designation}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 font-mono">
-                      {p.aadhar}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
-                      {p.phone}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
-                      {p.dateAdded}
-                    </td>
-                    <td className="px-6 py-4 text-center border-r border-slate-100">
-                      <button className="text-slate-400 hover:text-orange-600 transition-colors">
-                        <Edit className="h-4 w-4 mx-auto" />
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <button
-                        onClick={() => togglePersonStatus(p.id)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none shadow-inner ${p.isActive ? "bg-emerald-500" : "bg-slate-300"}`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition duration-300 shadow-sm ${p.isActive ? "translate-x-6" : "translate-x-1"}`}
-                        />
-                      </button>
-                      <p
-                        className={`text-[10px] mt-1 font-bold ${p.isActive ? "text-emerald-600" : "text-red-500"}`}
-                      >
-                        {p.isActive ? "ACTIVE" : "BLOCKED"}
-                      </p>
+                {loading ? (
+                  <tr>
+                    <td
+                      colSpan="7"
+                      className="p-8 text-center text-slate-500 italic animate-pulse"
+                    >
+                      Loading personnel from DB...
                     </td>
                   </tr>
-                ))}
-                {filteredPersonnel.length === 0 && (
+                ) : (
+                  filteredPersonnel.map((p) => (
+                    <tr
+                      key={p.id}
+                      className={`hover:bg-slate-50 transition-colors ${!p.isActive ? "bg-red-50/30 opacity-70" : ""}`}
+                    >
+                      <td className="px-6 py-4 border-r border-slate-100">
+                        <p className="text-sm font-bold text-[#0a1e4d]">
+                          {p.name}
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                          ID: {p.id}
+                        </p>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100">
+                        {p.designation}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 font-mono">
+                        {p.aadhar}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
+                        {p.phone}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
+                        {p.dateAdded}
+                      </td>
+                      <td className="px-6 py-4 text-center border-r border-slate-100">
+                        <button className="text-slate-400 hover:text-orange-600 transition-colors">
+                          <Edit className="h-4 w-4 mx-auto" />
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={() => togglePersonStatus(p.id)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none shadow-inner ${p.isActive ? "bg-emerald-500" : "bg-slate-300"}`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition duration-300 shadow-sm ${p.isActive ? "translate-x-6" : "translate-x-1"}`}
+                          />
+                        </button>
+                        <p
+                          className={`text-[10px] mt-1 font-bold ${p.isActive ? "text-emerald-600" : "text-red-500"}`}
+                        >
+                          {p.isActive ? "ACTIVE" : "BLOCKED"}
+                        </p>
+                      </td>
+                    </tr>
+                  ))
+                )}
+                {!loading && filteredPersonnel.length === 0 && (
                   <tr>
                     <td
                       colSpan="7"
@@ -301,54 +333,65 @@ export default function MasterRecordsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredVehicles.map((v) => (
-                  <tr
-                    key={v.id}
-                    className={`hover:bg-slate-50 transition-colors ${!v.isActive ? "bg-red-50/30 opacity-70" : ""}`}
-                  >
-                    <td className="px-6 py-4 border-r border-slate-100">
-                      <p className="text-sm font-bold text-[#0a1e4d] uppercase tracking-wide">
-                        {v.regNo}
-                      </p>
-                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                        ID: {v.id}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100">
-                      {v.type}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
-                      {v.owner}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
-                      {v.fcExpiry}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
-                      {v.dateAdded}
-                    </td>
-                    <td className="px-6 py-4 text-center border-r border-slate-100">
-                      <button className="text-slate-400 hover:text-orange-600 transition-colors">
-                        <Edit className="h-4 w-4 mx-auto" />
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <button
-                        onClick={() => toggleVehicleStatus(v.id)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none shadow-inner ${v.isActive ? "bg-emerald-500" : "bg-slate-300"}`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition duration-300 shadow-sm ${v.isActive ? "translate-x-6" : "translate-x-1"}`}
-                        />
-                      </button>
-                      <p
-                        className={`text-[10px] mt-1 font-bold ${v.isActive ? "text-emerald-600" : "text-red-500"}`}
-                      >
-                        {v.isActive ? "ACTIVE" : "BLOCKED"}
-                      </p>
+                {loading ? (
+                  <tr>
+                    <td
+                      colSpan="7"
+                      className="p-8 text-center text-slate-500 italic animate-pulse"
+                    >
+                      Loading vehicles from DB...
                     </td>
                   </tr>
-                ))}
-                {filteredVehicles.length === 0 && (
+                ) : (
+                  filteredVehicles.map((v) => (
+                    <tr
+                      key={v.id}
+                      className={`hover:bg-slate-50 transition-colors ${!v.isActive ? "bg-red-50/30 opacity-70" : ""}`}
+                    >
+                      <td className="px-6 py-4 border-r border-slate-100">
+                        <p className="text-sm font-bold text-[#0a1e4d] uppercase tracking-wide">
+                          {v.regNo}
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                          ID: {v.id}
+                        </p>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100">
+                        {v.type}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
+                        {v.owner}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
+                        {v.fcExpiry}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
+                        {v.dateAdded}
+                      </td>
+                      <td className="px-6 py-4 text-center border-r border-slate-100">
+                        <button className="text-slate-400 hover:text-orange-600 transition-colors">
+                          <Edit className="h-4 w-4 mx-auto" />
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={() => toggleVehicleStatus(v.id)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none shadow-inner ${v.isActive ? "bg-emerald-500" : "bg-slate-300"}`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition duration-300 shadow-sm ${v.isActive ? "translate-x-6" : "translate-x-1"}`}
+                          />
+                        </button>
+                        <p
+                          className={`text-[10px] mt-1 font-bold ${v.isActive ? "text-emerald-600" : "text-red-500"}`}
+                        >
+                          {v.isActive ? "ACTIVE" : "BLOCKED"}
+                        </p>
+                      </td>
+                    </tr>
+                  ))
+                )}
+                {!loading && filteredVehicles.length === 0 && (
                   <tr>
                     <td
                       colSpan="7"
@@ -382,10 +425,10 @@ export default function MasterRecordsPage() {
               Total Database Records
             </p>
             <h3 className="text-3xl font-black text-[#0a1e4d]">
-              {personnel.length + vehicles.length}
+              {stats.personCount + stats.vehicleCount}
             </h3>
             <p className="text-xs text-orange-600 font-bold">
-              {personnel.length} Personnel | {vehicles.length} Vehicles
+              {stats.personCount} Personnel | {stats.vehicleCount} Vehicles
             </p>
           </div>
           <div className="w-14 h-14 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 shadow-inner">
