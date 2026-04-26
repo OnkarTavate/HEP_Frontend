@@ -58,6 +58,109 @@ const getLabelById = (arr, val, key = "label") => {
   return item ? item[key] || item.name : val;
 };
 
+// ============================================================
+// VALIDATION UTILITIES
+// ============================================================
+const VALIDATORS = {
+  email: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+  mobile: (v) => /^[6-9]\d{9}$/.test(v.replace(/\s/g, "")),
+  aadhar: (v) => /^\d{12}$/.test(v.replace(/\s/g, "")),
+  pan: (v) => /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v.toUpperCase()),
+  passport: (v) => /^[A-Z][0-9]{7}$/.test(v.toUpperCase()),
+  visaNo: (v) => /^[A-Z0-9]{5,20}$/i.test(v),
+  vehicleReg: (v) =>
+    /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(
+      v.replace(/\s/g, ""),
+    ),
+  name: (v) => /^[a-zA-Z\s.'-]{2,80}$/.test(v.trim()),
+  rfidCard: (v) => /^[A-Z0-9]{4,20}$/i.test(v),
+  drivingLicence: (v) =>
+    /^[A-Z]{2}[0-9]{13}$/.test(v.toUpperCase().replace(/[-\s]/g, "")),
+  idProofNumber: (idType, v) => {
+    if (!v) return true; // optional field
+    if (!idType) return true;
+    const t = String(idType);
+    if (t === "1") return VALIDATORS.drivingLicence(v); // DL
+    if (t === "2") return VALIDATORS.pan(v); // PAN
+    if (t === "3") return VALIDATORS.passport(v); // Passport
+    return v.trim().length >= 4; // generic
+  },
+};
+
+const getValidationError = (field, value, extra = {}) => {
+  if (!value && value !== false) return null; // skip empty optional
+  switch (field) {
+    case "email":
+      return VALIDATORS.email(value)
+        ? null
+        : "Enter a valid email (e.g. name@domain.com)";
+    case "mobile":
+      return VALIDATORS.mobile(value)
+        ? null
+        : "Enter a valid 10-digit Indian mobile number starting with 6-9";
+    case "aadharNo":
+      return VALIDATORS.aadhar(value)
+        ? null
+        : "Aadhaar must be exactly 12 digits";
+    case "name":
+      return VALIDATORS.name(value)
+        ? null
+        : "Name must be 2-80 characters (letters only)";
+    case "cardNumber":
+      return value && !VALIDATORS.rfidCard(value)
+        ? "RFID Card must be 4-20 alphanumeric characters"
+        : null;
+    case "vehicleNo": // two-wheeler plate
+      return value && !VALIDATORS.vehicleReg(value)
+        ? "Enter a valid vehicle registration (e.g. TN-01-AB-1234)"
+        : null;
+    case "regNo": // four-wheeler plate
+      return VALIDATORS.vehicleReg(value)
+        ? null
+        : "Enter a valid registration number (e.g. TN-01-AB-1234)";
+    case "visaNo":
+      return VALIDATORS.visaNo(value)
+        ? null
+        : "Visa number must be 5-20 alphanumeric characters";
+    case "idProofNumber":
+      return VALIDATORS.idProofNumber(extra.idProofType, value)
+        ? null
+        : extra.idProofType === "1"
+          ? "Driving licence must be in format: State code + 13 digits"
+          : extra.idProofType === "2"
+            ? "PAN must be in format: ABCDE1234F"
+            : extra.idProofType === "3"
+              ? "Passport must be: 1 letter + 7 digits"
+              : "Enter a valid ID number";
+    case "insuranceExpiry":
+    case "rcValidity": {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const d = new Date(value);
+      return d < today
+        ? `${field === "insuranceExpiry" ? "Insurance expiry" : "RC validity"} date must be in the future`
+        : null;
+    }
+    default:
+      return null;
+  }
+};
+
+// ============================================================
+
+const DetailItem = ({ label, value, highlight = false }) => (
+  <div className="flex flex-col">
+    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+      {label}
+    </span>
+    <span
+      className={`text-sm font-semibold ${highlight ? "text-[#0a1e4d] font-black" : "text-slate-700"}`}
+    >
+      {value || "N/A"}
+    </span>
+  </div>
+);
+
 export default function PassRequestPage() {
   const [activeTab, setActiveTab] = useState("apply");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -72,12 +175,33 @@ export default function PassRequestPage() {
     rateCard: false,
   });
 
+  const [entityModal, setEntityModal] = useState({
+    isOpen: false,
+    data: null,
+    type: null,
+  });
+
   const [persons, setPersons] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [submittedPasses, setSubmittedPasses] = useState([]);
 
   const [editingPersonIndex, setEditingPersonIndex] = useState(null);
   const [editingVehicleIndex, setEditingVehicleIndex] = useState(null);
+
+  const [personErrors, setPersonErrors] = useState({});
+  const [vehicleErrors, setVehicleErrors] = useState({});
+
+  const validatePersonField = (field, value, extra = {}) => {
+    const err = getValidationError(field, value, extra);
+    setPersonErrors((prev) => ({ ...prev, [field]: err }));
+    return !err;
+  };
+
+  const validateVehicleField = (field, value) => {
+    const err = getValidationError(field, value);
+    setVehicleErrors((prev) => ({ ...prev, [field]: err }));
+    return !err;
+  };
 
   const [masterPersonsDB, setMasterPersonsDB] = useState({});
   const [masterVehiclesDB, setMasterVehiclesDB] = useState({});
@@ -344,34 +468,101 @@ export default function PassRequestPage() {
   const toggleModal = (modalName, state) => {
     setModals({ ...modals, [modalName]: state });
     if (!state) {
-      if (modalName === "person") setEditingPersonIndex(null);
-      if (modalName === "vehicle") setEditingVehicleIndex(null);
+      if (modalName === "person") {
+        setEditingPersonIndex(null);
+        setPersonErrors({});
+      }
+      if (modalName === "vehicle") {
+        setEditingVehicleIndex(null);
+        setVehicleErrors({});
+      }
     }
   };
 
   useEffect(() => {
+    let updatedPeriod = personForm.passPeriod;
+
+    // ✅ Restrict DAILY to max 7 days
+    if (String(personForm.passType) === "1") {
+      if (parseInt(updatedPeriod) > 7) {
+        updatedPeriod = "7";
+        toast.warning("Maximum 7 days allowed for daily pass");
+      }
+    } else {
+      // ❌ Disable period for Monthly/Yearly
+      updatedPeriod = "1";
+    }
+
     let amt = 10.2;
-    if (String(personForm.passType) === "2") amt = 153.0; // 2 = MONTHLY
-    if (String(personForm.passType) === "3") amt = 407.0; // 3 = YEARLY
+    if (String(personForm.passType) === "2") amt = 153.0;
+    if (String(personForm.passType) === "3") amt = 407.0;
+
     const newDateTo = calculateDateTo(
       personForm.dateFrom,
-      personForm.passPeriod,
+      updatedPeriod,
       personForm.passType,
     );
-    setPersonForm((prev) => ({ ...prev, amount: amt, dateTo: newDateTo }));
+
+    setPersonForm((prev) => ({
+      ...prev,
+      passPeriod: updatedPeriod,
+      amount: amt,
+      dateTo: newDateTo,
+    }));
   }, [personForm.passType, personForm.passPeriod, personForm.dateFrom]);
 
   useEffect(() => {
+    let updatedPeriod = vehicleForm.passPeriod;
+
+    if (String(vehicleForm.passType) === "1") {
+      if (parseInt(updatedPeriod) > 7) {
+        updatedPeriod = "7";
+        toast.warning("Daily pass max allowed is 7 days");
+      }
+    } else {
+      updatedPeriod = "1";
+    }
+
     let amt = 25.5;
     if (String(vehicleForm.passType) === "2") amt = 306.0;
     if (String(vehicleForm.passType) === "3") amt = 2035.0;
+
     const newDateTo = calculateDateTo(
       vehicleForm.dateFrom,
-      vehicleForm.passPeriod,
+      updatedPeriod,
       vehicleForm.passType,
     );
-    setVehicleForm((prev) => ({ ...prev, amount: amt, dateTo: newDateTo }));
+
+    setVehicleForm((prev) => ({
+      ...prev,
+      passPeriod: updatedPeriod,
+      amount: amt,
+      dateTo: newDateTo,
+    }));
   }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom]);
+
+  useEffect(() => {
+    const selectedNationality = getLabelById(
+      masterData.nationalities,
+      personForm.nationality,
+      "label",
+    )?.toUpperCase();
+
+    if (selectedNationality === "INDIAN") {
+      setPersonForm((prev) => ({
+        ...prev,
+        country: "75", // India
+      }));
+    } else if (selectedNationality && selectedNationality !== "INDIAN") {
+      // If switching from Indian → foreign, clear India
+      if (String(personForm.country) === "75") {
+        setPersonForm((prev) => ({
+          ...prev,
+          country: "",
+        }));
+      }
+    }
+  }, [personForm.nationality, masterData.nationalities]);
 
   const fetchSubmittedPasses = async () => {
     setLoadingPasses(true);
@@ -489,6 +680,61 @@ export default function PassRequestPage() {
   };
 
   const handleAddPerson = () => {
+    // ---- Full field validation before add ----
+    const errors = {};
+    if (!personForm.name.trim()) errors.name = "Full name is required";
+    else if (!/^[a-zA-Z\s.'-]{2,80}$/.test(personForm.name.trim()))
+      errors.name = "Name must be 2-80 characters (letters only)";
+
+    if (!personForm.aadharNo) errors.aadharNo = "Aadhaar number is required";
+    else if (!/^\d{12}$/.test(personForm.aadharNo.replace(/\s/g, "")))
+      errors.aadharNo = "Aadhaar must be exactly 12 digits";
+
+    if (!personForm.mobile) errors.mobile = "Mobile number is required";
+    else if (!/^[6-9]\d{9}$/.test(personForm.mobile.replace(/\s/g, "")))
+      errors.mobile =
+        "Enter a valid 10-digit Indian mobile number starting with 6-9";
+
+    if (
+      personForm.email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personForm.email)
+    )
+      errors.email = "Enter a valid email address";
+
+    if (
+      personForm.withTwoWheeler &&
+      personForm.vehicleNo &&
+      !/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(
+        personForm.vehicleNo,
+      )
+    )
+      errors.vehicleNo = "Enter a valid vehicle registration number";
+
+    if (
+      personForm.visaNo &&
+      String(personForm.country) !== "75" &&
+      !/^[A-Z0-9]{5,20}$/i.test(personForm.visaNo)
+    )
+      errors.visaNo = "Visa number must be 5-20 alphanumeric characters";
+
+    if (personForm.idProofNumber) {
+      const err = getValidationError(
+        "idProofNumber",
+        personForm.idProofNumber,
+        { idProofType: personForm.idProofType },
+      );
+      if (err) errors.idProofNumber = err;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setPersonErrors(errors);
+      return toast.error(
+        "Please fix the highlighted field errors before adding.",
+      );
+    }
+    setPersonErrors({});
+    // ---- End validation ----
+
     if (
       !personForm.name.trim() ||
       !personForm.designation ||
@@ -556,6 +802,38 @@ export default function PassRequestPage() {
   };
 
   const handleAddVehicle = () => {
+    // ---- Full field validation before add ----
+    const vErrors = {};
+    if (!vehicleForm.regNo.trim())
+      vErrors.regNo = "Registration number is required";
+    else if (
+      !/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(
+        vehicleForm.regNo,
+      )
+    )
+      vErrors.regNo = "Enter a valid registration number (e.g. TN-01-AB-1234)";
+
+    if (vehicleForm.insuranceExpiry) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (new Date(vehicleForm.insuranceExpiry) < today)
+        vErrors.insuranceExpiry = "Insurance expiry date must be in the future";
+    }
+    if (vehicleForm.rcValidity) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (new Date(vehicleForm.rcValidity) < today)
+        vErrors.rcValidity = "RC validity date must be in the future";
+    }
+    if (Object.keys(vErrors).length > 0) {
+      setVehicleErrors(vErrors);
+      return toast.error(
+        "Please fix the highlighted field errors before adding.",
+      );
+    }
+    setVehicleErrors({});
+    // ---- End validation ----
+
     if (
       !vehicleForm.regNo.trim() ||
       !vehicleForm.rcDocument ||
@@ -774,7 +1052,8 @@ export default function PassRequestPage() {
         if (p.photo) formData.append("personPhoto", p.photo);
         if (p.aadharFile) formData.append("personAadhar", p.aadharFile);
         if (p.idProofFile) formData.append("personIdProof", p.idProofFile);
-
+        if (p.requisitionLetter)
+          formData.append("requisitionLetter", p.requisitionLetter);
         if (p.driverLicence) formData.append("driverLicense", p.driverLicence);
         if (p.policeVerification)
           formData.append("policeVerification", p.policeVerification);
@@ -923,10 +1202,10 @@ export default function PassRequestPage() {
             Apply for new harbor entry permits
           </p>
         </div>
-        <div className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-3 shadow-sm text-[#0a1e4d]">
+        {/* <div className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-3 shadow-sm text-[#0a1e4d]">
           <Wallet className="h-5 w-5 text-orange-500" /> Wallet Balance:{" "}
           <span className="text-lg">₹{generalForm.balance}</span>
-        </div>
+        </div> */}
       </div>
 
       <div className="flex border-b border-slate-300">
@@ -1642,12 +1921,22 @@ export default function PassRequestPage() {
                     <input
                       type="text"
                       value={personForm.name}
-                      onChange={(e) =>
-                        setPersonForm({ ...personForm, name: e.target.value })
+                      onChange={(e) => {
+                        setPersonForm({ ...personForm, name: e.target.value });
+                        validatePersonField("name", e.target.value);
+                      }}
+                      onBlur={(e) =>
+                        validatePersonField("name", e.target.value)
                       }
-                      className={inputClass}
+                      className={`${inputClass} ${personErrors.name ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                       placeholder="Full Name"
+                      maxLength={80}
                     />
+                    {personErrors.name && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {personErrors.name}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
@@ -1656,15 +1945,26 @@ export default function PassRequestPage() {
                     <input
                       type="text"
                       value={personForm.aadharNo}
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          aadharNo: e.target.value,
-                        })
+                      onChange={(e) => {
+                        const val = e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 12);
+                        setPersonForm({ ...personForm, aadharNo: val });
+                        validatePersonField("aadharNo", val);
+                      }}
+                      onBlur={(e) =>
+                        validatePersonField("aadharNo", e.target.value)
                       }
-                      className={inputClass}
+                      className={`${inputClass} ${personErrors.aadharNo ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                       placeholder="XXXX XXXX XXXX"
+                      maxLength={12}
+                      inputMode="numeric"
                     />
+                    {personErrors.aadharNo && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {personErrors.aadharNo}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase text-red-500">
@@ -1710,17 +2010,36 @@ export default function PassRequestPage() {
                       </div>
                       <input
                         type="tel"
-                        value={personForm.mobile}
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            mobile: e.target.value,
-                          })
-                        }
-                        className="w-full pl-[5.5rem] pr-3 h-10 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 outline-none transition-all"
+                        value={personForm.mobile} // Fixed: Removed URL wrapper
+                        className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${
+                          personErrors.mobile
+                            ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
+                            : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
+                        }`}
                         placeholder="00000 00000"
+                        maxLength={10}
+                        inputMode="numeric"
+                        onBlur={(e) =>
+                          validatePersonField("mobile", e.target.value)
+                        }
+                        onChange={(e) => {
+                          // Logic merged: Clean the input AND update state
+                          const val = e.target.value
+                            .replace(/\D/g, "")
+                            .slice(0, 10);
+                          setPersonForm({ ...personForm, mobile: val });
+
+                          if (val.length === 10) {
+                            validatePersonField("mobile", val);
+                          }
+                        }}
                       />
                     </div>
+                    {personErrors.mobile && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {personErrors.mobile}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
@@ -1729,12 +2048,23 @@ export default function PassRequestPage() {
                     <input
                       type="email"
                       value={personForm.email}
-                      onChange={(e) =>
-                        setPersonForm({ ...personForm, email: e.target.value })
-                      }
-                      className={inputClass}
+                      onChange={(e) => {
+                        setPersonForm({ ...personForm, email: e.target.value });
+                        if (e.target.value)
+                          validatePersonField("email", e.target.value);
+                      }}
+                      onBlur={(e) => {
+                        if (e.target.value)
+                          validatePersonField("email", e.target.value);
+                      }}
+                      className={`${inputClass} ${personErrors.email ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                       placeholder="email@domain.com"
                     />
+                    {personErrors.email && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {personErrors.email}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
@@ -1757,17 +2087,35 @@ export default function PassRequestPage() {
                       <input
                         type="text"
                         value={personForm.vehicleNo}
-                        onChange={(e) =>
+                        disabled={!personForm.withTwoWheeler}
+                        placeholder="Vehicle No (e.g. TN01AB1234)"
+                        className="w-full text-sm disabled:bg-slate-100 disabled:cursor-not-allowed px-3 outline-none uppercase font-bold text-[#0a1e4d]"
+                        onBlur={(e) => {
+                          if (personForm.withTwoWheeler)
+                            validatePersonField("vehicleNo", e.target.value);
+                        }}
+                        // Combined single onChange handler
+                        onChange={(e) => {
+                          const val = e.target.value.toUpperCase().slice(0, 13);
+
+                          // Update the form state
                           setPersonForm({
                             ...personForm,
-                            vehicleNo: e.target.value,
-                          })
-                        }
-                        disabled={!personForm.withTwoWheeler}
-                        placeholder="Vehicle No"
-                        className="w-full text-sm disabled:bg-slate-100 disabled:cursor-not-allowed px-3 outline-none uppercase font-bold text-[#0a1e4d]"
+                            vehicleNo: val,
+                          });
+
+                          // Run validation if applicable
+                          if (personForm.withTwoWheeler && val.length >= 8) {
+                            validatePersonField("vehicleNo", val);
+                          }
+                        }}
                       />
                     </div>
+                    {personErrors.vehicleNo && personForm.withTwoWheeler && (
+                      <p className="text-xs text-red-500 mt-1 font-medium">
+                        {personErrors.vehicleNo}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
@@ -1775,12 +2123,21 @@ export default function PassRequestPage() {
                     </label>
                     <select
                       value={personForm.nationality}
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          nationality: e.target.value,
-                        })
-                      }
+                      onChange={(e) => {
+                        const value = e.target.value;
+
+                        const nationalityName = getLabelById(
+                          masterData.nationalities,
+                          value,
+                          "label",
+                        )?.toUpperCase();
+
+                        setPersonForm((prev) => ({
+                          ...prev,
+                          nationality: value,
+                          country: nationalityName === "INDIAN" ? "75" : "",
+                        }));
+                      }}
                       className={inputClass}
                     >
                       <option value="">Select Nationality</option>
@@ -1804,13 +2161,36 @@ export default function PassRequestPage() {
                         })
                       }
                       className={inputClass}
+                      disabled={
+                        getLabelById(
+                          masterData.nationalities,
+                          personForm.nationality,
+                          "label",
+                        )?.toUpperCase() === "INDIAN"
+                      }
                     >
                       <option value="">Select Country</option>
-                      {masterData.countries.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
+
+                      {masterData.countries
+                        .filter((c) => {
+                          const nationality = getLabelById(
+                            masterData.nationalities,
+                            personForm.nationality,
+                            "label",
+                          )?.toUpperCase();
+
+                          if (nationality === "INDIAN") {
+                            return c.id === 75; // only India
+                          } else if (nationality) {
+                            return c.id !== 75; // exclude India
+                          }
+                          return true;
+                        })
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
                     </select>
                   </div>
                   <div className="space-y-1.5">
@@ -1820,13 +2200,25 @@ export default function PassRequestPage() {
                     <input
                       type="text"
                       value={personForm.visaNo}
-                      onChange={(e) =>
-                        setPersonForm({ ...personForm, visaNo: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setPersonForm({ ...personForm, visaNo: val });
+                        if (val) validatePersonField("visaNo", val);
+                      }}
+                      onBlur={(e) => {
+                        if (e.target.value)
+                          validatePersonField("visaNo", e.target.value);
+                      }}
                       disabled={String(personForm.country) === "75"}
-                      placeholder="Visa number"
-                      className={`disabled:bg-slate-100 disabled:cursor-not-allowed ${inputClass}`}
+                      placeholder="Visa number (5-20 alphanumeric)"
+                      maxLength={20}
+                      className={`disabled:bg-slate-100 disabled:cursor-not-allowed ${inputClass} ${personErrors.visaNo ? "border-red-400" : ""}`}
                     />
+                    {personErrors.visaNo && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {personErrors.visaNo}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
@@ -1927,15 +2319,28 @@ export default function PassRequestPage() {
                     <input
                       type="text"
                       value={personForm.idProofNumber}
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          idProofNumber: e.target.value,
-                        })
-                      }
-                      className={inputClass}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setPersonForm({ ...personForm, idProofNumber: val });
+                        if (val)
+                          validatePersonField("idProofNumber", val, {
+                            idProofType: personForm.idProofType,
+                          });
+                      }}
+                      onBlur={(e) => {
+                        if (e.target.value)
+                          validatePersonField("idProofNumber", e.target.value, {
+                            idProofType: personForm.idProofType,
+                          });
+                      }}
+                      className={`${inputClass} ${personErrors.idProofNumber ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                       placeholder={idProofPlaceholder}
                     />
+                    {personErrors.idProofNumber && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {personErrors.idProofNumber}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5 md:col-span-2 max-w-sm">
                     <label className="text-xs font-bold text-slate-700 uppercase">
@@ -1975,8 +2380,14 @@ export default function PassRequestPage() {
                     )}
                   </div>
                   <div className="space-y-1.5 md:col-span-2 max-w-sm">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      Copy of ID Proof <span className="text-red-500">*</span>
+                    <label>
+                      Copy of{" "}
+                      {getLabelById(
+                        masterData.idProofTypes,
+                        personForm.idProofType,
+                        "label",
+                      ) || "ID Proof"}{" "}
+                      <span className="text-red-500">*</span>
                     </label>
                     <FileUploadBox
                       file={personForm.idProofFile}
@@ -2147,13 +2558,18 @@ export default function PassRequestPage() {
                           <input
                             type="number"
                             value={personForm.passPeriod}
+                            min="1"
+                            max={
+                              String(personForm.passType) === "1" ? "7" : "1"
+                            }
+                            disabled={String(personForm.passType) !== "1"}
                             onChange={(e) =>
                               setPersonForm({
                                 ...personForm,
                                 passPeriod: e.target.value,
                               })
                             }
-                            className="w-20 h-10 border border-slate-300 rounded-lg text-sm px-2 text-center outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-bold"
+                            className={inputClass}
                           />
                           <span className="text-sm font-bold text-slate-700">
                             Days
@@ -2279,15 +2695,23 @@ export default function PassRequestPage() {
                     <input
                       type="text"
                       value={vehicleForm.regNo}
-                      onChange={(e) =>
-                        setVehicleForm({
-                          ...vehicleForm,
-                          regNo: e.target.value,
-                        })
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase().slice(0, 13);
+                        setVehicleForm({ ...vehicleForm, regNo: val });
+                        if (val.length >= 8) validateVehicleField("regNo", val);
+                      }}
+                      onBlur={(e) =>
+                        validateVehicleField("regNo", e.target.value)
                       }
-                      className={`${inputClass} uppercase font-bold text-[#0a1e4d] tracking-wider`}
+                      className={`${inputClass} uppercase font-bold text-[#0a1e4d] tracking-wider ${vehicleErrors.regNo ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                       placeholder="TN-XX-XX-XXXX"
+                      maxLength={13}
                     />
+                    {vehicleErrors.regNo && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {vehicleErrors.regNo}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
@@ -2354,14 +2778,21 @@ export default function PassRequestPage() {
                     <input
                       type="date"
                       value={vehicleForm.insuranceExpiry}
-                      onChange={(e) =>
+                      min={new Date().toISOString().split("T")[0]}
+                      onChange={(e) => {
                         setVehicleForm({
                           ...vehicleForm,
                           insuranceExpiry: e.target.value,
-                        })
-                      }
-                      className={inputClass}
+                        });
+                        validateVehicleField("insuranceExpiry", e.target.value);
+                      }}
+                      className={`${inputClass} ${vehicleErrors.insuranceExpiry ? "border-red-400" : ""}`}
                     />
+                    {vehicleErrors.insuranceExpiry && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {vehicleErrors.insuranceExpiry}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
@@ -2370,14 +2801,21 @@ export default function PassRequestPage() {
                     <input
                       type="date"
                       value={vehicleForm.rcValidity}
-                      onChange={(e) =>
+                      min={new Date().toISOString().split("T")[0]}
+                      onChange={(e) => {
                         setVehicleForm({
                           ...vehicleForm,
                           rcValidity: e.target.value,
-                        })
-                      }
-                      className={inputClass}
+                        });
+                        validateVehicleField("rcValidity", e.target.value);
+                      }}
+                      className={`${inputClass} ${vehicleErrors.rcValidity ? "border-red-400" : ""}`}
                     />
+                    {vehicleErrors.rcValidity && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {vehicleErrors.rcValidity}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2519,13 +2957,18 @@ export default function PassRequestPage() {
                           <input
                             type="number"
                             value={vehicleForm.passPeriod}
+                            min="1"
+                            max={
+                              String(vehicleForm.passType) === "1" ? "7" : "1"
+                            }
+                            disabled={String(vehicleForm.passType) !== "1"}
                             onChange={(e) =>
                               setVehicleForm({
                                 ...vehicleForm,
                                 passPeriod: e.target.value,
                               })
                             }
-                            className="w-20 h-10 border border-slate-300 rounded-lg text-sm px-2 text-center outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-bold"
+                            className={inputClass}
                           />
                           <span className="text-sm font-bold text-slate-700">
                             Days
@@ -2719,8 +3162,11 @@ export default function PassRequestPage() {
                           <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             Name
                           </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-right">
-                            Amount
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                            Status
+                          </th>
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">
+                            Action
                           </th>
                         </tr>
                       </thead>
@@ -2728,22 +3174,54 @@ export default function PassRequestPage() {
                         {selectedPassDetails.persons &&
                         selectedPassDetails.persons.length > 0 ? (
                           selectedPassDetails.persons.map((p, i) => (
-                            <tr key={i} className="hover:bg-slate-50">
+                            <tr
+                              key={i}
+                              className="hover:bg-blue-50 cursor-pointer transition-colors"
+                              onClick={() =>
+                                setEntityModal({
+                                  isOpen: true,
+                                  data: p,
+                                  type: "person",
+                                })
+                              }
+                            >
                               <td className="p-3 text-sm font-medium text-slate-800">
                                 {p.name || p.person_name}
                               </td>
-                              <td className="p-3 text-sm font-bold text-slate-600 text-right">
-                                ₹{parseFloat(p.amount || 0).toFixed(2)}
+                              <td className="p-3">
+                                <span
+                                  className={`px-2 py-1 rounded-full text-[10px] font-bold ${String(p.status).toUpperCase() === "APPROVED" ? "bg-emerald-100 text-emerald-700" : String(p.status).toUpperCase() === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                                >
+                                  {(p.status || "PENDING").toUpperCase()}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center">
+                                {String(p.status).toUpperCase() ===
+                                "APPROVED" ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePrintQR(p);
+                                    }}
+                                    className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
+                                  >
+                                    Print QR
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-slate-400">
+                                    -
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           ))
                         ) : (
                           <tr>
                             <td
-                              colSpan="2"
+                              colSpan="3"
                               className="p-4 text-sm text-slate-400 text-center italic"
                             >
-                              Data not fetched. Need deep DB relation.
+                              No persons found.
                             </td>
                           </tr>
                         )}
@@ -2763,8 +3241,11 @@ export default function PassRequestPage() {
                           <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             Reg. No
                           </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-right">
-                            Amount
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                            Status
+                          </th>
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">
+                            Action
                           </th>
                         </tr>
                       </thead>
@@ -2772,24 +3253,56 @@ export default function PassRequestPage() {
                         {selectedPassDetails.vehicles &&
                         selectedPassDetails.vehicles.length > 0 ? (
                           selectedPassDetails.vehicles.map((v, i) => (
-                            <tr key={i} className="hover:bg-slate-50">
+                            <tr
+                              key={i}
+                              className="hover:bg-blue-50 cursor-pointer transition-colors"
+                              onClick={() =>
+                                setEntityModal({
+                                  isOpen: true,
+                                  data: v,
+                                  type: "vehicle",
+                                })
+                              }
+                            >
                               <td className="p-3 text-sm font-bold text-[#0a1e4d] uppercase">
                                 {v.registrationNo ||
                                   v.registration_no ||
                                   v.regNo}
                               </td>
-                              <td className="p-3 text-sm font-bold text-slate-600 text-right">
-                                ₹{parseFloat(v.amount || 0).toFixed(2)}
+                              <td className="p-3">
+                                <span
+                                  className={`px-2 py-1 rounded-full text-[10px] font-bold ${String(v.status).toUpperCase() === "APPROVED" ? "bg-emerald-100 text-emerald-700" : String(v.status).toUpperCase() === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                                >
+                                  {(v.status || "PENDING").toUpperCase()}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center">
+                                {String(v.status).toUpperCase() ===
+                                "APPROVED" ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePrintQR(v);
+                                    }}
+                                    className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
+                                  >
+                                    Print QR
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-slate-400">
+                                    -
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           ))
                         ) : (
                           <tr>
                             <td
-                              colSpan="2"
+                              colSpan="3"
                               className="p-4 text-sm text-slate-400 text-center italic"
                             >
-                              Data not fetched. Need deep DB relation.
+                              No vehicles found.
                             </td>
                           </tr>
                         )}
@@ -3033,6 +3546,185 @@ export default function PassRequestPage() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* INDIVIDUAL ENTITY DETAILS MODAL (READ-ONLY FOR COMPANY) */}
+      {/* ============================================================== */}
+      {entityModal.isOpen && entityModal.data && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[85vh] overflow-hidden border border-slate-200">
+            <div className="flex justify-between items-center px-6 py-4 bg-slate-800 text-white shrink-0">
+              <div className="flex items-center gap-3">
+                {entityModal.type === "person" ? (
+                  <UserPlus className="h-5 w-5 text-orange-400" />
+                ) : (
+                  <Truck className="h-5 w-5 text-orange-400" />
+                )}
+                <h3 className="text-lg font-bold">
+                  {entityModal.type === "person"
+                    ? entityModal.data.name
+                    : entityModal.data.registrationNo || entityModal.data.regNo}
+                </h3>
+              </div>
+              <button
+                onClick={() =>
+                  setEntityModal({ isOpen: false, data: null, type: null })
+                }
+                className="text-white/70 hover:text-white p-1 bg-slate-700 rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 space-y-6">
+              {/* REJECTION REASON BANNER (IF APPLICABLE) */}
+              {String(entityModal.data.status).toUpperCase() === "REJECTED" &&
+                entityModal.data.rejectedReason && (
+                  <div className="bg-red-50 border border-red-200 p-4 rounded-xl flex items-start gap-3">
+                    <X className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                    <div>
+                      <h4 className="text-xs font-black text-red-900 uppercase tracking-wider mb-1">
+                        Reason for Rejection
+                      </h4>
+                      <p className="text-sm text-red-700 font-medium">
+                        {entityModal.data.rejectedReason}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-3 bg-slate-100 border-b border-slate-200">
+                  <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest">
+                    Submitted Data
+                  </h4>
+                </div>
+                <div className="p-5 grid grid-cols-2 gap-y-6 gap-x-4">
+                  {entityModal.type === "person" ? (
+                    <>
+                      <DetailItem
+                        label="Full Name"
+                        value={entityModal.data.name}
+                        highlight
+                      />
+                      <DetailItem
+                        label="Aadhar No."
+                        value={entityModal.data.aadharNo}
+                      />
+                      <DetailItem
+                        label="Mobile No."
+                        value={entityModal.data.mobile}
+                      />
+                      <DetailItem
+                        label="Nationality"
+                        value={entityModal.data.nationality}
+                      />
+                      <DetailItem
+                        label="Pass Type"
+                        value={entityModal.data.passType}
+                        highlight
+                      />
+                      <DetailItem
+                        label="Valid From"
+                        value={
+                          entityModal.data.dateFrom
+                            ? new Date(
+                                entityModal.data.dateFrom,
+                              ).toLocaleDateString()
+                            : ""
+                        }
+                      />
+                      <DetailItem
+                        label="Valid To"
+                        value={
+                          entityModal.data.dateTo
+                            ? new Date(
+                                entityModal.data.dateTo,
+                              ).toLocaleDateString()
+                            : ""
+                        }
+                      />
+                      <DetailItem
+                        label="Calculated Amount"
+                        value={`₹${parseFloat(entityModal.data.amount || 0).toFixed(2)}`}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <DetailItem
+                        label="Registration No."
+                        value={
+                          entityModal.data.registrationNo ||
+                          entityModal.data.regNo
+                        }
+                        highlight
+                      />
+                      <DetailItem
+                        label="Pass Type"
+                        value={entityModal.data.passType}
+                        highlight
+                      />
+                      <DetailItem
+                        label="Valid From"
+                        value={
+                          entityModal.data.dateFrom
+                            ? new Date(
+                                entityModal.data.dateFrom,
+                              ).toLocaleDateString()
+                            : ""
+                        }
+                      />
+                      <DetailItem
+                        label="Valid To"
+                        value={
+                          entityModal.data.dateTo
+                            ? new Date(
+                                entityModal.data.dateTo,
+                              ).toLocaleDateString()
+                            : ""
+                        }
+                      />
+                      <DetailItem
+                        label="Insurance Expiry"
+                        value={
+                          entityModal.data.insuranceExpiry
+                            ? new Date(
+                                entityModal.data.insuranceExpiry,
+                              ).toLocaleDateString()
+                            : ""
+                        }
+                      />
+                      <DetailItem
+                        label="RC Validity"
+                        value={
+                          entityModal.data.rcValidity
+                            ? new Date(
+                                entityModal.data.rcValidity,
+                              ).toLocaleDateString()
+                            : ""
+                        }
+                      />
+                      <DetailItem
+                        label="Calculated Amount"
+                        value={`₹${parseFloat(entityModal.data.amount || 0).toFixed(2)}`}
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-white text-right shrink-0">
+              <button
+                onClick={() =>
+                  setEntityModal({ isOpen: false, data: null, type: null })
+                }
+                className="bg-slate-200 text-slate-800 px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-300 transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

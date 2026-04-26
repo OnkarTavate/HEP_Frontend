@@ -30,10 +30,10 @@ import {
   Mail,
   CreditCard,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 
-const AGENT_API =
-  process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
+const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
+
+const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
 
 // --- URL Helper to reliably strip '/api' for static file fetching ---
 const getFileUrl = (filePath) => {
@@ -85,7 +85,7 @@ const DocumentCard = ({
 export default function TrafficPassesPage() {
   const [activeTab, setActiveTab] = useState("pending");
   const [cardFilter, setCardFilter] = useState("ALL");
-
+  const [isViewMode, setIsViewMode] = useState(false);
   // Search and Sort States
   const [searchInput, setSearchInput] = useState("");
   const [sortBy, setSortBy] = useState("DATE_DESC");
@@ -137,6 +137,7 @@ export default function TrafficPassesPage() {
       );
 
       if (response.data && response.data.success) {
+        console.log("API RESPONSE:", response.data.data); // ✅ ADD THIS
         setRequests(response.data.data || []);
       } else {
         setRequests([]);
@@ -216,6 +217,7 @@ export default function TrafficPassesPage() {
     const persons = selectedRequest.persons || [];
     const vehicles = selectedRequest.vehicles || [];
 
+    // 1. VALIDATION: Ensure every single entity has a decision
     const unverifiedPersons = persons.filter(
       (p) => !entityStatuses.persons[p.id],
     );
@@ -231,58 +233,108 @@ export default function TrafficPassesPage() {
       return;
     }
 
-    const loadingToastId = toast.loading("Submitting review...");
+    const loadingToastId = toast.loading("Submitting review to backend...");
+
     try {
       const token = localStorage.getItem("accessToken");
+      const headers = { Authorization: `Bearer ${token}` };
 
-      const payload = {
-        requestId: selectedRequest.id,
-        decisions: entityStatuses,
-        remarks: entityRemarks,
-      };
+      // Target your Approval Admin Service endpoint (Port 5005)
+      const actionUrl = `${ADMIN_API}/pass-request/agent-pass-request-action`;
 
-      await axios.post(`${AGENT_API}/pass-request/review-entities`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
+      // 2. BUILD PERSON PAYLOADS
+      const personPromises = persons.map((p) => {
+        const status = entityStatuses.persons[p.id];
+        const remark = entityRemarks.persons[p.id];
+
+        const payload = {
+          personId: p.id,
+          decision: status === "APPROVED" ? "approve-person" : "reject-person",
+        };
+
+        if (status === "REJECTED") {
+          payload.rejectedReason = remark;
+        }
+
+        return axios.patch(actionUrl, payload, { headers });
       });
 
+      // 3. BUILD VEHICLE PAYLOADS
+      const vehiclePromises = vehicles.map((v) => {
+        const status = entityStatuses.vehicles[v.id];
+        const remark = entityRemarks.vehicles[v.id];
+
+        const payload = {
+          vehicleId: v.id,
+          decision:
+            status === "APPROVED" ? "approve-vehicle" : "reject-vehicle",
+        };
+
+        if (status === "REJECTED") {
+          payload.rejectedReason = remark;
+        }
+
+        return axios.patch(actionUrl, payload, { headers });
+      });
+
+      // 4. EXECUTE ALL ENTITY ACTIONS CONCURRENTLY
+      await Promise.all([...personPromises, ...vehiclePromises]);
+
+      // 5. FINALLY, SUBMIT THE 'COMPLETE-REVIEW' FLAG
+      const finalPayload = {
+        passRequestId: selectedRequest.id,
+        decision: "complete-review",
+      };
+
+      await axios.patch(actionUrl, finalPayload, { headers });
+
+      // 6. HANDLE SUCCESS
       toast.success("Review Submitted", {
         id: loadingToastId,
         description: "Pass Request review processed successfully.",
       });
+
       setIsModalOpen(false);
-      fetchPassRequests();
+      fetchPassRequests(); // Refresh the dashboard table
     } catch (error) {
       console.error("Submission error:", error);
-      toast.error("API Error", {
+      toast.error("Submission Failed", {
         id: loadingToastId,
-        description: "Backend endpoint error or missing route.",
+        description:
+          error.response?.data?.message ||
+          "Failed to submit complete review to backend.",
       });
     }
   };
 
-  const openReviewModal = (pass) => {
+  const openReviewModal = (pass, viewOnly = false) => {
     setSelectedRequest(pass);
-    setEntityStatuses({ persons: {}, vehicles: {} });
-    setEntityRemarks({ persons: {}, vehicles: {} });
-    // setCompanyProfile(null);
-    // fetchCompanyProfile();
+
+    if (!viewOnly) {
+      setEntityStatuses({ persons: {}, vehicles: {} });
+      setEntityRemarks({ persons: {}, vehicles: {} });
+    }
+
+    setIsViewMode(viewOnly);
     setIsModalOpen(true);
   };
 
   // --- FILTER & SORT LOGIC ---
-  const pendingPasses = requests.filter(
-    (r) => r.status === "SUBMITTED" || r.status === "PENDING",
-  );
-  const processedPasses = requests.filter(
-    (r) =>
-      r.status === "APPROVED" ||
-      r.status === "REJECTED" ||
-      r.status === "PROCESSED",
+  const PENDING_STATUSES = ["SUBMITTED", "PENDING", "IN_REVIEW"];
+  const PROCESSED_STATUSES = ["APPROVED", "REJECTED", "PROCESSED", "COMPLETED"];
+
+  const pendingPasses = requests.filter((r) =>
+    PENDING_STATUSES.includes(r.status),
   );
 
-  const approvedCount = processedPasses.filter(
-    (r) => r.status === "APPROVED" || r.status === "PROCESSED",
+  const processedPasses = requests.filter((r) =>
+    PROCESSED_STATUSES.includes(r.status),
+  );
+
+  const approvedCount = processedPasses.filter((r) =>
+    ["APPROVED", "PROCESSED", "COMPLETED"].includes(r.status),
   ).length;
+
   const rejectedCount = requests.filter((r) => r.status === "REJECTED").length;
 
   let baseData = activeTab === "pending" ? pendingPasses : processedPasses;
@@ -304,8 +356,7 @@ export default function TrafficPassesPage() {
         ? req.referenceNo.toLowerCase()
         : `req-${req.id}`;
       const rawId = req.id?.toString() || "";
-      const company = (
-        req.entityName ||"").toLowerCase();
+      const company = (req.entityName || "").toLowerCase();
 
       if (
         computedRef.includes(searchLower) ||
@@ -362,96 +413,21 @@ export default function TrafficPassesPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 font-sans relative">
-      <header className="bg-white/80 backdrop-blur-lg rounded-xl p-6 flex flex-col md:flex-row items-start md:items-center justify-between shadow-sm border border-slate-200 gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-[#0a1e4d]">
-            Traffic Passes Dashboard
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Review and selectively approve individual and vehicle harbor entry
-            permits.
-          </p>
+      <header className="bg-white/80 backdrop-blur-lg rounded-xl p-6 flex items-center justify-between shadow-sm border border-slate-200">
+        <div className="flex items-center gap-4">
+          <div className="bg-orange-100 p-3 rounded-xl">
+            <ShieldCheck className="h-6 w-6 text-[#ff6b00]" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-[#0a1e4d]">
+              Pass Approvals
+            </h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Review and authorize personnel and vehicle entry passes
+            </p>
+          </div>
         </div>
       </header>
-
-      {/* CLICKABLE STATS CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card
-          onClick={() => handleCardClick("pending", "ALL")}
-          className="border-0 shadow-sm hover:shadow-lg transition-all transform hover:-translate-y-1 bg-white cursor-pointer"
-        >
-          <CardContent className="p-6 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500 mb-1">
-                Total Requests
-              </p>
-              <h3 className="text-3xl font-bold text-[#0a1e4d]">
-                {requests.length}
-              </h3>
-            </div>
-            <div className="h-12 w-12 bg-blue-50 rounded-full flex items-center justify-center">
-              <Truck className="h-6 w-6 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          onClick={() => handleCardClick("pending", "ALL")}
-          className={`border-0 shadow-sm hover:shadow-lg transition-all transform hover:-translate-y-1 bg-white cursor-pointer ${activeTab === "pending" ? "ring-2 ring-amber-500" : ""}`}
-        >
-          <CardContent className="p-6 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500 mb-1">
-                Pending Passes
-              </p>
-              <h3 className="text-3xl font-bold text-amber-600">
-                {pendingPasses.length}
-              </h3>
-            </div>
-            <div className="h-12 w-12 bg-amber-50 rounded-full flex items-center justify-center">
-              <Clock className="h-6 w-6 text-amber-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          onClick={() => handleCardClick("processed", "APPROVED")}
-          className={`border-0 shadow-sm hover:shadow-lg transition-all transform hover:-translate-y-1 bg-white cursor-pointer ${cardFilter === "APPROVED" ? "ring-2 ring-emerald-500" : ""}`}
-        >
-          <CardContent className="p-6 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500 mb-1">
-                Approved
-              </p>
-              <h3 className="text-3xl font-bold text-emerald-600">
-                {approvedCount}
-              </h3>
-            </div>
-            <div className="h-12 w-12 bg-emerald-50 rounded-full flex items-center justify-center">
-              <CheckCircle2 className="h-6 w-6 text-emerald-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          onClick={() => handleCardClick("processed", "REJECTED")}
-          className={`border-0 shadow-sm hover:shadow-lg transition-all transform hover:-translate-y-1 bg-white cursor-pointer ${cardFilter === "REJECTED" ? "ring-2 ring-red-500" : ""}`}
-        >
-          <CardContent className="p-6 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500 mb-1">
-                Rejected
-              </p>
-              <h3 className="text-3xl font-bold text-red-600">
-                {rejectedCount}
-              </h3>
-            </div>
-            <div className="h-12 w-12 bg-red-50 rounded-full flex items-center justify-center">
-              <XCircle className="h-6 w-6 text-red-500" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* TABS, SEARCH & SORT */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-2 mt-4">
@@ -550,7 +526,10 @@ export default function TrafficPassesPage() {
                 filteredData.map((pass) => (
                   <tr
                     key={pass.id}
-                    className="hover:bg-slate-50 transition-colors"
+                    onClick={() =>
+                      openReviewModal(pass, activeTab === "processed")
+                    }
+                    className="hover:bg-slate-50 transition-colors cursor-pointer"
                   >
                     <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d]">
                       {pass.referenceNo || `REQ-${pass.id}`}
@@ -568,20 +547,16 @@ export default function TrafficPassesPage() {
                       {new Date(pass.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      {activeTab === "pending" ? (
-                        <button
-                          onClick={() => openReviewModal(pass)}
-                          className="bg-[#0a1e4d] text-white px-5 py-2 rounded-lg text-xs font-bold hover:opacity-90 shadow-md transition-all"
-                        >
-                          Review Entities
-                        </button>
-                      ) : (
-                        <span
-                          className={`px-3 py-1 rounded-full text-[11px] font-bold border ${pass.status === "PROCESSED" || pass.status === "APPROVED" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}
-                        >
-                          {pass.status.toUpperCase()}
-                        </span>
-                      )}
+                      <span
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold border ${
+                          pass.status === "PROCESSED" ||
+                          pass.status === "APPROVED"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-red-50 text-red-700 border-red-200"
+                        }`}
+                      >
+                        {pass.status.toUpperCase()}
+                      </span>
                     </td>
                   </tr>
                 ))
@@ -601,7 +576,7 @@ export default function TrafficPassesPage() {
               <div className="flex items-center gap-3">
                 <ShieldCheck className="h-6 w-6 text-orange-500" />
                 <h2 className="text-xl font-bold tracking-wide">
-                  Review Submissions:{" "}
+                  {isViewMode ? "View Processed Pass" : "Review Submissions"}:
                   {selectedRequest.referenceNo || `REQ-${selectedRequest.id}`}
                 </h2>
               </div>
@@ -626,7 +601,7 @@ export default function TrafficPassesPage() {
                         Requesting Agency Profile
                       </h4>
                       <p className="text-lg font-bold text-[#0a1e4d]">
-                        {selectedRequest.entityName   || "NA"}
+                        {selectedRequest.entityName || "NA"}
                       </p>
                     </div>
                   </div>
@@ -647,32 +622,32 @@ export default function TrafficPassesPage() {
                 </div>
 
                 {/* {companyProfile ? ( */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-slate-400" />
-                      <span className="text-sm font-medium text-slate-700">
-                        {selectedRequest.mobileNo || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-slate-400" />
-                      <span className="text-sm font-medium text-slate-700 truncate">
-                        {selectedRequest.email || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-slate-400" />
-                      <span className="text-sm font-medium text-slate-700">
-                        GST: {selectedRequest.gstinNumber || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 text-slate-400" />
-                      <span className="text-sm font-medium text-slate-700">
-                        PAN: {selectedRequest.panNumber || "N/A"}
-                      </span>
-                    </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-slate-400" />
+                    <span className="text-sm font-medium text-slate-700">
+                      {selectedRequest.mobileNo || "N/A"}
+                    </span>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-slate-400" />
+                    <span className="text-sm font-medium text-slate-700 truncate">
+                      {selectedRequest.email || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-slate-400" />
+                    <span className="text-sm font-medium text-slate-700">
+                      GST: {selectedRequest.gstinNumber || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-slate-400" />
+                    <span className="text-sm font-medium text-slate-700">
+                      PAN: {selectedRequest.panNumber || "N/A"}
+                    </span>
+                  </div>
+                </div>
                 {/* ) : (
                   <div className="flex items-center gap-2 text-sm text-slate-500">
                     <Loader2 className="h-4 w-4 animate-spin" /> Loading full
@@ -706,48 +681,86 @@ export default function TrafficPassesPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {selectedRequest.persons.map((p) => (
-                          <tr key={p.id} className="hover:bg-slate-50">
+                          <tr
+                            key={p.id}
+                            onClick={() => {
+                              setEntityModal({
+                                isOpen: true,
+                                data: p,
+                                type: "person",
+                              });
+                              setCurrentRemark(
+                                entityRemarks.persons[p.id] ||
+                                  p.rejectedReason ||
+                                  "",
+                              );
+                            }}
+                            className="hover:bg-slate-50 cursor-pointer transition-all hover:shadow-sm"
+                          >
                             <td className="p-3 font-bold text-[#0a1e4d]">
                               {p.name}
                               <span className="block font-medium text-xs text-slate-500">
                                 {p.hepTypeId} • {p.passType}
                               </span>
-                              {entityStatuses.persons[p.id] === "REJECTED" &&
-                                entityRemarks.persons[p.id] && (
-                                  <div className="mt-1 text-[10px] text-red-600 bg-red-50 p-1 rounded border border-red-100 inline-block">
-                                    Reason: {entityRemarks.persons[p.id]}
-                                  </div>
-                                )}
                             </td>
                             <td className="p-3 text-slate-600 font-mono text-xs">
                               {p.aadharNo}
                             </td>
                             <td className="p-3 text-right">
                               <div className="flex justify-end items-center gap-3">
-                                {entityStatuses.persons[p.id] && (
-                                  <span
-                                    className={`px-2 py-1 rounded text-[10px] font-bold ${entityStatuses.persons[p.id] === "APPROVED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}
+                                {(() => {
+                                  const personStatus =
+                                    entityStatuses.persons[p.id] ||
+                                    p.status ||
+                                    p.decision;
+
+                                  const personRemark =
+                                    entityRemarks.persons[p.id] ||
+                                    p.rejectedReason;
+
+                                  return (
+                                    <>
+                                      {personStatus && (
+                                        <span
+                                          className={`px-2 py-1 rounded text-[10px] font-bold ${
+                                            personStatus === "APPROVED"
+                                              ? "bg-emerald-100 text-emerald-700"
+                                              : "bg-red-100 text-red-700"
+                                          }`}
+                                        >
+                                          {personStatus}
+                                        </span>
+                                      )}
+
+                                      {personStatus === "REJECTED" &&
+                                        personRemark && (
+                                          <div className="mt-1 text-[10px] text-red-600 bg-red-50 p-1 rounded border border-red-100 inline-block">
+                                            Reason: {personRemark}
+                                          </div>
+                                        )}
+                                    </>
+                                  );
+                                })()}
+                                {!isViewMode && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEntityModal({
+                                        isOpen: true,
+                                        data: p,
+                                        type: "person",
+                                      });
+                                      setCurrentRemark(
+                                        entityRemarks.persons[p.id] || "",
+                                      );
+                                    }}
+                                    className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
                                   >
-                                    {entityStatuses.persons[p.id]}
-                                  </span>
+                                    {entityStatuses.persons[p.id]
+                                      ? "Re-verify"
+                                      : "Verify Full Dossier"}
+                                  </button>
                                 )}
-                                <button
-                                  onClick={() => {
-                                    setEntityModal({
-                                      isOpen: true,
-                                      data: p,
-                                      type: "person",
-                                    });
-                                    setCurrentRemark(
-                                      entityRemarks.persons[p.id] || "",
-                                    );
-                                  }}
-                                  className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
-                                >
-                                  {entityStatuses.persons[p.id]
-                                    ? "Re-verify"
-                                    : "Verify Full Dossier"}
-                                </button>
                               </div>
                             </td>
                           </tr>
@@ -782,7 +795,22 @@ export default function TrafficPassesPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {selectedRequest.vehicles.map((v) => (
-                          <tr key={v.id} className="hover:bg-slate-50">
+                          <tr
+                            key={v.id}
+                            onClick={() => {
+                              setEntityModal({
+                                isOpen: true,
+                                data: v,
+                                type: "vehicle",
+                              });
+                              setCurrentRemark(
+                                entityRemarks.vehicles[v.id] ||
+                                  v.rejectedReason ||
+                                  "",
+                              );
+                            }}
+                            className="hover:bg-slate-50 cursor-pointer transition-all hover:shadow-sm"
+                          >
                             <td className="p-3 font-bold text-[#0a1e4d] uppercase">
                               {v.registrationNo}
                               {entityStatuses.vehicles[v.id] === "REJECTED" &&
@@ -797,30 +825,59 @@ export default function TrafficPassesPage() {
                             </td>
                             <td className="p-3 text-right">
                               <div className="flex justify-end items-center gap-3">
-                                {entityStatuses.vehicles[v.id] && (
-                                  <span
-                                    className={`px-2 py-1 rounded text-[10px] font-bold ${entityStatuses.vehicles[v.id] === "APPROVED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}
+                                {(() => {
+                                  const vehicleStatus =
+                                    entityStatuses.vehicles[v.id] ||
+                                    v.status ||
+                                    v.decision;
+
+                                  const vehicleRemark =
+                                    entityRemarks.vehicles[v.id] ||
+                                    v.rejectedReason;
+
+                                  return (
+                                    <>
+                                      {vehicleStatus && (
+                                        <span
+                                          className={`px-2 py-1 rounded text-[10px] font-bold ${
+                                            vehicleStatus === "APPROVED"
+                                              ? "bg-emerald-100 text-emerald-700"
+                                              : "bg-red-100 text-red-700"
+                                          }`}
+                                        >
+                                          {vehicleStatus}
+                                        </span>
+                                      )}
+
+                                      {vehicleStatus === "REJECTED" &&
+                                        vehicleRemark && (
+                                          <div className="mt-1 text-[10px] text-red-600 bg-red-50 p-1 rounded border border-red-100 inline-block">
+                                            Reason: {vehicleRemark}
+                                          </div>
+                                        )}
+                                    </>
+                                  );
+                                })()}
+                                {!isViewMode && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEntityModal({
+                                        isOpen: true,
+                                        data: v,
+                                        type: "vehicle",
+                                      });
+                                      setCurrentRemark(
+                                        entityRemarks.vehicles[v.id] || "",
+                                      );
+                                    }}
+                                    className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
                                   >
-                                    {entityStatuses.vehicles[v.id]}
-                                  </span>
+                                    {entityStatuses.vehicles[v.id]
+                                      ? "Re-verify"
+                                      : "Verify Full Dossier"}
+                                  </button>
                                 )}
-                                <button
-                                  onClick={() => {
-                                    setEntityModal({
-                                      isOpen: true,
-                                      data: v,
-                                      type: "vehicle",
-                                    });
-                                    setCurrentRemark(
-                                      entityRemarks.vehicles[v.id] || "",
-                                    );
-                                  }}
-                                  className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
-                                >
-                                  {entityStatuses.vehicles[v.id]
-                                    ? "Re-verify"
-                                    : "Verify Full Dossier"}
-                                </button>
                               </div>
                             </td>
                           </tr>
@@ -836,12 +893,14 @@ export default function TrafficPassesPage() {
                 <AlertCircle className="h-4 w-4 text-orange-500" /> Ensure all
                 entities are thoroughly verified before submission.
               </span>
-              <button
-                onClick={handleSubmitReview}
-                className="bg-orange-600 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-colors flex items-center gap-2"
-              >
-                <CheckCircle2 className="h-5 w-5" /> Submit Complete Review
-              </button>
+              {!isViewMode && (
+                <button
+                  onClick={handleSubmitReview}
+                  className="bg-orange-600 text-white px-8 py-2.5 rounded-xl font-bold"
+                >
+                  Submit Complete Review
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -867,7 +926,9 @@ export default function TrafficPassesPage() {
                       : entityModal.data.registrationNo}
                   </h3>
                   <p className="text-xs text-slate-300 font-medium">
-                    Complete Entity Verification
+                    {isViewMode
+                      ? "Entity Details (Read Only)"
+                      : "Complete Entity Verification"}
                   </p>
                 </div>
               </div>
@@ -923,7 +984,7 @@ export default function TrafficPassesPage() {
                       />
                       <DetailItem
                         label="Country"
-                        value={entityModal.data.countryId}
+                        value={entityModal.data.country}
                       />
                       <DetailItem
                         label="Visa No."
@@ -1074,6 +1135,13 @@ export default function TrafficPassesPage() {
                         </div>
                       )}
                       <DocumentCard
+                        label="Requisition Letter"
+                        filePath={entityModal.data.requisitionLetterPath}
+                        documentType="requisitionLetter"
+                        passRequestId={selectedRequest.id}
+                        onView={handleViewDoc}
+                      />
+                      <DocumentCard
                         label="Aadhar Card Document"
                         filePath={entityModal.data.aadharPDFFilePATH}
                         documentType="personAadhar"
@@ -1187,6 +1255,7 @@ export default function TrafficPassesPage() {
                 <textarea
                   value={currentRemark}
                   onChange={(e) => setCurrentRemark(e.target.value)}
+                  disabled={isViewMode}
                   className="w-full border border-orange-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none bg-white shadow-inner"
                   rows="3"
                   placeholder="Enter specific remarks if rejecting this entity..."
@@ -1198,20 +1267,22 @@ export default function TrafficPassesPage() {
               <span className="text-xs text-slate-500 font-medium">
                 Record decisions individually per entity.
               </span>
-              <div className="flex gap-4">
-                <button
-                  onClick={() => handleEntityDecision("REJECTED")}
-                  className="bg-red-50 text-red-600 border border-red-200 px-8 py-3 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center gap-2 uppercase text-sm tracking-wider"
-                >
-                  <XCircle className="h-5 w-5" /> Reject
-                </button>
-                <button
-                  onClick={() => handleEntityDecision("APPROVED")}
-                  className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold shadow-md hover:bg-emerald-700 transition-colors flex items-center gap-2 uppercase text-sm tracking-wider"
-                >
-                  <CheckCircle2 className="h-5 w-5" /> Approve
-                </button>
-              </div>
+              {!isViewMode && (
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => handleEntityDecision("REJECTED")}
+                    className="bg-red-50 text-red-600 border border-red-200 px-8 py-3 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center gap-2 uppercase text-sm tracking-wider"
+                  >
+                    <XCircle className="h-5 w-5" /> Reject
+                  </button>
+                  <button
+                    onClick={() => handleEntityDecision("APPROVED")}
+                    className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold shadow-md hover:bg-emerald-700 transition-colors flex items-center gap-2 uppercase text-sm tracking-wider"
+                  >
+                    <CheckCircle2 className="h-5 w-5" /> Approve
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

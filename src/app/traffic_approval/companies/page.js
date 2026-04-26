@@ -28,6 +28,7 @@ export default function TrafficCompanyApprovals() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("pending");
+  const [isViewMode, setIsViewMode] = useState(false);
 
   // Modal States
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -212,7 +213,12 @@ export default function TrafficCompanyApprovals() {
               {displayedRequests.map((req) => (
                 <tr
                   key={req.id}
-                  className="hover:bg-slate-50 transition-colors"
+                  onClick={() => {
+                    setSelectedRequest(req);
+                    setIsViewMode(activeTab === "processed");
+                    setRemarks(req.rejectedReason || "");
+                  }}
+                  className="hover:bg-slate-50 transition-colors cursor-pointer"
                 >
                   <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d]">
                     {req.referenceNumber}
@@ -230,12 +236,15 @@ export default function TrafficCompanyApprovals() {
                   </td>
                   <td className="px-6 py-4 text-center">
                     {activeTab === "pending" ? (
-                      <button
-                        onClick={() => setSelectedRequest(req)}
-                        className="bg-[#0a1e4d] text-white px-5 py-2 rounded-lg text-xs font-bold hover:opacity-90 shadow-md"
+                      <span
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold border ${
+                          req.status === "approved"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-red-50 text-red-700 border-red-200"
+                        }`}
                       >
-                        Review Details
-                      </button>
+                        {req.status?.toUpperCase()}
+                      </span>
                     ) : (
                       <span
                         className={`px-3 py-1 rounded-full text-[11px] font-bold border ${req.status === "approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}
@@ -265,7 +274,10 @@ export default function TrafficCompanyApprovals() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
             <div className="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
               <h2 className="text-xl font-bold text-[#0a1e4d] flex items-center gap-2">
-                <Building2 className="text-orange-600" /> Company Verification
+                <Building2 className="text-orange-600" />
+                {isViewMode
+                  ? "Company Details (Read Only)"
+                  : "Company Verification"}
               </h2>
               <button
                 onClick={() => {
@@ -455,6 +467,7 @@ export default function TrafficCompanyApprovals() {
                 <textarea
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
+                  disabled={isViewMode}
                   className="w-full border border-orange-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-[#ff6b00]/20 focus:border-[#ff6b00] outline-none shadow-inner bg-white"
                   rows="3"
                   placeholder="Enter specific remarks if rejecting..."
@@ -463,20 +476,24 @@ export default function TrafficCompanyApprovals() {
             </div>
 
             <div className="flex justify-end gap-3 p-4 border-t border-slate-200 bg-white">
-              <button
-                onClick={() => handleActionClick("rejected")}
-                className="bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all"
-              >
-                <XCircle className="h-5 w-5" />
-                Reject
-              </button>
-              <button
-                onClick={() => handleActionClick("approved")}
-                className="bg-[#10b981] text-white px-8 py-2.5 rounded-lg shadow-md font-bold hover:bg-[#059669] flex items-center gap-2 transition-all"
-              >
-                <CheckCircle2 className="h-5 w-5" />
-                Approve
-              </button>
+              {!isViewMode && (
+                <>
+                  <button
+                    onClick={() => handleActionClick("rejected")}
+                    className="bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all"
+                  >
+                    <XCircle className="h-5 w-5" />
+                    Reject
+                  </button>
+                  <button
+                    onClick={() => handleActionClick("approved")}
+                    className="bg-[#10b981] text-white px-8 py-2.5 rounded-lg shadow-md font-bold hover:bg-[#059669] flex items-center gap-2 transition-all"
+                  >
+                    <CheckCircle2 className="h-5 w-5" />
+                    Approve
+                  </button>
+                </>
+              )}
             </div>
           </div>
           {/* PDF VIEWER OVERLAY */}
