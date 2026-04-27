@@ -19,6 +19,7 @@ import {
   XCircle,
   Eye,
   EyeOff,
+  ShieldAlert,
 } from "lucide-react";
 
 import { jwtDecode } from "jwt-decode";
@@ -580,7 +581,9 @@ const LoginPage = () => {
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                           : trackResult.status === "rejected"
                             ? "bg-red-50 text-red-700 border-red-200"
-                            : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                            : trackResult.status === "reverted"
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-yellow-50 text-yellow-700 border-yellow-200"
                       }`}
                     >
                       {trackResult.status === "approved" && (
@@ -589,6 +592,9 @@ const LoginPage = () => {
                       {trackResult.status === "rejected" && (
                         <XCircle className="h-3.5 w-3.5" />
                       )}
+                      {trackResult.status === "reverted" && (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      )}
                       {(!trackResult.status ||
                         trackResult.status === "pending") && (
                         <Clock className="h-3.5 w-3.5" />
@@ -596,6 +602,32 @@ const LoginPage = () => {
                       {(trackResult.status || "PENDING").toUpperCase()}
                     </div>
                   </div>
+
+                  {/* 🚀 REVERTED ACTION PANEL 🚀 */}
+                  {trackResult.status === "reverted" && (
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+                      <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
+                        <ShieldAlert className="h-4 w-4" />
+                        Attention Required
+                      </div>
+                      <p className="text-xs text-amber-700 leading-relaxed bg-white/50 p-2 rounded-lg border border-amber-100">
+                        <span className="font-bold">Remarks: </span>
+                        {trackResult.rejectedReason ||
+                          "Please update the requested details."}
+                      </p>
+                      <button
+                        onClick={() =>
+                          router.push(
+                            `/register?ref=${trackResult.referenceNumber}`,
+                          )
+                        }
+                        className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        UPDATE APPLICATION
+                      </button>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>

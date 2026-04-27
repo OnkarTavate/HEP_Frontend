@@ -15,6 +15,7 @@ import {
   Maximize,
   Minimize,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 
 const BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API;
@@ -60,6 +61,17 @@ export default function TrafficCompanyApprovals() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRevertClick = () => {
+    if (!remarks.trim()) {
+      toast.warning("Remarks Required", {
+        description:
+          "Please specify which fields need updating in the remarks.",
+      });
+      return;
+    }
+    setConfirmDialog({ isOpen: true, decision: "reverted" });
   };
 
   // 1. Validates input and opens the centered confirmation modal
@@ -122,7 +134,10 @@ export default function TrafficCompanyApprovals() {
     (r) => r.status === "pending" || !r.status,
   );
   const processedRequests = requests.filter(
-    (r) => r.status === "approved" || r.status === "rejected",
+    (r) =>
+      r.status === "approved" ||
+      r.status === "rejected" ||
+      r.status === "reverted",
   );
 
   const displayedRequests = (
@@ -235,23 +250,19 @@ export default function TrafficCompanyApprovals() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">
-                    {activeTab === "pending" ? (
-                      <span
-                        className={`px-3 py-1 rounded-full text-[11px] font-bold border ${
-                          req.status === "approved"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-red-50 text-red-700 border-red-200"
-                        }`}
-                      >
-                        {req.status?.toUpperCase()}
-                      </span>
-                    ) : (
-                      <span
-                        className={`px-3 py-1 rounded-full text-[11px] font-bold border ${req.status === "approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}
-                      >
-                        {req.status.toUpperCase()}
-                      </span>
-                    )}
+                    <span
+                      className={`px-3 py-1 rounded-full text-[11px] font-bold border ${
+                        req.status === "approved"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : req.status === "reverted"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : req.status === "rejected"
+                              ? "bg-red-50 text-red-700 border-red-200"
+                              : "bg-blue-50 text-blue-700 border-blue-200" // For pending
+                      }`}
+                    >
+                      {req.status?.toUpperCase() || "PENDING"}
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -459,38 +470,50 @@ export default function TrafficCompanyApprovals() {
                 </div>
               </div>
 
-              {/* Remarks */}
-              <div className="bg-orange-50 p-5 rounded-lg border border-orange-200 shadow-sm">
-                <label className="block text-xs font-bold text-orange-900 uppercase tracking-wider mb-3">
-                  Authority Remarks / Reason for Rejection
-                </label>
-                <textarea
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  disabled={isViewMode}
-                  className="w-full border border-orange-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-[#ff6b00]/20 focus:border-[#ff6b00] outline-none shadow-inner bg-white"
-                  rows="3"
-                  placeholder="Enter specific remarks if rejecting..."
-                ></textarea>
-              </div>
+              {/* Remarks - Conditionally Rendered */}
+              {(!isViewMode ||
+                selectedRequest?.status !== "approved" ||
+                remarks) && (
+                <div className="bg-orange-50 p-5 rounded-lg border border-orange-200 shadow-sm">
+                  <label className="block text-xs font-bold text-orange-900 uppercase tracking-wider mb-3">
+                    Authority Remarks / Reason for Rejection
+                  </label>
+                  <textarea
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    disabled={isViewMode}
+                    className="w-full border border-orange-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-[#ff6b00]/20 focus:border-[#ff6b00] outline-none shadow-inner bg-white"
+                    rows="3"
+                    placeholder="Enter specific remarks if rejecting or reverting..."
+                  ></textarea>
+                </div>
+              )}
             </div>
 
+            {/* Replace the existing buttons container with this */}
             <div className="flex justify-end gap-3 p-4 border-t border-slate-200 bg-white">
               {!isViewMode && (
                 <>
                   <button
                     onClick={() => handleActionClick("rejected")}
-                    className="bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all"
+                    className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2"
                   >
-                    <XCircle className="h-5 w-5" />
-                    Reject
+                    <XCircle className="h-5 w-5" /> Reject
                   </button>
+
+                  {/* NEW REVERT BUTTON */}
+                  <button
+                    onClick={handleRevertClick}
+                    className="bg-amber-100 border border-amber-300 text-amber-700 hover:bg-amber-200 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2"
+                  >
+                    <RefreshCw className="h-5 w-5" /> Revert
+                  </button>
+
                   <button
                     onClick={() => handleActionClick("approved")}
-                    className="bg-[#10b981] text-white px-8 py-2.5 rounded-lg shadow-md font-bold hover:bg-[#059669] flex items-center gap-2 transition-all"
+                    className="bg-[#10b981] text-white px-8 py-2.5 rounded-lg shadow-md font-bold hover:bg-[#059669] flex items-center gap-2"
                   >
-                    <CheckCircle2 className="h-5 w-5" />
-                    Approve
+                    <CheckCircle2 className="h-5 w-5" /> Approve
                   </button>
                 </>
               )}

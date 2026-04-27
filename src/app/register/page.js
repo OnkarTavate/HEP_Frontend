@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Link from "next/link";
+import { toast } from "sonner";
+import { useSearchParams } from "next/navigation";
 import {
   Ship,
   ArrowLeft,
@@ -14,7 +16,11 @@ import {
   MapPin,
   Contact2,
   FileText,
-  Loader2, // Added a loader icon
+  Loader2,
+  Maximize,
+  Minimize,
+  XCircle,
+  Eye,
 } from "lucide-react";
 
 // Map the identification fields cleanly to match the backend schema exactly
@@ -25,6 +31,7 @@ const identificationTypes = [
     fileName: "gstinDoc",
     fileId: "gstFileInput",
     req: true,
+    docType: "gst",
   },
   {
     label: "PAN",
@@ -32,6 +39,7 @@ const identificationTypes = [
     fileName: "panDoc",
     fileId: "panFileInput",
     req: true,
+    docType: "pan",
   },
   {
     label: "TAN",
@@ -39,15 +47,27 @@ const identificationTypes = [
     fileName: "tanDoc",
     fileId: "tanFileInput",
     req: false,
+    docType: "tan",
   },
 ];
 
 export default function RegisterPage() {
+  const searchParams = useSearchParams(); // <-- 2. Initialize hook
+  const editRef = searchParams.get("ref");
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); // NEW: Prevents double-clicks
   const [referenceNo, setReferenceNo] = useState("");
   const [entityFileName, setEntityFileName] = useState("");
+  const [tableFiles, setTableFiles] = useState({});
+
+  const [viewingDocUrl, setViewingDocUrl] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [iframeLoading, setIframeLoading] = useState(true);
+
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [existingData, setExistingData] = useState(null);
+  const [isFetchingOldData, setIsFetchingOldData] = useState(false);
 
   // Dynamic User Types State
   const [userTypes, setUserTypes] = useState([]);
@@ -83,6 +103,55 @@ export default function RegisterPage() {
   };
 
   useEffect(() => {
+    if (viewingDocUrl) {
+      setIframeLoading(true);
+    }
+  }, [viewingDocUrl]);
+  useEffect(() => {
+    const fetchExistingApplication = async () => {
+      if (!editRef) return;
+
+      setIsFetchingOldData(true);
+      try {
+        const token = localStorage.getItem("accessToken");
+
+        // Pass token and trim the reference number
+        const res = await axios.get(
+          `${process.env.NEXT_PUBLIC_AGENT_API}/agents/getTrackRequest`,
+          {
+            params: { referenceNumber: editRef.trim() },
+            headers: {
+              Authorization: token ? `Bearer ${token}` : "",
+            },
+            withCredentials: true,
+          },
+        );
+
+        console.log("BACKEND FETCH RESPONSE:", res.data); // <-- Check your browser console for this!
+
+        if (res.data.success && res.data.data) {
+          const data = res.data.data;
+          setExistingData(data);
+          setIsEditMode(true);
+
+          if (data.userTypeId) setSelectedUserTypeId(data.userTypeId);
+        } else {
+          throw new Error("Backend returned success: false or empty data.");
+        }
+      } catch (err) {
+        console.error("Failed to load existing data", err);
+        toast.error("Could not load your previous application data.");
+      } finally {
+        setIsFetchingOldData(false);
+      }
+    };
+
+    if (editRef) {
+      fetchExistingApplication();
+    }
+  }, [editRef]);
+
+  useEffect(() => {
     fetchInitialData();
   }, []);
 
@@ -112,14 +181,12 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Prevent double submissions
     if (isSubmitting) return;
     setIsSubmitting(true);
 
     const formData = new FormData();
     const formElements = e.target.elements;
 
-    // FIND THE ACTUAL NAME FOR THE SELECTED USER TYPE
     const selectedTypeObj = userTypes.find(
       (type) => type.id.toString() === selectedUserTypeId.toString(),
     );
@@ -157,11 +224,15 @@ export default function RegisterPage() {
       formElements.termsAccepted.checked ? "true" : "false",
     );
 
-    // Captcha validation fields
     formData.append("captchaValue", captchaInput || "");
     formData.append("captchaToken", captchaToken || "");
 
-    // 2. Append File Fields Safely
+    // 🚀 CRITICAL: Append referenceNumber for updates
+    if (isEditMode && editRef) {
+      formData.append("referenceNumber", editRef.trim());
+    }
+
+    // 2. Append File Fields
     const entityFile = document.getElementById("entityFileInput")?.files[0];
     const gstFile = document.getElementById("gstFileInput")?.files[0];
     const panFile = document.getElementById("panFileInput")?.files[0];
@@ -173,30 +244,50 @@ export default function RegisterPage() {
     if (tanFile) formData.append("tanDoc", tanFile);
 
     try {
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_AGENT_API}/agents/registerAgent`,
-        formData,
-        { withCredentials: true },
-      );
+      const token = localStorage.getItem("accessToken");
+
+      // Set the dynamic endpoint based on mode
+      const apiUrl = isEditMode
+        ? `${process.env.NEXT_PUBLIC_AGENT_API}/agents/updateAgentByRevert`
+        : `${process.env.NEXT_PUBLIC_AGENT_API}/agents/registerAgent`;
+
+      const apiMethod = isEditMode ? "put" : "post";
+
+      const response = await axios({
+        method: apiMethod,
+        url: apiUrl,
+        data: formData,
+        headers: {
+          "Content-Type": "multipart/form-data",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        withCredentials: true,
+      });
 
       const data = response.data;
 
-      // Success Logic
-      setReferenceNo(data.referenceNumber || "CHPT103152");
+      setReferenceNo(data.data?.referenceNumber || editRef || "CHPT103152");
       window.scrollTo({ top: 0, behavior: "smooth" });
       setIsSubmitted(true);
+
+      toast.success(
+        isEditMode
+          ? "Application Updated Successfully!"
+          : "Registration Submitted!",
+      );
     } catch (error) {
       console.error("Error submitting form:", error);
 
       if (error.response && error.response.data) {
-        console.error("Backend Rejection Reason:", error.response.data.message);
-        alert(`Registration Failed: ${error.response.data.message}`);
-        fetchInitialData();
+        toast.error(`Action Failed: ${error.response.data.message}`);
       } else {
-        alert("Network error occurred. Ensure your backend server is running.");
+        toast.error(
+          "Network error occurred. Ensure your backend server is running.",
+        );
       }
+
+      fetchInitialData();
     } finally {
-      // Re-enable the button if it failed
       setIsSubmitting(false);
     }
   };
@@ -269,416 +360,571 @@ export default function RegisterPage() {
                   </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-10">
-                  {/* General Information */}
-                  <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
-                    <SectionHeader
-                      icon={Building2}
-                      title="General Information"
-                    />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          User Type <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="userType"
-                          value={selectedUserTypeId}
-                          onChange={(e) =>
-                            setSelectedUserTypeId(e.target.value)
-                          }
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
-                          required
-                        >
-                          <option value="">-- Select User Type --</option>
-                          {userTypes.map((type) => (
-                            <option key={type.id} value={type.id}>
-                              {type.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                {isFetchingOldData && (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <Loader2 className="h-12 w-12 text-orange-600 animate-spin mb-4" />
+                    <p className="text-slate-600 font-bold">
+                      Loading your previous application...
+                    </p>
+                  </div>
+                )}
 
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          Mobile No. <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          name="mobileNo"
-                          type="text"
-                          pattern="[0-9]{10}"
-                          maxLength={10}
-                          title="Enter 10 digit mobile number"
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          Name of the Entity{" "}
-                          <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          name="entityName"
-                          type="text"
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          Entity Email <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          name="email"
-                          type="email"
-                          pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$"
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
-                          required
-                        />
-                      </div>
-
-                      <div className="md:col-span-2 space-y-1.5 mt-2">
-                        <label className="text-xs font-semibold text-orange-700 uppercase tracking-wider ml-1 bg-orange-100 px-3 py-1 rounded-full">
-                          {documentUploadLabel}{" "}
-                          <span className="text-red-500">*</span>
-                        </label>
-                        <div className="flex items-center justify-center w-full mt-2">
-                          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-orange-200 border-dashed rounded-2xl cursor-pointer bg-orange-50/50 hover:bg-orange-50 transition-colors">
-                            {entityFileName ? (
-                              <p className="text-green-600 font-semibold">
-                                {entityFileName}
-                              </p>
-                            ) : (
-                              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                <UploadCloud className="w-8 h-8 text-orange-500 mb-2" />
-                                <p className="text-sm text-slate-500">
-                                  <span className="font-semibold text-orange-600">
-                                    Click to upload
-                                  </span>{" "}
-                                  or drag and drop
-                                </p>
-                              </div>
-                            )}
-                            <input
-                              id="entityFileInput"
-                              name="entityFile"
-                              type="file"
-                              className="hidden"
-                              required
-                              onChange={(e) => {
-                                const file = e.target.files[0];
-                                validateFile(file, setEntityFileName, e.target);
-                              }}
-                            />
-                          </label>
+                {/* The Form - Only render if not fetching old data */}
+                {!isFetchingOldData && (
+                  <form onSubmit={handleSubmit} className="space-y-10">
+                    {/* REVERT REASON BANNER */}
+                    {isEditMode && existingData?.rejectedReason && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6 flex gap-4 items-start shadow-sm">
+                        <ShieldCheck className="h-6 w-6 text-amber-600 shrink-0" />
+                        <div>
+                          <h4 className="text-amber-900 font-bold text-sm uppercase tracking-wider mb-1">
+                            Application Reverted - Action Required
+                          </h4>
+                          <p className="text-amber-700 text-sm">
+                            {existingData.rejectedReason}
+                          </p>
                         </div>
                       </div>
-                    </div>
-                  </div>
+                    )}
 
-                  {/* Address Information */}
-                  <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
-                    <SectionHeader icon={MapPin} title="Address Information" />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="md:col-span-2 space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          Full Address <span className="text-red-500">*</span>
-                        </label>
-                        <textarea
-                          name="addressLine"
-                          rows="2"
-                          className="w-full p-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
-                          required
-                        ></textarea>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          City <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="city"
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
-                          required
-                        >
-                          <option value="">-- Select --</option>
-                          <option value="Chennai">Chennai</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          State <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="state"
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
-                          required
-                        >
-                          <option value="">-- Select --</option>
-                          <option value="Tamil Nadu">Tamil Nadu</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          Pin Code <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          name="pincode"
-                          type="text"
-                          pattern="[0-9]{6}"
-                          maxLength={6}
-                          title="Enter 6 digit PIN code"
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          Country <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="country"
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
-                          required
-                        >
-                          <option value="India">India</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Identification Information */}
-                  <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50 overflow-x-auto">
-                    <SectionHeader
-                      icon={FileText}
-                      title="Identification Information"
-                    />
-                    <table className="w-full text-left border-collapse min-w-[600px]">
-                      <thead>
-                        <tr className="border-b-2 border-orange-100">
-                          <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-24">
-                            Type
-                          </th>
-                          <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                            Identification No.
-                          </th>
-                          <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-1/3">
-                            ID Copy (PDF)
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {identificationTypes.map((idType) => (
-                          <tr
-                            key={idType.label}
-                            className="hover:bg-white/50 transition-colors"
-                          >
-                            <td className="py-4 px-2 text-sm font-bold text-slate-800">
-                              {idType.label}{" "}
-                              {idType.req && (
-                                <span className="text-red-500">*</span>
-                              )}
-                            </td>
-                            <td className="py-4 px-2">
-                              <input
-                                name={idType.numName}
-                                type="text"
-                                pattern={
-                                  idType.label === "PAN"
-                                    ? "[A-Z]{5}[0-9]{4}[A-Z]{1}"
-                                    : idType.label === "GST"
-                                      ? "^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$"
-                                      : undefined
-                                }
-                                title={
-                                  idType.label === "PAN"
-                                    ? "Enter valid PAN (ABCDE1234F)"
-                                    : idType.label === "GST"
-                                      ? "Enter valid GST number"
-                                      : ""
-                                }
-                                className="w-full h-10 px-3 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-lg"
-                                required={idType.req}
-                              />
-                            </td>
-                            <td className="py-4 px-2">
-                              <input
-                                id={idType.fileId}
-                                name={idType.fileName}
-                                type="file"
-                                onChange={(e) => {
-                                  const file = e.target.files[0];
-                                  validateFile(file, () => {}, e.target);
-                                }}
-                                className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200 cursor-pointer"
-                                required={idType.req}
-                              />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div className="mt-6 pt-4 border-t border-orange-100">
-                      <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                        General Remark (Optional)
-                      </label>
-                      <input
-                        name="remark"
-                        type="text"
-                        className="mt-1 w-full h-10 px-3 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-lg"
-                        placeholder="Notes about your documentation"
+                    {/* General Information */}
+                    <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
+                      <SectionHeader
+                        icon={Building2}
+                        title="General Information"
                       />
-                    </div>
-                  </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            User Type <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            name="userType"
+                            value={selectedUserTypeId}
+                            onChange={(e) =>
+                              setSelectedUserTypeId(e.target.value)
+                            }
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
+                            required
+                          >
+                            <option value="">-- Select User Type --</option>
+                            {userTypes.map((type) => (
+                              <option key={type.id} value={type.id}>
+                                {type.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
-                  {/* Contact Information */}
-                  <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
-                    <SectionHeader
-                      icon={Contact2}
-                      title="Contact Information"
-                    />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          Title <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          name="title"
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
-                          required
-                        >
-                          <option value="Mr.">Mr.</option>
-                          <option value="Ms.">Ms.</option>
-                          <option value="Mrs.">Mrs.</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          Mobile Number <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          name="contactMobile"
-                          type="text"
-                          pattern="[0-9]{10}"
-                          maxLength={10}
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          First Name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          name="firstName"
-                          type="text"
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          Last Name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          name="lastName"
-                          type="text"
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
-                          required
-                        />
-                      </div>
-                      <div className="md:col-span-2 space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          Contact Email <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          name="contactEmail"
-                          type="email"
-                          placeholder="official@example.com"
-                          className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Terms and Submit */}
-                  <div className="space-y-8 pt-4">
-                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                      <div className="flex items-start gap-4">
-                        <div className="pt-1">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            Mobile No. <span className="text-red-500">*</span>
+                          </label>
                           <input
-                            name="termsAccepted"
-                            type="checkbox"
-                            id="terms"
-                            className="w-5 h-5 text-orange-600 border-slate-300 rounded focus:ring-orange-500 cursor-pointer"
+                            name="mobileNo"
+                            type="text"
+                            defaultValue={existingData?.mobileNo || ""}
+                            pattern="[0-9]{10}"
+                            maxLength={10}
+                            title="Enter 10 digit mobile number"
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
                             required
                           />
                         </div>
-                        <label
-                          htmlFor="terms"
-                          className="text-sm text-slate-600 cursor-pointer leading-relaxed"
-                        >
-                          <span className="font-bold text-slate-900">
-                            I Read and Accept Terms & Conditions.
-                          </span>{" "}
-                          I/We hereby certify that the above permits are
-                          required only for our official purpose. We hold
-                          responsibility for all activities of the mentioned
-                          persons/vehicles inside the port. I/We declare that
-                          Chennai Port Authority will not be held responsible
-                          for any untoward incidents.
-                        </label>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            Name of the Entity{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            name="entityName"
+                            type="text"
+                            defaultValue={existingData?.entityName || ""}
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            Entity Email <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            name="email"
+                            type="email"
+                            defaultValue={existingData?.email || ""}
+                            pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$"
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            required
+                          />
+                        </div>
+
+                        <div className="md:col-span-2 space-y-1.5 mt-2">
+                          <label className="text-xs font-semibold text-orange-700 uppercase tracking-wider ml-1 bg-orange-100 px-3 py-1 rounded-full">
+                            {documentUploadLabel}{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+
+                          <div className="flex flex-col gap-2 w-full mt-3">
+                            {/* Top Row: Status & View Action */}
+                            {isEditMode && existingData?.entityFile && (
+                              <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-lg w-full">
+                                <div className="flex items-center gap-2 px-1">
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                  <span className="text-xs font-bold text-slate-600">
+                                    PREVIOUSLY UPLOADED
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setViewingDocUrl(
+                                      `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=entity`,
+                                    );
+                                  }}
+                                  className="flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors shadow-sm border border-blue-200/50"
+                                >
+                                  <Eye className="h-4 w-4" /> View Document
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Bottom Row: Unified File Input */}
+                            <label
+                              className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-4 py-6 rounded-xl text-sm font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-2 w-full text-center ${
+                                isEditMode && existingData?.entityFile
+                                  ? "border-orange-300 text-orange-700"
+                                  : "border-slate-300 text-slate-600 border-dashed border-2"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <UploadCloud className="h-6 w-6" />
+                                {isEditMode && existingData?.entityFile
+                                  ? "Replace File"
+                                  : "Click to upload or drag and drop"}
+                              </div>
+
+                              {/* Display selected filename */}
+                              {entityFileName && (
+                                <span className="text-emerald-600 text-xs truncate max-w-sm mt-1 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
+                                  {entityFileName}
+                                </span>
+                              )}
+
+                              <input
+                                id="entityFileInput"
+                                name="entityFile"
+                                type="file"
+                                className="hidden"
+                                required={!isEditMode}
+                                onChange={(e) => {
+                                  const file = e.target.files[0];
+                                  validateFile(
+                                    file,
+                                    setEntityFileName,
+                                    e.target,
+                                  );
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-center gap-6">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="flex gap-2">
-                          <div
-                            className="flex items-center justify-center bg-white border border-slate-300 rounded-xl h-14 overflow-hidden w-40 shadow-sm"
-                            dangerouslySetInnerHTML={{ __html: captchaSvg }}
-                          />
-                          <button
-                            type="button"
-                            onClick={fetchInitialData}
-                            className="p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
-                          >
-                            <RefreshCw className="h-5 w-5 text-slate-500" />
-                          </button>
+                    {/* Address Information */}
+                    <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
+                      <SectionHeader
+                        icon={MapPin}
+                        title="Address Information"
+                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="md:col-span-2 space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            Full Address <span className="text-red-500">*</span>
+                          </label>
+                          <textarea
+                            name="addressLine"
+                            rows="2"
+                            defaultValue={existingData?.addressLine || ""}
+                            className="w-full p-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            required
+                          ></textarea>
                         </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            City <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            name="city"
+                            defaultValue={existingData?.city || ""}
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
+                            required
+                          >
+                            <option value="">-- Select --</option>
+                            <option value="Chennai">Chennai</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            State <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            name="state"
+                            defaultValue={existingData?.state || ""}
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
+                            required
+                          >
+                            <option value="">-- Select --</option>
+                            <option value="Tamil Nadu">Tamil Nadu</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            Pin Code <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            name="pincode"
+                            type="text"
+                            defaultValue={existingData?.pincode || ""}
+                            pattern="[0-9]{6}"
+                            maxLength={6}
+                            title="Enter 6 digit PIN code"
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            Country <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            name="country"
+                            defaultValue={existingData?.country || "India"}
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
+                            required
+                          >
+                            <option value="India">India</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Identification Information */}
+                    <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50 overflow-x-auto">
+                      <SectionHeader
+                        icon={FileText}
+                        title="Identification Information"
+                      />
+                      <table className="w-full text-left border-collapse min-w-[600px]">
+                        <thead>
+                          <tr className="border-b-2 border-orange-100">
+                            <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-24">
+                              Type
+                            </th>
+                            <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                              Identification No.
+                            </th>
+                            <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-1/3">
+                              ID Copy (PDF)
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {identificationTypes.map((idType) => (
+                            <tr
+                              key={idType.label}
+                              className="hover:bg-white/50 transition-colors"
+                            >
+                              {/* COLUMN 1: Label */}
+                              <td className="py-4 px-2 text-sm font-bold text-slate-800">
+                                {idType.label}{" "}
+                                {idType.req && (
+                                  <span className="text-red-500">*</span>
+                                )}
+                              </td>
+
+                              {/* COLUMN 2: Identification Number (Text Input) */}
+                              <td className="py-4 px-2">
+                                <input
+                                  name={idType.numName}
+                                  type="text"
+                                  defaultValue={
+                                    existingData?.[idType.numName] || ""
+                                  }
+                                  pattern={
+                                    idType.label === "PAN"
+                                      ? "[A-Z]{5}[0-9]{4}[A-Z]{1}"
+                                      : idType.label === "GST"
+                                        ? "^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$"
+                                        : undefined
+                                  }
+                                  title={
+                                    idType.label === "PAN"
+                                      ? "Enter valid PAN (ABCDE1234F)"
+                                      : idType.label === "GST"
+                                        ? "Enter valid GST number"
+                                        : ""
+                                  }
+                                  className={`w-full h-10 px-3 bg-white border focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-lg ${
+                                    existingData?.rejectedReason
+                                      ?.toLowerCase()
+                                      .includes(idType.label.toLowerCase())
+                                      ? "border-red-400 bg-red-50"
+                                      : "border-slate-200"
+                                  }`}
+                                  required={idType.req}
+                                />
+                              </td>
+
+                              {/* COLUMN 3: ID Copy (File Input & Badge) */}
+                              <td className="py-4 px-2 align-middle w-1/3">
+                                <div className="flex flex-col gap-2">
+                                  {/* Top Row: Status & View Action */}
+                                  {isEditMode &&
+                                    existingData?.[idType.fileName] && (
+                                      <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-1.5 rounded-lg w-full">
+                                        <div className="flex items-center gap-1.5 px-1">
+                                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                          <span className="text-[10px] font-bold text-slate-600">
+                                            UPLOADED
+                                          </span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            setViewingDocUrl(
+                                              `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=${idType.docType}`,
+                                            );
+                                          }}
+                                          className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-2.5 py-1 rounded transition-colors shadow-sm border border-blue-200/50"
+                                        >
+                                          <Eye className="h-3 w-3" /> View
+                                        </button>
+                                      </div>
+                                    )}
+
+                                  {/* UNIFIED CUSTOM UPLOAD BUTTON */}
+                                  <label
+                                    className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-3 py-2 rounded-lg text-[10px] font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-1 w-full text-center ${
+                                      isEditMode &&
+                                      existingData?.[idType.fileName]
+                                        ? "border-orange-300 text-orange-700"
+                                        : "border-slate-300 text-slate-600"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-1.5">
+                                      <UploadCloud className="h-4 w-4" />
+                                      {isEditMode &&
+                                      existingData?.[idType.fileName]
+                                        ? "Replace File"
+                                        : "Upload Document"}
+                                    </div>
+
+                                    {/* Display selected filename */}
+                                    {tableFiles[idType.fileName] && (
+                                      <span className="text-emerald-600 truncate w-32 mt-0.5">
+                                        {tableFiles[idType.fileName]}
+                                      </span>
+                                    )}
+
+                                    <input
+                                      id={idType.fileId}
+                                      name={idType.fileName}
+                                      type="file"
+                                      className="hidden" // Hides the ugly native button
+                                      onChange={(e) => {
+                                        const file = e.target.files[0];
+                                        if (
+                                          validateFile(file, () => {}, e.target)
+                                        ) {
+                                          setTableFiles((prev) => ({
+                                            ...prev,
+                                            [idType.fileName]: file.name,
+                                          }));
+                                        }
+                                      }}
+                                      required={idType.req && !isEditMode}
+                                    />
+                                  </label>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="mt-6 pt-4 border-t border-orange-100">
+                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                          General Remark (Optional)
+                        </label>
                         <input
-                          name="captchaInput"
+                          name="remark"
                           type="text"
-                          value={captchaInput}
-                          onChange={(e) => setCaptchaInput(e.target.value)}
-                          placeholder="Enter Security Code"
-                          className="w-full text-center h-12 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl tracking-widest font-bold shadow-sm"
-                          required
+                          className="mt-1 w-full h-10 px-3 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-lg"
+                          placeholder="Notes about your documentation"
                         />
                       </div>
-
-                      <button
-                        type="submit"
-                        disabled={isSubmitting} // DISBLES BUTTON ON CLICK
-                        className={`gradient-orange hover:opacity-90 text-white font-bold py-4 px-16 rounded-2xl shadow-lg shadow-orange-600/25 transition-all text-lg flex items-center gap-2 w-full md:w-auto justify-center ${isSubmitting ? "opacity-70 cursor-not-allowed" : ""}`}
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="h-6 w-6 animate-spin" />
-                            Submitting...
-                          </>
-                        ) : (
-                          <>
-                            <ShieldCheck className="h-6 w-6" />
-                            Submit Registration
-                          </>
-                        )}
-                      </button>
                     </div>
-                  </div>
-                </form>
+
+                    {/* Contact Information */}
+                    <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
+                      <SectionHeader
+                        icon={Contact2}
+                        title="Contact Information"
+                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            Title <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            name="title"
+                            defaultValue={existingData?.title || "Mr."}
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
+                            required
+                          >
+                            <option value="Mr.">Mr.</option>
+                            <option value="Ms.">Ms.</option>
+                            <option value="Mrs.">Mrs.</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            Mobile Number{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            name="contactMobile"
+                            type="text"
+                            defaultValue={existingData?.contactMobile || ""}
+                            pattern="[0-9]{10}"
+                            maxLength={10}
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            First Name <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            name="firstName"
+                            type="text"
+                            defaultValue={existingData?.firstName || ""}
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            Last Name <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            name="lastName"
+                            type="text"
+                            defaultValue={existingData?.lastName || ""}
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            required
+                          />
+                        </div>
+                        <div className="md:col-span-2 space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            Contact Email{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            name="contactEmail"
+                            type="email"
+                            defaultValue={existingData?.contactEmail || ""}
+                            placeholder="official@example.com"
+                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Terms and Submit */}
+                    <div className="space-y-8 pt-4">
+                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                        <div className="flex items-start gap-4">
+                          <div className="pt-1">
+                            <input
+                              name="termsAccepted"
+                              type="checkbox"
+                              id="terms"
+                              className="w-5 h-5 text-orange-600 border-slate-300 rounded focus:ring-orange-500 cursor-pointer"
+                              required
+                            />
+                          </div>
+                          <label
+                            htmlFor="terms"
+                            className="text-sm text-slate-600 cursor-pointer leading-relaxed"
+                          >
+                            <span className="font-bold text-slate-900">
+                              I Read and Accept Terms & Conditions.
+                            </span>{" "}
+                            I/We hereby certify that the above permits are
+                            required only for our official purpose. We hold
+                            responsibility for all activities of the mentioned
+                            persons/vehicles inside the port. I/We declare that
+                            Chennai Port Authority will not be held responsible
+                            for any untoward incidents.
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-center gap-6">
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="flex gap-2">
+                            <div
+                              className="flex items-center justify-center bg-white border border-slate-300 rounded-xl h-14 overflow-hidden w-40 shadow-sm"
+                              dangerouslySetInnerHTML={{ __html: captchaSvg }}
+                            />
+                            <button
+                              type="button"
+                              onClick={fetchInitialData}
+                              className="p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
+                            >
+                              <RefreshCw className="h-5 w-5 text-slate-500" />
+                            </button>
+                          </div>
+                          <input
+                            name="captchaInput"
+                            type="text"
+                            value={captchaInput}
+                            onChange={(e) => setCaptchaInput(e.target.value)}
+                            placeholder="Enter Security Code"
+                            className="w-full text-center h-12 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl tracking-widest font-bold shadow-sm"
+                            required
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className={`gradient-orange hover:opacity-90 text-white font-bold py-4 px-16 rounded-2xl shadow-lg shadow-orange-600/25 transition-all text-lg flex items-center gap-2 w-full md:w-auto justify-center ${
+                            isSubmitting ? "opacity-70 cursor-not-allowed" : ""
+                          }`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <Loader2 className="h-6 w-6 animate-spin" />
+                              Submitting...
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck className="h-6 w-6" />
+                              Submit Registration
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                )}
               </div>
             ) : (
               <div className="p-12 md:p-24 text-center animate-in zoom-in-95 duration-500">
@@ -722,7 +968,74 @@ export default function RegisterPage() {
             )}
           </div>
         </main>
+        {/* 🚀 PDF VIEWER OVERLAY 🚀 */}
+        {viewingDocUrl && (
+          <div
+            className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-all duration-300 ${
+              isFullscreen ? "p-0" : "p-4 md:p-8"
+            }`}
+          >
+            <div
+              className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${
+                isFullscreen
+                  ? "max-w-full rounded-none border-none"
+                  : "max-w-6xl rounded-xl border border-slate-700"
+              }`}
+            >
+              {/* Viewer Header */}
+              <div className="flex justify-between items-center px-4 py-3 bg-slate-800 text-white">
+                <h3 className="font-bold flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-blue-400" />
+                  Document Viewer
+                </h3>
 
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsFullscreen(!isFullscreen)}
+                    className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg transition-colors"
+                    title={isFullscreen ? "Exit Fullscreen" : "Maximize"}
+                  >
+                    {isFullscreen ? (
+                      <Minimize className="h-5 w-5" />
+                    ) : (
+                      <Maximize className="h-5 w-5" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setViewingDocUrl(null);
+                      setIsFullscreen(false);
+                    }}
+                    className="bg-slate-700 hover:bg-red-500 p-2 rounded-lg transition-colors"
+                    title="Close Viewer"
+                  >
+                    <XCircle className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Iframe Container */}
+              <div className="flex-1 w-full bg-slate-100 relative">
+                {iframeLoading && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50">
+                    <Loader2 className="h-10 w-10 text-[#ff6b00] animate-spin mb-4" />
+                    <p className="text-slate-500 font-bold animate-pulse">
+                      Fetching secure document...
+                    </p>
+                  </div>
+                )}
+
+                <iframe
+                  src={viewingDocUrl}
+                  className="w-full h-full border-none relative z-0"
+                  title="Document Viewer"
+                  onLoad={() => setIframeLoading(false)}
+                />
+              </div>
+            </div>
+          </div>
+        )}
         <footer className="text-center py-6 text-zinc-500 text-xs font-bold uppercase tracking-widest">
           © 2026 - Chennai Port Authority
         </footer>

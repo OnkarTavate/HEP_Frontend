@@ -607,10 +607,60 @@ export default function PassRequestPage() {
     }
   }, [activeTab]);
 
-  const handlePrintQR = async (pass) => {
-    const passIdStr = pass.id ? `REQ-${pass.id}` : pass.passId || `REQ-XXXX`;
+  const handlePrintQR = async (entity, type) => {
+    // Extract IDs safely based on how your DB returns them
+    const passRequestId =
+      selectedPassDetails?.id || selectedPassDetails?.passId;
+    const entityId = entity?.id || entity?.person_id || entity?.vehicle_id;
 
-    toast.info(`Calling QR microservice for ${passIdStr}...`);
+    if (!passRequestId || !entityId) {
+      toast.error("Missing pass or entity ID. Cannot generate QR.");
+      return;
+    }
+
+    toast.info(`Generating QR for ${type}...`);
+
+    try {
+      let token = localStorage.getItem("accessToken");
+      if (token) token = token.replace(/^["']|["']$/g, "");
+
+      // Directing explicitly to your QR Service on Port 5007
+      const QR_SERVICE_URL =
+        process.env.NEXT_PUBLIC_QR_API || "http://localhost:5007/api";
+
+      const response = await axios.get(
+        `${QR_SERVICE_URL}/qr/generate-pass/${passRequestId}?type=${type}&entityId=${entityId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: "blob", // CRITICAL: Tells Axios to handle a PDF file, not JSON
+        },
+      );
+
+      // Create a URL for the downloaded PDF blob and open it in a new tab
+      const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      window.open(pdfUrl, "_blank");
+    } catch (error) {
+      let errorMessage = "Failed to generate QR pass.";
+
+      // If the backend fails, it sends JSON wrapped in a Blob. We must decode it.
+      if (error.response && error.response.data) {
+        if (error.response.data instanceof Blob) {
+          const text = await error.response.data.text();
+          try {
+            const json = JSON.parse(text);
+            errorMessage = json.message || errorMessage;
+          } catch (e) {
+            errorMessage = text;
+          }
+        } else {
+          errorMessage = error.response.data.message || errorMessage;
+        }
+      }
+
+      toast.error(`QR Error: ${errorMessage}`);
+      console.error("QR Generation Error:", error);
+    }
   };
 
   const calculateTotals = () => {
@@ -3201,7 +3251,7 @@ export default function PassRequestPage() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handlePrintQR(p);
+                                      handlePrintQR(p, "person"); // Pass the person object and type
                                     }}
                                     className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
                                   >
@@ -3282,7 +3332,7 @@ export default function PassRequestPage() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handlePrintQR(v);
+                                      handlePrintQR(v, "vehicle"); // Pass the vehicle object and type
                                     }}
                                     className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
                                   >
