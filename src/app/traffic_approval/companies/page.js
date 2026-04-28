@@ -95,10 +95,11 @@ export default function TrafficCompanyApprovals() {
     const loadingToastId = toast.loading(`Processing ${decision} request...`);
 
     try {
-      const response = await axios.put(`${BASE_URL}/user/agent-request`, {
+      const response = await axios.put(`${AGENT_API}/agents/action`, {
         agentId: selectedRequest.id,
         decision: decision,
-        rejectedReason: decision === "rejected" ? remarks : null,
+        rejectedReason:
+          decision === "rejected" || decision === "reverted" ? remarks : null,
       });
 
       if (response.data.success) {
