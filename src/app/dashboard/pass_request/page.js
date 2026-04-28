@@ -636,10 +636,33 @@ export default function PassRequestPage() {
         },
       );
 
-      // Create a URL for the downloaded PDF blob and open it in a new tab
+      // Create a URL for the downloaded PDF blob
       const pdfBlob = new Blob([response.data], { type: "application/pdf" });
       const pdfUrl = URL.createObjectURL(pdfBlob);
-      window.open(pdfUrl, "_blank");
+
+      // ==========================================
+      // NEW LOGIC: Print seamlessly in the same tab
+      // ==========================================
+
+      // 1. Create an invisible iframe
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = pdfUrl;
+
+      // 2. Append it to the document body
+      document.body.appendChild(iframe);
+
+      // 3. Wait for the PDF to load, then trigger the print dialog
+      iframe.onload = () => {
+        // Triggers the native browser print popup seamlessly
+        iframe.contentWindow.print();
+
+        // Clean up the DOM and memory after a minute
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          URL.revokeObjectURL(pdfUrl);
+        }, 60000);
+      };
     } catch (error) {
       let errorMessage = "Failed to generate QR pass.";
 
