@@ -36,6 +36,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import axios from "axios";
+import { useBeaconLogout } from "@/lib/useBeaconLogout";
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
 // Navigation items based on user role
 
@@ -92,6 +93,9 @@ export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const [user, setUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Clear Redis session when the tab/browser is closed
+  useBeaconLogout();
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");

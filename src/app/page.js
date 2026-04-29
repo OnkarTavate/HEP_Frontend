@@ -36,7 +36,7 @@ const LoginPage = () => {
   });
   const [error, setError] = useState("");
   const [captchaData, setCaptchaData] = useState({ svg: "", token: "" });
-  const [isCaptchaLoading, setIsCaptchaLoading] = useState(true);
+  const [isCaptchaLoading, setIsCaptchaLoading] = useState(false);
   const [isTrackModalOpen, setIsTrackModalOpen] = useState(false);
   const [trackReference, setTrackReference] = useState("");
   const [trackResult, setTrackResult] = useState(null);
@@ -435,7 +435,7 @@ const LoginPage = () => {
                         <button
                           type="button"
                           onClick={fetchCaptcha}
-                          disabled={isCaptchaLoading}
+                          disabled={!!isCaptchaLoading}
                           className="absolute -right-3 -top-3 bg-white border border-orange-200 shadow-md rounded-full p-1.5 hover:bg-orange-50 transition-all active:scale-95 disabled:opacity-50"
                           title="Get a new security code"
                         >

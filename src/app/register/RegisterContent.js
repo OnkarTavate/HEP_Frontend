@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -78,11 +78,19 @@ export default function RegisterPage() {
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaInput, setCaptchaInput] = useState("");
 
-  const handleMouseMove = (e) => {
-    const x = (e.clientX - window.innerWidth / 2) / 50;
-    const y = (e.clientY - window.innerHeight / 2) / 50;
-    setMousePos({ x, y });
-  };
+  const rafRef = useRef(null);
+
+  const handleMouseMove = useCallback((e) => {
+    // Throttle via requestAnimationFrame — fires at most once per frame (~16ms)
+    // instead of on every raw mousemove event (60+ times/sec)
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      const x = (e.clientX - window.innerWidth / 2) / 50;
+      const y = (e.clientY - window.innerHeight / 2) / 50;
+      setMousePos({ x, y });
+      rafRef.current = null;
+    });
+  }, []);
 
   // Fetch User Types and Captcha from API
   const fetchInitialData = async () => {

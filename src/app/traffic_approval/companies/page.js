@@ -20,8 +20,7 @@ import {
 
 const BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API;
 // Fallback logic to grab the documents from the agent API port (5001)
-const AGENT_API =
-  process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
+const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || `${BASE_URL.replace(/\/$/, "")}:5001/api`;
 const DOC_BASE_URL = AGENT_API.replace("/api", "");
 
 export default function TrafficCompanyApprovals() {
@@ -52,16 +51,46 @@ export default function TrafficCompanyApprovals() {
     }
   }, [viewingDocUrl]);
 
+  // const fetchDashboardData = async () => {
+  //   try {
+  //     const response = await axios.get(`${BASE_URL}/user/agent-users`);
+  //     setRequests(response.data.data || response.data);
+  //   } catch (error) {
+  //     console.error("Failed to fetch requests", error);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const fetchDashboardData = async () => {
-    try {
-      const response = await axios.get(`${BASE_URL}/user/agent-users`);
-      setRequests(response.data.data || response.data);
-    } catch (error) {
-      console.error("Failed to fetch requests", error);
-    } finally {
-      setLoading(false);
+  setLoading(true);  // Start loading state
+
+  try {
+    // Log the BASE_URL to ensure it's correctly defined
+    console.log("BASE_URL:", BASE_URL);
+    
+    // Make the API request
+    const response = await axios.get(`${BASE_URL}/user/agent-users`);
+    
+    // Log the entire response to inspect the structure
+    console.log("API Response:", response);
+
+    // Check if the expected data structure is present
+    if (!response.data || !response.data.data) {
+      console.warn("No data found in the response");
+      setRequests([]);  // Handle empty data
+    } else {
+      setRequests(response.data.data || response.data);  // Set the data if available
     }
-  };
+  } catch (error) {
+    // Log the full error for better debugging
+    console.error("Failed to fetch requests", error.response || error.message);
+
+    // Optionally, you can set some error state here to show a message to the user
+    // setError(true);  // Example of setting an error flag
+  } finally {
+    setLoading(false);  // Set loading to false after the request completes (success or failure)
+  }
+};
 
   const handleRevertClick = () => {
     if (!remarks.trim()) {
