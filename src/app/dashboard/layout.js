@@ -36,7 +36,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import axios from "axios";
-import { useBeaconLogout } from "@/lib/useBeaconLogout";
+import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
 // Navigation items based on user role
 
@@ -95,7 +95,7 @@ export default function DashboardLayout({ children }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Clear Redis session when the tab/browser is closed
-  useBeaconLogout();
+  useSessionHeartbeat();
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
-import { useBeaconLogout } from "@/lib/useBeaconLogout";
+import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
 
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -40,7 +40,7 @@ export default function AdminLayout({ children }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Clear Redis session when the tab/browser is closed
-  useBeaconLogout();
+  useSessionHeartbeat();
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
