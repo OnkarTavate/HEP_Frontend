@@ -21,32 +21,46 @@ import {
   UserPlus,
   BookOpen,
   FileCheck2,
+  CheckCircle2,
+  Eye,
 } from "lucide-react";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 
 const getCurrentDateTime = () => {
   const now = new Date();
-  const offset = now.getTimezoneOffset() * 60000;
-  return new Date(now.getTime() - offset).toISOString().slice(0, 16);
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 };
 
 const calculateDateTo = (fromDate, period, type) => {
   if (!fromDate || !period) return "";
-  const d = new Date(fromDate);
+
+  const [datePart, timePart = "00:00"] = String(fromDate).split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return "";
+
+  const d = new Date(year, month - 1, day); // local midnight — no UTC shift
   if (isNaN(d.getTime())) return "";
+
   const p = parseInt(period, 10);
 
   if (type === "DAILY" || type === "1" || type === 1) {
-    d.setDate(d.getDate() + p - 1);
+    d.setDate(d.getDate() + p); // +1 day for 1-day pass ✅
   } else if (type === "MONTHLY" || type === "2" || type === 2) {
-    d.setMonth(d.getMonth() + p);
-    d.setDate(d.getDate() - 1);
+    d.setMonth(d.getMonth() + p); // +1 month, same day ✅
   } else if (type === "YEARLY" || type === "3" || type === 3) {
-    d.setFullYear(d.getFullYear() + p);
-    d.setDate(d.getDate() - 1);
+    d.setFullYear(d.getFullYear() + p); // +1 year, same day ✅
   }
-  return d.toISOString().split("T")[0];
+
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${timePart}`; // carries same time as dateFrom
 };
 
 const getLabelById = (arr, val, key = "label") => {
@@ -56,6 +70,29 @@ const getLabelById = (arr, val, key = "label") => {
     (x) => String(x.id) === String(val) || String(x.value) === String(val),
   );
   return item ? item[key] || item.name : val;
+};
+
+const validateFile = (file, type) => {
+  if (!file) return "No file selected";
+
+  const allowedTypes = {
+    pdf: ["application/pdf"],
+    image: ["image/jpeg", "image/png", "image/jpg"],
+  };
+
+  const maxSize = 2 * 1024 * 1024; // 2MB
+
+  if (!allowedTypes[type].includes(file.type)) {
+    return type === "pdf"
+      ? "Only PDF files are allowed"
+      : "Only JPG, JPEG, PNG images are allowed";
+  }
+
+  if (file.size > maxSize) {
+    return "File size must be less than 2MB";
+  }
+
+  return null;
 };
 
 // ============================================================
@@ -709,17 +746,83 @@ export default function PassRequestPage() {
         setPersonForm(initialPersonForm);
         return;
       }
+
+      // Safe mapping for DB String values -> Dropdown IDs
+      const natObj = masterData.nationalities.find(
+        (n) =>
+          (n.label || n.name || "").toUpperCase() ===
+          String(data.nationality).toUpperCase(),
+      );
+      const natVal = natObj ? String(natObj.id || natObj.value) : "1"; // Default Indian
+
+      const idObj = masterData.idProofTypes.find(
+        (t) =>
+          (t.label || t.name || "").toUpperCase() ===
+          String(data.idProofType).toUpperCase(),
+      );
+      const idVal = idObj
+        ? String(idObj.id || idObj.value)
+        : data.idProofType || "";
+
+      const areaObj = masterData.accessAreas.find(
+        (a) =>
+          (a.label || a.name || "").toUpperCase() ===
+          String(data.accessAreaId).toUpperCase(),
+      );
+      const areaVal = areaObj ? String(areaObj.id || areaObj.value) : "";
+
+      const pTypeStr = String(data.passType || "").toUpperCase();
+      const passTypeVal =
+        pTypeStr === "MONTHLY"
+          ? "2"
+          : pTypeStr === "YEARLY" || pTypeStr === "ANNUAL"
+            ? "3"
+            : "1";
+
       setPersonForm({
         ...initialPersonForm,
         masterId: id,
+        existingPassRequestId: data.passRequestId, // Crucial for fetching old documents
+        hepType: data.hepTypeId
+          ? String(data.hepTypeId)
+          : data.designationName === "Driver"
+            ? "1"
+            : "2",
         name: data.name || "",
-        hepType: data.designation === "Driver" ? "1" : "2",
-        aadharNo: data.aadhar || "",
-        mobile: data.phone || "",
+        aadharNo: data.aadharNo || "",
+        mobile: data.mobile || "",
         email: data.email || "",
-        idProofType: data.idProofType || "1",
+        nationality: natVal,
+        country: data.countryId ? String(data.countryId) : "75",
+        visaNo: data.visaNo || "",
+        accessArea: areaVal,
+        designation: data.designationId ? String(data.designationId) : "",
+        designationOther: data.designationOther || "",
+        cardNumber: data.cardNumber || "",
+        withTwoWheeler: data.withTwoWheeler || false,
+        vehicleNo: data.vehicleNo || "",
+        idProofType: idVal,
+        idProofNumber: data.idProofNumber || "",
+
+        // 🚀 FIX: Pre-fill pass type and dates so UI reacts correctly
+        passType: passTypeVal,
+        passPeriod: data.passPeriod ? String(data.passPeriod) : "1",
+        dateFrom: data.dateFrom
+          ? new Date(data.dateFrom).toISOString().slice(0, 16)
+          : getCurrentDateTime(),
+
+        // Map Existing Files
+        existingAadharName: data.aadharPDFFileName,
+        existingPhotoName: data.photoFileName,
+        existingIdProofName: data.idProofFileName,
+        existingReqName: data.requisitionLetterName,
+        existingDlName: data.driverLicenseName,
+        existingPoliceName: data.policeVerificationName,
+        existingEmpName: data.employmentProofName,
+        existingChaName: data.chaLicenseName,
+        existingPassportName: data.passportName,
       });
-      toast.success("Person details auto-filled");
+      toast.success("Person details & documents auto-filled");
     } else {
       setPersonForm(initialPersonForm);
     }
@@ -739,14 +842,55 @@ export default function PassRequestPage() {
         return;
       }
 
+      const areaObj = masterData.accessAreas.find(
+        (a) =>
+          (a.label || a.name || "").toUpperCase() ===
+          String(data.accessAreaId).toUpperCase(),
+      );
+      const areaVal = areaObj ? String(areaObj.id || areaObj.value) : "";
+
+      // 🚀 FIX: Correctly map Pass Type
+      const pTypeStr = String(data.passType || "").toUpperCase();
+      const passTypeVal =
+        pTypeStr === "MONTHLY"
+          ? "2"
+          : pTypeStr === "YEARLY" || pTypeStr === "ANNUAL"
+            ? "3"
+            : "1";
+
       setVehicleForm({
         ...initialVehicleForm,
         masterId: id,
+        existingPassRequestId: data.passRequestId,
         regNo: data.registrationNo || data.regNo || "",
         type: data.vehicleTypeId || data.type || "",
+        cardNumber: data.rfidCardNumber || "",
+        accessArea: areaVal,
+        insuranceExpiry: data.insuranceExpiry
+          ? new Date(data.insuranceExpiry).toISOString().split("T")[0]
+          : "",
+        rcValidity: data.rcValidity
+          ? new Date(data.rcValidity).toISOString().split("T")[0]
+          : "",
+
+        // 🚀 FIX: Pre-fill pass type and dates
+        passType: passTypeVal,
+        passPeriod: data.passPeriod ? String(data.passPeriod) : "1",
+        dateFrom: data.dateFrom
+          ? new Date(data.dateFrom).toISOString().slice(0, 16)
+          : getCurrentDateTime(),
+
+        // Map Existing Files
+        existingRcName: data.scannedCopyFileName,
+        existingInsName: data.insuranceFileName,
+        existingPermitName: data.permitFileName,
+        existingFitnessName: data.fitnessFileName,
+        existingReqName: data.requestLetterName,
+        existingTaxName: data.taxDocName,
+        existingEmissionName: data.emissionCertName,
       });
 
-      toast.success("Vehicle details auto-filled");
+      toast.success("Vehicle details & documents auto-filled");
     } else {
       setVehicleForm(initialVehicleForm);
     }
@@ -806,28 +950,35 @@ export default function PassRequestPage() {
       );
     }
     setPersonErrors({});
-    // ---- End validation ----
-
     if (
       !personForm.name.trim() ||
       !personForm.designation ||
       !personForm.mobile ||
-      !personForm.photo
+      !(personForm.photo || personForm.existingPhotoName)
     ) {
       return toast.error("Please fill all mandatory fields including Photo.");
     }
-    if (!personForm.requisitionLetter)
+
+    if (!(personForm.requisitionLetter || personForm.existingReqName))
       return toast.error("Requisition Letter is mandatory.");
-    if (personForm.hepType === "1" && !personForm.driverLicence)
-      return toast.error("Driver Licence is mandatory for Drivers."); // 1 = Driver DB
-    if (personForm.hepType === "3" && !personForm.passportDoc)
+
+    if (
+      personForm.hepType === "1" &&
+      !(personForm.driverLicence || personForm.existingDlName)
+    )
+      return toast.error("Driver Licence is mandatory for Drivers.");
+
+    if (
+      personForm.hepType === "3" &&
+      !(personForm.passportDoc || personForm.existingPassportName)
+    )
       return toast.error("Passport is mandatory for Seafarers.");
 
     if (personForm.passType === "2" || personForm.passType === "3") {
       if (
-        !personForm.policeVerification ||
-        !personForm.proofOfEmployment ||
-        !personForm.copyOfLicence
+        !(personForm.policeVerification || personForm.existingPoliceName) ||
+        !(personForm.proofOfEmployment || personForm.existingEmpName) ||
+        !(personForm.copyOfLicence || personForm.existingChaName)
       ) {
         return toast.error(
           "Police Verification, Employment Proof, and Licence are mandatory for Monthly/Yearly passes.",
@@ -906,15 +1057,14 @@ export default function PassRequestPage() {
     }
     setVehicleErrors({});
     // ---- End validation ----
-
     if (
       !vehicleForm.regNo.trim() ||
-      !vehicleForm.rcDocument ||
-      !vehicleForm.insuranceDocument ||
-      !vehicleForm.permit ||
-      !vehicleForm.fitnessCert ||
-      !vehicleForm.insuranceExpiry || // <--- ADDED VALIDATION
-      !vehicleForm.rcValidity // <--- ADDED VALIDATION
+      !(vehicleForm.rcDocument || vehicleForm.existingRcName) ||
+      !(vehicleForm.insuranceDocument || vehicleForm.existingInsName) ||
+      !(vehicleForm.permit || vehicleForm.existingPermitName) ||
+      !(vehicleForm.fitnessCert || vehicleForm.existingFitnessName) ||
+      !vehicleForm.insuranceExpiry ||
+      !vehicleForm.rcValidity
     ) {
       return toast.error(
         "RC Book, Insurance, Permit, Fitness Certificate, and their Validity Dates are mandatory.",
@@ -925,9 +1075,9 @@ export default function PassRequestPage() {
       String(vehicleForm.passType) === "3"
     ) {
       if (
-        !vehicleForm.requestLetter ||
-        !vehicleForm.taxDoc ||
-        !vehicleForm.emissionCert
+        !(vehicleForm.requestLetter || vehicleForm.existingReqName) ||
+        !(vehicleForm.taxDoc || vehicleForm.existingTaxName) ||
+        !(vehicleForm.emissionCert || vehicleForm.existingEmissionName)
       ) {
         return toast.error(
           "Request Letter, Tax, and Emission Cert are mandatory for Monthly/Yearly passes.",
@@ -1054,7 +1204,7 @@ export default function PassRequestPage() {
           idProofNumber: p.idProofNumber,
           passType: getEnumValue(masterData.passTypes, p.passType, "DAILY"),
           passPeriod: parseInt(p.passPeriod, 10) || 1,
-          dateFrom: p.dateFrom.split("T")[0],
+          dateFrom: p.dateFrom,
           dateTo: computedDateTo,
           amount: parseFloat(p.amount) || 0,
         };
@@ -1089,7 +1239,7 @@ export default function PassRequestPage() {
           ),
           passType: getEnumValue(masterData.passTypes, v.passType, "DAILY"),
           passPeriod: parseInt(v.passPeriod, 10) || 1,
-          dateFrom: v.dateFrom.split("T")[0],
+          dateFrom: v.dateFrom,
           dateTo: computedDateTo,
           amount: parseFloat(v.amount) || 0,
         };
@@ -1191,30 +1341,100 @@ export default function PassRequestPage() {
   const inputClass =
     "w-full h-10 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm bg-white outline-none transition-all";
 
-  const FileUploadBox = ({ label, isRequired, file, onChange, hint }) => (
-    <div className="bg-white p-4 border border-slate-200 rounded-xl shadow-sm hover:border-orange-300 hover:shadow-md transition-all group">
-      <label className="text-xs font-bold text-slate-800 block mb-2">
-        {label} {isRequired && <span className="text-red-500">*</span>}{" "}
+  const FileUploadBox = ({
+    label,
+    isRequired,
+    file,
+    onChange,
+    hint,
+    existingFileName,
+    onView,
+    fileType = "pdf",
+  }) => (
+    <div className="bg-white p-4 border border-slate-200 rounded-xl shadow-sm hover:border-orange-300 hover:shadow-md transition-all group flex flex-col justify-between h-full">
+      <label className="text-xs font-bold text-slate-800 block mb-3">
+        {label}{" "}
+        {isRequired && !existingFileName && !file && (
+          <span className="text-red-500">*</span>
+        )}
         {hint && (
-          <span className="text-slate-400 font-normal ml-1">{hint}</span>
+          <span className="text-slate-400 font-normal ml-1 block mt-0.5">
+            {hint}
+          </span>
         )}
       </label>
-      <div className="relative">
+
+      {/* RENDER EXISTING FILE BADGE */}
+      {existingFileName && !file && (
+        <div className="flex flex-col gap-2 mb-3">
+          <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 px-2 py-2 rounded-lg">
+            <div className="flex items-center gap-1.5 overflow-hidden">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+              <span
+                className="text-[10px] font-bold text-emerald-700 truncate"
+                title={existingFileName}
+              >
+                {existingFileName}
+              </span>
+            </div>
+            {onView && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onView();
+                }}
+                className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-white px-2 py-1 rounded shadow-sm border border-emerald-200 ml-2 shrink-0"
+              >
+                <Eye className="h-3 w-3" /> View
+              </button>
+            )}
+          </div>
+          <span className="text-[9px] text-slate-400 font-medium italic">
+            (Upload a new file below to replace)
+          </span>
+        </div>
+      )}
+
+      {/* UPLOAD INPUT */}
+      <div className="relative mt-auto">
         <input
           type="file"
+          accept={fileType === "image" ? "image/*" : "application/pdf"}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-          onChange={onChange}
+          required={isRequired && !existingFileName && !file}
+          onChange={(e) => {
+            const file = e.target.files[0];
+
+            const error = validateFile(file, fileType);
+
+            if (error) {
+              toast.error(error);
+              e.target.value = ""; // reset input
+              return;
+            }
+
+            onChange(e); // proceed only if valid
+          }}
         />
         <div
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${file ? "border-emerald-200 bg-emerald-50" : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-orange-50 group-hover:border-orange-300"} transition-colors`}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
+            file
+              ? "border-orange-300 bg-orange-50"
+              : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
+          } transition-colors`}
         >
           <Upload
-            className={`w-4 h-4 flex-shrink-0 ${file ? "text-emerald-600" : "text-orange-500"}`}
+            className={`w-4 h-4 flex-shrink-0 ${file ? "text-orange-600" : "text-slate-400"}`}
           />
           <span
-            className={`text-xs truncate font-medium ${file ? "text-emerald-700" : "text-slate-500"}`}
+            className={`text-xs truncate font-medium ${file ? "text-orange-700" : "text-slate-500"}`}
           >
-            {file ? file.name : "Choose file..."}
+            {file
+              ? file.name
+              : existingFileName
+                ? "Choose new file..."
+                : "Choose file..."}
           </span>
         </div>
       </div>
@@ -1397,12 +1617,23 @@ export default function PassRequestPage() {
                     <input
                       className="hidden"
                       type="file"
-                      onChange={(e) =>
+                      accept="application/pdf" // 🔥 restrict file picker
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+
+                        const error = validateFile(file, "pdf"); // 🔥 reuse your validator
+
+                        if (error) {
+                          toast.error(error);
+                          e.target.value = ""; // reset input
+                          return;
+                        }
+
                         setGeneralForm({
                           ...generalForm,
-                          authLetter: e.target.files[0],
-                        })
-                      }
+                          authLetter: file,
+                        });
+                      }}
                     />
                   </label>
                 </div>
@@ -1468,12 +1699,12 @@ export default function PassRequestPage() {
                       </td>
                       <td className="px-4 py-4 border-r border-slate-100">
                         <div className="flex items-center gap-3">
-                          {p.photo ? (
+                          {p.photo || p.existingPhotoName ? (
                             <img
                               src={
                                 p.photo instanceof File
                                   ? URL.createObjectURL(p.photo)
-                                  : ""
+                                  : `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${p.existingPassRequestId}&documentType=personPhoto`
                               }
                               alt="Profile"
                               className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-sm"
@@ -1832,9 +2063,11 @@ export default function PassRequestPage() {
                   ) : (
                     submittedPasses.map((pass, idx) => {
                       // Robust DB mapping handling camelCase, snake_case, and flat text from PostgreSQL
-                      const passIdStr = pass.id
-                        ? `REQ-${pass.id}`
-                        : pass.passId || `REQ-XXXX`;
+                      const passIdStr = pass.referenceNo
+                        ? pass.referenceNo
+                        : pass.id
+                          ? `REQ-${pass.id}`
+                          : pass.passId || `REQ-XXXX`;
 
                       const createdAtStr =
                         pass.createdAt ||
@@ -2045,6 +2278,13 @@ export default function PassRequestPage() {
                     </label>
                     <FileUploadBox
                       file={personForm.aadharFile}
+                      existingFileName={personForm.existingAadharName}
+                      onView={() =>
+                        window.open(
+                          `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=personAadhar`,
+                          "_blank",
+                        )
+                      }
                       onChange={(e) =>
                         setPersonForm({
                           ...personForm,
@@ -2419,30 +2659,38 @@ export default function PassRequestPage() {
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Upload Photo <span className="text-red-500">*</span>
                     </label>
-                    {personForm.photo ? (
+                    {personForm.photo || personForm.existingPhotoName ? (
                       <div className="relative w-24 h-28 rounded-xl border border-slate-300 overflow-hidden shadow-sm group">
                         <img
                           src={
                             personForm.photo instanceof File
                               ? URL.createObjectURL(personForm.photo)
-                              : ""
+                              : `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=personPhoto`
                           }
                           alt="Profile"
                           className="w-full h-full object-cover"
                         />
                         <button
+                          type="button"
                           onClick={() =>
-                            setPersonForm({ ...personForm, photo: null })
+                            setPersonForm({
+                              ...personForm,
+                              photo: null,
+                              existingPhotoName: null,
+                            })
                           }
                           className="absolute top-1.5 right-1.5 bg-white/90 hover:bg-red-500 text-slate-700 hover:text-white p-1 rounded-full shadow-sm transition-colors"
-                          title="Remove"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     ) : (
                       <FileUploadBox
+                        label="Photo"
+                        fileType="image" // 🔥 THIS IS THE KEY FIX
+                        isRequired={true}
                         file={personForm.photo}
+                        existingFileName={personForm.existingPhotoName}
                         onChange={(e) =>
                           setPersonForm({
                             ...personForm,
@@ -2464,6 +2712,13 @@ export default function PassRequestPage() {
                     </label>
                     <FileUploadBox
                       file={personForm.idProofFile}
+                      existingFileName={personForm.existingIdProofName}
+                      onView={() =>
+                        window.open(
+                          `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=personIdProof`,
+                          "_blank",
+                        )
+                      }
                       onChange={(e) =>
                         setPersonForm({
                           ...personForm,
@@ -2507,6 +2762,13 @@ export default function PassRequestPage() {
                     label="Requisition Letter"
                     isRequired
                     file={personForm.requisitionLetter}
+                    existingFileName={personForm.existingReqName}
+                    onView={() =>
+                      window.open(
+                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=requisitionLetter`,
+                        "_blank",
+                      )
+                    }
                     onChange={(e) =>
                       setPersonForm({
                         ...personForm,
@@ -2519,6 +2781,13 @@ export default function PassRequestPage() {
                       label="Driver Licence"
                       isRequired
                       file={personForm.driverLicence}
+                      existingFileName={personForm.existingDlName}
+                      onView={() =>
+                        window.open(
+                          `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=driverLicense`,
+                          "_blank",
+                        )
+                      }
                       onChange={(e) =>
                         setPersonForm({
                           ...personForm,
@@ -2534,6 +2803,13 @@ export default function PassRequestPage() {
                         label="Police Verification"
                         isRequired
                         file={personForm.policeVerification}
+                        existingFileName={personForm.existingPoliceName}
+                        onView={() =>
+                          window.open(
+                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=policeVerification`,
+                            "_blank",
+                          )
+                        }
                         onChange={(e) =>
                           setPersonForm({
                             ...personForm,
@@ -2545,6 +2821,13 @@ export default function PassRequestPage() {
                         label="Proof of Employment"
                         isRequired
                         file={personForm.proofOfEmployment}
+                        existingFileName={personForm.existingEmpName}
+                        onView={() =>
+                          window.open(
+                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=employmentProof`,
+                            "_blank",
+                          )
+                        }
                         onChange={(e) =>
                           setPersonForm({
                             ...personForm,
@@ -2557,6 +2840,13 @@ export default function PassRequestPage() {
                         hint="(Stevedore/CHA)"
                         isRequired
                         file={personForm.copyOfLicence}
+                        existingFileName={personForm.existingChaName}
+                        onView={() =>
+                          window.open(
+                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=chaLicenseCopy`,
+                            "_blank",
+                          )
+                        }
                         onChange={(e) =>
                           setPersonForm({
                             ...personForm,
@@ -2574,6 +2864,13 @@ export default function PassRequestPage() {
                       isRequired={personForm.hepType === "3"}
                       hint={personForm.hepType !== "3" && "(Optional)"}
                       file={personForm.passportDoc}
+                      existingFileName={personForm.existingPassportName}
+                      onView={() =>
+                        window.open(
+                          `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=passportDoc`,
+                          "_blank",
+                        )
+                      }
                       onChange={(e) =>
                         setPersonForm({
                           ...personForm,
@@ -2653,6 +2950,7 @@ export default function PassRequestPage() {
                         <input
                           type="datetime-local"
                           value={personForm.dateFrom}
+                          min={getCurrentDateTime()}
                           onChange={(e) =>
                             setPersonForm({
                               ...personForm,
@@ -2665,7 +2963,7 @@ export default function PassRequestPage() {
                       <td className="p-3 border-r border-slate-200 flex items-center gap-2">
                         <input
                           readOnly
-                          type="date"
+                          type="datetime-local"
                           value={personForm.dateTo}
                           className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
                         />
@@ -2903,6 +3201,13 @@ export default function PassRequestPage() {
                     label="RC Book"
                     isRequired
                     file={vehicleForm.rcDocument}
+                    existingFileName={vehicleForm.existingRcName}
+                    onView={() =>
+                      window.open(
+                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleRC`,
+                        "_blank",
+                      )
+                    }
                     onChange={(e) =>
                       setVehicleForm({
                         ...vehicleForm,
@@ -2914,6 +3219,13 @@ export default function PassRequestPage() {
                     label="Insurance"
                     isRequired
                     file={vehicleForm.insuranceDocument}
+                    existingFileName={vehicleForm.existingInsName}
+                    onView={() =>
+                      window.open(
+                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleInsurance`,
+                        "_blank",
+                      )
+                    }
                     onChange={(e) =>
                       setVehicleForm({
                         ...vehicleForm,
@@ -2925,6 +3237,13 @@ export default function PassRequestPage() {
                     label="Permit"
                     isRequired
                     file={vehicleForm.permit}
+                    existingFileName={vehicleForm.existingPermitName}
+                    onView={() =>
+                      window.open(
+                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehiclePermit`,
+                        "_blank",
+                      )
+                    }
                     onChange={(e) =>
                       setVehicleForm({
                         ...vehicleForm,
@@ -2936,6 +3255,13 @@ export default function PassRequestPage() {
                     label="Fitness Certificate"
                     isRequired
                     file={vehicleForm.fitnessCert}
+                    existingFileName={vehicleForm.existingFitnessName}
+                    onView={() =>
+                      window.open(
+                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleFitness`,
+                        "_blank",
+                      )
+                    }
                     onChange={(e) =>
                       setVehicleForm({
                         ...vehicleForm,
@@ -2950,6 +3276,13 @@ export default function PassRequestPage() {
                         label="Request Letters"
                         isRequired
                         file={vehicleForm.requestLetter}
+                        existingFileName={vehicleForm.existingReqName}
+                        onView={() =>
+                          window.open(
+                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleRequestLetter`,
+                            "_blank",
+                          )
+                        }
                         onChange={(e) =>
                           setVehicleForm({
                             ...vehicleForm,
@@ -2961,6 +3294,13 @@ export default function PassRequestPage() {
                         label="Tax Document"
                         isRequired
                         file={vehicleForm.taxDoc}
+                        existingFileName={vehicleForm.existingTaxName}
+                        onView={() =>
+                          window.open(
+                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleTax`,
+                            "_blank",
+                          )
+                        }
                         onChange={(e) =>
                           setVehicleForm({
                             ...vehicleForm,
@@ -2972,6 +3312,13 @@ export default function PassRequestPage() {
                         label="Emission Certificate"
                         isRequired
                         file={vehicleForm.emissionCert}
+                        existingFileName={vehicleForm.existingEmissionName}
+                        onView={() =>
+                          window.open(
+                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleEmission`,
+                            "_blank",
+                          )
+                        }
                         onChange={(e) =>
                           setVehicleForm({
                             ...vehicleForm,
@@ -3052,6 +3399,7 @@ export default function PassRequestPage() {
                         <input
                           type="datetime-local"
                           value={vehicleForm.dateFrom}
+                          min={getCurrentDateTime()}
                           onChange={(e) =>
                             setVehicleForm({
                               ...vehicleForm,
@@ -3064,7 +3412,7 @@ export default function PassRequestPage() {
                       <td className="p-3 border-r border-slate-200">
                         <input
                           readOnly
-                          type="date"
+                          type="datetime-local"
                           value={vehicleForm.dateTo}
                           className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
                         />
@@ -3100,7 +3448,7 @@ export default function PassRequestPage() {
       {/* PASS DETAILS READ-ONLY MODAL */}
       {selectedPassDetails && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-[#0a1e4d] text-white">
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <FileText className="h-5 w-5 text-orange-400" />
@@ -3128,7 +3476,10 @@ export default function PassRequestPage() {
                       className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold text-[#0a1e4d] cursor-not-allowed"
                       readOnly
                       type="text"
-                      value={`REQ-${selectedPassDetails.id || selectedPassDetails.passId || "XXXX"}`}
+                      value={
+                        selectedPassDetails.referenceNo ||
+                        `REQ-${selectedPassDetails.id || selectedPassDetails.passId || "XXXX"}`
+                      }
                     />
                   </div>
                   <div>
@@ -3233,6 +3584,9 @@ export default function PassRequestPage() {
                       <thead className="bg-slate-50">
                         <tr>
                           <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                            Pass No
+                          </th>
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             Name
                           </th>
                           <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -3258,6 +3612,9 @@ export default function PassRequestPage() {
                                 })
                               }
                             >
+                              <td className="p-3 text-xs font-mono font-bold text-[#0a1e4d]">
+                                {p.personPassNo || "-"}
+                              </td>
                               <td className="p-3 text-sm font-medium text-slate-800">
                                 {p.name || p.person_name}
                               </td>
@@ -3274,7 +3631,7 @@ export default function PassRequestPage() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handlePrintQR(p, "person"); // Pass the person object and type
+                                      handlePrintQR(p, "person");
                                     }}
                                     className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
                                   >
@@ -3291,7 +3648,7 @@ export default function PassRequestPage() {
                         ) : (
                           <tr>
                             <td
-                              colSpan="3"
+                              colSpan="4"
                               className="p-4 text-sm text-slate-400 text-center italic"
                             >
                               No persons found.
@@ -3311,6 +3668,9 @@ export default function PassRequestPage() {
                     <table className="w-full text-left">
                       <thead className="bg-slate-50">
                         <tr>
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                            Pass No
+                          </th>
                           <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             Reg. No
                           </th>
@@ -3337,6 +3697,9 @@ export default function PassRequestPage() {
                                 })
                               }
                             >
+                              <td className="p-3 text-xs font-mono font-bold text-[#0a1e4d]">
+                                {v.vehiclePassNo || "-"}
+                              </td>
                               <td className="p-3 text-sm font-bold text-[#0a1e4d] uppercase">
                                 {v.registrationNo ||
                                   v.registration_no ||
@@ -3355,7 +3718,7 @@ export default function PassRequestPage() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handlePrintQR(v, "vehicle"); // Pass the vehicle object and type
+                                      handlePrintQR(v, "vehicle");
                                     }}
                                     className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
                                   >
@@ -3372,7 +3735,7 @@ export default function PassRequestPage() {
                         ) : (
                           <tr>
                             <td
-                              colSpan="3"
+                              colSpan="4"
                               className="p-4 text-sm text-slate-400 text-center italic"
                             >
                               No vehicles found.
@@ -3678,6 +4041,11 @@ export default function PassRequestPage() {
                   {entityModal.type === "person" ? (
                     <>
                       <DetailItem
+                        label="Pass No."
+                        value={entityModal.data.personPassNo || "Not Issued"}
+                        highlight
+                      />
+                      <DetailItem
                         label="Full Name"
                         value={entityModal.data.name}
                         highlight
@@ -3726,6 +4094,11 @@ export default function PassRequestPage() {
                     </>
                   ) : (
                     <>
+                      <DetailItem
+                        label="Pass No."
+                        value={entityModal.data.vehiclePassNo || "Not Issued"}
+                        highlight
+                      />
                       <DetailItem
                         label="Registration No."
                         value={

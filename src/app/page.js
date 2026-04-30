@@ -490,7 +490,7 @@ const LoginPage = () => {
                     </button>
 
                     {/* Manual */}
-                    <button
+                    {/* <button
                       type="button"
                       onClick={() => router.push("/manual")}
                       className="flex flex-col items-center gap-2 group"
@@ -501,7 +501,7 @@ const LoginPage = () => {
                       <span className="text-[11px] font-bold text-gray-800 uppercase tracking-wide text-center">
                         Manual
                       </span>
-                    </button>
+                    </button> */}
                   </div>
                 </div>
               </div>

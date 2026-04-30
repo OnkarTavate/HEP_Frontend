@@ -50,7 +50,7 @@ const getNavigationItems = (role) => {
     ...baseItems,
     { name: "Apply Pass", href: "/dashboard/pass_request", icon: FileText },
     { name: "Master Record", href: "/dashboard/master_record", icon: Database }, // <-- UPDATED PATH HERE
-    { name: "Wallet", href: "/dashboard/wallet", icon: Wallet },
+    // { name: "Wallet", href: "/dashboard/wallet", icon: Wallet },
   ];
 
   const roleItems = {

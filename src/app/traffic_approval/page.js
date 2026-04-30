@@ -669,6 +669,9 @@ export default function TrafficPassesPage() {
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
                           <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                            Pass No
+                          </th>
+                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
                             Name & Role
                           </th>
                           <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
@@ -697,6 +700,9 @@ export default function TrafficPassesPage() {
                             }}
                             className="hover:bg-slate-50 cursor-pointer transition-all hover:shadow-sm"
                           >
+                            <td className="p-3 text-slate-800 font-mono font-bold text-xs">
+                              {p.personPassNo || "-"}
+                            </td>
                             <td className="p-3 font-bold text-[#0a1e4d]">
                               {p.name}
                               <span className="block font-medium text-xs text-slate-500">
@@ -783,6 +789,9 @@ export default function TrafficPassesPage() {
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
                           <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                            Pass No
+                          </th>
+                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
                             Reg No
                           </th>
                           <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
@@ -811,6 +820,9 @@ export default function TrafficPassesPage() {
                             }}
                             className="hover:bg-slate-50 cursor-pointer transition-all hover:shadow-sm"
                           >
+                            <td className="p-3 text-slate-800 font-mono font-bold text-xs">
+                              {v.vehiclePassNo || "-"}
+                            </td>
                             <td className="p-3 font-bold text-[#0a1e4d] uppercase">
                               {v.registrationNo}
                               {entityStatuses.vehicles[v.id] === "REJECTED" &&
@@ -954,6 +966,11 @@ export default function TrafficPassesPage() {
                   {entityModal.type === "person" ? (
                     <>
                       <DetailItem
+                        label="Pass No."
+                        value={entityModal.data.personPassNo || "Not Issued"}
+                        highlight
+                      />
+                      <DetailItem
                         label="Full Name"
                         value={entityModal.data.name}
                         highlight
@@ -1022,6 +1039,11 @@ export default function TrafficPassesPage() {
                     </>
                   ) : (
                     <>
+                      <DetailItem
+                        label="Pass No."
+                        value={entityModal.data.vehiclePassNo || "Not Issued"}
+                        highlight
+                      />
                       <DetailItem
                         label="Registration No."
                         value={entityModal.data.registrationNo}
