@@ -51,6 +51,99 @@ const identificationTypes = [
   },
 ];
 
+// ============================================================
+// VALIDATION UTILITIES  (same pattern as pass-request page)
+// ============================================================
+const FIELD_VALIDATORS = {
+  mobileNo: (v) => /^[6-9]\d{9}$/.test(v.replace(/\s/g, "")),
+  contactMobile: (v) => /^[6-9]\d{9}$/.test(v.replace(/\s/g, "")),
+  email: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+  contactEmail: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+  entityName: (v) => v.trim().length >= 2,
+  firstName: (v) => /^[a-zA-Z\s.'-]{2,50}$/.test(v.trim()),
+  lastName: (v) => /^[a-zA-Z\s.'-]{1,50}$/.test(v.trim()),
+  pincode: (v) => /^\d{6}$/.test(v),
+  gstinNumber: (v) =>
+    /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(
+      v.toUpperCase(),
+    ),
+  panNumber: (v) => /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v.toUpperCase()),
+  tanNumber: (v) =>
+    v === "" || /^[A-Z]{4}[0-9]{5}[A-Z]{1}$/.test(v.toUpperCase()),
+  addressLine: (v) => v.trim().length >= 5,
+};
+
+const getFieldError = (field, value) => {
+  if (!value && value !== false) return null; // skip truly empty optionals
+  switch (field) {
+    case "mobileNo":
+    case "contactMobile":
+      return FIELD_VALIDATORS[field](value)
+        ? null
+        : "Enter a valid 10-digit Indian mobile number starting with 6-9";
+    case "email":
+    case "contactEmail":
+      return FIELD_VALIDATORS[field](value)
+        ? null
+        : "Enter a valid email address (e.g. name@domain.com)";
+    case "entityName":
+      return FIELD_VALIDATORS.entityName(value)
+        ? null
+        : "Entity name must be at least 2 characters";
+    case "firstName":
+      return FIELD_VALIDATORS.firstName(value)
+        ? null
+        : "First name must be 2-50 letters only";
+    case "lastName":
+      return FIELD_VALIDATORS.lastName(value)
+        ? null
+        : "Last name must be at least 1 letter";
+    case "pincode":
+      return FIELD_VALIDATORS.pincode(value)
+        ? null
+        : "PIN code must be exactly 6 digits";
+    case "gstinNumber":
+      return FIELD_VALIDATORS.gstinNumber(value)
+        ? null
+        : "Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5)";
+    case "panNumber":
+      return FIELD_VALIDATORS.panNumber(value)
+        ? null
+        : "PAN must be in format: ABCDE1234F";
+    case "tanNumber":
+      return FIELD_VALIDATORS.tanNumber(value)
+        ? null
+        : "TAN must be in format: AAAA12345A (optional)";
+    case "addressLine":
+      return FIELD_VALIDATORS.addressLine(value)
+        ? null
+        : "Please enter a valid address (at least 5 characters)";
+    default:
+      return null;
+  }
+};
+
+// ============================================================
+// PDF FILE VALIDATION  (replaces the old alert-based version)
+// ============================================================
+const PDF_MAX_SIZE = 1 * 1024 * 1024; // 1 MB
+
+/**
+ * Validates that a file is a PDF and within size limit.
+ * Returns an error string or null if valid.
+ */
+const validatePdfFile = (file) => {
+  if (!file) return null;
+  if (file.type !== "application/pdf") {
+    return "Only PDF files are allowed";
+  }
+  if (file.size > PDF_MAX_SIZE) {
+    return "File must be less than 1 MB";
+  }
+  return null;
+};
+// ============================================================
+
 export default function RegisterPage() {
   const searchParams = useSearchParams(); // <-- 2. Initialize hook
   const editRef = searchParams.get("ref");
@@ -60,6 +153,12 @@ export default function RegisterPage() {
   const [referenceNo, setReferenceNo] = useState("");
   const [entityFileName, setEntityFileName] = useState("");
   const [tableFiles, setTableFiles] = useState({});
+
+  // ── Inline field error state ──────────────────────────────
+  const [fieldErrors, setFieldErrors] = useState({});
+  // File-level error state keyed by fileId (e.g. "entityFileInput", "gstFileInput")
+  const [fileErrors, setFileErrors] = useState({});
+  // ─────────────────────────────────────────────────────────
 
   const [viewingDocUrl, setViewingDocUrl] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -77,12 +176,29 @@ export default function RegisterPage() {
   const [captchaSvg, setCaptchaSvg] = useState("");
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaInput, setCaptchaInput] = useState("");
+  const [captchaError, setCaptchaError] = useState("");
+
+  // Controlled state for fields that need live validation
+  // (uncontrolled fields in the form use defaultValue, so we read from event)
+  const [fieldValues, setFieldValues] = useState({
+    mobileNo: "",
+    email: "",
+    entityName: "",
+    addressLine: "",
+    pincode: "",
+    gstinNumber: "",
+    panNumber: "",
+    tanNumber: "",
+    firstName: "",
+    lastName: "",
+    contactMobile: "",
+    contactEmail: "",
+  });
 
   const rafRef = useRef(null);
 
   const handleMouseMove = useCallback((e) => {
     // Throttle via requestAnimationFrame — fires at most once per frame (~16ms)
-    // instead of on every raw mousemove event (60+ times/sec)
     if (rafRef.current) return;
     rafRef.current = requestAnimationFrame(() => {
       const x = (e.clientX - window.innerWidth / 2) / 50;
@@ -91,6 +207,33 @@ export default function RegisterPage() {
       rafRef.current = null;
     });
   }, []);
+
+  // Validate a single field and update fieldErrors state
+  const validateField = (field, value) => {
+    const err = getFieldError(field, value);
+    setFieldErrors((prev) => ({ ...prev, [field]: err }));
+    return !err;
+  };
+
+  // Handle controlled field changes with live validation
+  const handleFieldChange = (field, value) => {
+    setFieldValues((prev) => ({ ...prev, [field]: value }));
+    if (value) validateField(field, value); // validate while typing (only if non-empty)
+  };
+
+  // Handle file upload with PDF validation
+  const handleFileChange = (fileKey, file, onValidCb) => {
+    const err = validatePdfFile(file);
+    setFileErrors((prev) => ({ ...prev, [fileKey]: err }));
+    if (!err && file) {
+      onValidCb(file.name); // callback to set the display filename
+    } else if (err) {
+      onValidCb(""); // clear filename on error
+      // Reset the actual input so user can re-select
+      const inputEl = document.getElementById(fileKey);
+      if (inputEl) inputEl.value = "";
+    }
+  };
 
   // Fetch User Types and Captcha from API
   const fetchInitialData = async () => {
@@ -104,6 +247,7 @@ export default function RegisterPage() {
         setCaptchaSvg(data.captchaSvg);
         setCaptchaToken(data.captchaToken);
         setCaptchaInput(""); // Clear input when refreshing captcha
+        setCaptchaError(""); // Clear captcha error on refresh
       }
     } catch (error) {
       console.error("Error fetching initial data:", error);
@@ -115,6 +259,7 @@ export default function RegisterPage() {
       setIframeLoading(true);
     }
   }, [viewingDocUrl]);
+
   useEffect(() => {
     const fetchExistingApplication = async () => {
       if (!editRef) return;
@@ -143,6 +288,22 @@ export default function RegisterPage() {
           setIsEditMode(true);
 
           if (data.userTypeId) setSelectedUserTypeId(data.userTypeId);
+
+          // Pre-populate controlled field values so validation works in edit mode
+          setFieldValues({
+            mobileNo: data.mobileNo || "",
+            email: data.email || "",
+            entityName: data.entityName || "",
+            addressLine: data.addressLine || "",
+            pincode: data.pincode || "",
+            gstinNumber: data.gstinNumber || "",
+            panNumber: data.panNumber || "",
+            tanNumber: data.tanNumber || "",
+            firstName: data.firstName || "",
+            lastName: data.lastName || "",
+            contactMobile: data.contactMobile || "",
+            contactEmail: data.contactEmail || "",
+          });
         } else {
           throw new Error("Backend returned success: false or empty data.");
         }
@@ -163,9 +324,10 @@ export default function RegisterPage() {
     fetchInitialData();
   }, []);
 
+  // Legacy validateFile kept for backward compat (now only used as a passthrough)
+  // Real validation is handled by handleFileChange above
   const validateFile = (file, setFileName, inputRef) => {
     const maxSize = 1 * 1024 * 1024; // 1MB
-
     if (!file) return false;
 
     if (file.size > maxSize) {
@@ -190,6 +352,48 @@ export default function RegisterPage() {
     e.preventDefault();
 
     if (isSubmitting) return;
+
+    // ── Run all field validations before submitting ──
+    const errors = {};
+    const fieldsToValidate = [
+      "mobileNo",
+      "email",
+      "entityName",
+      "addressLine",
+      "pincode",
+      "gstinNumber",
+      "panNumber",
+      "firstName",
+      "lastName",
+      "contactMobile",
+      "contactEmail",
+    ];
+    if (fieldValues.tanNumber) {
+      fieldsToValidate.push("tanNumber");
+    }
+
+    fieldsToValidate.forEach((field) => {
+      if (fieldValues[field]) {
+        const err = getFieldError(field, fieldValues[field]);
+        if (err) errors[field] = err;
+      }
+    });
+
+    // Captcha check
+    if (!captchaInput.trim()) {
+      setCaptchaError("Please enter the security code");
+      errors._captcha = true;
+    } else {
+      setCaptchaError("");
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fix the highlighted errors before submitting.");
+      return;
+    }
+    // ────────────────────────────────────────────────
+
     setIsSubmitting(true);
 
     const formData = new FormData();
@@ -309,6 +513,32 @@ export default function RegisterPage() {
     </div>
   );
 
+  // Reusable inline error message component
+  const FieldError = ({ field }) =>
+    fieldErrors[field] ? (
+      <p className="text-xs text-red-500 font-medium mt-0.5 flex items-center gap-1">
+        <XCircle className="h-3.5 w-3.5 shrink-0" />
+        {fieldErrors[field]}
+      </p>
+    ) : null;
+
+  // Reusable file error message component
+  const FileError = ({ fileKey }) =>
+    fileErrors[fileKey] ? (
+      <p className="text-xs text-red-500 font-medium mt-1 flex items-center gap-1">
+        <XCircle className="h-3.5 w-3.5 shrink-0" />
+        {fileErrors[fileKey]}
+      </p>
+    ) : null;
+
+  // Shared input class helper
+  const inputCls = (field) =>
+    `w-full h-12 px-4 bg-white border focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all ${
+      fieldErrors[field]
+        ? "border-red-400 focus:ring-red-500/20 focus:border-red-500 bg-red-50"
+        : "border-slate-200"
+    }`;
+
   const selectedTypeObj = userTypes.find(
     (type) => type.id.toString() === selectedUserTypeId.toString(),
   );
@@ -338,11 +568,8 @@ export default function RegisterPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-white leading-none">
-                Chennai Port
+                APACS
               </h1>
-              <p className="text-[10px] font-medium text-orange-400 uppercase tracking-widest mt-1">
-                Authority
-              </p>
             </div>
           </div>
           <Link
@@ -395,13 +622,14 @@ export default function RegisterPage() {
                       </div>
                     )}
 
-                    {/* General Information */}
+                    {/* ── GENERAL INFORMATION ── */}
                     <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
                       <SectionHeader
                         icon={Building2}
                         title="General Information"
                       />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* User Type */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             User Type <span className="text-red-500">*</span>
@@ -424,6 +652,7 @@ export default function RegisterPage() {
                           </select>
                         </div>
 
+                        {/* Mobile No. */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             Mobile No. <span className="text-red-500">*</span>
@@ -431,14 +660,27 @@ export default function RegisterPage() {
                           <input
                             name="mobileNo"
                             type="text"
-                            defaultValue={existingData?.mobileNo || ""}
-                            pattern="[0-9]{10}"
+                            value={fieldValues.mobileNo}
+                            inputMode="numeric"
                             maxLength={10}
                             title="Enter 10 digit mobile number"
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            placeholder="Enter 10-digit mobile number"
+                            className={inputCls("mobileNo")}
+                            onChange={(e) => {
+                              const val = e.target.value
+                                .replace(/\D/g, "")
+                                .slice(0, 10);
+                              handleFieldChange("mobileNo", val);
+                            }}
+                            onBlur={(e) =>
+                              validateField("mobileNo", e.target.value)
+                            }
                             required
                           />
+                          <FieldError field="mobileNo" />
                         </div>
+
+                        {/* Entity Name */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             Name of the Entity{" "}
@@ -447,11 +689,21 @@ export default function RegisterPage() {
                           <input
                             name="entityName"
                             type="text"
-                            defaultValue={existingData?.entityName || ""}
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            value={fieldValues.entityName}
+                            placeholder="Enter organization name"
+                            className={inputCls("entityName")}
+                            onChange={(e) =>
+                              handleFieldChange("entityName", e.target.value)
+                            }
+                            onBlur={(e) =>
+                              validateField("entityName", e.target.value)
+                            }
                             required
                           />
+                          <FieldError field="entityName" />
                         </div>
+
+                        {/* Entity Email */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             Entity Email <span className="text-red-500">*</span>
@@ -459,13 +711,21 @@ export default function RegisterPage() {
                           <input
                             name="email"
                             type="email"
-                            defaultValue={existingData?.email || ""}
-                            pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$"
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            value={fieldValues.email}
+                            placeholder="official@example.com"
+                            className={inputCls("email")}
+                            onChange={(e) =>
+                              handleFieldChange("email", e.target.value)
+                            }
+                            onBlur={(e) =>
+                              validateField("email", e.target.value)
+                            }
                             required
                           />
+                          <FieldError field="email" />
                         </div>
 
+                        {/* Entity File Upload */}
                         <div className="md:col-span-2 space-y-1.5 mt-2">
                           <label className="text-xs font-semibold text-orange-700 uppercase tracking-wider ml-1 bg-orange-100 px-3 py-1 rounded-full">
                             {documentUploadLabel}{" "}
@@ -497,12 +757,14 @@ export default function RegisterPage() {
                               </div>
                             )}
 
-                            {/* Bottom Row: Unified File Input */}
+                            {/* Bottom Row: File Input */}
                             <label
                               className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-4 py-6 rounded-xl text-sm font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-2 w-full text-center ${
-                                isEditMode && existingData?.entityFile
-                                  ? "border-orange-300 text-orange-700"
-                                  : "border-slate-300 text-slate-600 border-dashed border-2"
+                                fileErrors["entityFileInput"]
+                                  ? "border-red-400 bg-red-50"
+                                  : isEditMode && existingData?.entityFile
+                                    ? "border-orange-300 text-orange-700"
+                                    : "border-slate-300 text-slate-600 border-dashed border-2"
                               }`}
                             >
                               <div className="flex items-center gap-2">
@@ -511,6 +773,9 @@ export default function RegisterPage() {
                                   ? "Replace File"
                                   : "Click to upload or drag and drop"}
                               </div>
+                              <span className="text-[11px] font-normal text-slate-400">
+                                PDF only · Max 1 MB
+                              </span>
 
                               {/* Display selected filename */}
                               {entityFileName && (
@@ -523,24 +788,26 @@ export default function RegisterPage() {
                                 id="entityFileInput"
                                 name="entityFile"
                                 type="file"
+                                accept="application/pdf"
                                 className="hidden"
                                 required={!isEditMode}
                                 onChange={(e) => {
                                   const file = e.target.files[0];
-                                  validateFile(
+                                  handleFileChange(
+                                    "entityFileInput",
                                     file,
-                                    setEntityFileName,
-                                    e.target,
+                                    (name) => setEntityFileName(name),
                                   );
                                 }}
                               />
                             </label>
+                            <FileError fileKey="entityFileInput" />
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Address Information */}
+                    {/* ── ADDRESS INFORMATION ── */}
                     <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
                       <SectionHeader
                         icon={MapPin}
@@ -554,11 +821,24 @@ export default function RegisterPage() {
                           <textarea
                             name="addressLine"
                             rows="2"
-                            defaultValue={existingData?.addressLine || ""}
-                            className="w-full p-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            value={fieldValues.addressLine}
+                            placeholder="Enter complete address"
+                            className={`w-full p-4 bg-white border focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all ${
+                              fieldErrors.addressLine
+                                ? "border-red-400 focus:ring-red-500/20 focus:border-red-500 bg-red-50"
+                                : "border-slate-200"
+                            }`}
+                            onChange={(e) =>
+                              handleFieldChange("addressLine", e.target.value)
+                            }
+                            onBlur={(e) =>
+                              validateField("addressLine", e.target.value)
+                            }
                             required
                           ></textarea>
+                          <FieldError field="addressLine" />
                         </div>
+
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             City <span className="text-red-500">*</span>
@@ -574,6 +854,7 @@ export default function RegisterPage() {
                             <option value="Other">Other</option>
                           </select>
                         </div>
+
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             State <span className="text-red-500">*</span>
@@ -588,6 +869,7 @@ export default function RegisterPage() {
                             <option value="Tamil Nadu">Tamil Nadu</option>
                           </select>
                         </div>
+
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             Pin Code <span className="text-red-500">*</span>
@@ -595,14 +877,26 @@ export default function RegisterPage() {
                           <input
                             name="pincode"
                             type="text"
-                            defaultValue={existingData?.pincode || ""}
-                            pattern="[0-9]{6}"
+                            value={fieldValues.pincode}
+                            inputMode="numeric"
                             maxLength={6}
                             title="Enter 6 digit PIN code"
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            placeholder="6-digit PIN code"
+                            className={inputCls("pincode")}
+                            onChange={(e) => {
+                              const val = e.target.value
+                                .replace(/\D/g, "")
+                                .slice(0, 6);
+                              handleFieldChange("pincode", val);
+                            }}
+                            onBlur={(e) =>
+                              validateField("pincode", e.target.value)
+                            }
                             required
                           />
+                          <FieldError field="pincode" />
                         </div>
+
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             Country <span className="text-red-500">*</span>
@@ -619,7 +913,7 @@ export default function RegisterPage() {
                       </div>
                     </div>
 
-                    {/* Identification Information */}
+                    {/* ── IDENTIFICATION INFORMATION ── */}
                     <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50 overflow-x-auto">
                       <SectionHeader
                         icon={FileText}
@@ -635,7 +929,7 @@ export default function RegisterPage() {
                               Identification No.
                             </th>
                             <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-1/3">
-                              ID Copy (PDF)
+                              ID Copy (PDF only)
                             </th>
                           </tr>
                         </thead>
@@ -653,37 +947,50 @@ export default function RegisterPage() {
                                 )}
                               </td>
 
-                              {/* COLUMN 2: Identification Number (Text Input) */}
+                              {/* COLUMN 2: Identification Number */}
                               <td className="py-4 px-2">
                                 <input
                                   name={idType.numName}
                                   type="text"
-                                  defaultValue={
-                                    existingData?.[idType.numName] || ""
+                                  value={fieldValues[idType.numName] ?? ""}
+                                  placeholder={
+                                    idType.label === "GST"
+                                      ? "22AAAAA0000A1Z5"
+                                      : idType.label === "PAN"
+                                        ? "ABCDE1234F"
+                                        : idType.label === "TAN"
+                                          ? "AAAA12345A (optional)"
+                                          : ""
                                   }
-                                  pattern={
-                                    idType.label === "PAN"
-                                      ? "[A-Z]{5}[0-9]{4}[A-Z]{1}"
-                                      : idType.label === "GST"
-                                        ? "^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$"
-                                        : undefined
-                                  }
-                                  title={
-                                    idType.label === "PAN"
-                                      ? "Enter valid PAN (ABCDE1234F)"
-                                      : idType.label === "GST"
-                                        ? "Enter valid GST number"
-                                        : ""
-                                  }
-                                  className={`w-full h-10 px-3 bg-white border focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-lg ${
-                                    existingData?.rejectedReason
-                                      ?.toLowerCase()
-                                      .includes(idType.label.toLowerCase())
-                                      ? "border-red-400 bg-red-50"
-                                      : "border-slate-200"
+                                  className={`w-full h-10 px-3 bg-white border focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-lg uppercase font-mono tracking-wider ${
+                                    fieldErrors[idType.numName]
+                                      ? "border-red-400 focus:ring-red-500/20 focus:border-red-500 bg-red-50"
+                                      : existingData?.rejectedReason
+                                            ?.toLowerCase()
+                                            .includes(
+                                              idType.label.toLowerCase(),
+                                            )
+                                        ? "border-red-400 bg-red-50"
+                                        : "border-slate-200"
                                   }`}
+                                  onChange={(e) => {
+                                    const val = e.target.value.toUpperCase();
+                                    handleFieldChange(idType.numName, val);
+                                  }}
+                                  onBlur={(e) =>
+                                    validateField(
+                                      idType.numName,
+                                      e.target.value,
+                                    )
+                                  }
                                   required={idType.req}
                                 />
+                                {fieldErrors[idType.numName] && (
+                                  <p className="text-xs text-red-500 font-medium mt-1 flex items-center gap-1">
+                                    <XCircle className="h-3.5 w-3.5 shrink-0" />
+                                    {fieldErrors[idType.numName]}
+                                  </p>
+                                )}
                               </td>
 
                               {/* COLUMN 3: ID Copy (File Input & Badge) */}
@@ -717,10 +1024,12 @@ export default function RegisterPage() {
                                   {/* UNIFIED CUSTOM UPLOAD BUTTON */}
                                   <label
                                     className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-3 py-2 rounded-lg text-[10px] font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-1 w-full text-center ${
-                                      isEditMode &&
-                                      existingData?.[idType.fileName]
-                                        ? "border-orange-300 text-orange-700"
-                                        : "border-slate-300 text-slate-600"
+                                      fileErrors[idType.fileId]
+                                        ? "border-red-400 bg-red-50"
+                                        : isEditMode &&
+                                            existingData?.[idType.fileName]
+                                          ? "border-orange-300 text-orange-700"
+                                          : "border-slate-300 text-slate-600"
                                     }`}
                                   >
                                     <div className="flex items-center gap-1.5">
@@ -728,8 +1037,11 @@ export default function RegisterPage() {
                                       {isEditMode &&
                                       existingData?.[idType.fileName]
                                         ? "Replace File"
-                                        : "Upload Document"}
+                                        : "Upload PDF"}
                                     </div>
+                                    <span className="text-[9px] font-normal text-slate-400">
+                                      PDF only · Max 1 MB
+                                    </span>
 
                                     {/* Display selected filename */}
                                     {tableFiles[idType.fileName] && (
@@ -742,21 +1054,32 @@ export default function RegisterPage() {
                                       id={idType.fileId}
                                       name={idType.fileName}
                                       type="file"
-                                      className="hidden" // Hides the ugly native button
+                                      accept="application/pdf"
+                                      className="hidden"
                                       onChange={(e) => {
                                         const file = e.target.files[0];
-                                        if (
-                                          validateFile(file, () => {}, e.target)
-                                        ) {
-                                          setTableFiles((prev) => ({
-                                            ...prev,
-                                            [idType.fileName]: file.name,
-                                          }));
-                                        }
+                                        handleFileChange(
+                                          idType.fileId,
+                                          file,
+                                          (name) => {
+                                            if (name) {
+                                              setTableFiles((prev) => ({
+                                                ...prev,
+                                                [idType.fileName]: name,
+                                              }));
+                                            } else {
+                                              setTableFiles((prev) => ({
+                                                ...prev,
+                                                [idType.fileName]: "",
+                                              }));
+                                            }
+                                          },
+                                        );
                                       }}
                                       required={idType.req && !isEditMode}
                                     />
                                   </label>
+                                  <FileError fileKey={idType.fileId} />
                                 </div>
                               </td>
                             </tr>
@@ -776,13 +1099,14 @@ export default function RegisterPage() {
                       </div>
                     </div>
 
-                    {/* Contact Information */}
+                    {/* ── CONTACT INFORMATION ── */}
                     <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
                       <SectionHeader
                         icon={Contact2}
                         title="Contact Information"
                       />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Title */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             Title <span className="text-red-500">*</span>
@@ -798,6 +1122,8 @@ export default function RegisterPage() {
                             <option value="Mrs.">Mrs.</option>
                           </select>
                         </div>
+
+                        {/* Contact Mobile */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             Mobile Number{" "}
@@ -806,13 +1132,26 @@ export default function RegisterPage() {
                           <input
                             name="contactMobile"
                             type="text"
-                            defaultValue={existingData?.contactMobile || ""}
-                            pattern="[0-9]{10}"
+                            value={fieldValues.contactMobile}
+                            inputMode="numeric"
                             maxLength={10}
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            placeholder="10-digit mobile number"
+                            className={inputCls("contactMobile")}
+                            onChange={(e) => {
+                              const val = e.target.value
+                                .replace(/\D/g, "")
+                                .slice(0, 10);
+                              handleFieldChange("contactMobile", val);
+                            }}
+                            onBlur={(e) =>
+                              validateField("contactMobile", e.target.value)
+                            }
                             required
                           />
+                          <FieldError field="contactMobile" />
                         </div>
+
+                        {/* First Name */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             First Name <span className="text-red-500">*</span>
@@ -820,11 +1159,21 @@ export default function RegisterPage() {
                           <input
                             name="firstName"
                             type="text"
-                            defaultValue={existingData?.firstName || ""}
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            value={fieldValues.firstName}
+                            placeholder="First name"
+                            className={inputCls("firstName")}
+                            onChange={(e) =>
+                              handleFieldChange("firstName", e.target.value)
+                            }
+                            onBlur={(e) =>
+                              validateField("firstName", e.target.value)
+                            }
                             required
                           />
+                          <FieldError field="firstName" />
                         </div>
+
+                        {/* Last Name */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             Last Name <span className="text-red-500">*</span>
@@ -832,11 +1181,21 @@ export default function RegisterPage() {
                           <input
                             name="lastName"
                             type="text"
-                            defaultValue={existingData?.lastName || ""}
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            value={fieldValues.lastName}
+                            placeholder="Last name"
+                            className={inputCls("lastName")}
+                            onChange={(e) =>
+                              handleFieldChange("lastName", e.target.value)
+                            }
+                            onBlur={(e) =>
+                              validateField("lastName", e.target.value)
+                            }
                             required
                           />
+                          <FieldError field="lastName" />
                         </div>
+
+                        {/* Contact Email */}
                         <div className="md:col-span-2 space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                             Contact Email{" "}
@@ -845,11 +1204,18 @@ export default function RegisterPage() {
                           <input
                             name="contactEmail"
                             type="email"
-                            defaultValue={existingData?.contactEmail || ""}
+                            value={fieldValues.contactEmail}
                             placeholder="official@example.com"
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                            className={inputCls("contactEmail")}
+                            onChange={(e) =>
+                              handleFieldChange("contactEmail", e.target.value)
+                            }
+                            onBlur={(e) =>
+                              validateField("contactEmail", e.target.value)
+                            }
                             required
                           />
+                          <FieldError field="contactEmail" />
                         </div>
                       </div>
                     </div>
@@ -903,11 +1269,30 @@ export default function RegisterPage() {
                             name="captchaInput"
                             type="text"
                             value={captchaInput}
-                            onChange={(e) => setCaptchaInput(e.target.value)}
+                            onChange={(e) => {
+                              setCaptchaInput(e.target.value);
+                              if (e.target.value.trim()) setCaptchaError(""); // clear error as user types
+                            }}
+                            onBlur={() => {
+                              if (!captchaInput.trim())
+                                setCaptchaError(
+                                  "Please enter the security code",
+                                );
+                            }}
                             placeholder="Enter Security Code"
-                            className="w-full text-center h-12 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl tracking-widest font-bold shadow-sm"
+                            className={`w-full text-center h-12 bg-white border focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl tracking-widest font-bold shadow-sm ${
+                              captchaError
+                                ? "border-red-400 focus:ring-red-500/20 focus:border-red-500 bg-red-50"
+                                : "border-slate-200"
+                            }`}
                             required
                           />
+                          {captchaError && (
+                            <p className="text-xs text-red-500 font-medium flex items-center gap-1">
+                              <XCircle className="h-3.5 w-3.5 shrink-0" />
+                              {captchaError}
+                            </p>
+                          )}
                         </div>
 
                         <button
