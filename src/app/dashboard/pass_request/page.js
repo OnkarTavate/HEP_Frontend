@@ -2293,7 +2293,7 @@ export default function PassRequestPage() {
                       }
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  {/* <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Card Number
                     </label>
@@ -2309,7 +2309,7 @@ export default function PassRequestPage() {
                       className={inputClass}
                       placeholder="RFID card number"
                     />
-                  </div>
+                  </div> */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Mobile <span className="text-red-500">*</span>
