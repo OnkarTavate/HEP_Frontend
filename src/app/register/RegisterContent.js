@@ -280,7 +280,7 @@ export default function RegisterPage() {
           },
         );
 
-        console.log("BACKEND FETCH RESPONSE:", res.data); // <-- Check your browser console for this!
+        console.log("BACKEND FETCH RESPONSE:", res.data);
 
         if (res.data.success && res.data.data) {
           const data = res.data.data;
@@ -288,6 +288,16 @@ export default function RegisterPage() {
           setIsEditMode(true);
 
           if (data.userTypeId) setSelectedUserTypeId(data.userTypeId);
+
+          // 🚀 FIX: Tell the UI that files exist in the database
+          if (data.entityFile)
+            setEntityFileName("Previously Uploaded Document.pdf");
+
+          setTableFiles({
+            gstinDoc: data.gstinDoc ? "Previously Uploaded Document.pdf" : "",
+            panDoc: data.panDoc ? "Previously Uploaded Document.pdf" : "",
+            tanDoc: data.tanDoc ? "Previously Uploaded Document.pdf" : "",
+          });
 
           // Pre-populate controlled field values so validation works in edit mode
           setFieldValues({
@@ -606,7 +616,12 @@ export default function RegisterPage() {
 
                 {/* The Form - Only render if not fetching old data */}
                 {!isFetchingOldData && (
-                  <form onSubmit={handleSubmit} className="space-y-10">
+                  <form
+                    key={existingData ? "edit-mode" : "new-mode"}
+                    onSubmit={handleSubmit}
+                    className="space-y-10"
+                  >
+                    {" "}
                     {/* REVERT REASON BANNER */}
                     {isEditMode && existingData?.rejectedReason && (
                       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6 flex gap-4 items-start shadow-sm">
@@ -621,7 +636,6 @@ export default function RegisterPage() {
                         </div>
                       </div>
                     )}
-
                     {/* ── GENERAL INFORMATION ── */}
                     <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
                       <SectionHeader
@@ -806,7 +820,6 @@ export default function RegisterPage() {
                         </div>
                       </div>
                     </div>
-
                     {/* ── ADDRESS INFORMATION ── */}
                     <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
                       <SectionHeader
@@ -912,7 +925,6 @@ export default function RegisterPage() {
                         </div>
                       </div>
                     </div>
-
                     {/* ── IDENTIFICATION INFORMATION ── */}
                     <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50 overflow-x-auto">
                       <SectionHeader
@@ -1098,7 +1110,6 @@ export default function RegisterPage() {
                         />
                       </div>
                     </div>
-
                     {/* ── CONTACT INFORMATION ── */}
                     <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
                       <SectionHeader
@@ -1219,7 +1230,6 @@ export default function RegisterPage() {
                         </div>
                       </div>
                     </div>
-
                     {/* Terms and Submit */}
                     <div className="space-y-8 pt-4">
                       <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
