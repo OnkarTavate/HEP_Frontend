@@ -20,7 +20,9 @@ import {
 
 const BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API;
 // Fallback logic to grab the documents from the agent API port (5001)
-const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || `${BASE_URL.replace(/\/$/, "")}:5001/api`;
+const AGENT_API =
+  process.env.NEXT_PUBLIC_AGENT_API ||
+  `${BASE_URL.replace(/\/$/, "")}:5001/api`;
 const DOC_BASE_URL = AGENT_API.replace("/api", "");
 
 export default function TrafficCompanyApprovals() {
@@ -62,35 +64,38 @@ export default function TrafficCompanyApprovals() {
   //   }
   // };
   const fetchDashboardData = async () => {
-  setLoading(true);  // Start loading state
+    setLoading(true); // Start loading state
 
-  try {
-    // Log the BASE_URL to ensure it's correctly defined
-    console.log("BASE_URL:", BASE_URL);
-    
-    // Make the API request
-    const response = await axios.get(`${BASE_URL}/user/agent-users`);
-    
-    // Log the entire response to inspect the structure
-    console.log("API Response:", response);
+    try {
+      // Log the BASE_URL to ensure it's correctly defined
+      console.log("BASE_URL:", BASE_URL);
 
-    // Check if the expected data structure is present
-    if (!response.data || !response.data.data) {
-      console.warn("No data found in the response");
-      setRequests([]);  // Handle empty data
-    } else {
-      setRequests(response.data.data || response.data);  // Set the data if available
+      // Make the API request
+      const response = await axios.get(`${BASE_URL}/user/agent-users`);
+
+      // Log the entire response to inspect the structure
+      console.log("API Response:", response);
+
+      // Check if the expected data structure is present
+      if (!response.data || !response.data.data) {
+        console.warn("No data found in the response");
+        setRequests([]); // Handle empty data
+      } else {
+        setRequests(response.data.data || response.data); // Set the data if available
+      }
+    } catch (error) {
+      // Log the full error for better debugging
+      console.error(
+        "Failed to fetch requests",
+        error.response || error.message,
+      );
+
+      // Optionally, you can set some error state here to show a message to the user
+      // setError(true);  // Example of setting an error flag
+    } finally {
+      setLoading(false); // Set loading to false after the request completes (success or failure)
     }
-  } catch (error) {
-    // Log the full error for better debugging
-    console.error("Failed to fetch requests", error.response || error.message);
-
-    // Optionally, you can set some error state here to show a message to the user
-    // setError(true);  // Example of setting an error flag
-  } finally {
-    setLoading(false);  // Set loading to false after the request completes (success or failure)
-  }
-};
+  };
 
   const handleRevertClick = () => {
     if (!remarks.trim()) {
@@ -430,24 +435,24 @@ export default function TrafficCompanyApprovals() {
                   Verification Documents
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  {selectedRequest.entityFile && (
-                    <button
-                      onClick={() =>
-                        setViewingDocUrl(
-                          `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=entity`,
-                        )
-                      }
-                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group w-full text-left"
-                    >
-                      <FileText className="text-blue-500 h-5 w-5 shrink-0" />
-                      <span className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-700">
-                        Entity Document
-                      </span>
-                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500 shrink-0" />
-                    </button>
-                  )}
+                  {/* Entity Document (Always Required) */}
+                  <button
+                    onClick={() =>
+                      setViewingDocUrl(
+                        `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=entity`,
+                      )
+                    }
+                    className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group w-full text-left"
+                  >
+                    <FileText className="text-blue-500 h-5 w-5 shrink-0" />
+                    <span className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-700">
+                      Entity Document
+                    </span>
+                    <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500 shrink-0" />
+                  </button>
 
-                  {selectedRequest.gstinDoc && (
+                  {/* GSTIN Document (Shows if GSTIN Number exists) */}
+                  {selectedRequest.gstinNumber && (
                     <button
                       onClick={() =>
                         setViewingDocUrl(
@@ -464,7 +469,8 @@ export default function TrafficCompanyApprovals() {
                     </button>
                   )}
 
-                  {selectedRequest.panDoc && (
+                  {/* PAN Document (Shows if PAN Number exists) */}
+                  {selectedRequest.panNumber && (
                     <button
                       onClick={() =>
                         setViewingDocUrl(
@@ -481,7 +487,8 @@ export default function TrafficCompanyApprovals() {
                     </button>
                   )}
 
-                  {selectedRequest.tanDoc && (
+                  {/* TAN Document (Shows if TAN Number exists) */}
+                  {selectedRequest.tanNumber && (
                     <button
                       onClick={() =>
                         setViewingDocUrl(
