@@ -115,9 +115,9 @@ body {
 }
 
 @theme inline {
-  /* Font configs from original layout */
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Font configs - Set Arial as default */
+  --font-sans: Arial, sans-serif;
+  --font-mono: 'Courier New', monospace;
 
   /* Map Standard Tailwind colors to our Saffron variables */
   /* This forces `bg-orange-600` etc. to use saffron */
@@ -181,12 +181,82 @@ body {
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    font-family: Arial, sans-serif;
   }
   body {
     @apply bg-background text-foreground;
+    font-family: Arial, sans-serif;
+    font-size: 16px; /* Base font size increased for better readability */
   }
   html {
-    @apply font-sans;
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+  }
+  
+  /* Increase default font sizes for better readability */
+  input, textarea, select, button {
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+  }
+  
+  label {
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+  }
+  
+  h1 {
+    font-family: Arial, sans-serif;
+    font-size: 2.5rem;
+    font-weight: bold;
+  }
+  
+  h2 {
+    font-family: Arial, sans-serif;
+    font-size: 2rem;
+    font-weight: bold;
+  }
+  
+  h3 {
+    font-family: Arial, sans-serif;
+    font-size: 1.75rem;
+    font-weight: bold;
+  }
+  
+  h4 {
+    font-family: Arial, sans-serif;
+    font-size: 1.5rem;
+    font-weight: bold;
+  }
+  
+  h5 {
+    font-family: Arial, sans-serif;
+    font-size: 1.25rem;
+    font-weight: bold;
+  }
+  
+  h6 {
+    font-family: Arial, sans-serif;
+    font-size: 1.125rem;
+    font-weight: bold;
+  }
+  
+  p {
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+  }
+  
+  span, div {
+    font-family: Arial, sans-serif;
+  }
+  
+  table {
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+  }
+  
+  th, td {
+    font-family: Arial, sans-serif;
+    font-size: 16px;
   }
 }
 

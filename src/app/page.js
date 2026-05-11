@@ -43,6 +43,8 @@ const LoginPage = () => {
   const [trackLoading, setTrackLoading] = useState(false);
   const [trackError, setTrackError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showForceLogoutDialog, setShowForceLogoutDialog] = useState(false);
+  const [forceLogoutLoading, setForceLogoutLoading] = useState(false);
 
   const fetchCaptcha = async () => {
     setIsCaptchaLoading(true);
@@ -177,6 +179,36 @@ const LoginPage = () => {
   //   }
   // };
 
+  const handleForceLogout = async () => {
+    setForceLogoutLoading(true);
+    try {
+      const res = await axios.post(`${AUTH_API}/auth/force-logout`, {
+        loginId: formData.username.trim(),
+        password: formData.password,
+      });
+
+      if (res.data.success) {
+        toast.success("Previous session terminated", {
+          description: "You can now login with your credentials.",
+        });
+        setShowForceLogoutDialog(false);
+        
+        // Automatically retry login after force logout
+        setTimeout(() => {
+          handleSubmit(new Event('submit'));
+        }, 500);
+      }
+    } catch (err) {
+      console.error("Force logout error:", err);
+      toast.error("Force logout failed", {
+        description: err.response?.data?.message || "Unable to terminate previous session",
+      });
+    } finally {
+      setForceLogoutLoading(false);
+    }
+  };
+
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(""); // You can remove this state entirely later if you only want to use toasts
@@ -233,9 +265,28 @@ const LoginPage = () => {
       console.error("Login error:", err);
 
       if (err.response) {
-        toast.error(err.response.data?.message || "Login failed"); // ❌ Error Toast
+        const status = err.response.status;
+        const message = err.response.data?.message || "Login failed";
+        
+        if (status === 409) {
+          // Concurrent session conflict - offer force logout option
+          setShowForceLogoutDialog(true);
+        } else if (status === 401) {
+          // Invalid credentials
+          toast.error("Login Failed", {
+            description: message,
+            duration: 4000,
+          });
+        } else {
+          toast.error(message);
+        }
+      } else if (err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK') {
+        toast.error("Connection Error", {
+          description: "Unable to reach the authentication server. Please check your network connection.",
+          duration: 4000,
+        });
       } else {
-        toast.error("Server not reachable"); // ❌ Error Toast
+        toast.error("Server not reachable");
       }
 
       fetchCaptcha(); // Refresh captcha on failed attempt
@@ -253,7 +304,7 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-zinc-50 font-sans">
+    <div className="min-h-screen relative overflow-hidden bg-zinc-50" style={{ fontFamily: 'Arial, sans-serif' }}>
       {/* Animated Background effects */}
       <div className="absolute inset-0 bg-gradient-to-br from-orange-50 to-white"></div>
 
@@ -270,24 +321,24 @@ const LoginPage = () => {
                 <Ship className="h-9 w-9 text-white" strokeWidth={2.5} />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 leading-none">
+                <h1 className="text-5xl font-bold text-gray-900 leading-none">
                   Chennai Port
                 </h1>
-                <p className="text-sm font-medium text-orange-600 mt-1">
+                <p className="text-xl font-medium text-orange-600 mt-1">
                   Authority
                 </p>
               </div>
             </div>
 
             <div className="space-y-6">
-              <h2 className="text-5xl font-bold leading-tight text-gray-900">
+              <h2 className="text-6xl font-bold leading-tight text-gray-900">
                 Welcome to the
                 <br />
                 <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-600 to-orange-400">
                   Chennai Port Gate Automation System
                 </span>
               </h2>
-              <p className="text-xl text-gray-600 leading-relaxed max-w-xl">
+              <p className="text-2xl text-gray-600 leading-relaxed max-w-xl">
                 A centralized digital system for controlling and monitoring
                 personnel, vehicle, and cargo movement through automated gate
                 pass management at Chennai Port.
@@ -320,8 +371,8 @@ const LoginPage = () => {
                   <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center mb-3">
                     <item.icon className="h-6 w-6 text-white" />
                   </div>
-                  <p className="font-semibold text-gray-900">{item.title}</p>
-                  <p className="text-xs text-gray-600 mt-1">{item.desc}</p>
+                  <p className="font-semibold text-gray-900 text-lg">{item.title}</p>
+                  <p className="text-base text-gray-600 mt-1">{item.desc}</p>
                 </div>
               ))}
             </div>
@@ -332,26 +383,26 @@ const LoginPage = () => {
             <div className="bg-white/80 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-white/40">
               <div className="space-y-6">
                 <div className="text-center space-y-2">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-600 rounded-2xl shadow-lg mb-4">
-                    <Sparkles className="h-8 w-8 text-white" />
+                  <div className="inline-flex items-center justify-center w-20 h-20 bg-orange-600 rounded-2xl shadow-lg mb-4">
+                    <Sparkles className="h-10 w-10 text-white" />
                   </div>
-                  <h3 className="text-3xl font-bold text-gray-900">Sign In</h3>
-                  <p className="text-gray-600">Access your secure portal</p>
+                  <h3 className="text-5xl font-bold text-gray-900">Sign In</h3>
+                  <p className="text-xl text-gray-600">Access your secure portal</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                   {error && (
-                    <div className="p-3 text-sm bg-red-50 border border-red-200 text-red-800 rounded-lg">
+                    <div className="p-4 text-lg bg-red-50 border border-red-200 text-red-800 rounded-lg">
                       {error}
                     </div>
                   )}
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
+                    <label className="text-lg font-medium text-gray-700">
                       Username / Employee ID
                     </label>
                     <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-400" />
                       <input
                         type="text"
                         placeholder="Enter your credentials"
@@ -359,7 +410,8 @@ const LoginPage = () => {
                         onChange={(e) =>
                           setFormData({ ...formData, username: e.target.value })
                         }
-                        className="w-full pl-12 pr-4 h-14 bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                        className="w-full pl-14 pr-4 h-16 text-lg bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                        style={{ fontFamily: 'Arial, sans-serif' }}
                         required
                       />
                     </div>
@@ -367,18 +419,18 @@ const LoginPage = () => {
 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-gray-700">
+                      <label className="text-lg font-medium text-gray-700">
                         Password
                       </label>
                       <button
                         type="button"
-                        className="text-xs text-orange-600 hover:underline font-medium"
+                        className="text-base text-orange-600 hover:underline font-medium"
                       >
                         Forgot?
                       </button>
                     </div>
                     <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-400" />
                       <input
                         type={showPassword ? "text" : "password"}
                         placeholder="Enter your password"
@@ -386,7 +438,8 @@ const LoginPage = () => {
                         onChange={(e) =>
                           setFormData({ ...formData, password: e.target.value })
                         }
-                        className="w-full pl-12 pr-12 h-14 bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                        className="w-full pl-14 pr-14 h-16 text-lg bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
+                        style={{ fontFamily: 'Arial, sans-serif' }}
                         required
                       />
                       <button
@@ -396,35 +449,36 @@ const LoginPage = () => {
                         title={showPassword ? "Hide password" : "Show password"}
                       >
                         {showPassword ? (
-                          <EyeOff className="h-5 w-5" />
+                          <EyeOff className="h-6 w-6" />
                         ) : (
-                          <Eye className="h-5 w-5" />
+                          <Eye className="h-6 w-6" />
                         )}
                       </button>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
+                    <label className="text-lg font-medium text-gray-700">
                       Security Check
                     </label>
                     <div className="flex gap-3">
                       <input
-                        placeholder="Enter code"
+                        placeholder="Enter answer"
                         value={formData.captcha}
                         onChange={(e) =>
                           setFormData({ ...formData, captcha: e.target.value })
                         }
-                        className="flex-1 px-4 h-14 bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl"
+                        className="flex-1 px-4 h-16 text-xl bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl"
+                        style={{ fontFamily: 'Arial, sans-serif' }}
                         required
                       />
-                      <div className="flex items-center gap-2 bg-orange-50 px-2 rounded-xl border border-orange-200 min-w-[150px] justify-center relative shadow-inner">
+                      <div className="flex items-center gap-2 bg-orange-50 px-4 rounded-xl border border-orange-200 min-w-[200px] justify-center relative shadow-inner">
                         {isCaptchaLoading ? (
-                          <RefreshCw className="h-6 w-6 text-orange-400 animate-spin" />
+                          <RefreshCw className="h-8 w-8 text-orange-400 animate-spin" />
                         ) : (
                           /* Render the backend SVG string securely */
                           <div
-                            className="h-full flex items-center justify-center [&>svg]:w-28 [&>svg]:h-12"
+                            className="h-full flex items-center justify-center [&>svg]:w-full [&>svg]:h-16"
                             dangerouslySetInnerHTML={{
                               __html: captchaData.svg,
                             }}
@@ -436,11 +490,11 @@ const LoginPage = () => {
                           type="button"
                           onClick={fetchCaptcha}
                           disabled={!!isCaptchaLoading}
-                          className="absolute -right-3 -top-3 bg-white border border-orange-200 shadow-md rounded-full p-1.5 hover:bg-orange-50 transition-all active:scale-95 disabled:opacity-50"
+                          className="absolute -right-3 -top-3 bg-white border border-orange-200 shadow-md rounded-full p-2 hover:bg-orange-50 transition-all active:scale-95 disabled:opacity-50"
                           title="Get a new security code"
                         >
                           <RefreshCw
-                            className={`h-4 w-4 text-orange-600 ${isCaptchaLoading ? "animate-spin" : "hover:rotate-180 transition-transform duration-500"}`}
+                            className={`h-5 w-5 text-orange-600 ${isCaptchaLoading ? "animate-spin" : "hover:rotate-180 transition-transform duration-500"}`}
                           />
                         </button>
                       </div>
@@ -449,7 +503,8 @@ const LoginPage = () => {
 
                   <button
                     type="submit"
-                    className="w-full h-14 bg-orange-600 text-white text-lg font-semibold rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-600/20 transition-all"
+                    className="w-full h-16 bg-orange-600 text-white text-2xl font-semibold rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-600/20 transition-all"
+                    style={{ fontFamily: 'Arial, sans-serif' }}
                   >
                     Login to Portal
                   </button>
@@ -465,7 +520,7 @@ const LoginPage = () => {
                       <div className="p-3.5 rounded-xl bg-gray-50 group-hover:bg-orange-50 transition-all border border-transparent group-hover:border-orange-200">
                         <User className="h-7 w-7 text-gray-700 group-hover:text-orange-600 transition-colors" />
                       </div>
-                      <span className="text-[11px] font-bold text-gray-800 uppercase tracking-wide text-center">
+                      <span className="text-sm font-bold text-gray-800 uppercase tracking-wide text-center">
                         Register
                       </span>
                     </button>
@@ -484,7 +539,7 @@ const LoginPage = () => {
                       <div className="p-3.5 rounded-xl bg-gray-50 group-hover:bg-orange-50 transition-all border border-transparent group-hover:border-orange-200">
                         <TrendingUp className="h-7 w-7 text-gray-700 group-hover:text-orange-600 transition-colors" />
                       </div>
-                      <span className="text-[11px] font-bold text-gray-800 uppercase tracking-wide text-center">
+                      <span className="text-sm font-bold text-gray-800 uppercase tracking-wide text-center">
                         Track Status
                       </span>
                     </button>
@@ -515,15 +570,15 @@ const LoginPage = () => {
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
             {/* Header */}
             <div className="flex justify-between items-center px-6 py-4 bg-slate-50 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                <Search className="h-5 w-5 text-orange-600" />
+              <h3 className="font-bold text-xl text-gray-900 flex items-center gap-2">
+                <Search className="h-6 w-6 text-orange-600" />
                 Track Registration
               </h3>
               <button
                 onClick={() => setIsTrackModalOpen(false)}
                 className="text-gray-400 hover:text-red-500 transition-colors bg-white p-1.5 rounded-lg shadow-sm"
               >
-                <X className="h-5 w-5" />
+                <X className="h-6 w-6" />
               </button>
             </div>
 
@@ -537,16 +592,18 @@ const LoginPage = () => {
                   onChange={(e) =>
                     setTrackReference(e.target.value.toUpperCase())
                   }
-                  className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-medium uppercase transition-all"
+                  className="flex-1 px-4 py-4 text-lg bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-medium uppercase transition-all"
+                  style={{ fontFamily: 'Arial, sans-serif' }}
                   required
                 />
                 <button
                   type="submit"
                   disabled={trackLoading}
-                  className="px-6 py-3 bg-[#0a1e4d] text-white font-bold rounded-xl hover:bg-orange-600 transition-colors shadow-md disabled:opacity-70 flex items-center justify-center min-w-[110px]"
+                  className="px-8 py-4 text-lg bg-[#0a1e4d] text-white font-bold rounded-xl hover:bg-orange-600 transition-colors shadow-md disabled:opacity-70 flex items-center justify-center min-w-[130px]"
+                  style={{ fontFamily: 'Arial, sans-serif' }}
                 >
                   {trackLoading ? (
-                    <RefreshCw className="h-5 w-5 animate-spin" />
+                    <RefreshCw className="h-6 w-6 animate-spin" />
                   ) : (
                     "Track"
                   )}
@@ -555,8 +612,8 @@ const LoginPage = () => {
 
               {/* Error Message */}
               {trackError && (
-                <div className="p-3 bg-red-50 text-red-700 text-sm font-medium rounded-xl border border-red-100 flex items-start gap-2">
-                  <XCircle className="h-5 w-5 shrink-0" />
+                <div className="p-4 bg-red-50 text-red-700 text-base font-medium rounded-xl border border-red-100 flex items-start gap-2">
+                  <XCircle className="h-6 w-6 shrink-0" />
                   {trackError}
                 </div>
               )}
@@ -566,16 +623,16 @@ const LoginPage = () => {
                 <div className="bg-gray-50 rounded-2xl p-5 border border-gray-200 space-y-4 animate-in slide-in-from-bottom-2">
                   <div className="flex justify-between items-start border-b border-gray-200 pb-4">
                     <div>
-                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                      <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">
                         Company
                       </p>
-                      <p className="font-bold text-gray-900 text-lg">
+                      <p className="font-bold text-gray-900 text-xl">
                         {trackResult.entityName}
                       </p>
                     </div>
                     {/* Dynamic Status Badge */}
                     <div
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border flex items-center gap-1.5 shadow-sm
+                      className={`px-4 py-2 rounded-lg text-sm font-bold border flex items-center gap-1.5 shadow-sm
                       ${
                         trackResult.status === "approved"
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -587,17 +644,17 @@ const LoginPage = () => {
                       }`}
                     >
                       {trackResult.status === "approved" && (
-                        <CheckCircle className="h-3.5 w-3.5" />
+                        <CheckCircle className="h-4 w-4" />
                       )}
                       {trackResult.status === "rejected" && (
-                        <XCircle className="h-3.5 w-3.5" />
+                        <XCircle className="h-4 w-4" />
                       )}
                       {trackResult.status === "reverted" && (
-                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        <RefreshCw className="h-4 w-4 animate-spin" />
                       )}
                       {(!trackResult.status ||
                         trackResult.status === "pending") && (
-                        <Clock className="h-3.5 w-3.5" />
+                        <Clock className="h-4 w-4" />
                       )}
                       {(trackResult.status || "PENDING").toUpperCase()}
                     </div>
@@ -606,11 +663,11 @@ const LoginPage = () => {
                   {/* 🚀 REVERTED ACTION PANEL 🚀 */}
                   {trackResult.status === "reverted" && (
                     <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
-                      <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
-                        <ShieldAlert className="h-4 w-4" />
+                      <div className="flex items-center gap-2 text-amber-800 font-bold text-base">
+                        <ShieldAlert className="h-5 w-5" />
                         Attention Required
                       </div>
-                      <p className="text-xs text-amber-700 leading-relaxed bg-white/50 p-2 rounded-lg border border-amber-100">
+                      <p className="text-sm text-amber-700 leading-relaxed bg-white/50 p-2 rounded-lg border border-amber-100">
                         <span className="font-bold">Remarks: </span>
                         {trackResult.rejectedReason ||
                           "Please update the requested details."}
@@ -621,9 +678,10 @@ const LoginPage = () => {
                             `/register?ref=${trackResult.referenceNumber}`,
                           )
                         }
-                        className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
+                        className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
+                        style={{ fontFamily: 'Arial, sans-serif' }}
                       >
-                        <RefreshCw className="h-4 w-4" />
+                        <RefreshCw className="h-5 w-5" />
                         UPDATE APPLICATION
                       </button>
                     </div>
@@ -631,34 +689,103 @@ const LoginPage = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                         Applicant
                       </p>
-                      <p className="text-sm font-semibold text-gray-800">
+                      <p className="text-base font-semibold text-gray-800">
                         {trackResult.title} {trackResult.firstName}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                         Applied On
                       </p>
-                      <p className="text-sm font-semibold text-gray-800">
+                      <p className="text-base font-semibold text-gray-800">
                         {new Date(trackResult.createdAt).toLocaleDateString(
                           "en-GB",
                         )}
                       </p>
                     </div>
                     <div className="col-span-2">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                         Contact
                       </p>
-                      <p className="text-sm font-semibold text-gray-800">
+                      <p className="text-base font-semibold text-gray-800">
                         {trackResult.email} • {trackResult.mobileNo}
                       </p>
                     </div>
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔐 FORCE LOGOUT DIALOG 🔐 */}
+      {showForceLogoutDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-orange-200">
+            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 text-white">
+              <div className="flex items-center gap-3">
+                <ShieldAlert className="h-8 w-8" />
+                <div>
+                  <h3 className="text-xl font-bold">Session Already Active</h3>
+                  <p className="text-sm text-orange-100 mt-1">
+                    You are logged in from another device
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  Your account is currently active on another device or browser. 
+                  You can either:
+                </p>
+                <ul className="mt-3 space-y-2 text-sm text-gray-600">
+                  <li className="flex items-start gap-2">
+                    <span className="text-orange-500 font-bold">•</span>
+                    <span>Wait for the other session to expire (15-30 minutes)</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-orange-500 font-bold">•</span>
+                    <span>Logout from the other device manually</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-orange-500 font-bold">•</span>
+                    <span className="font-semibold text-gray-700">Force logout and login here (recommended)</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowForceLogoutDialog(false)}
+                  disabled={forceLogoutLoading}
+                  className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleForceLogout}
+                  disabled={forceLogoutLoading}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {forceLogoutLoading ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      Terminating...
+                    </>
+                  ) : (
+                    <>
+                      <ShieldAlert className="h-4 w-4" />
+                      Force Logout & Login
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

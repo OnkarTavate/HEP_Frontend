@@ -258,9 +258,11 @@ export default function PassRequestPage() {
     masterId: "",
     hepType: "2", // Default: 2 (Personnel)
     seafarerPassFor: "Sign-On",
+    seafarerIdType: "", // New: "aadhaar" or "passport"
     name: "",
     aadharNo: "",
     aadharFile: null,
+    passportNo: "", // New: Passport number for seafarers
     cardNumber: "",
     mobile: "",
     email: "",
@@ -903,9 +905,24 @@ export default function PassRequestPage() {
     else if (!/^[a-zA-Z\s.'-]{2,80}$/.test(personForm.name.trim()))
       errors.name = "Name must be 2-80 characters (letters only)";
 
-    if (!personForm.aadharNo) errors.aadharNo = "Aadhaar number is required";
-    else if (!/^\d{12}$/.test(personForm.aadharNo.replace(/\s/g, "")))
-      errors.aadharNo = "Aadhaar must be exactly 12 digits";
+    // Aadhaar validation - required for non-seafarers OR seafarers who chose aadhaar
+    if (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar") {
+      if (!personForm.aadharNo) errors.aadharNo = "Aadhaar number is required";
+      else if (!/^\d{12}$/.test(personForm.aadharNo.replace(/\s/g, "")))
+        errors.aadharNo = "Aadhaar must be exactly 12 digits";
+    }
+
+    // Passport validation - required for seafarers who chose passport
+    if (personForm.hepType === "3" && personForm.seafarerIdType === "passport") {
+      if (!personForm.passportNo) errors.passportNo = "Passport number is required";
+      else if (!/^[A-Z][0-9]{7}$/.test(personForm.passportNo))
+        errors.passportNo = "Passport must be 1 letter + 7 digits (e.g., A1234567)";
+    }
+
+    // Seafarer must select ID type
+    if (personForm.hepType === "3" && !personForm.seafarerIdType) {
+      errors.seafarerIdType = "Please select Aadhaar or Passport";
+    }
 
     if (!personForm.mobile) errors.mobile = "Mobile number is required";
     else if (!/^[6-9]\d{9}$/.test(personForm.mobile.replace(/\s/g, "")))
@@ -2244,55 +2261,161 @@ export default function PassRequestPage() {
                       </p>
                     )}
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      Aadhar No. <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={personForm.aadharNo}
-                      onChange={(e) => {
-                        const val = e.target.value
-                          .replace(/\D/g, "")
-                          .slice(0, 12);
-                        setPersonForm({ ...personForm, aadharNo: val });
-                        validatePersonField("aadharNo", val);
-                      }}
-                      onBlur={(e) =>
-                        validatePersonField("aadharNo", e.target.value)
-                      }
-                      className={`${inputClass} ${personErrors.aadharNo ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                      placeholder="XXXX XXXX XXXX"
-                      maxLength={12}
-                      inputMode="numeric"
-                    />
-                    {personErrors.aadharNo && (
-                      <p className="text-xs text-red-500 mt-0.5 font-medium">
-                        {personErrors.aadharNo}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase text-red-500">
-                      Upload Aadhar <span className="text-red-500">*</span>
-                    </label>
-                    <FileUploadBox
-                      file={personForm.aadharFile}
-                      existingFileName={personForm.existingAadharName}
-                      onView={() =>
-                        window.open(
-                          `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=personAadhar`,
-                          "_blank",
-                        )
-                      }
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          aadharFile: e.target.files[0],
-                        })
-                      }
-                    />
-                  </div>
+                  {/* Seafarer ID Type Selection */}
+                  {personForm.hepType === "3" && (
+                    <div className="space-y-1.5 animate-in zoom-in">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        ID Proof Type <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={personForm.seafarerIdType}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setPersonForm({
+                            ...personForm,
+                            seafarerIdType: value,
+                            // Clear opposite field when switching
+                            aadharNo: value === "passport" ? "" : personForm.aadharNo,
+                            passportNo: value === "aadhaar" ? "" : personForm.passportNo,
+                            aadharFile: value === "passport" ? null : personForm.aadharFile,
+                          });
+                          // Clear error when selection is made
+                          if (personErrors.seafarerIdType) {
+                            setPersonErrors((prev) => ({ ...prev, seafarerIdType: null }));
+                          }
+                        }}
+                        className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${
+                          personErrors.seafarerIdType
+                            ? "border-red-400 bg-red-50"
+                            : "border-slate-300 bg-white"
+                        }`}
+                      >
+                        <option value="">-- Select ID Type --</option>
+                        <option value="aadhaar">Aadhaar</option>
+                        <option value="passport">Passport</option>
+                      </select>
+                      {personErrors.seafarerIdType && (
+                        <p className="text-xs text-red-500 mt-0.5 font-medium">
+                          {personErrors.seafarerIdType}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Aadhaar Fields - Show for non-seafarers OR seafarers who selected aadhaar */}
+                  {(personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar") && (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          Aadhaar No. <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={personForm.aadharNo}
+                          onChange={(e) => {
+                            const val = e.target.value
+                              .replace(/\D/g, "")
+                              .slice(0, 12);
+                            setPersonForm({ ...personForm, aadharNo: val });
+                            // Clear error on change
+                            if (personErrors.aadharNo) {
+                              setPersonErrors((prev) => ({ ...prev, aadharNo: null }));
+                            }
+                          }}
+                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none transition-all ${
+                            personErrors.aadharNo
+                              ? "border-red-400 bg-red-50"
+                              : "border-slate-300 bg-white"
+                          }`}
+                          placeholder="XXXX XXXX XXXX"
+                          maxLength={12}
+                          inputMode="numeric"
+                        />
+                        {personErrors.aadharNo && (
+                          <p className="text-xs text-red-500 mt-0.5 font-medium">
+                            {personErrors.aadharNo}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          Upload Aadhar <span className="text-red-500">*</span>
+                        </label>
+                        <FileUploadBox
+                          file={personForm.aadharFile}
+                          existingFileName={personForm.existingAadharName}
+                          onView={() =>
+                            window.open(
+                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=personAadhar`,
+                              "_blank",
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              aadharFile: e.target.files[0],
+                            })
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Passport Fields - Show only for seafarers who selected passport */}
+                  {personForm.hepType === "3" && personForm.seafarerIdType === "passport" && (
+                    <>
+                      <div className="space-y-1.5 animate-in zoom-in">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Passport No. <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={personForm.passportNo}
+                          onChange={(e) => {
+                            const val = e.target.value.toUpperCase().slice(0, 8);
+                            setPersonForm({ ...personForm, passportNo: val });
+                            // Clear error on change
+                            if (personErrors.passportNo) {
+                              setPersonErrors((prev) => ({ ...prev, passportNo: null }));
+                            }
+                          }}
+                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${
+                            personErrors.passportNo
+                              ? "border-red-400 bg-red-50"
+                              : "border-slate-300 bg-white"
+                          }`}
+                          placeholder="A1234567"
+                          maxLength={8}
+                        />
+                        {personErrors.passportNo && (
+                          <p className="text-xs text-red-500 mt-0.5 font-medium">
+                            {personErrors.passportNo}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5 animate-in zoom-in">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Upload Passport <span className="text-red-500">*</span>
+                        </label>
+                        <FileUploadBox
+                          file={personForm.passportDoc}
+                          existingFileName={personForm.existingPassportName}
+                          onView={() =>
+                            window.open(
+                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=passportDoc`,
+                              "_blank",
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              passportDoc: e.target.files[0],
+                            })
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
                   {/* <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Card Number

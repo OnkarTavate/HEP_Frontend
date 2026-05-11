@@ -50,7 +50,7 @@ export default function TrafficLayout({ children }) {
         .trim();
 
       // ✅ Allow ONLY Approval users
-      if (role !== "approval") {
+      if (role !== "approval" || role !=="admin" ) {
         alert("Unauthorized Access: Traffic Department Only.");
         router.push("/");
         return;
@@ -156,7 +156,7 @@ export default function TrafficLayout({ children }) {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50/20 to-amber-50/30">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50/20 to-amber-50/30" style={{ fontFamily: 'Arial, sans-serif' }}>
       <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:w-72 lg:border-r lg:border-slate-200/80 lg:bg-white lg:shadow-xl lg:shadow-slate-200/30">
         <SidebarContent />
       </aside>

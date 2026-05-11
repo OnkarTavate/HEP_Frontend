@@ -28,6 +28,7 @@ import {
   HelpCircle,
   Lock,
   ShieldCheck,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -95,6 +96,8 @@ export default function AdminLayout({ children }) {
   // Strictly Admin Navigation Items
   const navigationItems = [
     { name: "Admin Console", href: "/admin", icon: ShieldCheck },
+    { name: "Pass Approvals", href: "/traffic_approval", icon: FileText },
+    { name: "Company Approvals", href: "/traffic_approval/companies", icon: Building2 },
     { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
   ];
 
@@ -175,7 +178,7 @@ export default function AdminLayout({ children }) {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50/20 to-amber-50/30">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50/20 to-amber-50/30" style={{ fontFamily: 'Arial, sans-serif' }}>
       {/* Desktop Sidebar */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:w-72 lg:border-r lg:border-slate-200/80 lg:bg-white lg:shadow-xl lg:shadow-slate-200/30">
         <SidebarContent />
