@@ -50,7 +50,7 @@ export default function TrafficLayout({ children }) {
         .trim();
 
       // ✅ Allow ONLY Approval users
-      if (role !== "approval" || role !=="admin" ) {
+      if (role !== "approval" && role !== "admin" && role !== "administrator") {
         alert("Unauthorized Access: Traffic Department Only.");
         router.push("/");
         return;

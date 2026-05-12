@@ -96,9 +96,13 @@ export default function AdminLayout({ children }) {
   // Strictly Admin Navigation Items
   const navigationItems = [
     { name: "Admin Console", href: "/admin", icon: ShieldCheck },
-    { name: "Pass Approvals", href: "/traffic_approval", icon: FileText },
-    { name: "Company Approvals", href: "/traffic_approval/companies", icon: Building2 },
-    { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
+    { name: "Pass Approvals", href: "/admin/pass-approvals", icon: FileText },
+    {
+      name: "Company Approvals",
+      href: "/admin/companies",
+      icon: Building2,
+    },
+    { name: "All Passes", href: "/admin/all-passes", icon: LayoutDashboard },
   ];
 
   const SidebarContent = () => (
