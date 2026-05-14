@@ -37,10 +37,14 @@ const getCurrentDateTime = () => {
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 };
 
+// All passes — daily, monthly, yearly — must expire at 05:59 AM on the
+// computed end date, regardless of the time selected for dateFrom.
+const PASS_EXPIRY_TIME = "05:59";
+
 const calculateDateTo = (fromDate, period, type) => {
   if (!fromDate || !period) return "";
 
-  const [datePart, timePart = "00:00"] = String(fromDate).split("T");
+  const [datePart] = String(fromDate).split("T");
   const [year, month, day] = datePart.split("-").map(Number);
   if (!year || !month || !day) return "";
 
@@ -60,7 +64,8 @@ const calculateDateTo = (fromDate, period, type) => {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}T${timePart}`; // carries same time as dateFrom
+  // Always lock the expiry time to 05:59 AM (port pass cutoff).
+  return `${yyyy}-${mm}-${dd}T${PASS_EXPIRY_TIME}`;
 };
 
 const getLabelById = (arr, val, key = "label") => {
@@ -274,6 +279,9 @@ export default function PassRequestPage() {
     accessArea: "",
     designation: "",
     designationOther: "",
+    cdcNumber: "",
+    cdcDocument: null,
+    declarationForm: null,
     idProofType: "",
     idProofNumber: "",
     photo: null,
@@ -1301,6 +1309,9 @@ export default function PassRequestPage() {
           formData.append("employmentProof", p.proofOfEmployment);
         if (p.copyOfLicence) formData.append("chaLicenseCopy", p.copyOfLicence);
         if (p.passportDoc) formData.append("passportDoc", p.passportDoc);
+        if (p.cdcDocument) formData.append("cdcDocument", p.cdcDocument);
+        if (p.declarationForm)
+          formData.append("declarationForm", p.declarationForm);
       });
 
       // Send files for every vehicle
@@ -1504,11 +1515,11 @@ export default function PassRequestPage() {
     : "Enter Identification Proof number";
 
   return (
-    <div className="space-y-6 font-sans max-w-7xl mx-auto text-slate-800">
+    <div className="space-y-6 font-sans w-full text-slate-800 dark:text-stone-200">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-[#0a1e4d]">Pass Request</h2>
-          <p className="text-sm text-slate-500 font-medium">
+          <h2 className="text-3xl font-bold text-[#0a1e4d] dark:text-white">Pass Request</h2>
+          <p className="text-base text-slate-500 dark:text-stone-300 font-medium">
             Apply for new harbor entry permits
           </p>
         </div>
@@ -1518,16 +1529,16 @@ export default function PassRequestPage() {
         </div> */}
       </div>
 
-      <div className="flex border-b border-slate-300">
+      <div className="flex border-b border-slate-300 dark:border-white/10">
         <button
           onClick={() => setActiveTab("apply")}
-          className={`px-8 py-4 text-sm transition-all ${activeTab === "apply" ? "font-bold text-[#0a1e4d] border-b-2 border-[#0a1e4d]" : "font-semibold text-slate-500 hover:text-[#0a1e4d]"}`}
+          className={`px-8 py-4 text-base transition-all ${activeTab === "apply" ? "font-bold text-[#0a1e4d] dark:text-white border-b-2 border-[#0a1e4d] dark:border-white" : "font-semibold text-slate-500 dark:text-stone-400 hover:text-[#0a1e4d] dark:hover:text-white"}`}
         >
           Apply New Pass
         </button>
         <button
           onClick={() => setActiveTab("view")}
-          className={`px-8 py-4 text-sm transition-all ${activeTab === "view" ? "font-bold text-[#0a1e4d] border-b-2 border-[#0a1e4d]" : "font-semibold text-slate-500 hover:text-[#0a1e4d]"}`}
+          className={`px-8 py-4 text-base transition-all ${activeTab === "view" ? "font-bold text-[#0a1e4d] dark:text-white border-b-2 border-[#0a1e4d] dark:border-white" : "font-semibold text-slate-500 dark:text-stone-400 hover:text-[#0a1e4d] dark:hover:text-white"}`}
         >
           View Submitted Passes
         </button>
@@ -2192,7 +2203,7 @@ export default function PassRequestPage() {
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1 bg-slate-50 space-y-6">
+            <div className="p-8 overflow-y-auto flex-1 bg-slate-50 space-y-8">
               {!editingPersonIndex && (
                 <div className="bg-white p-5 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center gap-4 shadow-sm">
                   <label className="text-xs font-black text-[#0a1e4d] uppercase tracking-wider whitespace-nowrap">
@@ -2215,7 +2226,7 @@ export default function PassRequestPage() {
                 </div>
               )}
 
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+              <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3">
                   1. Role & Identity
                 </h4>
@@ -2678,8 +2689,10 @@ export default function PassRequestPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="space-y-1.5 col-span-1 md:col-span-2 flex gap-4">
-                    <div className="flex-1 space-y-1.5">
+                  <div
+                    className={`col-span-1 md:col-span-2 grid gap-4 ${personForm.designation === "Others" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"}`}
+                  >
+                    <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 uppercase">
                         Designation <span className="text-red-500">*</span>
                       </label>
@@ -2703,28 +2716,94 @@ export default function PassRequestPage() {
                             {d.name}
                           </option>
                         ))}
+                        <option value="Crew">Crew</option>
+                        <option value="Supernumerary">Supernumerary</option>
                         <option value="Others">Others</option>
                       </select>
                     </div>
-                    <div
-                      className={`flex-1 space-y-1.5 ${personForm.designation === "Others" ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-                    >
-                      <label className="text-xs font-bold text-transparent uppercase select-none">
-                        .
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Specify Others"
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            designationOther: e.target.value,
-                          })
-                        }
-                        className={inputClass}
-                      />
-                    </div>
+                    {personForm.designation === "Others" && (
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          Specify Others <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Specify designation"
+                          value={personForm.designationOther || ""}
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              designationOther: e.target.value,
+                            })
+                          }
+                          className={inputClass}
+                        />
+                      </div>
+                    )}
                   </div>
+                  {personForm.designation === "Crew" && (
+                    <div className="col-span-1 md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-5 items-start">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          CDC Document No. <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={personForm.cdcNumber}
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              cdcNumber: e.target.value,
+                            })
+                          }
+                          className={inputClass}
+                          placeholder="Enter CDC document number"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          CDC Document <span className="text-red-500">*</span>
+                        </label>
+                        <FileUploadBox
+                          file={personForm.cdcDocument}
+                          existingFileName={personForm.existingCdcName}
+                          onView={() =>
+                            window.open(
+                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=cdcDocument`,
+                              "_blank",
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              cdcDocument: e.target.files[0],
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          Declaration Form Document <span className="text-red-500">*</span>
+                        </label>
+                        <FileUploadBox
+                          file={personForm.declarationForm}
+                          existingFileName={personForm.existingDeclarationName}
+                          onView={() =>
+                            window.open(
+                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=declarationForm`,
+                              "_blank",
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              declarationForm: e.target.files[0],
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Type of Id proof
@@ -2824,7 +2903,7 @@ export default function PassRequestPage() {
                     )}
                   </div>
                   <div className="space-y-1.5 md:col-span-2 max-w-sm">
-                    <label>
+                    <label className="text-xs font-bold text-slate-700 uppercase">
                       Copy of{" "}
                       {getLabelById(
                         masterData.idProofTypes,
@@ -2875,7 +2954,111 @@ export default function PassRequestPage() {
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+              <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-[#0a1e4d] text-white">
+                    <tr>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Type of Pass <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Pass Period <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Date From <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Date To <span className="text-orange-400">*</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    <tr>
+                      <td className="p-3 border-r border-slate-200">
+                        <select
+                          value={personForm.passType}
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              passType: e.target.value,
+                            })
+                          }
+                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                        >
+                          {masterData.passTypes.map((t) => (
+                            <option
+                              key={t.id || t.value}
+                              value={t.id || t.value}
+                            >
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            value={personForm.passPeriod}
+                            min="1"
+                            max={
+                              String(personForm.passType) === "1" ? "7" : "1"
+                            }
+                            disabled={String(personForm.passType) !== "1"}
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                passPeriod: e.target.value,
+                              })
+                            }
+                            className={inputClass}
+                          />
+                          <span className="text-sm font-bold text-slate-700">
+                            Days
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <input
+                          type="datetime-local"
+                          value={personForm.dateFrom}
+                          min={getCurrentDateTime()}
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              dateFrom: e.target.value,
+                            })
+                          }
+                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                        />
+                      </td>
+                      <td className="p-3 border-r border-slate-200 flex items-center gap-2">
+                        <input
+                          readOnly
+                          type="datetime-local"
+                          value={personForm.dateTo}
+                          className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
+                        />
+                        {String(personForm.passType) === "2" && (
+                          <input
+                            type="time"
+                            title="Valid Upto Time"
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                validUptoTime: e.target.value,
+                              })
+                            }
+                            className="w-28 h-10 border border-red-300 bg-red-50 rounded-lg text-sm px-2 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-red-900 font-bold animate-in fade-in"
+                          />
+                        )}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+                            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
                   <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
                   Mandatory Documents
@@ -3004,110 +3187,6 @@ export default function PassRequestPage() {
                   )}
                 </div>
               </div>
-
-              <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-[#0a1e4d] text-white">
-                    <tr>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Type of Pass <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Pass Period <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Date From <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Date To <span className="text-orange-400">*</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    <tr>
-                      <td className="p-3 border-r border-slate-200">
-                        <select
-                          value={personForm.passType}
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              passType: e.target.value,
-                            })
-                          }
-                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
-                        >
-                          {masterData.passTypes.map((t) => (
-                            <option
-                              key={t.id || t.value}
-                              value={t.id || t.value}
-                            >
-                              {t.label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="number"
-                            value={personForm.passPeriod}
-                            min="1"
-                            max={
-                              String(personForm.passType) === "1" ? "7" : "1"
-                            }
-                            disabled={String(personForm.passType) !== "1"}
-                            onChange={(e) =>
-                              setPersonForm({
-                                ...personForm,
-                                passPeriod: e.target.value,
-                              })
-                            }
-                            className={inputClass}
-                          />
-                          <span className="text-sm font-bold text-slate-700">
-                            Days
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <input
-                          type="datetime-local"
-                          value={personForm.dateFrom}
-                          min={getCurrentDateTime()}
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              dateFrom: e.target.value,
-                            })
-                          }
-                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                        />
-                      </td>
-                      <td className="p-3 border-r border-slate-200 flex items-center gap-2">
-                        <input
-                          readOnly
-                          type="datetime-local"
-                          value={personForm.dateTo}
-                          className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
-                        />
-                        {String(personForm.passType) === "2" && (
-                          <input
-                            type="time"
-                            title="Valid Upto Time"
-                            onChange={(e) =>
-                              setPersonForm({
-                                ...personForm,
-                                validUptoTime: e.target.value,
-                              })
-                            }
-                            className="w-28 h-10 border border-red-300 bg-red-50 rounded-lg text-sm px-2 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-red-900 font-bold animate-in fade-in"
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -3154,7 +3233,7 @@ export default function PassRequestPage() {
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50 space-y-6">
+            <div className="p-8 overflow-y-auto flex-1 bg-slate-50/50 space-y-8">
               {!editingVehicleIndex && (
                 <div className="bg-white p-5 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center gap-4 shadow-sm">
                   <label className="text-xs font-black text-[#0a1e4d] uppercase tracking-wider whitespace-nowrap">
@@ -3177,7 +3256,7 @@ export default function PassRequestPage() {
                 </div>
               )}
 
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+              <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3">
                   1. Vehicle Details
                 </h4>
@@ -3314,7 +3393,99 @@ export default function PassRequestPage() {
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+              <div className="mt-8 border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-[#0a1e4d] text-white">
+                    <tr>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Type of Pass <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Pass Period <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Date From <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Date To <span className="text-orange-400">*</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    <tr>
+                      <td className="p-3 border-r border-slate-200">
+                        <select
+                          value={vehicleForm.passType}
+                          onChange={(e) =>
+                            setVehicleForm({
+                              ...vehicleForm,
+                              passType: e.target.value,
+                            })
+                          }
+                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                        >
+                          {masterData.passTypes.map((t) => (
+                            <option
+                              key={t.id || t.value}
+                              value={t.id || t.value}
+                            >
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            value={vehicleForm.passPeriod}
+                            min="1"
+                            max={
+                              String(vehicleForm.passType) === "1" ? "7" : "1"
+                            }
+                            disabled={String(vehicleForm.passType) !== "1"}
+                            onChange={(e) =>
+                              setVehicleForm({
+                                ...vehicleForm,
+                                passPeriod: e.target.value,
+                              })
+                            }
+                            className={inputClass}
+                          />
+                          <span className="text-sm font-bold text-slate-700">
+                            Days
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <input
+                          type="datetime-local"
+                          value={vehicleForm.dateFrom}
+                          min={getCurrentDateTime()}
+                          onChange={(e) =>
+                            setVehicleForm({
+                              ...vehicleForm,
+                              dateFrom: e.target.value,
+                            })
+                          }
+                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                        />
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <input
+                          readOnly
+                          type="datetime-local"
+                          value={vehicleForm.dateTo}
+                          className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
+                        />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+
+              <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-orange-500" /> 2. Mandatory
                   Documents
@@ -3452,97 +3623,6 @@ export default function PassRequestPage() {
                     </>
                   )}
                 </div>
-              </div>
-
-              <div className="mt-8 border border-slate-300 rounded-xl overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-[#0a1e4d] text-white">
-                    <tr>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Type of Pass <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Pass Period <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Date From <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Date To <span className="text-orange-400">*</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    <tr>
-                      <td className="p-3 border-r border-slate-200">
-                        <select
-                          value={vehicleForm.passType}
-                          onChange={(e) =>
-                            setVehicleForm({
-                              ...vehicleForm,
-                              passType: e.target.value,
-                            })
-                          }
-                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
-                        >
-                          {masterData.passTypes.map((t) => (
-                            <option
-                              key={t.id || t.value}
-                              value={t.id || t.value}
-                            >
-                              {t.label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="number"
-                            value={vehicleForm.passPeriod}
-                            min="1"
-                            max={
-                              String(vehicleForm.passType) === "1" ? "7" : "1"
-                            }
-                            disabled={String(vehicleForm.passType) !== "1"}
-                            onChange={(e) =>
-                              setVehicleForm({
-                                ...vehicleForm,
-                                passPeriod: e.target.value,
-                              })
-                            }
-                            className={inputClass}
-                          />
-                          <span className="text-sm font-bold text-slate-700">
-                            Days
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <input
-                          type="datetime-local"
-                          value={vehicleForm.dateFrom}
-                          min={getCurrentDateTime()}
-                          onChange={(e) =>
-                            setVehicleForm({
-                              ...vehicleForm,
-                              dateFrom: e.target.value,
-                            })
-                          }
-                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                        />
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <input
-                          readOnly
-                          type="datetime-local"
-                          value={vehicleForm.dateTo}
-                          className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
-                        />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
               </div>
             </div>
 

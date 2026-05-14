@@ -8,6 +8,7 @@ import {
   Ship,
   Lock,
   User,
+  UserPlus,
   RefreshCw,
   Sparkles,
   Shield,
@@ -45,6 +46,52 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showForceLogoutDialog, setShowForceLogoutDialog] = useState(false);
   const [forceLogoutLoading, setForceLogoutLoading] = useState(false);
+
+  // AsmrProg-style card toggle: "signin" shows the Sign-In form, "forgot"
+  // slides over to the Forgot-Password form. The orange side panel content
+  // updates in lock-step.
+  const [authMode, setAuthMode] = useState("signin"); // "signin" | "forgot"
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      toast.warning("Please enter your registered email or login ID.");
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const res = await axios.post(
+        `${AUTH_API}/auth/forgot-password`,
+        { loginId: forgotEmail.trim() },
+        {
+          // Don't throw on 404 — backend may not have implemented this yet.
+          validateStatus: (s) => s < 500,
+        },
+      );
+      if (res.status >= 200 && res.status < 300 && res.data?.success) {
+        toast.success("Reset link sent", {
+          description:
+            "If an account exists for this ID, a password reset link has been emailed.",
+        });
+        setAuthMode("signin");
+        setForgotEmail("");
+      } else if (res.status === 404) {
+        toast.error("Feature unavailable", {
+          description:
+            "Password reset is not yet enabled. Please contact your administrator.",
+        });
+      } else {
+        toast.error(res.data?.message || "Unable to process the request.");
+      }
+    } catch (err) {
+      console.error("Forgot password error:", err);
+      toast.error("Server not reachable");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   const fetchCaptcha = async () => {
     setIsCaptchaLoading(true);
@@ -188,15 +235,14 @@ const LoginPage = () => {
       });
 
       if (res.data.success) {
-        toast.success("Previous session terminated", {
-          description: "You can now login with your credentials.",
-        });
         setShowForceLogoutDialog(false);
-        
-        // Automatically retry login after force logout
-        setTimeout(() => {
-          handleSubmit(new Event('submit'));
-        }, 500);
+        // Captcha tokens are single-use; fetch a fresh one and ask the user
+        // to re-enter it rather than silently auto-retrying (which was
+        // failing because the previous 409 flow already cleared the captcha).
+        await fetchCaptcha();
+        toast.success("Previous session terminated", {
+          description: "Please re-enter the security code and sign in again.",
+        });
       }
     } catch (err) {
       console.error("Force logout error:", err);
@@ -220,12 +266,28 @@ const LoginPage = () => {
     }
 
     try {
-      const res = await axios.post(`${AUTH_API}/auth/login`, {
-        loginId: formData.username.trim(),
-        password: formData.password,
-        captchaToken: captchaData.token,
-        captchaValue: formData.captcha,
-      });
+      const res = await axios.post(
+        `${AUTH_API}/auth/login`,
+        {
+          loginId: formData.username.trim(),
+          password: formData.password,
+          captchaToken: captchaData.token,
+          captchaValue: formData.captcha,
+        },
+        {
+          // Treat 409 (concurrent session) as a normal response so axios
+          // does NOT throw — prevents the Next.js dev overlay from
+          // reporting "AxiosError 409" for an expected UX flow.
+          validateStatus: (status) =>
+            (status >= 200 && status < 300) || status === 409,
+        },
+      );
+
+      // Concurrent-session conflict — show force-logout dialog.
+      if (res.status === 409) {
+        setShowForceLogoutDialog(true);
+        return;
+      }
 
       const data = res.data;
 
@@ -262,16 +324,13 @@ const LoginPage = () => {
         fetchCaptcha(); // Refresh captcha on failed attempt
       }
     } catch (err) {
-      console.error("Login error:", err);
-
       if (err.response) {
         const status = err.response.status;
         const message = err.response.data?.message || "Login failed";
-        
-        if (status === 409) {
-          // Concurrent session conflict - offer force logout option
-          setShowForceLogoutDialog(true);
-        } else if (status === 401) {
+
+        console.error("Login error:", err);
+
+        if (status === 401) {
           // Invalid credentials
           toast.error("Login Failed", {
             description: message,
@@ -281,6 +340,7 @@ const LoginPage = () => {
           toast.error(message);
         }
       } else if (err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK') {
+        console.error("Login error:", err);
         toast.error("Connection Error", {
           description: "Unable to reach the authentication server. Please check your network connection.",
           duration: 4000,
@@ -304,41 +364,56 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-zinc-50" style={{ fontFamily: 'Arial, sans-serif' }}>
-      {/* Animated Background effects */}
-      <div className="absolute inset-0 bg-gradient-to-br from-orange-50 to-white"></div>
+    <div className="h-screen relative overflow-hidden bg-zinc-900" style={{ fontFamily: 'Arial, sans-serif' }}>
+      {/* Cinematic ship video background */}
+      <video
+        className="absolute inset-0 w-full h-full object-cover"
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        poster="/file.svg"
+        aria-hidden="true"
+      >
+        <source src="/Ship.mp4" type="video/mp4" />
+      </video>
 
-      {/* Floating Orbs */}
-      <div className="absolute top-20 left-10 w-72 h-72 bg-orange-500/10 rounded-full blur-3xl"></div>
-      <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-600/10 rounded-full blur-3xl"></div>
+      {/* Layered overlays for legibility + warm port mood */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-900/55 to-orange-900/60"></div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30"></div>
 
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-        <div className="w-full max-w-7xl grid lg:grid-cols-2 gap-12 items-center">
+      {/* Subtle floating orbs to keep the orange brand glow */}
+      <div className="absolute top-20 left-10 w-72 h-72 bg-orange-500/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-600/20 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div className="relative z-10 h-screen flex items-center p-4 sm:p-6 lg:pl-12 lg:pr-16 lg:py-6 overflow-hidden">
+        <div className="w-full mx-auto grid lg:grid-cols-[5fr_6fr] gap-6 lg:gap-10 items-center">
           {/* Left Section - Branding */}
           <div className="hidden lg:block space-y-8 animate-in fade-in duration-700">
-            <div className="inline-flex items-center gap-4 bg-white/60 backdrop-blur-md p-6 rounded-3xl shadow-lg border border-white/40">
-              <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
+            <div className="inline-flex items-center gap-4 bg-white/15 backdrop-blur-xl p-6 rounded-3xl shadow-lg ring-1 ring-white/20">
+              <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-900/40">
                 <Ship className="h-9 w-9 text-white" strokeWidth={2.5} />
               </div>
               <div>
-                <h1 className="text-5xl font-bold text-gray-900 leading-none">
+                <h1 className="text-4xl font-bold text-white leading-none drop-shadow-lg">
                   Chennai Port
                 </h1>
-                <p className="text-xl font-medium text-orange-600 mt-1">
+                <p className="text-lg font-medium text-orange-300 mt-1">
                   Authority
                 </p>
               </div>
             </div>
 
             <div className="space-y-6">
-              <h2 className="text-6xl font-bold leading-tight text-gray-900">
+              <h2 className="text-4xl xl:text-5xl font-bold leading-tight text-white drop-shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
                 Welcome to the
                 <br />
-                <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-600 to-orange-400">
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-300 to-amber-200">
                   Chennai Port Gate Automation System
                 </span>
               </h2>
-              <p className="text-2xl text-gray-600 leading-relaxed max-w-xl">
+              <p className="text-base xl:text-lg text-stone-100/90 leading-relaxed max-w-xl drop-shadow">
                 A centralized digital system for controlling and monitoring
                 personnel, vehicle, and cargo movement through automated gate
                 pass management at Chennai Port.
@@ -366,199 +441,268 @@ const LoginPage = () => {
               ].map((item, i) => (
                 <div
                   key={i}
-                  className="bg-white/60 backdrop-blur-md p-5 rounded-2xl border border-white/40 hover:scale-105 transition-transform cursor-default"
+                  className="bg-white/10 backdrop-blur-xl p-5 rounded-2xl ring-1 ring-white/20 hover:bg-white/15 hover:scale-105 transition-all cursor-default"
                 >
-                  <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center mb-3">
+                  <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center mb-3 shadow-lg shadow-orange-900/40">
                     <item.icon className="h-6 w-6 text-white" />
                   </div>
-                  <p className="font-semibold text-gray-900 text-lg">{item.title}</p>
-                  <p className="text-base text-gray-600 mt-1">{item.desc}</p>
+                  <p className="font-semibold text-white text-sm">{item.title}</p>
+                  <p className="text-xs text-stone-200/80 mt-1">{item.desc}</p>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Right Section - Login Form */}
-          <div className="animate-in slide-in-from-bottom duration-700">
-            <div className="bg-white/80 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-white/40">
-              <div className="space-y-6">
-                <div className="text-center space-y-2">
-                  <div className="inline-flex items-center justify-center w-20 h-20 bg-orange-600 rounded-2xl shadow-lg mb-4">
-                    <Sparkles className="h-10 w-10 text-white" />
-                  </div>
-                  <h3 className="text-5xl font-bold text-gray-900">Sign In</h3>
-                  <p className="text-xl text-gray-600">Access your secure portal</p>
+          <div className="animate-in slide-in-from-bottom duration-700 w-full">
+            {/* Soft orange glow halo behind the card for extra polish */}
+            <div className="relative w-full">
+              <div
+                aria-hidden
+                className="hidden lg:block absolute -inset-6 bg-gradient-to-br from-orange-400/30 via-orange-300/20 to-transparent blur-3xl rounded-[40px] -z-10"
+              />
+              <div
+                className="relative bg-white/95 backdrop-blur-2xl rounded-[30px] shadow-[0_30px_80px_-15px_rgba(0,0,0,0.6)] ring-1 ring-white/40 overflow-hidden w-full max-w-[820px] mx-auto lg:ml-auto lg:mr-0 min-h-[560px] sm:min-h-[600px] lg:h-[78vh] lg:max-h-[680px] transition-shadow duration-500 hover:shadow-[0_35px_90px_-15px_rgba(0,0,0,0.7)]"
+              >
+              {/* ── Form column (slides to the right half when forgot is active) ─── */}
+              <div
+                className={`md:absolute md:top-0 md:left-0 md:w-1/2 md:h-full bg-white z-[2] transition-transform duration-700 ease-in-out ${authMode === "forgot" ? "md:translate-x-full" : "md:translate-x-0"}`}
+              >
+                <div className="h-full flex flex-col justify-center px-6 md:px-8 lg:px-10 py-8 max-w-md mx-auto w-full">
+                {authMode === "signin" ? (
+                  <div key="signin-panel" className="animate-in fade-in duration-500 ease-out">
+                <div className="text-center mb-4">
+                  <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">Sign In</h3>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Quick-action icon row (replaces template's social icons
+                    with the actual functional shortcuts: Register & Track). */}
+                <div className="flex justify-center gap-3 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => router.push("/register")}
+                    title="Register"
+                    className="w-11 h-11 rounded-[20%] border border-gray-300 flex items-center justify-center text-gray-700 hover:border-orange-500 hover:text-orange-600 transition-colors"
+                  >
+                    <UserPlus className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTrackModalOpen(true);
+                      setTrackResult(null);
+                      setTrackError("");
+                      setTrackReference("");
+                    }}
+                    title="Track Status"
+                    className="w-11 h-11 rounded-[20%] border border-gray-300 flex items-center justify-center text-gray-700 hover:border-orange-500 hover:text-orange-600 transition-colors"
+                  >
+                    <TrendingUp className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={fetchCaptcha}
+                    disabled={!!isCaptchaLoading}
+                    title="Refresh security code"
+                    className="w-11 h-11 rounded-[20%] border border-gray-300 flex items-center justify-center text-gray-700 hover:border-orange-500 hover:text-orange-600 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw
+                      className={`h-5 w-5 ${isCaptchaLoading ? "animate-spin" : ""}`}
+                    />
+                  </button>
+                </div>
+
+                <p className="text-center text-sm text-gray-500 mb-4">
+                  or use your credentials
+                </p>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
                   {error && (
-                    <div className="p-4 text-lg bg-red-50 border border-red-200 text-red-800 rounded-lg">
+                    <div className="p-3 text-sm bg-red-50 border border-red-200 text-red-800 rounded-lg">
                       {error}
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    <label className="text-lg font-medium text-gray-700">
-                      Username / Employee ID
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Enter your credentials"
-                        value={formData.username}
-                        onChange={(e) =>
-                          setFormData({ ...formData, username: e.target.value })
-                        }
-                        className="w-full pl-14 pr-4 h-16 text-lg bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
-                        style={{ fontFamily: 'Arial, sans-serif' }}
-                        required
-                      />
-                    </div>
+                  {/* Username */}
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Username / Employee ID"
+                      value={formData.username}
+                      onChange={(e) =>
+                        setFormData({ ...formData, username: e.target.value })
+                      }
+                      className="w-full pl-11 pr-3 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                      required
+                    />
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-lg font-medium text-gray-700">
-                        Password
-                      </label>
-                      <button
-                        type="button"
-                        className="text-base text-orange-600 hover:underline font-medium"
-                      >
-                        Forgot?
-                      </button>
-                    </div>
-                    <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-400" />
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Enter your password"
-                        value={formData.password}
-                        onChange={(e) =>
-                          setFormData({ ...formData, password: e.target.value })
-                        }
-                        className="w-full pl-14 pr-14 h-16 text-lg bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all"
-                        style={{ fontFamily: 'Arial, sans-serif' }}
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-600 transition-colors focus:outline-none"
-                        title={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-6 w-6" />
-                        ) : (
-                          <Eye className="h-6 w-6" />
-                        )}
-                      </button>
-                    </div>
+                  {/* Password */}
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Password"
+                      value={formData.password}
+                      onChange={(e) =>
+                        setFormData({ ...formData, password: e.target.value })
+                      }
+                      className="w-full pl-11 pr-11 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-600 transition-colors focus:outline-none"
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-lg font-medium text-gray-700">
-                      Security Check
-                    </label>
-                    <div className="flex gap-3">
-                      <input
-                        placeholder="Enter answer"
-                        value={formData.captcha}
-                        onChange={(e) =>
-                          setFormData({ ...formData, captcha: e.target.value })
-                        }
-                        className="flex-1 px-4 h-16 text-xl bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl"
-                        style={{ fontFamily: 'Arial, sans-serif' }}
-                        required
-                      />
-                      <div className="flex items-center gap-2 bg-orange-50 px-4 rounded-xl border border-orange-200 min-w-[200px] justify-center relative shadow-inner">
+                  {/* Captcha — input on the left, captcha image + refresh on the right.
+                      Stacks vertically on very small screens for readability. */}
+                  <div className="flex flex-col sm:flex-row gap-2 w-full">
+                    <input
+                      placeholder="Security Code"
+                      value={formData.captcha}
+                      onChange={(e) =>
+                        setFormData({ ...formData, captcha: e.target.value })
+                      }
+                      className="flex-1 min-w-0 px-4 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                      required
+                    />
+                    <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 w-full sm:w-[170px] shrink-0 justify-between">
+                      <div className="flex-1 flex items-center justify-center min-w-0 overflow-hidden">
                         {isCaptchaLoading ? (
-                          <RefreshCw className="h-8 w-8 text-orange-400 animate-spin" />
+                          <RefreshCw className="h-5 w-5 text-orange-400 animate-spin" />
                         ) : (
-                          /* Render the backend SVG string securely */
                           <div
-                            className="h-full flex items-center justify-center [&>svg]:w-full [&>svg]:h-16"
+                            className="flex items-center justify-center w-full [&>svg]:w-full [&>svg]:max-w-[130px] [&>svg]:h-11"
                             dangerouslySetInnerHTML={{
                               __html: captchaData.svg,
                             }}
                           />
                         )}
-
-                        {/* Refresh Button */}
-                        <button
-                          type="button"
-                          onClick={fetchCaptcha}
-                          disabled={!!isCaptchaLoading}
-                          className="absolute -right-3 -top-3 bg-white border border-orange-200 shadow-md rounded-full p-2 hover:bg-orange-50 transition-all active:scale-95 disabled:opacity-50"
-                          title="Get a new security code"
-                        >
-                          <RefreshCw
-                            className={`h-5 w-5 text-orange-600 ${isCaptchaLoading ? "animate-spin" : "hover:rotate-180 transition-transform duration-500"}`}
-                          />
-                        </button>
                       </div>
+                      <button
+                        type="button"
+                        onClick={fetchCaptcha}
+                        disabled={!!isCaptchaLoading}
+                        title="Get a new security code"
+                        className="shrink-0 bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100 active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        <RefreshCw
+                          className={`h-4 w-4 text-orange-600 ${isCaptchaLoading ? "animate-spin" : ""}`}
+                        />
+                      </button>
                     </div>
+                  </div>
+
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode("forgot")}
+                      className="text-sm text-gray-600 hover:text-orange-600 hover:underline"
+                    >
+                      Forget Your Password?
+                    </button>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full h-16 bg-orange-600 text-white text-2xl font-semibold rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-600/20 transition-all"
-                    style={{ fontFamily: 'Arial, sans-serif' }}
+                    className="w-full py-3.5 bg-orange-600 text-white text-base font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-600/20 transition-all"
                   >
-                    Login to Portal
+                    Sign In
                   </button>
                 </form>
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <div className="grid grid-cols-3 gap-4">
-                    {/* Register */}
-                    <button
-                      type="button"
-                      onClick={() => router.push("/register")}
-                      className="flex flex-col items-center gap-2 group"
-                    >
-                      <div className="p-3.5 rounded-xl bg-gray-50 group-hover:bg-orange-50 transition-all border border-transparent group-hover:border-orange-200">
-                        <User className="h-7 w-7 text-gray-700 group-hover:text-orange-600 transition-colors" />
-                      </div>
-                      <span className="text-sm font-bold text-gray-800 uppercase tracking-wide text-center">
-                        Register
-                      </span>
-                    </button>
-
-                    {/* Track Registration */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsTrackModalOpen(true);
-                        setTrackResult(null);
-                        setTrackError("");
-                        setTrackReference("");
-                      }}
-                      className="flex flex-col items-center gap-2 group"
-                    >
-                      <div className="p-3.5 rounded-xl bg-gray-50 group-hover:bg-orange-50 transition-all border border-transparent group-hover:border-orange-200">
-                        <TrendingUp className="h-7 w-7 text-gray-700 group-hover:text-orange-600 transition-colors" />
-                      </div>
-                      <span className="text-sm font-bold text-gray-800 uppercase tracking-wide text-center">
-                        Track Status
-                      </span>
-                    </button>
-
-                    {/* Manual */}
-                    {/* <button
-                      type="button"
-                      onClick={() => router.push("/manual")}
-                      className="flex flex-col items-center gap-2 group"
-                    >
-                      <div className="p-3.5 rounded-xl bg-gray-50 group-hover:bg-orange-50 transition-all border border-transparent group-hover:border-orange-200">
-                        <Sparkles className="h-7 w-7 text-gray-700 group-hover:text-orange-600 transition-colors" />
-                      </div>
-                      <span className="text-[11px] font-bold text-gray-800 uppercase tracking-wide text-center">
-                        Manual
-                      </span>
-                    </button> */}
                   </div>
+                ) : (
+                  <div key="forgot-panel" className="animate-in fade-in slide-in-from-right-6 duration-500 ease-out">
+                    <div className="text-center mb-6">
+                      <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">
+                        Reset Password
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-2">
+                        Enter your registered email or employee ID — we&apos;ll
+                        send you a reset link.
+                      </p>
+                    </div>
+
+                    <form onSubmit={handleForgotSubmit} className="space-y-4">
+                      <div className="relative">
+                        <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="Email or Employee ID"
+                          value={forgotEmail}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          className="w-full pl-11 pr-3 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                          required
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={forgotLoading}
+                        className="w-full py-3.5 bg-orange-600 text-white text-base font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-600/20 transition-all disabled:opacity-70 flex items-center justify-center"
+                      >
+                        {forgotLoading ? (
+                          <RefreshCw className="h-5 w-5 animate-spin" />
+                        ) : (
+                          "Send Reset Link"
+                        )}
+                      </button>
+
+                      <div className="text-center">
+                        <button
+                          type="button"
+                          onClick={() => setAuthMode("signin")}
+                          className="text-sm text-gray-600 hover:text-orange-600 hover:underline"
+                        >
+                          ← Back to Sign In
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
                 </div>
+              </div>
+
+              {/* ── Orange side panel (slides from right to left when forgot is active) ─── */}
+              <div
+                className={`hidden md:flex absolute top-0 right-0 w-1/2 h-full flex-col items-center justify-center text-center text-white px-8 bg-gradient-to-br from-orange-500 to-orange-700 transition-all duration-700 ease-in-out ${authMode === "forgot" ? "md:-translate-x-full" : "md:translate-x-0"}`}
+                style={{
+                  borderRadius:
+                    authMode === "forgot"
+                      ? "0 150px 100px 0"
+                      : "150px 0 0 100px",
+                }}
+              >
+                <h2 className="text-2xl lg:text-3xl font-bold mb-3">Hello, Friend!</h2>
+                <p className="text-sm leading-relaxed opacity-95 max-w-[280px] mb-6">
+                  Register with your personal details to use all site features
+                </p>
+                <button
+                  type="button"
+                  onClick={() => router.push("/register")}
+                  className="px-10 py-3 border border-white text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors mb-3"
+                >
+                  Sign Up
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthMode(authMode === "forgot" ? "signin" : "forgot")}
+                  className="px-10 py-3 bg-white/10 border border-white/60 text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors"
+                >
+                  {authMode === "forgot" ? "Back to Sign In" : "Forgot Password?"}
+                </button>
+              </div>
               </div>
             </div>
           </div>

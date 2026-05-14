@@ -186,22 +186,24 @@ body {
   body {
     @apply bg-background text-foreground;
     font-family: Arial, sans-serif;
-    font-size: 16px; /* Base font size increased for better readability */
+    font-size: 1rem; /* inherits root size — scales globally with html */
   }
   html {
     font-family: Arial, sans-serif;
+    /* Normal browser default — every rem-based size in the app
+       (Tailwind text-*, headings, etc.) is calibrated against this. */
     font-size: 16px;
   }
-  
-  /* Increase default font sizes for better readability */
+
+  /* Form controls use rem so they track the html root size. */
   input, textarea, select, button {
     font-family: Arial, sans-serif;
-    font-size: 16px;
+    font-size: 1rem;
   }
-  
+
   label {
     font-family: Arial, sans-serif;
-    font-size: 16px;
+    font-size: 1rem;
   }
   
   h1 {
@@ -242,21 +244,21 @@ body {
   
   p {
     font-family: Arial, sans-serif;
-    font-size: 16px;
+    font-size: 1rem;
   }
-  
+
   span, div {
     font-family: Arial, sans-serif;
   }
-  
+
   table {
     font-family: Arial, sans-serif;
-    font-size: 16px;
+    font-size: 1.2rem;
   }
-  
+
   th, td {
     font-family: Arial, sans-serif;
-    font-size: 16px;
+    font-size: 1rem;
   }
 }
 
