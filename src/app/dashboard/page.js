@@ -23,7 +23,13 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Activity,
-  MapPin,
+  Sun,
+  Cloud,
+  CloudSun,
+  CloudRain,
+  CloudDrizzle,
+  Wind,
+  Droplets,
 } from "lucide-react";
 
 import {
@@ -115,6 +121,24 @@ const gateFeed = [
 ];
 
 // ---------------------------------------------------------------------------
+// Chennai Port live info — compact summary used by the LivePortStatus strip.
+// In production these would come from VTS / IMD / port-operations APIs.
+// ---------------------------------------------------------------------------
+const chennaiPortInfo = Object.freeze({
+  location: { name: "Chennai Port" },
+  current: {
+    temp: 32,
+    condition: "Partly Cloudy",
+    icon: "cloud-sun",
+    humidity: 78,
+    wind: { speed: 14, direction: "SSW" },
+  },
+  tides: {
+    nextHigh: { time: "13:42", height: 1.2 },
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Pure helpers (kept outside the component so they don't get recreated)
 // ---------------------------------------------------------------------------
 const getStatusColor = (status) => {
@@ -146,6 +170,53 @@ const getGreeting = (hour) => {
   return "Good Evening";
 };
 
+// Maps a weather-condition key from chennaiPortInfo to a Lucide icon component.
+const weatherIconFor = (key) => {
+  switch (key) {
+    case "sun":          return Sun;
+    case "cloud":        return Cloud;
+    case "cloud-sun":    return CloudSun;
+    case "cloud-rain":   return CloudRain;
+    case "cloud-drizzle":return CloudDrizzle;
+    default:             return Cloud;
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Shared "shady" card shells — soft layered drop-shadows, refined ring,
+// gives every panel a lifted, premium feel against the page halo.
+// ---------------------------------------------------------------------------
+const cardShell =
+  "rounded-3xl border-0 bg-white dark:bg-[#1f232d] " +
+  "ring-1 ring-stone-200/70 dark:ring-white/[0.06] " +
+  "shadow-[0_1px_3px_rgba(15,23,42,0.04),0_18px_40px_-20px_rgba(15,23,42,0.20)] " +
+  "dark:shadow-[0_1px_3px_rgba(0,0,0,0.55),0_30px_60px_-24px_rgba(0,0,0,0.70)] " +
+  "hover:shadow-[0_4px_10px_rgba(15,23,42,0.06),0_28px_56px_-20px_rgba(15,23,42,0.28)] " +
+  "dark:hover:shadow-[0_4px_10px_rgba(0,0,0,0.65),0_36px_72px_-24px_rgba(0,0,0,0.85)] " +
+  "transition-all duration-300";
+
+const cardShellPrimary =
+  "rounded-3xl border-0 overflow-hidden relative text-white " +
+  "bg-gradient-to-br from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] " +
+  "ring-1 ring-amber-400/15 " +
+  "shadow-[0_2px_6px_rgba(245,158,11,0.10),0_24px_56px_-20px_rgba(245,158,11,0.30)] " +
+  "hover:shadow-[0_4px_12px_rgba(245,158,11,0.16),0_36px_72px_-20px_rgba(245,158,11,0.42)] " +
+  "transition-all duration-300";
+
+const cardShellAlertRed =
+  "rounded-3xl border-0 bg-white dark:bg-[#1f232d] overflow-hidden " +
+  "ring-1 ring-red-200 dark:ring-red-500/30 " +
+  "shadow-[0_1px_3px_rgba(244,63,94,0.06),0_18px_40px_-20px_rgba(244,63,94,0.22)] " +
+  "dark:shadow-[0_1px_3px_rgba(0,0,0,0.55),0_28px_60px_-24px_rgba(244,63,94,0.30)] " +
+  "transition-all duration-300";
+
+const cardShellAlertAmber =
+  "rounded-3xl border-0 bg-white dark:bg-[#1f232d] overflow-hidden " +
+  "ring-1 ring-amber-200 dark:ring-amber-400/30 " +
+  "shadow-[0_1px_3px_rgba(245,158,11,0.06),0_18px_40px_-20px_rgba(245,158,11,0.22)] " +
+  "dark:shadow-[0_1px_3px_rgba(0,0,0,0.55),0_28px_60px_-24px_rgba(245,158,11,0.30)] " +
+  "transition-all duration-300";
+
 // ---------------------------------------------------------------------------
 // Sub-components (memoised — they receive only primitives / stable refs,
 // so they will not re-render when the parent's live clock ticks).
@@ -163,13 +234,7 @@ const StatCard = memo(function StatCard({
 }) {
   const isPrimary = accent === "primary";
   return (
-    <Card
-      className={
-        isPrimary
-          ? "border-0 rounded-3xl shadow-xl shadow-amber-900/20 bg-gradient-to-br from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] text-white overflow-hidden relative"
-          : "border-0 rounded-3xl shadow-sm hover:shadow-lg transition-all bg-white dark:bg-[#252836] ring-1 ring-stone-200/70 dark:ring-white/5"
-      }
-    >
+    <Card className={isPrimary ? cardShellPrimary : cardShell}>
       {isPrimary && (
         <>
           <div
@@ -274,7 +339,7 @@ const LivePortStatus = memo(function LivePortStatus({ now }) {
   );
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#1a1d27] via-[#252836] to-[#1a1d27] dark:from-black dark:via-[#1a1d27] dark:to-black text-white shadow-xl ring-1 ring-white/5">
+    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#1a1d27] via-[#252836] to-[#1a1d27] dark:from-black dark:via-[#1a1d27] dark:to-black text-white ring-1 ring-white/5 shadow-[0_2px_6px_rgba(15,23,42,0.06),0_24px_56px_-20px_rgba(15,23,42,0.40)] dark:shadow-[0_2px_6px_rgba(0,0,0,0.6),0_36px_72px_-20px_rgba(0,0,0,0.85)]">
       {/* Decorative wave SVG — pure CSS/SVG, no extra deps */}
       <svg
         aria-hidden
@@ -293,53 +358,105 @@ const LivePortStatus = memo(function LivePortStatus({ now }) {
         />
       </svg>
 
-      <div className="relative flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:p-6">
-        <div className="flex items-center gap-4">
-          <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 ring-1 ring-emerald-400/40">
-            <Radar className="h-6 w-6 text-emerald-400" />
-            <span className="absolute inset-0 rounded-2xl ring-2 ring-emerald-400/60 animate-ping" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="text-xs font-semibold uppercase tracking-widest text-emerald-300">
-                Port Operational
+      {(() => {
+        const w = chennaiPortInfo.current;
+        const CurrentIcon = weatherIconFor(w.icon);
+        return (
+          <div className="relative px-4 py-3 md:px-5 md:py-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            {/* Status pill + location */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/15 ring-1 ring-emerald-400/40 shrink-0">
+                <Radar className="h-4 w-4 text-emerald-400" />
+                <span className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/50 animate-ping" />
+              </div>
+              <div className="leading-tight min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-emerald-300">
+                    Port Operational
+                  </span>
+                </div>
+                <p className="text-xs text-stone-300 truncate">
+                  <span className="font-semibold text-white">
+                    {chennaiPortInfo.location.name}
+                  </span>{" "}
+                  <span className="text-stone-500">• Bay of Bengal</span>
+                </p>
+              </div>
+            </div>
+
+            <span className="hidden md:inline-block h-6 w-px bg-white/10" />
+
+            {/* Compact ops chips — only the 3 most-used */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/5 ring-1 ring-white/10 px-2 py-0.5 text-[11px]">
+                <CheckCircle className="h-3 w-3 text-emerald-300" />
+                <span className="text-stone-400">Gates</span>
+                <span className="font-semibold text-emerald-300 tabular-nums">4/4</span>
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/5 ring-1 ring-white/10 px-2 py-0.5 text-[11px]">
+                <Anchor className="h-3 w-3 text-amber-300" />
+                <span className="text-stone-400">Vessels</span>
+                <span className="font-semibold text-amber-300 tabular-nums">7</span>
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/5 ring-1 ring-white/10 px-2 py-0.5 text-[11px]">
+                <Clock className="h-3 w-3 text-orange-300" />
+                <span className="text-stone-400">Queue</span>
+                <span className="font-semibold text-orange-300 tabular-nums">12</span>
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/5 ring-1 ring-white/10 px-2 py-0.5 text-[11px]">
+                <Container className="h-3 w-3 text-fuchsia-300" />
+                <span className="text-stone-400">TEU</span>
+                <span className="font-semibold text-fuchsia-300 tabular-nums">1,284</span>
               </span>
             </div>
-            <p className="text-sm text-stone-300">
-              <MapPin className="inline h-3.5 w-3.5 -mt-0.5 mr-1 text-amber-300" />
-              JNPT • Berths 1–14 active • Tide: High 13:42
-            </p>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-3 gap-4 md:gap-6 text-center">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest font-bold text-stone-400">Gates</p>
-            <p className="text-xl font-bold text-emerald-300 tabular-nums">4 / 4</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest font-bold text-stone-400">In Queue</p>
-            <p className="text-xl font-bold text-amber-300 tabular-nums">12</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest font-bold text-stone-400">Vessels</p>
-            <p className="text-xl font-bold text-orange-300 tabular-nums">7</p>
-          </div>
-        </div>
+            <span className="hidden md:inline-block h-6 w-px bg-white/10" />
 
-        <div className="text-right">
-          <p className="font-mono text-2xl font-bold tabular-nums text-amber-200">{timeStr}</p>
-          <p className="text-xs text-stone-400">{dateStr}</p>
-        </div>
-      </div>
+            {/* Weather chip */}
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-sky-500/10 ring-1 ring-sky-400/20 px-2.5 py-1 text-[11px]">
+              <CurrentIcon className="h-4 w-4 text-amber-300" />
+              <span className="font-bold text-white tabular-nums">{w.temp}°C</span>
+              <span className="text-stone-300">{w.condition}</span>
+              <span className="text-stone-500">·</span>
+              <Wind className="h-3 w-3 text-sky-300" />
+              <span className="text-stone-300 tabular-nums">
+                {w.wind.speed} {w.wind.direction}
+              </span>
+              <span className="text-stone-500">·</span>
+              <Droplets className="h-3 w-3 text-sky-300" />
+              <span className="text-stone-300 tabular-nums">{w.humidity}%</span>
+            </div>
+
+            {/* Tide chip */}
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 ring-1 ring-cyan-400/20 px-2.5 py-1 text-[11px]">
+              <ArrowUpCircle className="h-3.5 w-3.5 text-cyan-300" />
+              <span className="text-stone-400">High</span>
+              <span className="font-semibold text-cyan-300 tabular-nums">
+                {chennaiPortInfo.tides.nextHigh.time}
+              </span>
+              <span className="text-stone-500 tabular-nums">
+                {chennaiPortInfo.tides.nextHigh.height}m
+              </span>
+            </div>
+
+            {/* Push clock to the right */}
+            <div className="ml-auto text-right leading-tight">
+              <p className="font-mono text-base md:text-lg font-bold tabular-nums text-amber-200">
+                {timeStr}
+              </p>
+              <p className="text-[10px] text-stone-400">{dateStr}</p>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 });
 
 const ThroughputChart = memo(function ThroughputChart() {
   return (
-    <Card className="rounded-3xl shadow-sm border-0 bg-white dark:bg-[#252836] ring-1 ring-stone-200/70 dark:ring-white/5">
+    <Card className={cardShell}>
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -391,7 +508,7 @@ const ThroughputChart = memo(function ThroughputChart() {
 
 const PassTypeChart = memo(function PassTypeChart() {
   return (
-    <Card className="rounded-3xl shadow-sm border-0 bg-white dark:bg-[#252836] ring-1 ring-stone-200/70 dark:ring-white/5">
+    <Card className={cardShell}>
       <CardHeader>
         <CardTitle className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-900 dark:text-stone-100">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-400/15 text-teal-700 dark:text-teal-300">
@@ -449,7 +566,7 @@ const PassTypeChart = memo(function PassTypeChart() {
 
 const GateActivityFeed = memo(function GateActivityFeed() {
   return (
-    <Card className="rounded-3xl shadow-sm border-0 bg-white dark:bg-[#252836] ring-1 ring-stone-200/70 dark:ring-white/5">
+    <Card className={cardShell}>
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <div>
@@ -545,7 +662,22 @@ export default function DashboardPage() {
   const greeting = useMemo(() => getGreeting(now.getHours()), [now]);
 
   return (
-    <div className="w-full font-sans space-y-6">
+    <div className="relative w-full font-sans">
+      {/* Soft amber halo behind the page — gives every card a "lifted" feel */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 -top-12 h-[420px] bg-gradient-to-b from-amber-200/40 via-amber-50/10 to-transparent dark:from-amber-400/[0.05] dark:via-transparent dark:to-transparent blur-2xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-24 top-40 h-72 w-72 rounded-full bg-orange-300/20 dark:bg-orange-500/[0.04] blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-24 top-[30%] h-80 w-80 rounded-full bg-teal-300/20 dark:bg-teal-500/[0.04] blur-3xl"
+      />
+
+      <div className="relative space-y-6">
       {/* 1 ─ Live Port Status banner */}
       <LivePortStatus now={now} />
 
@@ -557,7 +689,7 @@ export default function DashboardPage() {
             {greeting}
           </div>
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-stone-900 dark:text-stone-100 mb-2">
-            Welcome aboard,{" "}
+            Welcome Company,{" "}
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-orange-500 dark:from-amber-300 dark:to-orange-400">{username}</span>
           </h1>
           <p className="text-base md:text-lg text-stone-600 dark:text-stone-400 max-w-2xl">
@@ -616,7 +748,7 @@ export default function DashboardPage() {
       {(mockUserStatus.isBlacklisted || mockUserStatus.hasPenalties) && (
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           {mockUserStatus.isBlacklisted && (
-            <Card className="rounded-3xl border-0 ring-1 ring-red-200 dark:ring-red-500/30 shadow-sm bg-white dark:bg-[#252836] overflow-hidden lg:col-span-2">
+            <Card className={cardShellAlertRed + " lg:col-span-2"}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl flex items-center justify-center shadow-md shadow-red-500/30 flex-shrink-0">
@@ -660,7 +792,7 @@ export default function DashboardPage() {
           )}
 
           {mockUserStatus.hasPenalties && (
-            <Card className="rounded-3xl border-0 ring-1 ring-amber-200 dark:ring-amber-400/30 shadow-sm bg-white dark:bg-[#252836] overflow-hidden lg:col-span-2">
+            <Card className={cardShellAlertAmber + " lg:col-span-2"}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl flex items-center justify-center shadow-md shadow-amber-500/30 flex-shrink-0">
@@ -725,7 +857,7 @@ export default function DashboardPage() {
       <div className="grid lg:grid-cols-2 gap-6">
         <GateActivityFeed />
 
-        <Card className="rounded-3xl shadow-sm border-0 bg-white dark:bg-[#252836] ring-1 ring-stone-200/70 dark:ring-white/5">
+        <Card className={cardShell}>
           <CardHeader className="flex flex-row items-center justify-between pb-4">
             <div>
               <CardTitle className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-900 dark:text-stone-100">
@@ -788,7 +920,7 @@ export default function DashboardPage() {
       </div>
 
       {/* 7 ─ Transactions */}
-      <Card className="rounded-3xl shadow-sm border-0 bg-white dark:bg-[#252836] ring-1 ring-stone-200/70 dark:ring-white/5">
+      <Card className={cardShell}>
         <CardHeader className="pb-4">
           <CardTitle className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-900 dark:text-stone-100">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300">
@@ -841,6 +973,7 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

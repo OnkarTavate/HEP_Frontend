@@ -47,6 +47,23 @@ const LoginPage = () => {
   const [showForceLogoutDialog, setShowForceLogoutDialog] = useState(false);
   const [forceLogoutLoading, setForceLogoutLoading] = useState(false);
 
+  // Typing animation for the welcome headline (50ms per character)
+  const HEADLINE_LINE1 = "Welcome to the";
+  const HEADLINE_LINE2 = "Chennai Port Gate Automation System";
+  const HEADLINE_FULL = `${HEADLINE_LINE1}\n${HEADLINE_LINE2}`;
+  const [typedHeadline, setTypedHeadline] = useState("");
+
+  useEffect(() => {
+    setTypedHeadline("");
+    let i = 0;
+    const interval = setInterval(() => {
+      i += 1;
+      setTypedHeadline(HEADLINE_FULL.slice(0, i));
+      if (i >= HEADLINE_FULL.length) clearInterval(interval);
+    }, 50);
+    return () => clearInterval(interval);
+  }, []);
+
   // AsmrProg-style card toggle: "signin" shows the Sign-In form, "forgot"
   // slides over to the Forgot-Password form. The orange side panel content
   // updates in lock-step.
@@ -396,9 +413,32 @@ const LoginPage = () => {
                 <Ship className="h-9 w-9 text-white" strokeWidth={2.5} />
               </div>
               <div>
-                <h1 className="text-4xl font-bold text-white leading-none drop-shadow-lg">
+                <h1 className="text-4xl font-bold text-white leading-none drop-shadow-lg chennai-port-glow">
                   Chennai Port
                 </h1>
+                <style jsx>{`
+                  @keyframes chennaiPortBreath {
+                    0%,
+                    100% {
+                      text-shadow: none;
+                    }
+                    50% {
+                      text-shadow:
+                        0 0 6px rgba(96, 165, 250, 0.55),
+                        0 0 14px rgba(59, 130, 246, 0.45),
+                        0 0 28px rgba(37, 99, 235, 0.35);
+                    }
+                  }
+                  .chennai-port-glow {
+                    animation: chennaiPortBreath 3.6s ease-in-out infinite;
+                    will-change: text-shadow;
+                  }
+                  @media (prefers-reduced-motion: reduce) {
+                    .chennai-port-glow {
+                      animation: none;
+                    }
+                  }
+                `}</style>
                 <p className="text-lg font-medium text-orange-300 mt-1">
                   Authority
                 </p>
@@ -406,12 +446,39 @@ const LoginPage = () => {
             </div>
 
             <div className="space-y-6">
-              <h2 className="text-4xl xl:text-5xl font-bold leading-tight text-white drop-shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
-                Welcome to the
-                <br />
-                <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-300 to-amber-200">
-                  Chennai Port Gate Automation System
-                </span>
+              <h2 className="text-4xl xl:text-5xl font-bold leading-tight text-white drop-shadow-[0_4px_20px_rgba(0,0,0,0.5)] min-h-[7rem] xl:min-h-[8.5rem]">
+                {(() => {
+                  const newlineIdx = HEADLINE_FULL.indexOf("\n");
+                  const firstPart = typedHeadline.slice(
+                    0,
+                    Math.min(typedHeadline.length, newlineIdx),
+                  );
+                  const secondPart =
+                    typedHeadline.length > newlineIdx
+                      ? typedHeadline.slice(newlineIdx + 1)
+                      : "";
+                  const onFirstLine = typedHeadline.length <= newlineIdx;
+                  const isDone = typedHeadline.length >= HEADLINE_FULL.length;
+                  return (
+                    <>
+                      {firstPart}
+                      {onFirstLine && !isDone && (
+                        <span className="inline-block w-[2px] h-[0.9em] align-[-0.1em] ml-1 bg-white animate-pulse" />
+                      )}
+                      {!onFirstLine && (
+                        <>
+                          <br />
+                          <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-300 to-amber-200">
+                            {secondPart}
+                          </span>
+                          {!isDone && (
+                            <span className="inline-block w-[2px] h-[0.9em] align-[-0.1em] ml-1 bg-orange-300 animate-pulse" />
+                          )}
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
               </h2>
               <p className="text-base xl:text-lg text-stone-100/90 leading-relaxed max-w-xl drop-shadow">
                 A centralized digital system for controlling and monitoring

@@ -123,13 +123,98 @@ export default function AdminLayout({ children }) {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-orange-50/30 to-amber-50/50">
-        <div className="text-center">
-          <div className="relative inline-block">
-            <Ship className="h-14 w-14 text-primary animate-pulse mx-auto" />
-            <div className="absolute inset-0 h-14 w-14 mx-auto rounded-full bg-primary/20 animate-ping" />
+      <div
+        className={cn(
+          "h-screen w-screen overflow-hidden flex transition-colors duration-300",
+          "bg-[#d8d0c8] dark:bg-[#0d0f17]",
+          darkMode && "dark",
+        )}
+        style={{ fontFamily: "'Montserrat', 'Inter', Arial, sans-serif" }}
+      >
+        <div className="w-full h-full bg-[#f5f1eb] dark:bg-[#1a1d27] flex overflow-hidden">
+          {/* Sidebar silhouette */}
+          <aside className="hidden lg:flex w-64 flex-shrink-0 bg-[#0a0a0a] dark:bg-black border-r border-black/20 dark:border-white/5 p-4 flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center justify-center w-12 h-12 rounded-2xl bg-amber-400 text-[#1f1f1f] shadow-lg shrink-0">
+                <ShieldCheck className="h-6 w-6" strokeWidth={2.5} />
+              </span>
+              <div className="flex flex-col gap-1.5">
+                <span className="block h-3.5 w-24 rounded bg-white/15 animate-pulse" />
+                <span className="block h-2.5 w-20 rounded bg-amber-400/40 animate-pulse" />
+              </div>
+            </div>
+            <div className="mt-6 h-3 w-16 rounded bg-white/10 animate-pulse" />
+            <div className="flex flex-col gap-2.5 mt-2">
+              {[0, 1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-11 rounded-2xl bg-white/5 animate-pulse"
+                  style={{ animationDelay: `${i * 120}ms` }}
+                />
+              ))}
+            </div>
+          </aside>
+
+          {/* Main column */}
+          <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+            {/* Header silhouette */}
+            <header className="px-4 sm:px-6 lg:px-8 pt-4 pb-3 flex items-center justify-between gap-3 shrink-0">
+              <div className="space-y-2">
+                <div className="h-7 sm:h-9 w-44 rounded-lg bg-stone-300/70 dark:bg-white/10 animate-pulse" />
+                <div className="h-3 w-56 rounded bg-stone-300/50 dark:bg-white/5 animate-pulse" />
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="hidden md:block h-10 w-72 rounded-full bg-white dark:bg-white/5 dark:border dark:border-white/10 animate-pulse" />
+                <div className="h-10 w-10 rounded-full bg-white dark:bg-white/5 dark:border dark:border-white/10 animate-pulse" />
+                <div className="h-10 w-10 rounded-full bg-white dark:bg-white/5 dark:border dark:border-white/10 animate-pulse" />
+                <div className="h-12 w-32 rounded-2xl bg-black/90 dark:bg-white/5 dark:border dark:border-white/10 animate-pulse" />
+              </div>
+            </header>
+
+            {/* Content skeleton */}
+            <main className="flex-1 px-4 sm:px-6 lg:px-8 pb-4 min-h-0 overflow-hidden">
+              <div className="relative h-full w-full">
+                <div className="h-14 rounded-3xl bg-gradient-to-r from-[#1a1d27] via-[#252836] to-[#1a1d27] dark:from-black dark:via-[#1a1d27] dark:to-black animate-pulse mb-4" />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+                  <div
+                    className="h-56 rounded-3xl bg-[#d6cebf] dark:bg-[#272a36] animate-pulse lg:col-span-2"
+                    style={{ animationDelay: "100ms" }}
+                  />
+                  <div
+                    className="h-56 rounded-3xl bg-[#1f232d] dark:bg-[#1f232d] animate-pulse"
+                    style={{ animationDelay: "180ms" }}
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div
+                    className="h-40 rounded-3xl bg-white dark:bg-[#1f232d] ring-1 ring-stone-200/60 dark:ring-white/5 animate-pulse"
+                    style={{ animationDelay: "220ms" }}
+                  />
+                  <div
+                    className="h-40 rounded-3xl bg-white dark:bg-[#1f232d] ring-1 ring-stone-200/60 dark:ring-white/5 animate-pulse"
+                    style={{ animationDelay: "300ms" }}
+                  />
+                </div>
+
+                <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center">
+                  <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-white/85 dark:bg-[#1f232d]/90 backdrop-blur-md ring-1 ring-stone-200/70 dark:ring-white/10 shadow-lg">
+                    <span className="relative flex h-7 w-7 items-center justify-center rounded-xl bg-amber-400 text-[#1f1f1f] shrink-0">
+                      <ShieldCheck className="h-4 w-4" strokeWidth={2.5} />
+                      <span className="absolute inset-0 rounded-xl ring-2 ring-amber-400/60 animate-ping" />
+                    </span>
+                    <span className="text-sm font-semibold text-stone-700 dark:text-stone-200 tracking-wide">
+                      Loading admin console
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce [animation-delay:-0.3s]" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce [animation-delay:-0.15s]" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce" />
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </main>
           </div>
-          <p className="text-slate-500 mt-6">Loading Admin...</p>
         </div>
       </div>
     );
