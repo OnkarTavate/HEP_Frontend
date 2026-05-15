@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import Select from "react-select";
@@ -15,17 +16,25 @@ import {
   Plus,
   Upload,
   Search,
-  FileText,
-  ShieldCheck,
   Phone,
   UserPlus,
   BookOpen,
   FileCheck2,
   CheckCircle2,
   Eye,
+  Ship,
+  AlertTriangle,
+  Loader2,
+  FileText,
+  ShieldCheck,
 } from "lucide-react";
+import {
+  getPublicIntake,
+  submitPublicVendorForm,
+} from "@/lib/vendorPassApi";
 
-const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
+const AGENT_API =
+  process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
 const getCurrentDateTime = () => {
   const now = new Date();
@@ -37,14 +46,10 @@ const getCurrentDateTime = () => {
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 };
 
-// All passes — daily, monthly, yearly — must expire at 05:59 AM on the
-// computed end date, regardless of the time selected for dateFrom.
-const PASS_EXPIRY_TIME = "05:59";
-
 const calculateDateTo = (fromDate, period, type) => {
   if (!fromDate || !period) return "";
 
-  const [datePart] = String(fromDate).split("T");
+  const [datePart, timePart = "00:00"] = String(fromDate).split("T");
   const [year, month, day] = datePart.split("-").map(Number);
   if (!year || !month || !day) return "";
 
@@ -64,17 +69,34 @@ const calculateDateTo = (fromDate, period, type) => {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
-  // Always lock the expiry time to 05:59 AM (port pass cutoff).
-  return `${yyyy}-${mm}-${dd}T${PASS_EXPIRY_TIME}`;
+  return `${yyyy}-${mm}-${dd}T${timePart}`; // carries same time as dateFrom
 };
 
 const getLabelById = (arr, val, key = "label") => {
   if (!val) return "";
-  if (!Array.isArray(arr)) return val;
-  const item = arr.find(
-    (x) => String(x.id) === String(val) || String(x.value) === String(val),
-  );
-  return item ? item[key] || item.name : val;
+  const item = arr.find((x) => String(x.id || x.value) === String(val));
+  return item ? item[key] || item.label || item.name : "";
+};
+
+const getFilteredPassTypes = (intakeData, passTypesData) => {
+  if (!intakeData) return passTypesData;
+  if (intakeData.allowAuctionPassOnly) {
+    // Only show Auction pass type - add it if not present
+    const auctionPass = passTypesData.find(
+      (t) => (t.label || t.name || "").toUpperCase() === "AUCTION"
+    );
+    if (auctionPass) {
+      return [auctionPass];
+    } else {
+      // Add Auction pass type manually if not in backend data
+      return [{ id: "4", value: "AUCTION", label: "Auction" }];
+    }
+  } else {
+    // Filter out Auction pass type
+    return passTypesData.filter(
+      (t) => (t.label || t.name || "").toUpperCase() !== "AUCTION"
+    );
+  }
 };
 
 const validateFile = (file, type) => {
@@ -203,14 +225,21 @@ const DetailItem = ({ label, value, highlight = false }) => (
   </div>
 );
 
-export default function PassRequestPage() {
-  const [activeTab, setActiveTab] = useState("apply");
+export default function VendorPassPublicPage() {
+  const params = useParams();
+  const router = useRouter();
+  const token = params?.token;
+
+  // Intake (department-provided context)
+  const [intake, setIntake] = useState(null);
+  const [intakeLoading, setIntakeLoading] = useState(true);
+  const [intakeError, setIntakeError] = useState("");
+
+  // Vendor flow has no tabs / no history view
+  const [activeTab] = useState("apply");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [paymentMode, setPaymentMode] = useState("Account");
-  const [loadingPasses, setLoadingPasses] = useState(false);
-  const [currentUser, setCurrentUser] = useState({});
-  const [selectedPassDetails, setSelectedPassDetails] = useState(null);
   const [modals, setModals] = useState({
     person: false,
     vehicle: false,
@@ -225,7 +254,6 @@ export default function PassRequestPage() {
 
   const [persons, setPersons] = useState([]);
   const [vehicles, setVehicles] = useState([]);
-  const [submittedPasses, setSubmittedPasses] = useState([]);
 
   const [editingPersonIndex, setEditingPersonIndex] = useState(null);
   const [editingVehicleIndex, setEditingVehicleIndex] = useState(null);
@@ -252,7 +280,7 @@ export default function PassRequestPage() {
     companyName: "Loading...",
     email: "Loading...",
     mobile: "Loading...",
-    balance: "7725.00", // Keep mock for now if wallet isn't built
+    balance: "7725.00",
     utilizedBalance: "0.00",
     purpose: "",
     purposeOther: "",
@@ -279,9 +307,6 @@ export default function PassRequestPage() {
     accessArea: "",
     designation: "",
     designationOther: "",
-    cdcNumber: "",
-    cdcDocument: null,
-    declarationForm: null,
     idProofType: "",
     idProofNumber: "",
     photo: null,
@@ -371,22 +396,60 @@ export default function PassRequestPage() {
     ],
   });
 
+  // Fetch vendor intake by token; pre-fill general form from intake
   useEffect(() => {
-    try {
-      const userStr = localStorage.getItem("user");
-      if (userStr) {
-        setCurrentUser(JSON.parse(userStr));
+    if (!token) return;
+    let alive = true;
+    (async () => {
+      try {
+        setIntakeLoading(true);
+        const data = await getPublicIntake(token);
+        if (!alive) return;
+        setIntake(data);
+        setIntakeError("");
+        setGeneralForm((prev) => ({
+          ...prev,
+          companyName: data.companyName || "",
+          email: data.vendorEmail || "",
+          mobile: data.vendorMobile || "",
+          purpose: data.purposeOfVisitId ? String(data.purposeOfVisitId) : "",
+          purposeOther: data.purposeOther || "",
+          visitorType: data.visitorTypeId ? String(data.visitorTypeId) : "",
+          visitorTypeOther: data.visitorTypeOther || "",
+          hasWorkOrder: data.hasWorkOrder || false,
+          refDocNo: data.refDocNo || "",
+          equipmentMaterialDetails: data.equipmentMaterialDetails || "",
+          remarks: data.remarks || "",
+          authLetter: null,
+        }));
+        if (data.paymentMode === "FREE") setPaymentMode("E-Cash");
+        if (data.workOrderFilePath) {
+          setGeneralForm((prev) => ({
+            ...prev,
+            workOrderFile: { name: data.workOrderFileName },
+          }));
+        }
+      } catch (err) {
+        if (!alive) return;
+        console.error("Vendor intake fetch failed:", err);
+        setIntakeError(
+          err?.response?.data?.message ||
+            err?.message ||
+            "This link is invalid or has expired."
+        );
+      } finally {
+        if (alive) setIntakeLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to parse user from local storage", error);
-    }
-  }, []);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [token]);
 
   useEffect(() => {
     const fetchMasterData = async () => {
       try {
-        const token = localStorage.getItem("accessToken");
-        const config = { headers: { Authorization: `Bearer ${token}` } };
+        const config = {};
 
         const [natRes, passRes, idRes, accessRes, desigRes, vehRes] =
           await Promise.all([
@@ -433,84 +496,8 @@ export default function PassRequestPage() {
     fetchMasterData();
   }, []);
 
-  // --- FETCH LOGGED-IN AGENT PROFILE ---
-  useEffect(() => {
-    const fetchAgentProfile = async () => {
-      try {
-        let token = localStorage.getItem("accessToken");
-        if (!token) return;
-
-        // Remove extra quotes if present
-        token = token.replace(/^["']|["']$/g, "");
-
-        // Call your backend agent profile route
-        const response = await axios.get(`${AGENT_API}/agents/profile`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (response.data && response.data.success) {
-          const agentData = response.data.data;
-
-          // Populate the General Form with the DB data
-          setGeneralForm((prev) => ({
-            ...prev,
-            companyName: agentData.entityName || "N/A",
-            email: agentData.email || "N/A",
-            mobile: agentData.mobileNo || "N/A",
-          }));
-        }
-      } catch (error) {
-        console.error("Failed to fetch agent profile:", error);
-        toast.error("Failed to load company profile data.");
-
-        // Fallback if API fails
-        setGeneralForm((prev) => ({
-          ...prev,
-          companyName: "Error loading profile",
-          email: "-",
-          mobile: "-",
-        }));
-      }
-    };
-
-    fetchAgentProfile();
-  }, []);
-
-  useEffect(() => {
-    const fetchMasterRecords = async () => {
-      try {
-        let token = localStorage.getItem("accessToken");
-        if (!token) return;
-
-        token = token.replace(/^["']|["']$/g, "");
-
-        const res = await axios.get(
-          `${AGENT_API}/pass-request/my-master-records`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-
-        if (res.data?.success) {
-          const persons = res.data.data.persons || [];
-          const vehicles = res.data.data.vehicles || [];
-
-          const pDict = {};
-          persons.forEach((p) => (pDict[p.id] = p));
-
-          const vDict = {};
-          vehicles.forEach((v) => (vDict[v.id] = v));
-
-          setMasterPersonsDB(pDict);
-          setMasterVehiclesDB(vDict);
-        }
-      } catch (err) {
-        console.error("Master records fetch failed", err);
-      }
-    };
-
-    fetchMasterRecords();
-  }, []);
+  // Agent profile + master records useEffects intentionally omitted —
+  // the vendor flow has no logged-in agent and no saved master directory.
 
   const toggleModal = (modalName, state) => {
     setModals({ ...modals, [modalName]: state });
@@ -610,128 +597,6 @@ export default function PassRequestPage() {
       }
     }
   }, [personForm.nationality, masterData.nationalities]);
-
-  const fetchSubmittedPasses = async () => {
-    setLoadingPasses(true);
-    try {
-      const token = localStorage.getItem("accessToken");
-
-      if (!token) {
-        toast.error("Authentication token missing. Please log in again.");
-        setLoadingPasses(false);
-        return;
-      }
-
-      const response = await axios.get(
-        `${AGENT_API}/pass-request/my-pass-requests`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-
-      if (response.data && response.data.success) {
-        setSubmittedPasses(response.data.data);
-      } else {
-        setSubmittedPasses([]);
-      }
-    } catch (error) {
-      console.error("Error fetching pass requests:", error);
-      toast.error(
-        error.response?.data?.message || "Failed to load submitted passes.",
-      );
-      setSubmittedPasses([]);
-    } finally {
-      setLoadingPasses(false);
-    }
-  };
-
-  // Trigger fetch when "view" tab is selected
-  useEffect(() => {
-    if (activeTab === "view") {
-      fetchSubmittedPasses();
-    }
-  }, [activeTab]);
-
-  const handlePrintQR = async (entity, type) => {
-    // Extract IDs safely based on how your DB returns them
-    const passRequestId =
-      selectedPassDetails?.id || selectedPassDetails?.passId;
-    const entityId = entity?.id || entity?.person_id || entity?.vehicle_id;
-
-    if (!passRequestId || !entityId) {
-      toast.error("Missing pass or entity ID. Cannot generate QR.");
-      return;
-    }
-
-    toast.info(`Generating QR for ${type}...`);
-
-    try {
-      let token = localStorage.getItem("accessToken");
-      if (token) token = token.replace(/^["']|["']$/g, "");
-
-      // Directing explicitly to your QR Service on Port 5007
-      const QR_SERVICE_URL =
-        process.env.NEXT_PUBLIC_QR_API || "http://localhost:5007/api";
-
-      const response = await axios.get(
-        `${QR_SERVICE_URL}/qr/generate-pass/${passRequestId}?type=${type}&entityId=${entityId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          responseType: "blob", // CRITICAL: Tells Axios to handle a PDF file, not JSON
-        },
-      );
-
-      // Create a URL for the downloaded PDF blob
-      const pdfBlob = new Blob([response.data], { type: "application/pdf" });
-      const pdfUrl = URL.createObjectURL(pdfBlob);
-
-      // ==========================================
-      // NEW LOGIC: Print seamlessly in the same tab
-      // ==========================================
-
-      // 1. Create an invisible iframe
-      const iframe = document.createElement("iframe");
-      iframe.style.display = "none";
-      iframe.src = pdfUrl;
-
-      // 2. Append it to the document body
-      document.body.appendChild(iframe);
-
-      // 3. Wait for the PDF to load, then trigger the print dialog
-      iframe.onload = () => {
-        // Triggers the native browser print popup seamlessly
-        iframe.contentWindow.print();
-
-        // Clean up the DOM and memory after a minute
-        setTimeout(() => {
-          document.body.removeChild(iframe);
-          URL.revokeObjectURL(pdfUrl);
-        }, 60000);
-      };
-    } catch (error) {
-      let errorMessage = "Failed to generate QR pass.";
-
-      // If the backend fails, it sends JSON wrapped in a Blob. We must decode it.
-      if (error.response && error.response.data) {
-        if (error.response.data instanceof Blob) {
-          const text = await error.response.data.text();
-          try {
-            const json = JSON.parse(text);
-            errorMessage = json.message || errorMessage;
-          } catch (e) {
-            errorMessage = text;
-          }
-        } else {
-          errorMessage = error.response.data.message || errorMessage;
-        }
-      }
-
-      toast.error(`QR Error: ${errorMessage}`);
-      console.error("QR Generation Error:", error);
-    }
-  };
 
   const calculateTotals = () => {
     let base = 0;
@@ -1145,23 +1010,27 @@ export default function PassRequestPage() {
   };
 
   const handleSubmitRequest = async () => {
-    if (!generalForm.purpose)
-      return toast.warning("Please select a Purpose of Visit.");
-    if (!generalForm.authLetter)
-      return toast.warning("Please upload the Authorised Letter.");
+    if (!intake) return toast.error("Intake not loaded.");
     if (!agreedToTerms)
       return toast.warning("Please agree to the Terms and Conditions.");
     if (persons.length === 0 && vehicles.length === 0)
       return toast.warning("Add at least one person or vehicle.");
 
+    // Enforce intake quotas
+    if (persons.length > Number(intake.noOfPersonsAllowed || 0)) {
+      return toast.error(
+        `You can submit at most ${intake.noOfPersonsAllowed} persons.`
+      );
+    }
+    if (vehicles.length > Number(intake.noOfVehiclesAllowed || 0)) {
+      return toast.error(
+        `You can submit at most ${intake.noOfVehiclesAllowed} vehicles.`
+      );
+    }
+
     setLoading(true);
 
     try {
-      // 1. CLEAN TOKEN: Prevents malformed JWT backend crashes
-      let token = localStorage.getItem("accessToken");
-      if (token) token = token.replace(/^["']|["']$/g, "");
-
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
       const formData = new FormData();
 
       const finalPurpose =
@@ -1169,29 +1038,19 @@ export default function PassRequestPage() {
           ? 6
           : parseInt(generalForm.purpose, 10);
 
-      // 2. SAFE EXTRACTION: Prevent undefined values breaking the DB insertion
       const getEnumValue = (arr, id, fallback) => {
         if (!id) return fallback;
-
         const item = arr.find(
           (x) => String(x.id) === String(id) || String(x.value) === String(id),
         );
-
         let value = item ? item.value || item.label || item.name : fallback;
-
-        // 🔧 FIX: convert YEARLY → ANNUAL to match DB enum
         if (value === "YEARLY") value = "ANNUAL";
-
         return value;
       };
 
-      // =========================
-      // PERSONS
-      // =========================
       const formattedPersons = persons.map((p) => {
         if (!p.dateFrom)
           throw new Error(`DateFrom missing for person ${p.name}`);
-
         const computedDateTo = calculateDateTo(
           p.dateFrom,
           p.passPeriod,
@@ -1199,7 +1058,6 @@ export default function PassRequestPage() {
         );
         if (!computedDateTo)
           throw new Error(`DateTo not calculated for person ${p.name}`);
-
         return {
           rateId: 1,
           hepTypeId: parseInt(p.hepType, 10) || 2,
@@ -1235,13 +1093,9 @@ export default function PassRequestPage() {
         };
       });
 
-      // =========================
-      // VEHICLES
-      // =========================
       const formattedVehicles = vehicles.map((v) => {
         if (!v.dateFrom)
           throw new Error(`DateFrom missing for vehicle ${v.regNo}`);
-
         const computedDateTo = calculateDateTo(
           v.dateFrom,
           v.passPeriod,
@@ -1249,7 +1103,6 @@ export default function PassRequestPage() {
         );
         if (!computedDateTo)
           throw new Error(`DateTo not calculated for vehicle ${v.regNo}`);
-
         return {
           rateId: 2,
           vehicleTypeId: parseInt(v.type, 10) || 1,
@@ -1270,32 +1123,17 @@ export default function PassRequestPage() {
         };
       });
 
-      // =========================
-      // PAYLOAD
-      // =========================
-      const requestPayload = {
-        // agentId: parseInt(user.id, 10) || parseInt(user.agentId, 10) || 1,
-        purposeOfVisitId: finalPurpose,
-        paymentMode: paymentMode.toUpperCase(),
-        // 3. INJECT MISSING TOTALS required by your PostgreSQL Schema
-        baseTotal: parseFloat(totals.base) || 0.0,
-        grossTotal: parseFloat(totals.base) || 0.0,
-        gstAmount: parseFloat(totals.gst) || 0.0,
-        netAmount: parseFloat(totals.net) || 0.0,
-        persons: formattedPersons,
-        vehicles: formattedVehicles,
-      };
+      // Vendor payload — no authLetter, no agentId
+      formData.append("persons", JSON.stringify(formattedPersons));
+      formData.append("vehicles", JSON.stringify(formattedVehicles));
+      formData.append("purposeOfVisitId", String(finalPurpose || ""));
+      formData.append("paymentMode", paymentMode.toUpperCase());
+      formData.append("baseTotal", String(parseFloat(totals.base) || 0.0));
+      formData.append("grossTotal", String(parseFloat(totals.base) || 0.0));
+      formData.append("gstAmount", String(parseFloat(totals.gst) || 0.0));
+      formData.append("netAmount", String(parseFloat(totals.net) || 0.0));
 
-      formData.append("payload", JSON.stringify(requestPayload));
-      formData.append("authLetter", generalForm.authLetter);
-
-      // =========================
-      // FILES APPENDING
-      // =========================
-
-      // ===== CHANGE START =====
-      // Send files for every person (indexed)
-
+      // Files
       persons.forEach((p) => {
         if (p.photo) formData.append("personPhoto", p.photo);
         if (p.aadharFile) formData.append("personAadhar", p.aadharFile);
@@ -1309,12 +1147,7 @@ export default function PassRequestPage() {
           formData.append("employmentProof", p.proofOfEmployment);
         if (p.copyOfLicence) formData.append("chaLicenseCopy", p.copyOfLicence);
         if (p.passportDoc) formData.append("passportDoc", p.passportDoc);
-        if (p.cdcDocument) formData.append("cdcDocument", p.cdcDocument);
-        if (p.declarationForm)
-          formData.append("declarationForm", p.declarationForm);
       });
-
-      // Send files for every vehicle
 
       vehicles.forEach((v) => {
         if (v.rcDocument) formData.append("vehicleRC", v.rcDocument);
@@ -1327,35 +1160,25 @@ export default function PassRequestPage() {
         if (v.taxDoc) formData.append("vehicleTax", v.taxDoc);
         if (v.emissionCert) formData.append("vehicleEmission", v.emissionCert);
       });
-      // ===== CHANGE END =====
 
       const response = await axios.post(
-        `${AGENT_API}/pass-request/createPassRequest`,
+        `${AGENT_API}/vendor-pass/public/${token}/submit`,
         formData,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
+        { headers: { "Content-Type": "multipart/form-data" } }
       );
 
-      if (response.data) {
-        toast.success("Request Submitted Successfully!");
-
-        setSubmittedPasses([
-          {
-            passId: `REQ-${Math.floor(Math.random() * 10000)}`,
-            applicant: user.firstName || "Applicant",
-            status: "Pending Approval",
-            createdAt: new Date().toISOString(),
-            paymentMode: paymentMode.toUpperCase(),
-            netAmount: totals.net,
-          },
-          ...submittedPasses,
-        ]);
-
+      if (response.data?.success) {
+        toast.success("Application Submitted Successfully!", {
+          description: response.data.data?.referenceNo
+            ? `Reference ${response.data.data.referenceNo}`
+            : undefined,
+        });
         setPersons([]);
         setVehicles([]);
         setAgreedToTerms(false);
-        setActiveTab("view");
+        router.push(`/vendor_pass/${token}/submitted`);
+      } else {
+        toast.error(response.data?.message || "Submission failed.");
       }
     } catch (error) {
       toast.error(
@@ -1514,162 +1337,112 @@ export default function PassRequestPage() {
     ? `Enter ${currentIdProofName} No`
     : "Enter Identification Proof number";
 
-  return (
-    <div className="space-y-6 font-sans w-full text-slate-800 dark:text-stone-200">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-[#0a1e4d] dark:text-white">Pass Request</h2>
-          <p className="text-base text-slate-500 dark:text-stone-300 font-medium">
-            Apply for new harbor entry permits
+  // Loading guard
+  if (intakeLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex items-center gap-3 text-slate-600">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span className="text-sm font-medium">Validating link…</span>
+        </div>
+      </div>
+    );
+  }
+  if (intakeError || !intake) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="bg-white border border-red-200 rounded-2xl shadow-sm max-w-md w-full p-8 text-center space-y-3">
+          <AlertTriangle className="h-10 w-10 text-red-500 mx-auto" />
+          <h2 className="text-lg font-bold text-[#0a1e4d]">Link Unavailable</h2>
+          <p className="text-sm text-slate-600">
+            {intakeError || "This link is no longer active."}
           </p>
         </div>
-        {/* <div className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-3 shadow-sm text-[#0a1e4d]">
-          <Wallet className="h-5 w-5 text-orange-500" /> Wallet Balance:{" "}
-          <span className="text-lg">₹{generalForm.balance}</span>
-        </div> */}
       </div>
+    );
+  }
 
-      <div className="flex border-b border-slate-300 dark:border-white/10">
-        <button
-          onClick={() => setActiveTab("apply")}
-          className={`px-8 py-4 text-base transition-all ${activeTab === "apply" ? "font-bold text-[#0a1e4d] dark:text-white border-b-2 border-[#0a1e4d] dark:border-white" : "font-semibold text-slate-500 dark:text-stone-400 hover:text-[#0a1e4d] dark:hover:text-white"}`}
-        >
-          Apply New Pass
-        </button>
-        <button
-          onClick={() => setActiveTab("view")}
-          className={`px-8 py-4 text-base transition-all ${activeTab === "view" ? "font-bold text-[#0a1e4d] dark:text-white border-b-2 border-[#0a1e4d] dark:border-white" : "font-semibold text-slate-500 dark:text-stone-400 hover:text-[#0a1e4d] dark:hover:text-white"}`}
-        >
-          View Submitted Passes
-        </button>
-      </div>
-
-      {activeTab === "apply" && (
-        <div className="space-y-8 animate-in fade-in duration-300">
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-              <h3 className="font-black text-[#0a1e4d] flex items-center gap-2 uppercase text-sm tracking-wider">
-                <Info className="h-5 w-5 text-orange-500" /> General Details
-              </h3>
-              <button
-                onClick={() => toggleModal("rateCard", true)}
-                className="bg-white text-[#0a1e4d] px-4 py-2 rounded-lg border border-slate-200 text-xs font-bold hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm"
-              >
-                <Calculator className="h-4 w-4 text-orange-500" /> View Rate
-                Card
-              </button>
+  return (
+    <div className="min-h-screen bg-slate-50 py-8">
+      <div className="space-y-6 font-sans max-w-7xl mx-auto px-4 text-slate-800">
+        {/* Vendor public header */}
+        <header className="bg-gradient-to-r from-[#0a1e4d] to-[#1a2f64] text-white rounded-2xl p-6 shadow-lg flex flex-col md:flex-row justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="bg-white/10 p-3 rounded-xl">
+              <Ship className="h-7 w-7 text-orange-400" />
             </div>
-            <div className="p-6">
-              <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-                <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Company Name
-                  </p>
-                  <p className="text-sm font-bold text-[#0a1e4d] mt-1">
-                    {generalForm.companyName}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Email ID
-                  </p>
-                  <p className="text-sm font-semibold text-slate-700 mt-1">
-                    {generalForm.email}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Mobile No
-                  </p>
-                  <p className="text-sm font-semibold text-slate-700 mt-1">
-                    +91 {generalForm.mobile}
-                  </p>
-                </div>
-                {/* <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Utilized Balance
-                  </p>
-                  <p className="text-sm font-black text-red-600 mt-1">
-                    ₹ {generalForm.utilizedBalance}
-                  </p>
-                </div> */}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Purpose of Visit <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={generalForm.purpose}
-                    onChange={(e) =>
-                      setGeneralForm({
-                        ...generalForm,
-                        purpose: e.target.value,
-                      })
-                    }
-                    className={inputClass}
-                  >
-                    <option value="">Select Purpose</option>
-                    {masterData.purposes.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                  {String(generalForm.purpose) === "6" && (
-                    <input
-                      type="text"
-                      onChange={(e) =>
-                        setGeneralForm({
-                          ...generalForm,
-                          purposeOther: e.target.value,
-                        })
-                      }
-                      className={`${inputClass} mt-3 animate-in fade-in`}
-                      placeholder="Specify other purpose..."
-                    />
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Authorised Letter Copy{" "}
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <label className="w-full h-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-lg px-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors group">
-                    <Upload className="h-4 w-4 text-slate-400 group-hover:text-orange-500" />
-                    <span className="text-sm text-slate-600 font-medium truncate group-hover:text-orange-600">
-                      {generalForm.authLetter
-                        ? generalForm.authLetter.name
-                        : "Upload PDF/JPG (Max 2MB)"}
-                    </span>
-                    <input
-                      className="hidden"
-                      type="file"
-                      accept="application/pdf" // 🔥 restrict file picker
-                      onChange={(e) => {
-                        const file = e.target.files[0];
-
-                        const error = validateFile(file, "pdf"); // 🔥 reuse your validator
-
-                        if (error) {
-                          toast.error(error);
-                          e.target.value = ""; // reset input
-                          return;
-                        }
-
-                        setGeneralForm({
-                          ...generalForm,
-                          authLetter: file,
-                        });
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
+            <div>
+              <p className="text-xs uppercase tracking-widest text-slate-300 font-semibold">
+                Chennai Port Authority — Vendor Pass Application
+              </p>
+              <h2 className="text-2xl font-bold mt-1">
+                {intake.companyName || "Vendor"}
+              </h2>
+              <p className="text-xs text-slate-300 mt-1">
+                Ref: <span className="font-mono">{intake.referenceNo}</span>{" "}
+                · Dept: {intake.departmentName}
+              </p>
             </div>
-          </section>
+          </div>
+          <div className="flex flex-col items-start md:items-end gap-2 text-sm">
+            <span className="bg-amber-400 text-[#0a1e4d] font-bold px-3 py-1 rounded-lg">
+              Valid Till: {intake.validUpto}
+            </span>
+            <span className="text-xs text-slate-300">
+              Persons Allowed: <b>{intake.noOfPersonsAllowed}</b> · Vehicles
+              Allowed: <b>{intake.noOfVehiclesAllowed}</b>
+            </span>
+          </div>
+        </header>
 
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+        {activeTab === "apply" && (
+          <div className="space-y-8 animate-in fade-in duration-300">
+            {/* General Information Section */}
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+              <div className="px-6 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
+                <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wide flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-orange-500" /> General Information:
+                </h3>
+              </div>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <DetailItem label="Department Name" value={intake.departmentName} highlight />
+                <DetailItem label="Pass Type" value={intake.passApplyMode} />
+                <DetailItem label="Type of Visitors" value={generalForm.visitorType ? getLabelById(masterData.purposes, generalForm.visitorType) : "-"} />
+                {generalForm.visitorType === "6" && (
+                  <DetailItem label="Visitor Type (Other)" value={generalForm.visitorTypeOther} />
+                )}
+                <DetailItem label="Purpose of Visit" value={generalForm.purpose ? getLabelById(masterData.purposes, generalForm.purpose) : "-"} />
+                {generalForm.purpose === "6" && (
+                  <DetailItem label="Purpose (Other)" value={generalForm.purposeOther} />
+                )}
+                <DetailItem label="Company Name" value={generalForm.companyName} highlight />
+                <DetailItem label="Vendor Mobile" value={generalForm.mobile} />
+                <DetailItem label="Vendor Email" value={generalForm.email} />
+                <DetailItem label="Work Order" value={generalForm.hasWorkOrder ? "Yes" : "No"} />
+                {generalForm.hasWorkOrder && (
+                  <>
+                    <DetailItem label="Ref Doc No / PO No / Work Order No" value={generalForm.refDocNo} />
+                    {generalForm.workOrderFile && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Work Order Copy</span>
+                        <span className="text-sm font-semibold text-slate-700">{generalForm.workOrderFile.name}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                <DetailItem label="Equipment/Material Details" value={generalForm.equipmentMaterialDetails} />
+                <DetailItem label="Remarks" value={generalForm.remarks} />
+                <DetailItem label="No. of Vehicles Allowed" value={intake.noOfVehiclesAllowed} highlight />
+                <DetailItem label="No. of Persons Allowed" value={intake.noOfPersonsAllowed} highlight />
+                <DetailItem label="Validity Upto" value={intake.validUpto} highlight />
+                <DetailItem label="Payment Mode" value={intake.paymentMode} />
+                {intake.allowAuctionPassOnly && (
+                  <DetailItem label="Auction Pass Only" value="Yes" highlight />
+                )}
+              </div>
+            </section>
+
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
             <div className="px-6 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
               <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wide flex items-center gap-2">
                 <Users className="h-5 w-5 text-orange-500" /> Detail of Persons:
@@ -1810,7 +1583,12 @@ export default function PassRequestPage() {
             <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
               <button
                 onClick={openAddPersonModal}
-                className="bg-orange-600 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-orange-700 transition-all uppercase tracking-wider"
+                disabled={persons.length >= (intake?.noOfPersonsAllowed || 0)}
+                className={`text-xs font-bold px-6 py-3 rounded-xl shadow-lg transition-all uppercase tracking-wider ${
+                  persons.length >= (intake?.noOfPersonsAllowed || 0)
+                    ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                    : "bg-orange-600 text-white hover:bg-orange-700"
+                }`}
               >
                 Add Person
               </button>
@@ -1932,7 +1710,12 @@ export default function PassRequestPage() {
             <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
               <button
                 onClick={openAddVehicleModal}
-                className="bg-orange-600 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-orange-700 transition-all uppercase tracking-wider"
+                disabled={vehicles.length >= (intake?.noOfVehiclesAllowed || 0)}
+                className={`text-xs font-bold px-6 py-3 rounded-xl shadow-lg transition-all uppercase tracking-wider ${
+                  vehicles.length >= (intake?.noOfVehiclesAllowed || 0)
+                    ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                    : "bg-orange-600 text-white hover:bg-orange-700"
+                }`}
               >
                 Add Vehicle
               </button>
@@ -2026,159 +1809,6 @@ export default function PassRequestPage() {
         </div>
       )}
 
-      {/* VIEW SUBMITTED PASSES TAB */}
-      {activeTab === "view" && (
-        <div className="space-y-8 animate-in fade-in duration-300">
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-              <h3 className="font-black text-[#0a1e4d] flex items-center gap-2 uppercase text-sm tracking-wider">
-                <FileText className="h-5 w-5 text-orange-500" /> My Pass
-                Requests
-              </h3>
-              <button
-                onClick={fetchSubmittedPasses}
-                disabled={loadingPasses}
-                className="bg-white text-[#0a1e4d] px-4 py-2 rounded-lg border border-slate-200 text-xs font-bold hover:bg-slate-50 disabled:opacity-50 transition-colors flex items-center gap-2 shadow-sm"
-              >
-                {loadingPasses ? "Refreshing..." : "Refresh List"}
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-[#0a1e4d] text-white">
-                  <tr>
-                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider">
-                      Request ID
-                    </th>
-                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider">
-                      Application Date
-                    </th>
-                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider">
-                      Payment Mode
-                    </th>
-                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider text-right">
-                      Net Amount
-                    </th>
-                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider text-center">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {loadingPasses ? (
-                    <tr>
-                      <td
-                        colSpan="6"
-                        className="p-12 text-center text-sm font-bold text-slate-400"
-                      >
-                        <div className="flex justify-center items-center gap-2">
-                          <span className="animate-pulse">
-                            Loading pass records...
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : submittedPasses.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan="6"
-                        className="p-12 text-center text-sm font-medium text-slate-400 italic"
-                      >
-                        No pass requests found in the database.
-                      </td>
-                    </tr>
-                  ) : (
-                    submittedPasses.map((pass, idx) => {
-                      // Robust DB mapping handling camelCase, snake_case, and flat text from PostgreSQL
-                      const passIdStr = pass.referenceNo
-                        ? pass.referenceNo
-                        : pass.id
-                          ? `REQ-${pass.id}`
-                          : pass.passId || `REQ-XXXX`;
-
-                      const createdAtStr =
-                        pass.createdAt ||
-                        pass.created_at ||
-                        pass.createdat ||
-                        pass.submittedAt ||
-                        pass.submitted_at ||
-                        pass.submittedat;
-
-                      const paymentModeStr =
-                        pass.paymentMode ||
-                        pass.payment_mode ||
-                        pass.paymentmode ||
-                        "-";
-
-                      const netAmountVal =
-                        pass.netAmount ||
-                        pass.net_amount ||
-                        pass.netamount ||
-                        pass.baseTotal ||
-                        pass.basetotal ||
-                        "0.00";
-
-                      const currentStatus = (
-                        pass.status || "PENDING"
-                      ).toUpperCase();
-
-                      const isApproved =
-                        currentStatus === "APPROVED" ||
-                        currentStatus === "ISSUED";
-
-                      return (
-                        <tr
-                          key={pass.id || idx}
-                          onClick={() => setSelectedPassDetails(pass)}
-                          className="hover:bg-blue-50/50 transition-colors cursor-pointer"
-                        >
-                          <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d] border-r border-slate-100">
-                            {passIdStr}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-slate-600 font-medium border-r border-slate-100">
-                            {createdAtStr
-                              ? new Date(createdAtStr).toLocaleString("en-IN", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : "-"}
-                          </td>
-                          <td className="px-6 py-4 text-sm font-bold text-slate-600 border-r border-slate-100">
-                            {paymentModeStr}
-                          </td>
-                          <td className="px-6 py-4 text-sm font-black text-[#0a1e4d] text-right border-r border-slate-100">
-                            ₹ {parseFloat(netAmountVal).toFixed(2)}
-                          </td>
-                          <td className="px-6 py-4 text-center border-r border-slate-100">
-                            <span
-                              className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                                currentStatus === "SUBMITTED"
-                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                  : isApproved
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                    : currentStatus === "REJECTED"
-                                      ? "bg-red-50 text-red-700 border border-red-200"
-                                      : "bg-amber-50 text-amber-700 border border-amber-200"
-                              }`}
-                            >
-                              {currentStatus}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-      )}
-
       {/* PERSON MODAL */}
       {modals.person && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
@@ -2203,30 +1833,9 @@ export default function PassRequestPage() {
               </button>
             </div>
 
-            <div className="p-8 overflow-y-auto flex-1 bg-slate-50 space-y-8">
-              {!editingPersonIndex && (
-                <div className="bg-white p-5 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center gap-4 shadow-sm">
-                  <label className="text-xs font-black text-[#0a1e4d] uppercase tracking-wider whitespace-nowrap">
-                    Fast-Fill from Master Directory:
-                  </label>
-                  <Select
-                    options={personOptions}
-                    value={personOptions.find(
-                      (opt) => opt.value === String(personForm.masterId || ""),
-                    )}
-                    onChange={(selected) => {
-                      const id = selected?.value || "";
-                      handleMasterPersonSelect({ target: { value: id } });
-                    }}
-                    placeholder="Search person..."
-                    isClearable
-                    className="max-w-md w-full"
-                    classNamePrefix="react-select"
-                  />
-                </div>
-              )}
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-50 space-y-6">
 
-              <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3">
                   1. Role & Identity
                 </h4>
@@ -2427,23 +2036,6 @@ export default function PassRequestPage() {
                       </div>
                     </>
                   )}
-                  {/* <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      Card Number
-                    </label>
-                    <input
-                      type="text"
-                      value={personForm.cardNumber}
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          cardNumber: e.target.value,
-                        })
-                      }
-                      className={inputClass}
-                      placeholder="RFID card number"
-                    />
-                  </div> */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Mobile <span className="text-red-500">*</span>
@@ -2689,10 +2281,8 @@ export default function PassRequestPage() {
                       ))}
                     </select>
                   </div>
-                  <div
-                    className={`col-span-1 md:col-span-2 grid gap-4 ${personForm.designation === "Others" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"}`}
-                  >
-                    <div className="space-y-1.5">
+                  <div className="space-y-1.5 col-span-1 md:col-span-2 flex gap-4">
+                    <div className="flex-1 space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 uppercase">
                         Designation <span className="text-red-500">*</span>
                       </label>
@@ -2716,94 +2306,28 @@ export default function PassRequestPage() {
                             {d.name}
                           </option>
                         ))}
-                        <option value="Crew">Crew</option>
-                        <option value="Supernumerary">Supernumerary</option>
                         <option value="Others">Others</option>
                       </select>
                     </div>
-                    {personForm.designation === "Others" && (
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase">
-                          Specify Others <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Specify designation"
-                          value={personForm.designationOther || ""}
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              designationOther: e.target.value,
-                            })
-                          }
-                          className={inputClass}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  {personForm.designation === "Crew" && (
-                    <div className="col-span-1 md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-5 items-start">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase">
-                          CDC Document No. <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={personForm.cdcNumber}
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              cdcNumber: e.target.value,
-                            })
-                          }
-                          className={inputClass}
-                          placeholder="Enter CDC document number"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase">
-                          CDC Document <span className="text-red-500">*</span>
-                        </label>
-                        <FileUploadBox
-                          file={personForm.cdcDocument}
-                          existingFileName={personForm.existingCdcName}
-                          onView={() =>
-                            window.open(
-                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=cdcDocument`,
-                              "_blank",
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              cdcDocument: e.target.files[0],
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase">
-                          Declaration Form Document <span className="text-red-500">*</span>
-                        </label>
-                        <FileUploadBox
-                          file={personForm.declarationForm}
-                          existingFileName={personForm.existingDeclarationName}
-                          onView={() =>
-                            window.open(
-                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=declarationForm`,
-                              "_blank",
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              declarationForm: e.target.files[0],
-                            })
-                          }
-                        />
-                      </div>
+                    <div
+                      className={`flex-1 space-y-1.5 ${personForm.designation === "Others" ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+                    >
+                      <label className="text-xs font-bold text-transparent uppercase select-none">
+                        .
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Specify Others"
+                        onChange={(e) =>
+                          setPersonForm({
+                            ...personForm,
+                            designationOther: e.target.value,
+                          })
+                        }
+                        className={inputClass}
+                      />
                     </div>
-                  )}
+                  </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Type of Id proof
@@ -2903,7 +2427,7 @@ export default function PassRequestPage() {
                     )}
                   </div>
                   <div className="space-y-1.5 md:col-span-2 max-w-sm">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
+                    <label>
                       Copy of{" "}
                       {getLabelById(
                         masterData.idProofTypes,
@@ -2954,111 +2478,7 @@ export default function PassRequestPage() {
                 </div>
               </div>
 
-              <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-[#0a1e4d] text-white">
-                    <tr>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Type of Pass <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Pass Period <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Date From <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Date To <span className="text-orange-400">*</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    <tr>
-                      <td className="p-3 border-r border-slate-200">
-                        <select
-                          value={personForm.passType}
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              passType: e.target.value,
-                            })
-                          }
-                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
-                        >
-                          {masterData.passTypes.map((t) => (
-                            <option
-                              key={t.id || t.value}
-                              value={t.id || t.value}
-                            >
-                              {t.label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="number"
-                            value={personForm.passPeriod}
-                            min="1"
-                            max={
-                              String(personForm.passType) === "1" ? "7" : "1"
-                            }
-                            disabled={String(personForm.passType) !== "1"}
-                            onChange={(e) =>
-                              setPersonForm({
-                                ...personForm,
-                                passPeriod: e.target.value,
-                              })
-                            }
-                            className={inputClass}
-                          />
-                          <span className="text-sm font-bold text-slate-700">
-                            Days
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <input
-                          type="datetime-local"
-                          value={personForm.dateFrom}
-                          min={getCurrentDateTime()}
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              dateFrom: e.target.value,
-                            })
-                          }
-                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                        />
-                      </td>
-                      <td className="p-3 border-r border-slate-200 flex items-center gap-2">
-                        <input
-                          readOnly
-                          type="datetime-local"
-                          value={personForm.dateTo}
-                          className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
-                        />
-                        {String(personForm.passType) === "2" && (
-                          <input
-                            type="time"
-                            title="Valid Upto Time"
-                            onChange={(e) =>
-                              setPersonForm({
-                                ...personForm,
-                                validUptoTime: e.target.value,
-                              })
-                            }
-                            className="w-28 h-10 border border-red-300 bg-red-50 rounded-lg text-sm px-2 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-red-900 font-bold animate-in fade-in"
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-                            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
                   <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
                   Mandatory Documents
@@ -3187,6 +2607,110 @@ export default function PassRequestPage() {
                   )}
                 </div>
               </div>
+
+              <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-[#0a1e4d] text-white">
+                    <tr>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Type of Pass <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Pass Period <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Date From <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Date To <span className="text-orange-400">*</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    <tr>
+                      <td className="p-3 border-r border-slate-200">
+                        <select
+                          value={personForm.passType}
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              passType: e.target.value,
+                            })
+                          }
+                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                        >
+                          {getFilteredPassTypes(intake, masterData.passTypes).map((t) => (
+                            <option
+                              key={t.id || t.value}
+                              value={t.id || t.value}
+                            >
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            value={personForm.passPeriod}
+                            min="1"
+                            max={
+                              String(personForm.passType) === "1" ? "7" : "1"
+                            }
+                            disabled={String(personForm.passType) !== "1"}
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                passPeriod: e.target.value,
+                              })
+                            }
+                            className={inputClass}
+                          />
+                          <span className="text-sm font-bold text-slate-700">
+                            Days
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <input
+                          type="datetime-local"
+                          value={personForm.dateFrom}
+                          min={getCurrentDateTime()}
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              dateFrom: e.target.value,
+                            })
+                          }
+                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                        />
+                      </td>
+                      <td className="p-3 border-r border-slate-200 flex items-center gap-2">
+                        <input
+                          readOnly
+                          type="datetime-local"
+                          value={personForm.dateTo}
+                          className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
+                        />
+                        {String(personForm.passType) === "2" && (
+                          <input
+                            type="time"
+                            title="Valid Upto Time"
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                validUptoTime: e.target.value,
+                              })
+                            }
+                            className="w-28 h-10 border border-red-300 bg-red-50 rounded-lg text-sm px-2 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-red-900 font-bold animate-in fade-in"
+                          />
+                        )}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -3233,30 +2757,8 @@ export default function PassRequestPage() {
               </button>
             </div>
 
-            <div className="p-8 overflow-y-auto flex-1 bg-slate-50/50 space-y-8">
-              {!editingVehicleIndex && (
-                <div className="bg-white p-5 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center gap-4 shadow-sm">
-                  <label className="text-xs font-black text-[#0a1e4d] uppercase tracking-wider whitespace-nowrap">
-                    Select from Vehicle Fleet:
-                  </label>
-                  <Select
-                    options={vehicleOptions}
-                    value={vehicleOptions.find(
-                      (opt) => opt.value === String(vehicleForm.masterId || ""),
-                    )}
-                    onChange={(selected) => {
-                      const id = selected?.value || "";
-                      handleMasterVehicleSelect({ target: { value: id } });
-                    }}
-                    placeholder="Search vehicle..."
-                    isClearable
-                    className="max-w-md w-full"
-                    classNamePrefix="react-select"
-                  />
-                </div>
-              )}
-
-              <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50 space-y-6">
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3">
                   1. Vehicle Details
                 </h4>
@@ -3305,23 +2807,6 @@ export default function PassRequestPage() {
                       ))}
                     </select>
                   </div>
-                  {/* <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      RFID Card Number
-                    </label>
-                    <input
-                      type="text"
-                      value={vehicleForm.cardNumber}
-                      onChange={(e) =>
-                        setVehicleForm({
-                          ...vehicleForm,
-                          cardNumber: e.target.value,
-                        })
-                      }
-                      className={inputClass}
-                      placeholder="Enter RFID if available"
-                    />
-                  </div> */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Access Area <span className="text-red-500">*</span>
@@ -3393,99 +2878,7 @@ export default function PassRequestPage() {
                 </div>
               </div>
 
-              <div className="mt-8 border border-slate-300 rounded-xl overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-[#0a1e4d] text-white">
-                    <tr>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Type of Pass <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Pass Period <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Date From <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Date To <span className="text-orange-400">*</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    <tr>
-                      <td className="p-3 border-r border-slate-200">
-                        <select
-                          value={vehicleForm.passType}
-                          onChange={(e) =>
-                            setVehicleForm({
-                              ...vehicleForm,
-                              passType: e.target.value,
-                            })
-                          }
-                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
-                        >
-                          {masterData.passTypes.map((t) => (
-                            <option
-                              key={t.id || t.value}
-                              value={t.id || t.value}
-                            >
-                              {t.label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="number"
-                            value={vehicleForm.passPeriod}
-                            min="1"
-                            max={
-                              String(vehicleForm.passType) === "1" ? "7" : "1"
-                            }
-                            disabled={String(vehicleForm.passType) !== "1"}
-                            onChange={(e) =>
-                              setVehicleForm({
-                                ...vehicleForm,
-                                passPeriod: e.target.value,
-                              })
-                            }
-                            className={inputClass}
-                          />
-                          <span className="text-sm font-bold text-slate-700">
-                            Days
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <input
-                          type="datetime-local"
-                          value={vehicleForm.dateFrom}
-                          min={getCurrentDateTime()}
-                          onChange={(e) =>
-                            setVehicleForm({
-                              ...vehicleForm,
-                              dateFrom: e.target.value,
-                            })
-                          }
-                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                        />
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <input
-                          readOnly
-                          type="datetime-local"
-                          value={vehicleForm.dateTo}
-                          className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
-                        />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-
-              <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-orange-500" /> 2. Mandatory
                   Documents
@@ -3624,6 +3017,97 @@ export default function PassRequestPage() {
                   )}
                 </div>
               </div>
+
+              <div className="mt-8 border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-[#0a1e4d] text-white">
+                    <tr>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Type of Pass <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Pass Period <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Date From <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Date To <span className="text-orange-400">*</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    <tr>
+                      <td className="p-3 border-r border-slate-200">
+                        <select
+                          value={vehicleForm.passType}
+                          onChange={(e) =>
+                            setVehicleForm({
+                              ...vehicleForm,
+                              passType: e.target.value,
+                            })
+                          }
+                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                        >
+                          {getFilteredPassTypes(intake, masterData.passTypes).map((t) => (
+                            <option
+                              key={t.id || t.value}
+                              value={t.id || t.value}
+                            >
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            value={vehicleForm.passPeriod}
+                            min="1"
+                            max={
+                              String(vehicleForm.passType) === "1" ? "7" : "1"
+                            }
+                            disabled={String(vehicleForm.passType) !== "1"}
+                            onChange={(e) =>
+                              setVehicleForm({
+                                ...vehicleForm,
+                                passPeriod: e.target.value,
+                              })
+                            }
+                            className={inputClass}
+                          />
+                          <span className="text-sm font-bold text-slate-700">
+                            Days
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <input
+                          type="datetime-local"
+                          value={vehicleForm.dateFrom}
+                          min={getCurrentDateTime()}
+                          onChange={(e) =>
+                            setVehicleForm({
+                              ...vehicleForm,
+                              dateFrom: e.target.value,
+                            })
+                          }
+                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                        />
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <input
+                          readOnly
+                          type="datetime-local"
+                          value={vehicleForm.dateTo}
+                          className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
+                        />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -3643,321 +3127,6 @@ export default function PassRequestPage() {
                 {editingVehicleIndex !== null
                   ? "Update Vehicle"
                   : "Add Vehicle"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* PASS DETAILS READ-ONLY MODAL */}
-      {selectedPassDetails && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-[#0a1e4d] text-white">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <FileText className="h-5 w-5 text-orange-400" />
-                Submitted Application Details
-              </h2>
-              <button
-                onClick={() => setSelectedPassDetails(null)}
-                className="text-white/70 hover:text-white transition-colors"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto space-y-6 bg-slate-50">
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="font-black text-slate-800 mb-4 border-b border-slate-100 pb-2 text-sm uppercase tracking-wider">
-                  General Information
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Pass ID
-                    </label>
-                    <input
-                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold text-[#0a1e4d] cursor-not-allowed"
-                      readOnly
-                      type="text"
-                      value={
-                        selectedPassDetails.referenceNo ||
-                        `REQ-${selectedPassDetails.id || selectedPassDetails.passId || "XXXX"}`
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Company
-                    </label>
-                    <input
-                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm text-slate-700 cursor-not-allowed"
-                      readOnly
-                      type="text"
-                      value={generalForm.companyName || "Global Marine Traders"}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Application Date
-                    </label>
-                    <input
-                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm text-slate-700 cursor-not-allowed"
-                      readOnly
-                      type="text"
-                      value={
-                        selectedPassDetails.createdAt ||
-                        selectedPassDetails.created_at ||
-                        selectedPassDetails.submittedAt ||
-                        selectedPassDetails.submitted_at ||
-                        selectedPassDetails.createdat ||
-                        selectedPassDetails.submittedat
-                          ? new Date(
-                              selectedPassDetails.createdAt ||
-                                selectedPassDetails.created_at ||
-                                selectedPassDetails.submittedAt ||
-                                selectedPassDetails.submitted_at ||
-                                selectedPassDetails.createdat ||
-                                selectedPassDetails.submittedat,
-                            ).toLocaleString("en-IN", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : "-"
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Payment Mode
-                    </label>
-                    <input
-                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm text-slate-700 cursor-not-allowed"
-                      readOnly
-                      type="text"
-                      value={
-                        selectedPassDetails.paymentMode ||
-                        selectedPassDetails.payment_mode ||
-                        selectedPassDetails.paymentmode ||
-                        "-"
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Net Amount
-                    </label>
-                    <input
-                      className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-black text-[#0a1e4d] cursor-not-allowed"
-                      readOnly
-                      type="text"
-                      value={`₹ ${parseFloat(selectedPassDetails.netAmount || selectedPassDetails.net_amount || selectedPassDetails.netamount || selectedPassDetails.baseTotal || selectedPassDetails.basetotal || "0").toFixed(2)}`}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Status
-                    </label>
-                    <input
-                      className={`w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold cursor-not-allowed ${
-                        (selectedPassDetails.status || "").toUpperCase() ===
-                        "APPROVED"
-                          ? "text-emerald-600"
-                          : "text-orange-600"
-                      }`}
-                      readOnly
-                      type="text"
-                      value={(
-                        selectedPassDetails.status || "PENDING"
-                      ).toUpperCase()}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                  <h3 className="font-black text-slate-800 mb-3 border-b border-slate-100 pb-2 text-sm uppercase tracking-wider">
-                    Persons Included
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                            Pass No
-                          </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                            Name
-                          </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                            Status
-                          </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">
-                            Action
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {selectedPassDetails.persons &&
-                        selectedPassDetails.persons.length > 0 ? (
-                          selectedPassDetails.persons.map((p, i) => (
-                            <tr
-                              key={i}
-                              className="hover:bg-blue-50 cursor-pointer transition-colors"
-                              onClick={() =>
-                                setEntityModal({
-                                  isOpen: true,
-                                  data: p,
-                                  type: "person",
-                                })
-                              }
-                            >
-                              <td className="p-3 text-xs font-mono font-bold text-[#0a1e4d]">
-                                {p.personPassNo || "-"}
-                              </td>
-                              <td className="p-3 text-sm font-medium text-slate-800">
-                                {p.name || p.person_name}
-                              </td>
-                              <td className="p-3">
-                                <span
-                                  className={`px-2 py-1 rounded-full text-[10px] font-bold ${String(p.status).toUpperCase() === "APPROVED" ? "bg-emerald-100 text-emerald-700" : String(p.status).toUpperCase() === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
-                                >
-                                  {(p.status || "PENDING").toUpperCase()}
-                                </span>
-                              </td>
-                              <td className="p-3 text-center">
-                                {String(p.status).toUpperCase() ===
-                                "APPROVED" ? (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handlePrintQR(p, "person");
-                                    }}
-                                    className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
-                                  >
-                                    Print QR
-                                  </button>
-                                ) : (
-                                  <span className="text-xs text-slate-400">
-                                    -
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td
-                              colSpan="4"
-                              className="p-4 text-sm text-slate-400 text-center italic"
-                            >
-                              No persons found.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                  <h3 className="font-black text-slate-800 mb-3 border-b border-slate-100 pb-2 text-sm uppercase tracking-wider">
-                    Vehicles Included
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                            Pass No
-                          </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                            Reg. No
-                          </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                            Status
-                          </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">
-                            Action
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {selectedPassDetails.vehicles &&
-                        selectedPassDetails.vehicles.length > 0 ? (
-                          selectedPassDetails.vehicles.map((v, i) => (
-                            <tr
-                              key={i}
-                              className="hover:bg-blue-50 cursor-pointer transition-colors"
-                              onClick={() =>
-                                setEntityModal({
-                                  isOpen: true,
-                                  data: v,
-                                  type: "vehicle",
-                                })
-                              }
-                            >
-                              <td className="p-3 text-xs font-mono font-bold text-[#0a1e4d]">
-                                {v.vehiclePassNo || "-"}
-                              </td>
-                              <td className="p-3 text-sm font-bold text-[#0a1e4d] uppercase">
-                                {v.registrationNo ||
-                                  v.registration_no ||
-                                  v.regNo}
-                              </td>
-                              <td className="p-3">
-                                <span
-                                  className={`px-2 py-1 rounded-full text-[10px] font-bold ${String(v.status).toUpperCase() === "APPROVED" ? "bg-emerald-100 text-emerald-700" : String(v.status).toUpperCase() === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
-                                >
-                                  {(v.status || "PENDING").toUpperCase()}
-                                </span>
-                              </td>
-                              <td className="p-3 text-center">
-                                {String(v.status).toUpperCase() ===
-                                "APPROVED" ? (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handlePrintQR(v, "vehicle");
-                                    }}
-                                    className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
-                                  >
-                                    Print QR
-                                  </button>
-                                ) : (
-                                  <span className="text-xs text-slate-400">
-                                    -
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td
-                              colSpan="4"
-                              className="p-4 text-sm text-slate-400 text-center italic"
-                            >
-                              No vehicles found.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end p-5 border-t border-slate-200 bg-white rounded-b-2xl">
-              <button
-                onClick={() => setSelectedPassDetails(null)}
-                className="bg-[#0a1e4d] text-white px-8 py-2.5 rounded-xl shadow-lg font-bold hover:bg-opacity-90 transition-colors uppercase tracking-wider text-sm"
-              >
-                Close Details
               </button>
             </div>
           </div>
@@ -4378,6 +3547,7 @@ export default function PassRequestPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

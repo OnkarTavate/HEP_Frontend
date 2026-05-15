@@ -315,25 +315,32 @@ const LoginPage = () => {
         localStorage.setItem("accessToken", data.accessToken);
         localStorage.setItem("refreshToken", data.refreshToken);
 
-        // ✅ Store ONLY what backend gives (role)
+        // ✅ Store role + department so layouts can gate access correctly.
+        //    Backend change #1 (see BACKEND_CHANGES_REQUIRED.md) must include
+        //    departmentName + departmentId in the login response. Until then
+        //    those fields will be null and Vendor Pass routing won't work.
         const user = {
           username: formData.username,
-          role: data.role, // IMPORTANT
+          role: data.role,
+          departmentName: data.departmentName || null,
+          departmentId: data.departmentId || null,
         };
 
         localStorage.setItem("user", JSON.stringify(user));
 
-        toast.success("Login successful!"); // ✅ Success Toast
+        toast.success("Login successful!");
 
-        // 🚀 ROLE-BASED ROUTING (TEMP SOLUTION)
-        if (data.role === "Admin" || data.role === "Administrator") {
-          console.log("➡️ Redirecting to /admin");
+        // 🚀 ROLE-BASED ROUTING
+        const role = (data.role || "").toLowerCase();
+        const dept = (data.departmentName || "").toLowerCase();
+
+        if (role === "admin" || role === "administrator") {
           router.push("/admin");
-        } else if (data.role === "Approval") {
-          console.log("➡️ Redirecting to /traffic_approval");
-          router.push("/traffic_approval"); // TEMP (all approvals go here)
+        } else if (role === "approval" && dept.includes("traffic")) {
+          router.push("/traffic_approval");
+        } else if (role === "approval") {
+          router.push("/admin/vendor_pass");
         } else {
-          console.log("➡️ Redirecting to /dashboard");
           router.push("/dashboard");
         }
       } else {

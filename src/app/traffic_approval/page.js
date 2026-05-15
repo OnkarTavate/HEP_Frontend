@@ -31,17 +31,23 @@ import {
   CreditCard,
 } from "lucide-react";
 
-const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
+const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
 
 // --- URL Helper to reliably strip '/api' for static file fetching ---
-const getFileUrl = (filePath) => {
-  if (!filePath) return "";
-  const baseUrl = AGENT_API.replace("/api", "");
-  // Prevent double slashes
-  const cleanPath = filePath.startsWith("/") ? filePath.slice(1) : filePath;
-  return `${baseUrl}/${cleanPath}`;
+const getFileUrl = (path) => {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  return `${AGENT_API}${path.startsWith("/") ? "" : "/"}${path}`;
+};
+
+const extractEntityIndex = (entityId) => {
+  // Vendor pass entity IDs are in format "vpr-{id}-p-{index}" or "vpr-{id}-v-{index}"
+  if (!entityId || typeof entityId !== "string") return 0;
+  const parts = entityId.split("-");
+  const index = parseInt(parts[parts.length - 1]);
+  return isNaN(index) ? 0 : index;
 };
 
 // --- Reusable UI Components ---
@@ -64,11 +70,13 @@ const DocumentCard = ({
   documentType,
   passRequestId,
   onView,
+  entityIndex = 0,
+  isVendorPass = false,
 }) => {
   if (!filePath) return null; // Only renders if the file exists in the JSON data
   return (
     <button
-      onClick={() => onView(passRequestId, documentType, filePath)}
+      onClick={() => onView(passRequestId, documentType, filePath, entityIndex, isVendorPass)}
       className="flex items-center w-full justify-between bg-white p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] hover:shadow-sm transition-all group"
     >
       <div className="flex items-center gap-2 overflow-hidden">
@@ -176,7 +184,7 @@ export default function TrafficPassesPage() {
   //   }
   // };
 
-  const handleViewDoc = (passRequestId, documentType, staticPath) => {
+  const handleViewDoc = (passRequestId, documentType, staticPath, entityIndex = 0, isVendorPass = false) => {
     // Check if the file is an image based on its extension
     const isImg = staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath);
     setIsImage(!!isImg);
@@ -185,7 +193,7 @@ export default function TrafficPassesPage() {
       setViewingDocUrl(getFileUrl(staticPath));
     } else {
       setViewingDocUrl(
-        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${passRequestId}&documentType=${documentType}`,
+        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${passRequestId}&documentType=${documentType}&entityIndex=${entityIndex}&isVendorPass=${isVendorPass}`,
       );
     }
   };
@@ -239,54 +247,115 @@ export default function TrafficPassesPage() {
       const token = localStorage.getItem("accessToken");
       const headers = { Authorization: `Bearer ${token}` };
 
-      // Target your Approval Admin Service endpoint (Port 5005)
-      const actionUrl = `${ADMIN_API}/pass-request/agent-pass-request-action`;
+      // Check if this is a vendor pass
+      const isVendorPass = selectedRequest.originType === "VENDOR";
 
-      // 2. BUILD PERSON PAYLOADS
-      const personPromises = persons.map((p) => {
-        const status = entityStatuses.persons[p.id];
-        const remark = entityRemarks.persons[p.id];
+      if (isVendorPass) {
+        // --- VENDOR PASS APPROVAL FLOW ---
+        // Use direct agent API endpoints for vendor passes
+        const vendorPassId = selectedRequest.id;
 
-        const payload = {
-          personId: p.id,
-          decision: status === "APPROVED" ? "approve-person" : "reject-person",
+        // 2. BUILD PERSON PROMISES for vendor passes
+        const personPromises = persons.map((p) => {
+          const status = entityStatuses.persons[p.id];
+          const personIndex = extractEntityIndex(p.id);
+          const remark = entityRemarks.persons[p.id];
+
+          if (status === "APPROVED") {
+            return axios.put(
+              `${AGENT_API}/vendor-pass/${vendorPassId}/approve-person/${personIndex}`,
+              {},
+              { headers }
+            );
+          } else {
+            return axios.put(
+              `${AGENT_API}/vendor-pass/${vendorPassId}/reject-person/${personIndex}`,
+              { rejectedReason: remark },
+              { headers }
+            );
+          }
+        });
+
+        // 3. BUILD VEHICLE PROMISES for vendor passes
+        const vehiclePromises = vehicles.map((v) => {
+          const status = entityStatuses.vehicles[v.id];
+          const vehicleIndex = extractEntityIndex(v.id);
+          const remark = entityRemarks.vehicles[v.id];
+
+          if (status === "APPROVED") {
+            return axios.put(
+              `${AGENT_API}/vendor-pass/${vendorPassId}/approve-vehicle/${vehicleIndex}`,
+              {},
+              { headers }
+            );
+          } else {
+            return axios.put(
+              `${AGENT_API}/vendor-pass/${vendorPassId}/reject-vehicle/${vehicleIndex}`,
+              { rejectedReason: remark },
+              { headers }
+            );
+          }
+        });
+
+        // 4. EXECUTE ALL ENTITY ACTIONS CONCURRENTLY
+        await Promise.all([...personPromises, ...vehiclePromises]);
+
+        // 5. FINALLY, SUBMIT THE 'COMPLETE-REVIEW' FLAG
+        await axios.put(
+          `${AGENT_API}/vendor-pass/${vendorPassId}/complete-review`,
+          {},
+          { headers }
+        );
+      } else {
+        // --- NORMAL PASS APPROVAL FLOW (Admin Service) ---
+        const actionUrl = `${ADMIN_API}/pass-request/agent-pass-request-action`;
+
+        // 2. BUILD PERSON PAYLOADS
+        const personPromises = persons.map((p) => {
+          const status = entityStatuses.persons[p.id];
+          const remark = entityRemarks.persons[p.id];
+
+          const payload = {
+            personId: p.id,
+            decision: status === "APPROVED" ? "approve-person" : "reject-person",
+          };
+
+          if (status === "REJECTED") {
+            payload.rejectedReason = remark;
+          }
+
+          return axios.patch(actionUrl, payload, { headers });
+        });
+
+        // 3. BUILD VEHICLE PAYLOADS
+        const vehiclePromises = vehicles.map((v) => {
+          const status = entityStatuses.vehicles[v.id];
+          const remark = entityRemarks.vehicles[v.id];
+
+          const payload = {
+            vehicleId: v.id,
+            decision:
+              status === "APPROVED" ? "approve-vehicle" : "reject-vehicle",
+          };
+
+          if (status === "REJECTED") {
+            payload.rejectedReason = remark;
+          }
+
+          return axios.patch(actionUrl, payload, { headers });
+        });
+
+        // 4. EXECUTE ALL ENTITY ACTIONS CONCURRENTLY
+        await Promise.all([...personPromises, ...vehiclePromises]);
+
+        // 5. FINALLY, SUBMIT THE 'COMPLETE-REVIEW' FLAG
+        const finalPayload = {
+          passRequestId: selectedRequest.id,
+          decision: "complete-review",
         };
 
-        if (status === "REJECTED") {
-          payload.rejectedReason = remark;
-        }
-
-        return axios.patch(actionUrl, payload, { headers });
-      });
-
-      // 3. BUILD VEHICLE PAYLOADS
-      const vehiclePromises = vehicles.map((v) => {
-        const status = entityStatuses.vehicles[v.id];
-        const remark = entityRemarks.vehicles[v.id];
-
-        const payload = {
-          vehicleId: v.id,
-          decision:
-            status === "APPROVED" ? "approve-vehicle" : "reject-vehicle",
-        };
-
-        if (status === "REJECTED") {
-          payload.rejectedReason = remark;
-        }
-
-        return axios.patch(actionUrl, payload, { headers });
-      });
-
-      // 4. EXECUTE ALL ENTITY ACTIONS CONCURRENTLY
-      await Promise.all([...personPromises, ...vehiclePromises]);
-
-      // 5. FINALLY, SUBMIT THE 'COMPLETE-REVIEW' FLAG
-      const finalPayload = {
-        passRequestId: selectedRequest.id,
-        decision: "complete-review",
-      };
-
-      await axios.patch(actionUrl, finalPayload, { headers });
+        await axios.patch(actionUrl, finalPayload, { headers });
+      }
 
       // 6. HANDLE SUCCESS
       toast.success("Review Submitted", {
@@ -525,7 +594,7 @@ export default function TrafficPassesPage() {
               ) : (
                 filteredData.map((pass) => (
                   <tr
-                    key={pass.id}
+                    key={pass.originType === "VENDOR" ? `vpr-${pass.id}` : pass.id}
                     onClick={() =>
                       openReviewModal(pass, activeTab === "processed")
                     }
@@ -825,12 +894,6 @@ export default function TrafficPassesPage() {
                             </td>
                             <td className="p-3 font-bold text-[#0a1e4d] uppercase">
                               {v.registrationNo}
-                              {entityStatuses.vehicles[v.id] === "REJECTED" &&
-                                entityRemarks.vehicles[v.id] && (
-                                  <div className="mt-1 text-[10px] text-red-600 bg-red-50 p-1 rounded border border-red-100 inline-block font-normal normal-case">
-                                    Reason: {entityRemarks.vehicles[v.id]}
-                                  </div>
-                                )}
                             </td>
                             <td className="p-3 text-slate-600 text-xs font-medium">
                               {v.vehicleTypeId} • {v.passType}
@@ -1135,12 +1198,14 @@ export default function TrafficPassesPage() {
                                 selectedRequest.id,
                                 "personPhoto",
                                 entityModal.data.photoFilePath,
+                                extractEntityIndex(entityModal.data.id),
+                                selectedRequest.originType === "VENDOR"
                               )
                             }
                             title="Click to Enlarge Photo"
                           >
                             <img
-                              src={`${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${selectedRequest.id}&documentType=personPhoto`}
+                              src={`${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${selectedRequest.id}&documentType=personPhoto&entityIndex=${extractEntityIndex(entityModal.data.id)}&isVendorPass=${selectedRequest.originType === "VENDOR"}`}
                               alt="Passport Photo"
                               className="w-24 h-28 object-cover rounded-lg border border-slate-200 shadow-sm bg-slate-50 group-hover:opacity-75 transition-opacity"
                               onError={(e) => {
@@ -1162,6 +1227,8 @@ export default function TrafficPassesPage() {
                         documentType="requisitionLetter"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="Aadhar Card Document"
@@ -1169,6 +1236,8 @@ export default function TrafficPassesPage() {
                         documentType="personAadhar"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="Additional ID Proof"
@@ -1176,6 +1245,8 @@ export default function TrafficPassesPage() {
                         documentType="personIdProof"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="Driver License"
@@ -1183,6 +1254,8 @@ export default function TrafficPassesPage() {
                         documentType="driverLicense"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="Police Verification"
@@ -1190,6 +1263,8 @@ export default function TrafficPassesPage() {
                         documentType="policeVerification"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="Proof Of Employment"
@@ -1197,6 +1272,8 @@ export default function TrafficPassesPage() {
                         documentType="employmentProof"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="CHA License"
@@ -1204,6 +1281,8 @@ export default function TrafficPassesPage() {
                         documentType="chaLicenseCopy"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="Passport Document"
@@ -1211,6 +1290,8 @@ export default function TrafficPassesPage() {
                         documentType="passportDoc"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                     </>
                   ) : (
@@ -1221,6 +1302,8 @@ export default function TrafficPassesPage() {
                         documentType="vehicleRC"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="Insurance Document"
@@ -1228,6 +1311,8 @@ export default function TrafficPassesPage() {
                         documentType="vehicleInsurance"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="Permit Document"
@@ -1235,6 +1320,8 @@ export default function TrafficPassesPage() {
                         documentType="vehiclePermit"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="Fitness Certificate"
@@ -1242,6 +1329,8 @@ export default function TrafficPassesPage() {
                         documentType="vehicleFitness"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="Request Letter"
@@ -1249,6 +1338,8 @@ export default function TrafficPassesPage() {
                         documentType="vehicleRequestLetter"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="Tax Document"
@@ -1256,6 +1347,8 @@ export default function TrafficPassesPage() {
                         documentType="vehicleTax"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
                         label="Emission Certificate (PUC)"
@@ -1263,6 +1356,8 @@ export default function TrafficPassesPage() {
                         documentType="vehicleEmission"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                     </>
                   )}

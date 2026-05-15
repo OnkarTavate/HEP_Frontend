@@ -33,6 +33,7 @@ import {
   Moon,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -89,9 +90,11 @@ export default function AdminLayout({ children }) {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
-      // Security Check: Only Admins can load this layout
+      // Access control: Admin OR any Approval department user
       const role = (parsedUser.role || "").toLowerCase();
-      if (role !== "admin" && role !== "administrator") {
+      const isAdmin = role === "admin" || role === "administrator";
+      const isApproval = role === "approval";
+      if (!isAdmin && !isApproval) {
         router.push("/");
         return;
       }
@@ -223,13 +226,9 @@ export default function AdminLayout({ children }) {
   // Strictly Admin Navigation Items
   const navigationItems = [
     { name: "Admin Console", href: "/admin", icon: ShieldCheck },
-    { name: "Pass Approvals", href: "/admin/pass-approvals", icon: FileText },
-    {
-      name: "Company Approvals",
-      href: "/admin/companies",
-      icon: Building2,
-    },
-    { name: "All Passes", href: "/admin/all-passes", icon: LayoutDashboard },
+    { name: "Pass Approvals", href: "/traffic_approval", icon: FileText },
+    { name: "Company Approvals", href: "/traffic_approval/companies", icon: Building2 },
+    { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
   ];
 
   const SidebarContent = () => (

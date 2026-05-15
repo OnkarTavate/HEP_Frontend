@@ -48,9 +48,16 @@ export default function TrafficLayout({ children }) {
       const role = String(parsedUser.role || "")
         .toLowerCase()
         .trim();
+      const dept = String(parsedUser.departmentName || "")
+        .toLowerCase()
+        .trim();
 
-      // ✅ Allow ONLY Approval users
-      if (role !== "approval" && role !== "admin" && role !== "administrator") {
+      // ✅ Allow traffic approvers OR admins
+      const isAdmin = role === "admin" || role === "administrator";
+      // Allow "approval" role with traffic dept OR any role containing "traffic" (e.g., "traffic_officer")
+      const isTrafficApprover = (role === "approval" && dept.includes("traffic")) || role.includes("traffic");
+
+      if (!isAdmin && !isTrafficApprover) {
         alert("Unauthorized Access: Traffic Department Only.");
         router.push("/");
         return;
