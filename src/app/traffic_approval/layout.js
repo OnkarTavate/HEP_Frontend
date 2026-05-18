@@ -40,7 +40,7 @@ export default function TrafficLayout({ children }) {
   // Clear Redis session when the tab/browser is closed
   useSessionHeartbeat();
 
-  useEffect(() => {
+ useEffect(() => {
     const storedUser = localStorage.getItem("user");
 
     if (storedUser) {

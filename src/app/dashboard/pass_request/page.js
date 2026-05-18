@@ -257,6 +257,7 @@ export default function PassRequestPage() {
     purpose: "",
     purposeOther: "",
     authLetter: null,
+    requisitionLetter: null,
   });
 
   const initialPersonForm = {
@@ -984,9 +985,6 @@ export default function PassRequestPage() {
       return toast.error("Please fill all mandatory fields including Photo.");
     }
 
-    if (!(personForm.requisitionLetter || personForm.existingReqName))
-      return toast.error("Requisition Letter is mandatory.");
-
     if (
       personForm.hepType === "1" &&
       !(personForm.driverLicence || personForm.existingDlName)
@@ -1000,13 +998,9 @@ export default function PassRequestPage() {
       return toast.error("Passport is mandatory for Seafarers.");
 
     if (personForm.passType === "2" || personForm.passType === "3") {
-      if (
-        !(personForm.policeVerification || personForm.existingPoliceName) ||
-        !(personForm.proofOfEmployment || personForm.existingEmpName) ||
-        !(personForm.copyOfLicence || personForm.existingChaName)
-      ) {
+      if (!(personForm.policeVerification || personForm.existingPoliceName)) {
         return toast.error(
-          "Police Verification, Employment Proof, and Licence are mandatory for Monthly/Yearly passes.",
+          "Police Verification is mandatory for Monthly/Yearly passes.",
         );
       }
     }
@@ -1149,6 +1143,8 @@ export default function PassRequestPage() {
       return toast.warning("Please select a Purpose of Visit.");
     if (!generalForm.authLetter)
       return toast.warning("Please upload the Authorised Letter.");
+    if (!generalForm.requisitionLetter)
+      return toast.warning("Please upload the Requisition Letter.");
     if (!agreedToTerms)
       return toast.warning("Please agree to the Terms and Conditions.");
     if (persons.length === 0 && vehicles.length === 0)
@@ -1288,6 +1284,8 @@ export default function PassRequestPage() {
 
       formData.append("payload", JSON.stringify(requestPayload));
       formData.append("authLetter", generalForm.authLetter);
+      if (generalForm.requisitionLetter)
+        formData.append("requisitionLetter", generalForm.requisitionLetter);
 
       // =========================
       // FILES APPENDING
@@ -1300,8 +1298,6 @@ export default function PassRequestPage() {
         if (p.photo) formData.append("personPhoto", p.photo);
         if (p.aadharFile) formData.append("personAadhar", p.aadharFile);
         if (p.idProofFile) formData.append("personIdProof", p.idProofFile);
-        if (p.requisitionLetter)
-          formData.append("requisitionLetter", p.requisitionLetter);
         if (p.driverLicence) formData.append("driverLicense", p.driverLicence);
         if (p.policeVerification)
           formData.append("policeVerification", p.policeVerification);
@@ -1446,11 +1442,10 @@ export default function PassRequestPage() {
           }}
         />
         <div
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
-            file
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${file
               ? "border-orange-300 bg-orange-50"
               : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
-          } transition-colors`}
+            } transition-colors`}
         >
           <Upload
             className={`w-4 h-4 flex-shrink-0 ${file ? "text-orange-600" : "text-slate-400"}`}
@@ -1594,7 +1589,7 @@ export default function PassRequestPage() {
                   </p>
                 </div> */}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                     Purpose of Visit <span className="text-red-500">*</span>
@@ -1660,6 +1655,40 @@ export default function PassRequestPage() {
                         setGeneralForm({
                           ...generalForm,
                           authLetter: file,
+                        });
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Requisition Letter <span className="text-red-500">*</span>
+                  </label>
+                  <label className="w-full h-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-lg px-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors group">
+                    <Upload className="h-4 w-4 text-slate-400 group-hover:text-orange-500" />
+                    <span className="text-sm text-slate-600 font-medium truncate group-hover:text-orange-600">
+                      {generalForm.requisitionLetter
+                        ? generalForm.requisitionLetter.name
+                        : "Upload PDF (Max 2MB)"}
+                    </span>
+                    <input
+                      className="hidden"
+                      type="file"
+                      accept="application/pdf"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+
+                        const error = validateFile(file, "pdf");
+
+                        if (error) {
+                          toast.error(error);
+                          e.target.value = "";
+                          return;
+                        }
+
+                        setGeneralForm({
+                          ...generalForm,
+                          requisitionLetter: file,
                         });
                       }}
                     />
@@ -1750,9 +1779,9 @@ export default function PassRequestPage() {
                               {p.designation === "Others"
                                 ? p.designationOther
                                 : getLabelById(
-                                    masterData.designations,
-                                    p.designation,
-                                  )}
+                                  masterData.designations,
+                                  p.designation,
+                                )}
                             </p>
                           </div>
                         </div>
@@ -2139,12 +2168,12 @@ export default function PassRequestPage() {
                           <td className="px-6 py-4 text-sm text-slate-600 font-medium border-r border-slate-100">
                             {createdAtStr
                               ? new Date(createdAtStr).toLocaleString("en-IN", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
                               : "-"}
                           </td>
                           <td className="px-6 py-4 text-sm font-bold text-slate-600 border-r border-slate-100">
@@ -2155,15 +2184,14 @@ export default function PassRequestPage() {
                           </td>
                           <td className="px-6 py-4 text-center border-r border-slate-100">
                             <span
-                              className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                                currentStatus === "SUBMITTED"
+                              className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${currentStatus === "SUBMITTED"
                                   ? "bg-blue-50 text-blue-700 border border-blue-200"
                                   : isApproved
                                     ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                     : currentStatus === "REJECTED"
                                       ? "bg-red-50 text-red-700 border border-red-200"
                                       : "bg-amber-50 text-amber-700 border border-amber-200"
-                              }`}
+                                }`}
                             >
                               {currentStatus}
                             </span>
@@ -2295,11 +2323,10 @@ export default function PassRequestPage() {
                             setPersonErrors((prev) => ({ ...prev, seafarerIdType: null }));
                           }
                         }}
-                        className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${
-                          personErrors.seafarerIdType
+                        className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${personErrors.seafarerIdType
                             ? "border-red-400 bg-red-50"
                             : "border-slate-300 bg-white"
-                        }`}
+                          }`}
                       >
                         <option value="">-- Select ID Type --</option>
                         <option value="aadhaar">Aadhaar</option>
@@ -2333,11 +2360,10 @@ export default function PassRequestPage() {
                               setPersonErrors((prev) => ({ ...prev, aadharNo: null }));
                             }
                           }}
-                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none transition-all ${
-                            personErrors.aadharNo
+                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none transition-all ${personErrors.aadharNo
                               ? "border-red-400 bg-red-50"
                               : "border-slate-300 bg-white"
-                          }`}
+                            }`}
                           placeholder="XXXX XXXX XXXX"
                           maxLength={12}
                           inputMode="numeric"
@@ -2390,11 +2416,10 @@ export default function PassRequestPage() {
                               setPersonErrors((prev) => ({ ...prev, passportNo: null }));
                             }
                           }}
-                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${
-                            personErrors.passportNo
+                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${personErrors.passportNo
                               ? "border-red-400 bg-red-50"
                               : "border-slate-300 bg-white"
-                          }`}
+                            }`}
                           placeholder="A1234567"
                           maxLength={8}
                         />
@@ -2458,11 +2483,10 @@ export default function PassRequestPage() {
                       <input
                         type="tel"
                         value={personForm.mobile} // Fixed: Removed URL wrapper
-                        className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${
-                          personErrors.mobile
+                        className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${personErrors.mobile
                             ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
                             : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
-                        }`}
+                          }`}
                         placeholder="00000 00000"
                         maxLength={10}
                         inputMode="numeric"
@@ -3058,30 +3082,16 @@ export default function PassRequestPage() {
                 </table>
               </div>
 
-                            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              {(personForm.hepType === "1" ||
+                personForm.hepType === "3" ||
+                String(personForm.passType) === "2" ||
+                String(personForm.passType) === "3") && (
+              <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
                   <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
                   Mandatory Documents
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  <FileUploadBox
-                    label="Requisition Letter"
-                    isRequired
-                    file={personForm.requisitionLetter}
-                    existingFileName={personForm.existingReqName}
-                    onView={() =>
-                      window.open(
-                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=requisitionLetter`,
-                        "_blank",
-                      )
-                    }
-                    onChange={(e) =>
-                      setPersonForm({
-                        ...personForm,
-                        requisitionLetter: e.target.files[0],
-                      })
-                    }
-                  />
                   {personForm.hepType === "1" && ( // 1 = Driver ID
                     <FileUploadBox
                       label="Driver Licence"
@@ -3104,7 +3114,6 @@ export default function PassRequestPage() {
                   )}
                   {(String(personForm.passType) === "2" ||
                     String(personForm.passType) === "3") && (
-                    <>
                       <FileUploadBox
                         label="Police Verification"
                         isRequired
@@ -3123,52 +3132,11 @@ export default function PassRequestPage() {
                           })
                         }
                       />
-                      <FileUploadBox
-                        label="Proof of Employment"
-                        isRequired
-                        file={personForm.proofOfEmployment}
-                        existingFileName={personForm.existingEmpName}
-                        onView={() =>
-                          window.open(
-                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=employmentProof`,
-                            "_blank",
-                          )
-                        }
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            proofOfEmployment: e.target.files[0],
-                          })
-                        }
-                      />
-                      <FileUploadBox
-                        label="Copy of Licence"
-                        hint="(Stevedore/CHA)"
-                        isRequired
-                        file={personForm.copyOfLicence}
-                        existingFileName={personForm.existingChaName}
-                        onView={() =>
-                          window.open(
-                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=chaLicenseCopy`,
-                            "_blank",
-                          )
-                        }
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            copyOfLicence: e.target.files[0],
-                          })
-                        }
-                      />
-                    </>
-                  )}
-                  {(String(personForm.passType) === "2" ||
-                    String(personForm.passType) === "3" ||
-                    personForm.hepType === "3") && (
+                    )}
+                  {personForm.hepType === "3" && (
                     <FileUploadBox
                       label="Passport"
-                      isRequired={personForm.hepType === "3"}
-                      hint={personForm.hepType !== "3" && "(Optional)"}
+                      isRequired
                       file={personForm.passportDoc}
                       existingFileName={personForm.existingPassportName}
                       onView={() =>
@@ -3187,6 +3155,7 @@ export default function PassRequestPage() {
                   )}
                 </div>
               </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -3565,63 +3534,63 @@ export default function PassRequestPage() {
                   />
                   {(String(vehicleForm.passType) === "2" ||
                     String(vehicleForm.passType) === "3") && (
-                    <>
-                      <FileUploadBox
-                        label="Request Letters"
-                        isRequired
-                        file={vehicleForm.requestLetter}
-                        existingFileName={vehicleForm.existingReqName}
-                        onView={() =>
-                          window.open(
-                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleRequestLetter`,
-                            "_blank",
-                          )
-                        }
-                        onChange={(e) =>
-                          setVehicleForm({
-                            ...vehicleForm,
-                            requestLetter: e.target.files[0],
-                          })
-                        }
-                      />
-                      <FileUploadBox
-                        label="Tax Document"
-                        isRequired
-                        file={vehicleForm.taxDoc}
-                        existingFileName={vehicleForm.existingTaxName}
-                        onView={() =>
-                          window.open(
-                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleTax`,
-                            "_blank",
-                          )
-                        }
-                        onChange={(e) =>
-                          setVehicleForm({
-                            ...vehicleForm,
-                            taxDoc: e.target.files[0],
-                          })
-                        }
-                      />
-                      <FileUploadBox
-                        label="Emission Certificate"
-                        isRequired
-                        file={vehicleForm.emissionCert}
-                        existingFileName={vehicleForm.existingEmissionName}
-                        onView={() =>
-                          window.open(
-                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleEmission`,
-                            "_blank",
-                          )
-                        }
-                        onChange={(e) =>
-                          setVehicleForm({
-                            ...vehicleForm,
-                            emissionCert: e.target.files[0],
-                          })
-                        }
-                      />
-                    </>
-                  )}
+                      <>
+                        <FileUploadBox
+                          label="Request Letters"
+                          isRequired
+                          file={vehicleForm.requestLetter}
+                          existingFileName={vehicleForm.existingReqName}
+                          onView={() =>
+                            window.open(
+                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleRequestLetter`,
+                              "_blank",
+                            )
+                          }
+                          onChange={(e) =>
+                            setVehicleForm({
+                              ...vehicleForm,
+                              requestLetter: e.target.files[0],
+                            })
+                          }
+                        />
+                        <FileUploadBox
+                          label="Tax Document"
+                          isRequired
+                          file={vehicleForm.taxDoc}
+                          existingFileName={vehicleForm.existingTaxName}
+                          onView={() =>
+                            window.open(
+                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleTax`,
+                              "_blank",
+                            )
+                          }
+                          onChange={(e) =>
+                            setVehicleForm({
+                              ...vehicleForm,
+                              taxDoc: e.target.files[0],
+                            })
+                          }
+                        />
+                        <FileUploadBox
+                          label="Emission Certificate"
+                          isRequired
+                          file={vehicleForm.emissionCert}
+                          existingFileName={vehicleForm.existingEmissionName}
+                          onView={() =>
+                            window.open(
+                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleEmission`,
+                              "_blank",
+                            )
+                          }
+                          onChange={(e) =>
+                            setVehicleForm({
+                              ...vehicleForm,
+                              emissionCert: e.target.files[0],
+                            })
+                          }
+                        />
+                      </>
+                    )}
                 </div>
               </div>
             </div>
@@ -3706,25 +3675,25 @@ export default function PassRequestPage() {
                       type="text"
                       value={
                         selectedPassDetails.createdAt ||
-                        selectedPassDetails.created_at ||
-                        selectedPassDetails.submittedAt ||
-                        selectedPassDetails.submitted_at ||
-                        selectedPassDetails.createdat ||
-                        selectedPassDetails.submittedat
+                          selectedPassDetails.created_at ||
+                          selectedPassDetails.submittedAt ||
+                          selectedPassDetails.submitted_at ||
+                          selectedPassDetails.createdat ||
+                          selectedPassDetails.submittedat
                           ? new Date(
-                              selectedPassDetails.createdAt ||
-                                selectedPassDetails.created_at ||
-                                selectedPassDetails.submittedAt ||
-                                selectedPassDetails.submitted_at ||
-                                selectedPassDetails.createdat ||
-                                selectedPassDetails.submittedat,
-                            ).toLocaleString("en-IN", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
+                            selectedPassDetails.createdAt ||
+                            selectedPassDetails.created_at ||
+                            selectedPassDetails.submittedAt ||
+                            selectedPassDetails.submitted_at ||
+                            selectedPassDetails.createdat ||
+                            selectedPassDetails.submittedat,
+                          ).toLocaleString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
                           : "-"
                       }
                     />
@@ -3761,12 +3730,11 @@ export default function PassRequestPage() {
                       Status
                     </label>
                     <input
-                      className={`w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold cursor-not-allowed ${
-                        (selectedPassDetails.status || "").toUpperCase() ===
-                        "APPROVED"
+                      className={`w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold cursor-not-allowed ${(selectedPassDetails.status || "").toUpperCase() ===
+                          "APPROVED"
                           ? "text-emerald-600"
                           : "text-orange-600"
-                      }`}
+                        }`}
                       readOnly
                       type="text"
                       value={(
@@ -3802,7 +3770,7 @@ export default function PassRequestPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {selectedPassDetails.persons &&
-                        selectedPassDetails.persons.length > 0 ? (
+                          selectedPassDetails.persons.length > 0 ? (
                           selectedPassDetails.persons.map((p, i) => (
                             <tr
                               key={i}
@@ -3830,7 +3798,7 @@ export default function PassRequestPage() {
                               </td>
                               <td className="p-3 text-center">
                                 {String(p.status).toUpperCase() ===
-                                "APPROVED" ? (
+                                  "APPROVED" ? (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -3887,7 +3855,7 @@ export default function PassRequestPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {selectedPassDetails.vehicles &&
-                        selectedPassDetails.vehicles.length > 0 ? (
+                          selectedPassDetails.vehicles.length > 0 ? (
                           selectedPassDetails.vehicles.map((v, i) => (
                             <tr
                               key={i}
@@ -3917,7 +3885,7 @@ export default function PassRequestPage() {
                               </td>
                               <td className="p-3 text-center">
                                 {String(v.status).toUpperCase() ===
-                                "APPROVED" ? (
+                                  "APPROVED" ? (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -4275,8 +4243,8 @@ export default function PassRequestPage() {
                         value={
                           entityModal.data.dateFrom
                             ? new Date(
-                                entityModal.data.dateFrom,
-                              ).toLocaleDateString()
+                              entityModal.data.dateFrom,
+                            ).toLocaleDateString()
                             : ""
                         }
                       />
@@ -4285,8 +4253,8 @@ export default function PassRequestPage() {
                         value={
                           entityModal.data.dateTo
                             ? new Date(
-                                entityModal.data.dateTo,
-                              ).toLocaleDateString()
+                              entityModal.data.dateTo,
+                            ).toLocaleDateString()
                             : ""
                         }
                       />
@@ -4320,8 +4288,8 @@ export default function PassRequestPage() {
                         value={
                           entityModal.data.dateFrom
                             ? new Date(
-                                entityModal.data.dateFrom,
-                              ).toLocaleDateString()
+                              entityModal.data.dateFrom,
+                            ).toLocaleDateString()
                             : ""
                         }
                       />
@@ -4330,8 +4298,8 @@ export default function PassRequestPage() {
                         value={
                           entityModal.data.dateTo
                             ? new Date(
-                                entityModal.data.dateTo,
-                              ).toLocaleDateString()
+                              entityModal.data.dateTo,
+                            ).toLocaleDateString()
                             : ""
                         }
                       />
@@ -4340,8 +4308,8 @@ export default function PassRequestPage() {
                         value={
                           entityModal.data.insuranceExpiry
                             ? new Date(
-                                entityModal.data.insuranceExpiry,
-                              ).toLocaleDateString()
+                              entityModal.data.insuranceExpiry,
+                            ).toLocaleDateString()
                             : ""
                         }
                       />
@@ -4350,8 +4318,8 @@ export default function PassRequestPage() {
                         value={
                           entityModal.data.rcValidity
                             ? new Date(
-                                entityModal.data.rcValidity,
-                              ).toLocaleDateString()
+                              entityModal.data.rcValidity,
+                            ).toLocaleDateString()
                             : ""
                         }
                       />

@@ -225,7 +225,7 @@ export default function MasterRecordsPage() {
     (parseInt(stats.vehicleCount, 10) || 0);
 
   return (
-    <div className="space-y-6 font-sans max-w-7xl mx-auto text-slate-800">
+    <div className="space-y-6 font-sans w-full text-slate-800">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>

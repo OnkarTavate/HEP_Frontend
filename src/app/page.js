@@ -549,47 +549,6 @@ const LoginPage = () => {
                   <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">Sign In</h3>
                 </div>
 
-                {/* Quick-action icon row (replaces template's social icons
-                    with the actual functional shortcuts: Register & Track). */}
-                <div className="flex justify-center gap-3 mb-4">
-                  <button
-                    type="button"
-                    onClick={() => router.push("/register")}
-                    title="Register"
-                    className="w-11 h-11 rounded-[20%] border border-gray-300 flex items-center justify-center text-gray-700 hover:border-orange-500 hover:text-orange-600 transition-colors"
-                  >
-                    <UserPlus className="h-5 w-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsTrackModalOpen(true);
-                      setTrackResult(null);
-                      setTrackError("");
-                      setTrackReference("");
-                    }}
-                    title="Track Status"
-                    className="w-11 h-11 rounded-[20%] border border-gray-300 flex items-center justify-center text-gray-700 hover:border-orange-500 hover:text-orange-600 transition-colors"
-                  >
-                    <TrendingUp className="h-5 w-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={fetchCaptcha}
-                    disabled={!!isCaptchaLoading}
-                    title="Refresh security code"
-                    className="w-11 h-11 rounded-[20%] border border-gray-300 flex items-center justify-center text-gray-700 hover:border-orange-500 hover:text-orange-600 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw
-                      className={`h-5 w-5 ${isCaptchaLoading ? "animate-spin" : ""}`}
-                    />
-                  </button>
-                </div>
-
-                <p className="text-center text-sm text-gray-500 mb-4">
-                  or use your credentials
-                </p>
-
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {error && (
                     <div className="p-3 text-sm bg-red-50 border border-red-200 text-red-800 rounded-lg">
@@ -678,7 +637,7 @@ const LoginPage = () => {
                     </div>
                   </div>
 
-                  <div className="text-center">
+                  {/* <div className="text-center">
                     <button
                       type="button"
                       onClick={() => setAuthMode("forgot")}
@@ -686,13 +645,27 @@ const LoginPage = () => {
                     >
                       Forget Your Password?
                     </button>
-                  </div>
+                  </div> */}
 
                   <button
                     type="submit"
                     className="w-full py-3.5 bg-orange-600 text-white text-base font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-600/20 transition-all"
                   >
                     Sign In
+                  </button>
+
+                  {/* Quick-action: Track Pass button (below Sign In). */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTrackModalOpen(true);
+                      setTrackResult(null);
+                      setTrackError("");
+                      setTrackReference("");
+                    }}
+                    className="w-full py-3.5 bg-white text-orange-600 text-base font-semibold tracking-wider uppercase rounded-xl border-2 border-orange-600 hover:bg-orange-50 active:scale-[0.99] transition-all"
+                  >
+                    Track Pass
                   </button>
                 </form>
                   </div>

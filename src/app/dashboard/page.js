@@ -454,11 +454,64 @@ const LivePortStatus = memo(function LivePortStatus({ now }) {
   );
 });
 
+// Custom glassy tooltip used by the throughput chart
+const ThroughputTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  const inbound = payload.find((p) => p.dataKey === "inbound")?.value ?? 0;
+  const outbound = payload.find((p) => p.dataKey === "outbound")?.value ?? 0;
+  return (
+    <div className="rounded-2xl bg-white/95 dark:bg-[#1f232d]/95 backdrop-blur-md ring-1 ring-stone-200 dark:ring-white/10 shadow-xl px-4 py-3 text-sm">
+      <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">
+        {label}
+      </p>
+      <div className="flex items-center justify-between gap-6 mb-1.5">
+        <span className="flex items-center gap-1.5 font-semibold text-stone-700 dark:text-stone-200">
+          <ArrowDownCircle className="h-3.5 w-3.5 text-amber-500" /> Inbound
+        </span>
+        <span className="font-extrabold tabular-nums text-amber-600 dark:text-amber-300">
+          {inbound}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-6">
+        <span className="flex items-center gap-1.5 font-semibold text-stone-700 dark:text-stone-200">
+          <ArrowUpCircle className="h-3.5 w-3.5 text-teal-500" /> Outbound
+        </span>
+        <span className="font-extrabold tabular-nums text-teal-600 dark:text-teal-300">
+          {outbound}
+        </span>
+      </div>
+      <div className="mt-2 pt-2 border-t border-stone-200/70 dark:border-white/10 flex items-center justify-between gap-6">
+        <span className="text-stone-500 dark:text-stone-400">Total</span>
+        <span className="font-extrabold tabular-nums text-stone-900 dark:text-stone-100">
+          {inbound + outbound}
+        </span>
+      </div>
+    </div>
+  );
+};
+
 const ThroughputChart = memo(function ThroughputChart() {
+  // Derived KPIs — computed once at module-evaluation time of the component
+  const totalInbound = throughputData.reduce((s, d) => s + d.inbound, 0);
+  const totalOutbound = throughputData.reduce((s, d) => s + d.outbound, 0);
+  const totalAll = totalInbound + totalOutbound;
+  const peak = throughputData.reduce(
+    (acc, d) => (d.inbound + d.outbound > acc.total ? { month: d.month, total: d.inbound + d.outbound } : acc),
+    { month: "—", total: 0 },
+  );
+  const last = throughputData[throughputData.length - 1];
+  const prev = throughputData[throughputData.length - 2];
+  const lastTotal = last.inbound + last.outbound;
+  const prevTotal = prev.inbound + prev.outbound;
+  const trendPct = prevTotal
+    ? Math.round(((lastTotal - prevTotal) / prevTotal) * 100)
+    : 0;
+  const trendUp = trendPct >= 0;
+
   return (
     <Card className={cardShell}>
       <CardHeader>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <CardTitle className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-900 dark:text-stone-100">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300">
@@ -470,94 +523,400 @@ const ThroughputChart = memo(function ThroughputChart() {
               Monthly inbound vs outbound movements
             </CardDescription>
           </div>
-          <Badge className="bg-stone-100 dark:bg-white/5 text-stone-600 dark:text-stone-300 border-0 font-semibold rounded-full">6 months</Badge>
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
+                trendUp
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                  : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
+              }`}
+            >
+              {trendUp ? "\u2191" : "\u2193"} {Math.abs(trendPct)}% MoM
+            </span>
+            <Badge className="bg-stone-100 dark:bg-white/5 text-stone-600 dark:text-stone-300 border-0 font-semibold rounded-full">
+              6 months
+            </Badge>
+          </div>
+        </div>
+
+        {/* KPI strip */}
+        <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-2xl bg-amber-50/70 dark:bg-amber-400/10 ring-1 ring-amber-200/60 dark:ring-amber-400/20 p-3">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">
+              <ArrowDownCircle className="h-3.5 w-3.5" /> Inbound
+            </div>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums text-stone-900 dark:text-stone-100">
+              {totalInbound}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-teal-50/70 dark:bg-teal-400/10 ring-1 ring-teal-200/60 dark:ring-teal-400/20 p-3">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-teal-700 dark:text-teal-300">
+              <ArrowUpCircle className="h-3.5 w-3.5" /> Outbound
+            </div>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums text-stone-900 dark:text-stone-100">
+              {totalOutbound}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-stone-100/70 dark:bg-white/5 ring-1 ring-stone-200/60 dark:ring-white/10 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">
+              Total moves
+            </p>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums text-stone-900 dark:text-stone-100">
+              {totalAll}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-stone-100/70 dark:bg-white/5 ring-1 ring-stone-200/60 dark:ring-white/10 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">
+              Peak month
+            </p>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums text-stone-900 dark:text-stone-100">
+              {peak.month}
+              <span className="ml-1 text-sm font-semibold text-stone-500 dark:text-stone-400">
+                ({peak.total})
+              </span>
+            </p>
+          </div>
         </div>
       </CardHeader>
+
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={throughputData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <AreaChart
+            data={throughputData}
+            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+          >
             <defs>
               <linearGradient id="inboundGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"  stopColor="#f59e0b" stopOpacity={0.5} />
-                <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.02} />
+                <stop offset="0%" stopColor="#fbbf24" stopOpacity={0.7} />
+                <stop offset="60%" stopColor="#f59e0b" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="outboundGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"  stopColor="#14b8a6" stopOpacity={0.45} />
-                <stop offset="100%" stopColor="#14b8a6" stopOpacity={0.02} />
+                <stop offset="0%" stopColor="#2dd4bf" stopOpacity={0.65} />
+                <stop offset="60%" stopColor="#14b8a6" stopOpacity={0.22} />
+                <stop offset="100%" stopColor="#14b8a6" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="inboundStroke" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#f59e0b" />
+                <stop offset="100%" stopColor="#fb923c" />
+              </linearGradient>
+              <linearGradient id="outboundStroke" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#14b8a6" />
+                <stop offset="100%" stopColor="#0d9488" />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis dataKey="month" stroke="#64748b" fontSize={13} />
-            <YAxis stroke="#64748b" fontSize={13} />
-            <Tooltip
-              contentStyle={{
-                borderRadius: 12,
-                border: "1px solid #e2e8f0",
-                fontSize: 13,
-              }}
+            <CartesianGrid
+              strokeDasharray="4 6"
+              stroke="currentColor"
+              className="text-stone-200 dark:text-white/10"
+              vertical={false}
             />
-            <Legend wrapperStyle={{ fontSize: 13 }} />
-            <Area type="monotone" dataKey="inbound"  stroke="#f59e0b" strokeWidth={3} fill="url(#inboundGrad)"  name="Inbound" />
-            <Area type="monotone" dataKey="outbound" stroke="#14b8a6" strokeWidth={3} fill="url(#outboundGrad)" name="Outbound" />
+            <XAxis
+              dataKey="month"
+              stroke="currentColor"
+              className="text-stone-500 dark:text-stone-400"
+              fontSize={12}
+              tickLine={false}
+              axisLine={false}
+              dy={6}
+            />
+            <YAxis
+              stroke="currentColor"
+              className="text-stone-500 dark:text-stone-400"
+              fontSize={12}
+              tickLine={false}
+              axisLine={false}
+              width={32}
+            />
+            <Tooltip
+              cursor={{ stroke: "#f59e0b", strokeWidth: 1, strokeDasharray: "3 3" }}
+              content={<ThroughputTooltip />}
+            />
+            <Area
+              type="monotone"
+              dataKey="inbound"
+              stroke="url(#inboundStroke)"
+              strokeWidth={3}
+              fill="url(#inboundGrad)"
+              name="Inbound"
+              activeDot={{ r: 6, strokeWidth: 3, stroke: "#fff", fill: "#f59e0b" }}
+            />
+            <Area
+              type="monotone"
+              dataKey="outbound"
+              stroke="url(#outboundStroke)"
+              strokeWidth={3}
+              fill="url(#outboundGrad)"
+              name="Outbound"
+              activeDot={{ r: 6, strokeWidth: 3, stroke: "#fff", fill: "#14b8a6" }}
+            />
           </AreaChart>
         </ResponsiveContainer>
+
+        {/* Custom legend */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
+          <span className="inline-flex items-center gap-2 font-semibold text-stone-700 dark:text-stone-200">
+            <span className="h-2.5 w-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-400" />
+            Inbound
+          </span>
+          <span className="inline-flex items-center gap-2 font-semibold text-stone-700 dark:text-stone-200">
+            <span className="h-2.5 w-6 rounded-full bg-gradient-to-r from-teal-500 to-teal-600" />
+            Outbound
+          </span>
+        </div>
       </CardContent>
     </Card>
   );
 });
 
+// Glassy tooltip for the donut chart
+const PassTypeTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  const item = payload[0];
+  return (
+    <div className="rounded-2xl bg-white/95 dark:bg-[#1f232d]/95 backdrop-blur-md ring-1 ring-stone-200 dark:ring-white/10 shadow-xl px-4 py-3 text-sm">
+      <div className="flex items-center gap-2 font-bold text-stone-900 dark:text-stone-100">
+        <span
+          className="h-2.5 w-2.5 rounded-full"
+          style={{ backgroundColor: item.payload.color }}
+        />
+        {item.payload.name}
+      </div>
+      <p className="mt-1 text-2xl font-extrabold tabular-nums text-stone-900 dark:text-stone-100">
+        {item.value}
+        <span className="ml-1 text-xs font-semibold text-stone-500 dark:text-stone-400">
+          passes
+        </span>
+      </p>
+    </div>
+  );
+};
+
 const PassTypeChart = memo(function PassTypeChart() {
+  const total = passTypeData.reduce((s, d) => s + d.value, 0);
+  const top = passTypeData.reduce((a, b) => (a.value >= b.value ? a : b));
+  const topPct = total ? Math.round((top.value / total) * 100) : 0;
+
+  // Pre-compute the mid-angle of each slice so we can decide whether the
+  // hover tooltip should anchor to the left or right of the donut.
+  // Recharts pies start at 90° (12 o'clock) and sweep clockwise by default.
+  const sliceSides = useMemo(() => {
+    let cumulative = 0;
+    return passTypeData.map((d) => {
+      const startAngle = 90 - (cumulative / total) * 360;
+      cumulative += d.value;
+      const endAngle = 90 - (cumulative / total) * 360;
+      const mid = (startAngle + endAngle) / 2;
+      // cos(mid) > 0 ⇒ right half, ≤ 0 ⇒ left half
+      const x = Math.cos((mid * Math.PI) / 180);
+      return x >= 0 ? "right" : "left";
+    });
+  }, []);
+
+  const [activeIndex, setActiveIndex] = useState(null);
+  const activeSlice = activeIndex !== null ? passTypeData[activeIndex] : null;
+  const activeSide = activeIndex !== null ? sliceSides[activeIndex] : null;
+
   return (
     <Card className={cardShell}>
       <CardHeader>
-        <CardTitle className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-900 dark:text-stone-100">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-400/15 text-teal-700 dark:text-teal-300">
-            <Container className="h-5 w-5" />
-          </span>
-          Pass Type Distribution
-        </CardTitle>
-        <CardDescription className="text-base text-stone-500 dark:text-stone-400 mt-1">Breakdown by category</CardDescription>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-900 dark:text-stone-100">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-400/15 text-teal-700 dark:text-teal-300">
+                <Container className="h-5 w-5" />
+              </span>
+              Pass Type Distribution
+            </CardTitle>
+            <CardDescription className="text-base text-stone-500 dark:text-stone-400 mt-1">
+              Breakdown by category
+            </CardDescription>
+          </div>
+          <Badge className="bg-teal-100 dark:bg-teal-400/15 text-teal-700 dark:text-teal-300 border-0 font-bold rounded-full">
+            {total} total
+          </Badge>
+        </div>
       </CardHeader>
-      <CardContent className="flex flex-col items-center">
-        <ResponsiveContainer width="100%" height={280}>
-          <PieChart>
-            <Pie
-              data={passTypeData}
-              cx="50%"
-              cy="50%"
-              innerRadius={75}
-              outerRadius={110}
-              paddingAngle={6}
-              dataKey="value"
-              stroke="none"
-            >
-              {passTypeData.map((entry) => (
-                <Cell key={entry.name} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={{
-                borderRadius: 12,
-                border: "1px solid #e2e8f0",
-                fontSize: 13,
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
 
-        <div className="grid grid-cols-3 gap-6 mt-4 w-full">
-          {passTypeData.map((item) => (
-            <div key={item.name} className="text-center">
-              <div className="flex justify-center mb-2">
-                <span
-                  className="h-3 w-3 rounded-full"
-                  style={{ backgroundColor: item.color }}
-                />
+      <CardContent>
+        <div className="relative">
+          <ResponsiveContainer width="100%" height={280}>
+            <PieChart>
+              <defs>
+                <linearGradient id="sliceVehicle" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#fbbf24" />
+                  <stop offset="100%" stopColor="#f59e0b" />
+                </linearGradient>
+                <linearGradient id="slicePersonnel" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#2dd4bf" />
+                  <stop offset="100%" stopColor="#0d9488" />
+                </linearGradient>
+                <linearGradient id="sliceDriver" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#c084fc" />
+                  <stop offset="100%" stopColor="#9333ea" />
+                </linearGradient>
+                <filter id="sliceGlow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="4" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              {/* Outer faint ring */}
+              <Pie
+                data={passTypeData}
+                cx="50%"
+                cy="50%"
+                startAngle={90}
+                endAngle={-270}
+                innerRadius={112}
+                outerRadius={120}
+                paddingAngle={3}
+                dataKey="value"
+                stroke="none"
+                isAnimationActive={false}
+              >
+                {passTypeData.map((entry) => (
+                  <Cell key={`ring-${entry.name}`} fill={entry.color} fillOpacity={0.15} />
+                ))}
+              </Pie>
+              {/* Main donut */}
+              <Pie
+                data={passTypeData}
+                cx="50%"
+                cy="50%"
+                startAngle={90}
+                endAngle={-270}
+                innerRadius={72}
+                outerRadius={104}
+                paddingAngle={4}
+                cornerRadius={10}
+                dataKey="value"
+                stroke="none"
+                filter="url(#sliceGlow)"
+                onMouseEnter={(_, idx) => setActiveIndex(idx)}
+                onMouseLeave={() => setActiveIndex(null)}
+              >
+                {passTypeData.map((entry, idx) => {
+                  const grad =
+                    entry.name === "Vehicle"
+                      ? "url(#sliceVehicle)"
+                      : entry.name === "Personnel"
+                        ? "url(#slicePersonnel)"
+                        : "url(#sliceDriver)";
+                  return (
+                    <Cell
+                      key={entry.name}
+                      fill={grad}
+                      opacity={
+                        activeIndex === null || activeIndex === idx ? 1 : 0.45
+                      }
+                      style={{ transition: "opacity 200ms ease, transform 200ms ease" }}
+                    />
+                  );
+                })}
+              </Pie>
+              {/* Recharts default tooltip disabled — we render our own. */}
+            </PieChart>
+          </ResponsiveContainer>
+
+          {/* Centre label overlay — shows hovered slice details, otherwise top type */}
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-stone-500 dark:text-stone-400">
+              {activeSlice ? activeSlice.name : "Top type"}
+            </p>
+            <p className="text-3xl md:text-4xl font-extrabold tabular-nums text-stone-900 dark:text-stone-100 leading-none mt-1">
+              {activeSlice
+                ? `${Math.round((activeSlice.value / total) * 100)}%`
+                : `${topPct}%`}
+            </p>
+            <p
+              className="mt-1 inline-flex items-center gap-1.5 text-xs font-bold"
+              style={{ color: activeSlice ? activeSlice.color : top.color }}
+            >
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: activeSlice ? activeSlice.color : top.color }}
+              />
+              {activeSlice ? `${activeSlice.value} passes` : top.name}
+            </p>
+          </div>
+
+          {/* Side-anchored hover card — appears on the LEFT when hovering a
+              left-half slice, on the RIGHT when hovering a right-half slice. */}
+          {activeSlice && (
+            <div
+              className={`pointer-events-none absolute top-1/2 -translate-y-1/2 transition-all duration-200 ${
+                activeSide === "left"
+                  ? "left-2 sm:left-4"
+                  : "right-2 sm:right-4"
+              }`}
+            >
+              <div className="rounded-2xl bg-white/95 dark:bg-[#1f232d]/95 backdrop-blur-md ring-1 ring-stone-200 dark:ring-white/10 shadow-xl px-4 py-3 text-sm min-w-[140px]">
+                <div className="flex items-center gap-2 font-bold text-stone-900 dark:text-stone-100">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: activeSlice.color }}
+                  />
+                  {activeSlice.name}
+                </div>
+                <p className="mt-1 text-2xl font-extrabold tabular-nums text-stone-900 dark:text-stone-100 leading-none">
+                  {activeSlice.value}
+                  <span className="ml-1 text-xs font-semibold text-stone-500 dark:text-stone-400">
+                    passes
+                  </span>
+                </p>
+                <p className="mt-1 text-xs font-bold tabular-nums text-stone-500 dark:text-stone-400">
+                  {Math.round((activeSlice.value / total) * 100)}% of total
+                </p>
               </div>
-              <p className="font-bold text-xl md:text-2xl text-stone-900 dark:text-stone-100">{item.value}</p>
-              <p className="text-sm md:text-base text-stone-500 dark:text-stone-400 font-medium">{item.name}</p>
             </div>
-          ))}
+          )}
+        </div>
+
+        {/* Legend rows with progress bars */}
+        <div className="mt-5 space-y-2.5">
+          {passTypeData.map((item) => {
+            const pct = total ? Math.round((item.value / total) * 100) : 0;
+            return (
+              <div
+                key={item.name}
+                className="flex items-center gap-3 rounded-2xl bg-stone-50 dark:bg-white/5 ring-1 ring-stone-200/70 dark:ring-white/10 px-3 py-2.5"
+              >
+                <span
+                  className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+                  style={{
+                    background: `linear-gradient(135deg, ${item.color}, ${item.color}cc)`,
+                  }}
+                >
+                  <Container className="h-4 w-4 text-white" strokeWidth={2.5} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="font-bold text-stone-800 dark:text-stone-100 truncate">
+                      {item.name}
+                    </p>
+                    <p className="text-sm font-extrabold tabular-nums text-stone-900 dark:text-stone-100">
+                      {item.value}
+                      <span className="ml-1.5 text-xs font-semibold text-stone-500 dark:text-stone-400">
+                        {pct}%
+                      </span>
+                    </p>
+                  </div>
+                  <div className="mt-1.5 h-1.5 w-full rounded-full bg-stone-200/70 dark:bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${pct}%`,
+                        background: `linear-gradient(90deg, ${item.color}, ${item.color}cc)`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </CardContent>
     </Card>
