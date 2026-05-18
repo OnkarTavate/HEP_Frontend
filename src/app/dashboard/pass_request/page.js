@@ -23,6 +23,11 @@ import {
   FileCheck2,
   CheckCircle2,
   Eye,
+  AlertCircle,
+  RefreshCw,
+  Edit3,
+  Car,
+  User,
 } from "lucide-react";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
@@ -222,6 +227,13 @@ export default function PassRequestPage() {
     data: null,
     type: null,
   });
+
+  // State for editing reverted passes (Phase 2)
+  const [editingRevertedPass, setEditingRevertedPass] = useState(null);
+  const [revertedEditModal, setRevertedEditModal] = useState(false);
+  const [revertedPersons, setRevertedPersons] = useState([]);
+  const [revertedVehicles, setRevertedVehicles] = useState([]);
+  const [editingRevertedEntity, setEditingRevertedEntity] = useState(null); // { type: 'person'|'vehicle', index: number, data: object }
 
   const [persons, setPersons] = useState([]);
   const [vehicles, setVehicles] = useState([]);
@@ -648,9 +660,9 @@ export default function PassRequestPage() {
     }
   };
 
-  // Trigger fetch when "view" tab is selected
+  // Trigger fetch when "view" or "reverted" tab is selected
   useEffect(() => {
-    if (activeTab === "view") {
+    if (activeTab === "view" || activeTab === "reverted") {
       fetchSubmittedPasses();
     }
   }, [activeTab]);
@@ -1005,6 +1017,13 @@ export default function PassRequestPage() {
       }
     }
 
+    // Check if we're editing a reverted entity
+    if (editingRevertedEntity && editingRevertedEntity.type === 'person') {
+      // Call API to update reverted person
+      handleSaveRevertedEntity();
+      return;
+    }
+
     if (editingPersonIndex !== null) {
       const updated = [...persons];
       updated[editingPersonIndex] = personForm;
@@ -1102,6 +1121,13 @@ export default function PassRequestPage() {
           "Request Letter, Tax, and Emission Cert are mandatory for Monthly/Yearly passes.",
         );
       }
+    }
+
+    // Check if we're editing a reverted entity
+    if (editingRevertedEntity && editingRevertedEntity.type === 'vehicle') {
+      // Call API to update reverted vehicle
+      handleSaveRevertedEntity();
+      return;
     }
 
     if (editingVehicleIndex !== null) {
@@ -1484,6 +1510,306 @@ export default function PassRequestPage() {
     }
   };
 
+  // ============================================
+  // PHASE 2: EDIT REVERTED PASS FUNCTIONS
+  // ============================================
+
+  const handleEditRevertedPass = (pass) => {
+    setEditingRevertedPass(pass);
+
+    // Extract only reverted entities
+    const revertedPersonsList = pass.persons?.filter(p => p.status === 'reverted') || [];
+    const revertedVehiclesList = pass.vehicles?.filter(v => v.status === 'reverted') || [];
+
+    setRevertedPersons(revertedPersonsList);
+    setRevertedVehicles(revertedVehiclesList);
+    setRevertedEditModal(true);
+  };
+
+  const closeRevertedEditModal = () => {
+    setRevertedEditModal(false);
+    setEditingRevertedPass(null);
+    setRevertedPersons([]);
+    setRevertedVehicles([]);
+    setEditingRevertedEntity(null);
+  };
+
+  const handleEditRevertedEntity = (type, index, entity) => {
+    // Debug: Log all available fields in the entity
+    console.log('=== ENTITY DEBUG ===');
+    console.log('Entity type:', type);
+    console.log('Entity object:', entity);
+    console.log('Entity keys:', Object.keys(entity));
+    console.log('Photo fields:', {
+      photoFileName: entity.photoFileName,
+      photoFilePATH: entity.photoFilePATH,
+      photoFilePath: entity.photoFilePath,
+    });
+    console.log('Aadhar fields:', {
+      aadharPDFFileName: entity.aadharPDFFileName,
+      aadharPDFFilePATH: entity.aadharPDFFilePATH,
+    });
+    
+    // Close the reverted edit modal first
+    setRevertedEditModal(false);
+    
+    // Store the entity being edited for later use
+    setEditingRevertedEntity({ type, index, id: entity.id, passId: editingRevertedPass?.id });
+
+    if (type === 'person') {
+      // Map reverted person data to personForm structure
+      // NOTE: personForm uses: country, designation, accessArea (not countryId, designationId, accessAreaId)
+      setPersonForm({
+        id: entity.id,
+        masterId: entity.masterId || '',
+        name: entity.name || '',
+        mobile: entity.mobile || '',
+        email: entity.email || '',
+        aadharNo: entity.aadharNo || entity.aadharNumber || entity.idProofNumber || '',
+        designation: String(entity.designationId || ''),
+        designationOther: '',
+        idProofType: entity.idProofType || '',
+        idProofNumber: entity.idProofNumber || entity.aadharNo || '',
+        hepType: String(entity.hepTypeId || '2'),
+        passType: String(entity.passType || '1'),
+        passPeriod: entity.passPeriod || '1',
+        dateFrom: entity.dateFrom ? entity.dateFrom.split('T')[0] : '',
+        dateTo: entity.dateTo ? entity.dateTo.split('T')[0] : '',
+        amount: entity.amount || '',
+        nationality: String(entity.nationality || '1'),
+        country: String(entity.countryId || '75'),
+        visaNo: entity.visaNo || '',
+        cardNumber: entity.cardNumber || '',
+        withTwoWheeler: entity.withTwoWheeler || false,
+        vehicleNo: entity.vehicleNo || '',
+        accessArea: String(entity.accessAreaId || ''),
+        passportNo: entity.passportNo || '',
+        cdcNumber: entity.cdcNumber || '',
+        seafarerPassFor: entity.seafarerPassFor || 'Sign-On',
+        seafarerIdType: entity.seafarerIdType || '',
+        photo: null,
+        aadharFile: null,
+        driverLicence: null,
+        requisitionLetter: null,
+        passportDoc: null,
+        policeVerification: null,
+        proofOfEmployment: null,
+        copyOfLicence: null,
+        idProofFile: null,
+        cdcDocument: null,
+        declarationForm: null,
+        // Existing file names for viewing
+        existingPassRequestId: editingRevertedPass?.id,
+        existingPhotoName: entity.photoFileName,
+        existingAadharName: entity.aadharPDFFileName,
+        existingDlName: entity.driverLicenseName,
+        existingReqName: entity.requisitionLetterName,
+        existingPassportName: entity.passportName,
+        existingPoliceName: entity.policeVerificationName,
+        existingEmpName: entity.employmentProofName,
+        existingChaName: entity.chaLicenseName,
+        existingIdProofName: entity.idProofFileName,
+        existingCdcName: entity.cdcDocumentName,
+        existingDeclarationName: entity.declarationFormName,
+        isEditing: true,
+        editIndex: index
+      });
+
+      // Open the person form modal
+      toggleModal("person", true);
+      toast.success('Person details loaded for editing');
+
+    } else if (type === 'vehicle') {
+      // Map reverted vehicle data to vehicleForm structure
+      setVehicleForm({
+        id: entity.id,
+        regNo: entity.registrationNo || entity.regNo || '',
+        engineNo: entity.engineNo || '',
+        chassisNo: entity.chassisNo || '',
+        vehicleType: String(entity.vehicleTypeId || ''),
+        fuelType: entity.fuelType || '',
+        insuranceExpiry: entity.insuranceExpiry ? entity.insuranceExpiry.split('T')[0] : '',
+        rcValidity: entity.rcValidity ? entity.rcValidity.split('T')[0] : '',
+        passType: String(entity.passType || ''),
+        passPeriod: entity.passPeriod || '',
+        dateFrom: entity.dateFrom ? entity.dateFrom.split('T')[0] : '',
+        dateTo: entity.dateTo ? entity.dateTo.split('T')[0] : '',
+        amount: entity.amount || '',
+        rcDocument: null,
+        insuranceDocument: null,
+        permit: null,
+        fitnessCert: null,
+        requestLetter: null,
+        taxDoc: null,
+        emissionCert: null,
+        // Existing file names for viewing
+        existingPassRequestId: editingRevertedPass?.id,
+        existingRcName: entity.scannedCopyFileName,
+        existingInsName: entity.insuranceFileName,
+        existingPermitName: entity.permitFileName,
+        existingFitnessName: entity.fitnessFileName,
+        existingReqName: entity.requestLetterName,
+        existingTaxName: entity.taxDocName,
+        existingEmissionName: entity.emissionCertName,
+        isEditing: true,
+        editIndex: index
+      });
+
+      // Open the vehicle form modal
+      toggleModal("vehicle", true);
+      toast.success('Vehicle details loaded for editing');
+    }
+  };
+
+  const handleSaveRevertedEntity = async () => {
+    if (!editingRevertedEntity) return;
+
+    const { type, index, id } = editingRevertedEntity;
+
+    try {
+      const token = getToken();
+      const headers = { Authorization: `Bearer ${token}` };
+
+      if (type === 'person') {
+        // Use personForm data for the update
+        const updateData = {
+          id: id,
+          name: personForm.name,
+          mobile: personForm.mobile,
+          aadharNo: personForm.aadharNo,
+          designation: personForm.designation,
+          idProofType: personForm.idProofType,
+          hepTypeId: personForm.hepType,
+          passType: personForm.passType,
+          passPeriod: personForm.passPeriod,
+          dateFrom: personForm.dateFrom,
+          dateTo: personForm.dateTo,
+          amount: personForm.amount,
+          countryId: personForm.nationality,
+          // File names for reference
+          photoFileName: personForm.existingPhotoName,
+          aadharPDFFileName: personForm.existingAadharName,
+          driverLicenseName: personForm.existingDlName,
+          requisitionLetterName: personForm.existingReqName,
+          passportName: personForm.existingPassportName,
+          policeVerificationName: personForm.existingPoliceName,
+          employmentProofName: personForm.existingEmpName,
+          chaLicenseName: personForm.existingChaName,
+          idProofFileName: personForm.existingIdProofName,
+          cdcDocumentName: personForm.existingCdcName,
+          declarationFormName: personForm.existingDeclarationName,
+        };
+
+        // Update person via API
+        await axios.put(
+          `${API_BASE_URL}/pass-request/update-pass-person/${id}`,
+          updateData,
+          { headers }
+        );
+
+        // Update local reverted persons state
+        const updatedPersons = [...revertedPersons];
+        updatedPersons[index] = { ...updateData, id, status: 'pending' };
+        setRevertedPersons(updatedPersons);
+
+        // Close person form and reset
+        toggleModal("person", false);
+        setPersonForm(initialPersonForm);
+
+        // Reopen the reverted edit modal
+        setRevertedEditModal(true);
+
+      } else if (type === 'vehicle') {
+        // Use vehicleForm data for the update
+        const updateData = {
+          id: id,
+          registrationNo: vehicleForm.regNo,
+          regNo: vehicleForm.regNo,
+          engineNo: vehicleForm.engineNo,
+          chassisNo: vehicleForm.chassisNo,
+          vehicleTypeId: vehicleForm.vehicleType,
+          fuelType: vehicleForm.fuelType,
+          insuranceExpiry: vehicleForm.insuranceExpiry,
+          rcValidity: vehicleForm.rcValidity,
+          passType: vehicleForm.passType,
+          passPeriod: vehicleForm.passPeriod,
+          dateFrom: vehicleForm.dateFrom,
+          dateTo: vehicleForm.dateTo,
+          amount: vehicleForm.amount,
+          // File names for reference
+          scannedCopyFileName: vehicleForm.existingRcName,
+          insuranceFileName: vehicleForm.existingInsName,
+          permitFileName: vehicleForm.existingPermitName,
+          fitnessFileName: vehicleForm.existingFitnessName,
+          requestLetterName: vehicleForm.existingReqName,
+          taxDocName: vehicleForm.existingTaxName,
+          emissionCertName: vehicleForm.existingEmissionName,
+        };
+
+        // Update vehicle via API
+        await axios.put(
+          `${API_BASE_URL}/pass-request/update-pass-vehicle/${id}`,
+          updateData,
+          { headers }
+        );
+
+        // Update local reverted vehicles state
+        const updatedVehicles = [...revertedVehicles];
+        updatedVehicles[index] = { ...updateData, id, status: 'pending' };
+        setRevertedVehicles(updatedVehicles);
+
+        // Close vehicle form and reset
+        toggleModal("vehicle", false);
+        setVehicleForm(initialVehicleForm);
+
+        // Reopen the reverted edit modal
+        setRevertedEditModal(true);
+      }
+
+      toast.success(`${type === 'person' ? 'Person' : 'Vehicle'} updated successfully`);
+      setEditingRevertedEntity(null);
+
+    } catch (error) {
+      console.error('Error updating reverted entity:', error);
+      toast.error(error.response?.data?.message || 'Failed to update entity');
+    }
+  };
+
+  const handleResubmitRevertedPass = async () => {
+    if (!editingRevertedPass) return;
+
+    try {
+      const token = getToken();
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // Check if all reverted entities have been updated
+      const pendingPersons = revertedPersons.filter(p => p.status === 'reverted');
+      const pendingVehicles = revertedVehicles.filter(v => v.status === 'reverted');
+
+      if (pendingPersons.length > 0 || pendingVehicles.length > 0) {
+        toast.error(`Please update all reverted entities before resubmitting. ${pendingPersons.length + pendingVehicles.length} remaining.`);
+        return;
+      }
+
+      // Resubmit the pass - change status back to PENDING
+      await axios.put(
+        `${API_BASE_URL}/pass-request/resubmit-reverted-pass/${editingRevertedPass.id}`,
+        {},
+        { headers }
+      );
+
+      toast.success('Pass resubmitted successfully!');
+      closeRevertedEditModal();
+
+      // Refresh the reverted passes list
+      fetchSubmittedPasses();
+
+    } catch (error) {
+      console.error('Error resubmitting pass:', error);
+      toast.error(error.response?.data?.message || 'Failed to resubmit pass');
+    }
+  };
+
   const getFilteredDesignations = () => {
     // If Seafarer (ID: 3) is selected, only show Crew and Supernumerary
     if (String(personForm.hepType) === "3") {
@@ -1530,6 +1856,17 @@ export default function PassRequestPage() {
           className={`px-8 py-4 text-base transition-all ${activeTab === "apply" ? "font-bold text-[#0a1e4d] dark:text-white border-b-2 border-[#0a1e4d] dark:border-white" : "font-semibold text-slate-500 dark:text-stone-400 hover:text-[#0a1e4d] dark:hover:text-white"}`}
         >
           Apply New Pass
+        </button>
+        <button
+          onClick={() => setActiveTab("reverted")}
+          className={`px-8 py-4 text-base transition-all ${activeTab === "reverted" ? "font-bold text-amber-600 dark:text-amber-400 border-b-2 border-amber-600 dark:border-amber-400" : "font-semibold text-slate-500 dark:text-stone-400 hover:text-amber-600 dark:hover:text-amber-400"}`}
+        >
+          ⚠️ Reverted Applications
+          {submittedPasses.filter(p => p.status === 'REVERTED' || p.hasRevertedEntities).length > 0 && (
+            <span className="ml-2 px-2 py-0.5 text-xs font-bold bg-amber-100 text-amber-700 rounded-full">
+              {submittedPasses.filter(p => p.status === 'REVERTED' || p.hasRevertedEntities).length}
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab("view")}
@@ -2199,6 +2536,128 @@ export default function PassRequestPage() {
                         </tr>
                       );
                     })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* REVERTED APPLICATIONS TAB */}
+      {activeTab === "reverted" && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 bg-amber-50 flex justify-between items-center">
+              <h3 className="font-black text-amber-900 flex items-center gap-2 uppercase text-sm tracking-wider">
+                <AlertCircle className="h-5 w-5 text-amber-600" /> Reverted Applications - Action Required
+              </h3>
+              <button
+                onClick={fetchSubmittedPasses}
+                disabled={loadingPasses}
+                className="bg-white text-amber-700 px-4 py-2 rounded-lg border border-amber-200 text-xs font-bold hover:bg-amber-50 disabled:opacity-50 transition-colors flex items-center gap-2 shadow-sm"
+              >
+                <RefreshCw className={`h-4 w-4 ${loadingPasses ? "animate-spin" : ""}`} />
+                Refresh
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-[#0a1e4d] text-white">
+                  <tr>
+                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider">
+                      Reference No
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider">
+                      Submitted Date
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider">
+                      Entities
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider text-center">
+                      Reverted Count
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider text-center">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {loadingPasses ? (
+                    <tr>
+                      <td colSpan="5" className="p-12 text-center">
+                        <RefreshCw className="h-8 w-8 animate-spin mx-auto text-amber-500 mb-3" />
+                        <p className="text-sm font-medium text-slate-500">
+                          Loading reverted applications...
+                        </p>
+                      </td>
+                    </tr>
+                  ) : submittedPasses.filter(p => p.status === 'REVERTED' || p.hasRevertedEntities).length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan="5"
+                        className="p-12 text-center text-sm font-medium text-slate-400 italic"
+                      >
+                        <div className="flex flex-col items-center gap-3">
+                          <CheckCircle2 className="h-12 w-12 text-emerald-400" />
+                          <p>No reverted applications found.</p>
+                          <p className="text-xs">All your pass applications are under review or completed.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    submittedPasses
+                      .filter(p => p.status === 'REVERTED' || p.hasRevertedEntities)
+                      .map((pass) => {
+                        const totalEntities = (pass.persons?.length || 0) + (pass.vehicles?.length || 0);
+                        const revertedEntities = [
+                          ...(pass.persons || []).filter(p => p.status === 'reverted'),
+                          ...(pass.vehicles || []).filter(v => v.status === 'reverted')
+                        ];
+
+                        return (
+                          <tr
+                            key={pass.id}
+                            className="hover:bg-amber-50/50 transition-colors border-l-4 border-amber-400"
+                          >
+                            <td className="px-6 py-4 border-r border-slate-100">
+                              <span className="font-mono font-bold text-[#0a1e4d]">
+                                {pass.referenceNo}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
+                              {new Date(pass.submittedAt || pass.createdAt).toLocaleDateString('en-GB', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                              })}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
+                              <div className="flex flex-col gap-1">
+                                <span>{totalEntities} Total</span>
+                                <span className="text-amber-600 font-bold">
+                                  {revertedEntities.length} Reverted
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-center border-r border-slate-100">
+                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 text-amber-700 font-bold text-sm">
+                                {pass.revertCount || 1}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <button
+                                onClick={() => handleEditRevertedPass(pass)}
+                                className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 mx-auto"
+                              >
+                                <Edit3 className="h-4 w-4" />
+                                Edit & Resubmit
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
                   )}
                 </tbody>
               </table>
@@ -3791,7 +4250,7 @@ export default function PassRequestPage() {
                               </td>
                               <td className="p-3">
                                 <span
-                                  className={`px-2 py-1 rounded-full text-[10px] font-bold ${String(p.status).toUpperCase() === "APPROVED" ? "bg-emerald-100 text-emerald-700" : String(p.status).toUpperCase() === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                                  className={`px-2 py-1 rounded-full text-[10px] font-bold ${String(p.status).toUpperCase() === "APPROVED" ? "bg-emerald-100 text-emerald-700" : String(p.status).toUpperCase() === "REJECTED" ? "bg-red-100 text-red-700" : String(p.status).toUpperCase() === "REVERTED" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}
                                 >
                                   {(p.status || "PENDING").toUpperCase()}
                                 </span>
@@ -3878,7 +4337,7 @@ export default function PassRequestPage() {
                               </td>
                               <td className="p-3">
                                 <span
-                                  className={`px-2 py-1 rounded-full text-[10px] font-bold ${String(v.status).toUpperCase() === "APPROVED" ? "bg-emerald-100 text-emerald-700" : String(v.status).toUpperCase() === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                                  className={`px-2 py-1 rounded-full text-[10px] font-bold ${String(v.status).toUpperCase() === "APPROVED" ? "bg-emerald-100 text-emerald-700" : String(v.status).toUpperCase() === "REJECTED" ? "bg-red-100 text-red-700" : String(v.status).toUpperCase() === "REVERTED" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}
                                 >
                                   {(v.status || "PENDING").toUpperCase()}
                                 </span>
@@ -4202,6 +4661,25 @@ export default function PassRequestPage() {
                   </div>
                 )}
 
+              {/* REVERT REASON BANNER (IF APPLICABLE) */}
+              {String(entityModal.data.status).toUpperCase() === "REVERTED" &&
+                (entityModal.data.revertReason || entityModal.data.rejectedReason) && (
+                  <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                    <div>
+                      <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider mb-1">
+                        Action Required - Application Reverted
+                      </h4>
+                      <p className="text-sm text-amber-700 font-medium">
+                        {entityModal.data.revertReason || entityModal.data.rejectedReason}
+                      </p>
+                      <p className="text-xs text-amber-600 mt-2">
+                        Please update the required information and re-submit.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-5 py-3 bg-slate-100 border-b border-slate-200">
                   <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest">
@@ -4341,6 +4819,212 @@ export default function PassRequestPage() {
                 className="bg-slate-200 text-slate-800 px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-300 transition-colors"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PHASE 2: REVERTED PASS EDIT MODAL */}
+      {revertedEditModal && editingRevertedPass && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
+            {/* Header */}
+            <div className="flex justify-between items-center px-6 py-4 bg-amber-600 text-white shrink-0">
+              <div>
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <Edit3 className="h-5 w-5" />
+                  Edit Reverted Pass - {editingRevertedPass.referenceNo}
+                </h3>
+                <p className="text-xs text-amber-100 mt-0.5">
+                  Update reverted entities and resubmit your application
+                </p>
+              </div>
+              <button
+                onClick={closeRevertedEditModal}
+                className="text-white hover:text-amber-100 transition-colors p-1"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+              {/* Warning Banner */}
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl mb-6 flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-sm text-amber-800">
+                  <p className="font-semibold">Action Required</p>
+                  <p>
+                    Please review and update all reverted entities below. Once updated, their status will change to "pending" and you can resubmit the pass for approval.
+                  </p>
+                </div>
+              </div>
+
+              {/* Reverted Persons Section */}
+              {revertedPersons.length > 0 && (
+                <div className="mb-8">
+                  <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <Users className="h-5 w-5 text-blue-600" />
+                    Reverted Persons ({revertedPersons.length})
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {revertedPersons.map((person, index) => (
+                      <div
+                        key={person.id}
+                        className={`p-4 rounded-xl border-2 transition-all ${
+                          person.status === 'reverted'
+                            ? 'bg-white border-amber-300'
+                            : 'bg-green-50 border-green-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                              person.status === 'reverted' ? 'bg-amber-100' : 'bg-green-100'
+                            }`}>
+                              <User className={`h-5 w-5 ${
+                                person.status === 'reverted' ? 'text-amber-600' : 'text-green-600'
+                              }`} />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-800">{person.name}</p>
+                              <p className="text-xs text-slate-500">ID: {person.id}</p>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            person.status === 'reverted'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            {person.status === 'reverted' ? 'Needs Update' : 'Updated'}
+                          </span>
+                        </div>
+
+                        {/* Revert Reason */}
+                        {person.rejectedReason && (
+                          <div className="bg-red-50 border border-red-200 p-3 rounded-lg mb-3">
+                            <p className="text-xs text-red-600 font-semibold mb-1">Revert Reason:</p>
+                            <p className="text-sm text-red-700">{person.rejectedReason}</p>
+                          </div>
+                        )}
+
+                        {/* Edit Button */}
+                        {person.status === 'reverted' && (
+                          <button
+                            onClick={() => handleEditRevertedEntity('person', index, person)}
+                            className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                            Update Person
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Reverted Vehicles Section */}
+              {revertedVehicles.length > 0 && (
+                <div className="mb-8">
+                  <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <Car className="h-5 w-5 text-emerald-600" />
+                    Reverted Vehicles ({revertedVehicles.length})
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {revertedVehicles.map((vehicle, index) => (
+                      <div
+                        key={vehicle.id}
+                        className={`p-4 rounded-xl border-2 transition-all ${
+                          vehicle.status === 'reverted'
+                            ? 'bg-white border-amber-300'
+                            : 'bg-green-50 border-green-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                              vehicle.status === 'reverted' ? 'bg-amber-100' : 'bg-green-100'
+                            }`}>
+                              <Car className={`h-5 w-5 ${
+                                vehicle.status === 'reverted' ? 'text-amber-600' : 'text-green-600'
+                              }`} />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-800">{vehicle.registrationNo || vehicle.regNo}</p>
+                              <p className="text-xs text-slate-500">ID: {vehicle.id}</p>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            vehicle.status === 'reverted'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            {vehicle.status === 'reverted' ? 'Needs Update' : 'Updated'}
+                          </span>
+                        </div>
+
+                        {/* Revert Reason */}
+                        {vehicle.rejectedReason && (
+                          <div className="bg-red-50 border border-red-200 p-3 rounded-lg mb-3">
+                            <p className="text-xs text-red-600 font-semibold mb-1">Revert Reason:</p>
+                            <p className="text-sm text-red-700">{vehicle.rejectedReason}</p>
+                          </div>
+                        )}
+
+                        {/* Edit Button */}
+                        {vehicle.status === 'reverted' && (
+                          <button
+                            onClick={() => handleEditRevertedEntity('vehicle', index, vehicle)}
+                            className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                            Update Vehicle
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* All Updated Message */}
+              {revertedPersons.every(p => p.status !== 'reverted') &&
+               revertedVehicles.every(v => v.status !== 'reverted') && (
+                <div className="bg-green-50 border border-green-200 p-4 rounded-xl flex items-center gap-3 mb-6">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
+                  <div>
+                    <p className="font-semibold text-green-800">All entities updated!</p>
+                    <p className="text-sm text-green-700">You can now resubmit your pass for approval.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-200 bg-white flex justify-between shrink-0">
+              <button
+                onClick={closeRevertedEditModal}
+                className="bg-slate-200 text-slate-800 px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResubmitRevertedPass}
+                disabled={
+                  revertedPersons.some(p => p.status === 'reverted') ||
+                  revertedVehicles.some(v => v.status === 'reverted')
+                }
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${
+                  revertedPersons.some(p => p.status === 'reverted') ||
+                  revertedVehicles.some(v => v.status === 'reverted')
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                    : 'bg-amber-500 hover:bg-amber-600 text-white'
+                }`}
+              >
+                <Send className="h-4 w-4" />
+                Resubmit Pass
               </button>
             </div>
           </div>

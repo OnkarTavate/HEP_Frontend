@@ -29,6 +29,7 @@ import {
   Phone,
   Mail,
   CreditCard,
+  RefreshCw,
 } from "lucide-react";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
@@ -198,10 +199,12 @@ export default function TrafficPassesPage() {
     }
   };
   const handleEntityDecision = (status) => {
-    if (status === "REJECTED" && !currentRemark.trim()) {
-      toast.error("Rejection Reason Required", {
+    if ((status === "REJECTED" || status === "REVERTED") && !currentRemark.trim()) {
+      toast.error(`${status === "REVERTED" ? "Revert" : "Rejection"} Reason Required`, {
         description:
-          "You must provide a remark explaining why this pass is being rejected.",
+          status === "REVERTED"
+            ? "You must provide a remark explaining what needs to be corrected."
+            : "You must provide a remark explaining why this pass is being rejected.",
       });
       return;
     }
@@ -224,6 +227,8 @@ export default function TrafficPassesPage() {
   const handleSubmitReview = async () => {
     const persons = selectedRequest.persons || [];
     const vehicles = selectedRequest.vehicles || [];
+    let reviewStatus = null;
+    let responseMessage = null;
 
     // 1. VALIDATION: Ensure every single entity has a decision
     const unverifiedPersons = persons.filter(
@@ -236,7 +241,7 @@ export default function TrafficPassesPage() {
     if (unverifiedPersons.length > 0 || unverifiedVehicles.length > 0) {
       toast.warning("Incomplete Verification", {
         description:
-          "You must approve or reject EVERY person and vehicle before submitting.",
+          "You must approve, reject, or revert EVERY person and vehicle before submitting.",
       });
       return;
     }
@@ -267,6 +272,12 @@ export default function TrafficPassesPage() {
               {},
               { headers }
             );
+          } else if (status === "REVERTED") {
+            return axios.put(
+              `${AGENT_API}/vendor-pass/${vendorPassId}/revert-person/${personIndex}`,
+              { revertReason: remark },
+              { headers }
+            );
           } else {
             return axios.put(
               `${AGENT_API}/vendor-pass/${vendorPassId}/reject-person/${personIndex}`,
@@ -286,6 +297,12 @@ export default function TrafficPassesPage() {
             return axios.put(
               `${AGENT_API}/vendor-pass/${vendorPassId}/approve-vehicle/${vehicleIndex}`,
               {},
+              { headers }
+            );
+          } else if (status === "REVERTED") {
+            return axios.put(
+              `${AGENT_API}/vendor-pass/${vendorPassId}/revert-vehicle/${vehicleIndex}`,
+              { revertReason: remark },
               { headers }
             );
           } else {
@@ -317,11 +334,18 @@ export default function TrafficPassesPage() {
 
           const payload = {
             personId: p.id,
-            decision: status === "APPROVED" ? "approve-person" : "reject-person",
+            decision:
+              status === "APPROVED"
+                ? "approve-person"
+                : status === "REVERTED"
+                  ? "revert-person"
+                  : "reject-person",
           };
 
           if (status === "REJECTED") {
             payload.rejectedReason = remark;
+          } else if (status === "REVERTED") {
+            payload.revertReason = remark;
           }
 
           return axios.patch(actionUrl, payload, { headers });
@@ -335,11 +359,17 @@ export default function TrafficPassesPage() {
           const payload = {
             vehicleId: v.id,
             decision:
-              status === "APPROVED" ? "approve-vehicle" : "reject-vehicle",
+              status === "APPROVED"
+                ? "approve-vehicle"
+                : status === "REVERTED"
+                  ? "revert-vehicle"
+                  : "reject-vehicle",
           };
 
           if (status === "REJECTED") {
             payload.rejectedReason = remark;
+          } else if (status === "REVERTED") {
+            payload.revertReason = remark;
           }
 
           return axios.patch(actionUrl, payload, { headers });
@@ -354,14 +384,23 @@ export default function TrafficPassesPage() {
           decision: "complete-review",
         };
 
-        await axios.patch(actionUrl, finalPayload, { headers });
+        const completeResponse = await axios.patch(actionUrl, finalPayload, { headers });
+        reviewStatus = completeResponse.data?.data?.reviewStatus;
+        responseMessage = completeResponse.data?.data?.message;
       }
 
       // 6. HANDLE SUCCESS
-      toast.success("Review Submitted", {
-        id: loadingToastId,
-        description: "Pass Request review processed successfully.",
-      });
+      if (reviewStatus === 'REVERTED') {
+        toast.success("Review Saved with Reverted Entities", {
+          id: loadingToastId,
+          description: responseMessage || "Pass request has been reverted to the applicant for corrections.",
+        });
+      } else {
+        toast.success("Review Submitted", {
+          id: loadingToastId,
+          description: responseMessage || "Pass Request review processed successfully.",
+        });
+      }
 
       setIsModalOpen(false);
       fetchPassRequests(); // Refresh the dashboard table
@@ -390,7 +429,7 @@ export default function TrafficPassesPage() {
 
   // --- FILTER & SORT LOGIC ---
   const PENDING_STATUSES = ["SUBMITTED", "PENDING", "IN_REVIEW"];
-  const PROCESSED_STATUSES = ["APPROVED", "REJECTED", "PROCESSED", "COMPLETED"];
+  const PROCESSED_STATUSES = ["APPROVED", "REJECTED", "REVERTED", "PROCESSED", "COMPLETED"];
 
   const pendingPasses = requests.filter((r) =>
     PENDING_STATUSES.includes(r.status),
@@ -763,6 +802,7 @@ export default function TrafficPassesPage() {
                               });
                               setCurrentRemark(
                                 entityRemarks.persons[p.id] ||
+                                  p.revertReason ||
                                   p.rejectedReason ||
                                   "",
                               );
@@ -791,6 +831,7 @@ export default function TrafficPassesPage() {
 
                                   const personRemark =
                                     entityRemarks.persons[p.id] ||
+                                    p.revertReason ||
                                     p.rejectedReason;
 
                                   return (
@@ -800,17 +841,23 @@ export default function TrafficPassesPage() {
                                           className={`px-2 py-1 rounded text-[10px] font-bold ${
                                             personStatus === "APPROVED"
                                               ? "bg-emerald-100 text-emerald-700"
-                                              : "bg-red-100 text-red-700"
+                                              : personStatus === "REVERTED"
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-red-100 text-red-700"
                                           }`}
                                         >
                                           {personStatus}
                                         </span>
                                       )}
 
-                                      {personStatus === "REJECTED" &&
+                                      {(personStatus === "REJECTED" || personStatus === "REVERTED") &&
                                         personRemark && (
-                                          <div className="mt-1 text-[10px] text-red-600 bg-red-50 p-1 rounded border border-red-100 inline-block">
-                                            Reason: {personRemark}
+                                          <div className={`mt-1 text-[10px] p-1 rounded border inline-block ${
+                                            personStatus === "REVERTED"
+                                              ? "text-amber-600 bg-amber-50 border-amber-100"
+                                              : "text-red-600 bg-red-50 border-red-100"
+                                          }`}>
+                                            {personStatus === "REVERTED" ? "Revert: " : "Reason: "}{personRemark}
                                           </div>
                                         )}
                                     </>
@@ -883,6 +930,7 @@ export default function TrafficPassesPage() {
                               });
                               setCurrentRemark(
                                 entityRemarks.vehicles[v.id] ||
+                                  v.revertReason ||
                                   v.rejectedReason ||
                                   "",
                               );
@@ -908,6 +956,7 @@ export default function TrafficPassesPage() {
 
                                   const vehicleRemark =
                                     entityRemarks.vehicles[v.id] ||
+                                    v.revertReason ||
                                     v.rejectedReason;
 
                                   return (
@@ -917,17 +966,23 @@ export default function TrafficPassesPage() {
                                           className={`px-2 py-1 rounded text-[10px] font-bold ${
                                             vehicleStatus === "APPROVED"
                                               ? "bg-emerald-100 text-emerald-700"
-                                              : "bg-red-100 text-red-700"
+                                              : vehicleStatus === "REVERTED"
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-red-100 text-red-700"
                                           }`}
                                         >
                                           {vehicleStatus}
                                         </span>
                                       )}
 
-                                      {vehicleStatus === "REJECTED" &&
+                                      {(vehicleStatus === "REJECTED" || vehicleStatus === "REVERTED") &&
                                         vehicleRemark && (
-                                          <div className="mt-1 text-[10px] text-red-600 bg-red-50 p-1 rounded border border-red-100 inline-block">
-                                            Reason: {vehicleRemark}
+                                          <div className={`mt-1 text-[10px] p-1 rounded border inline-block ${
+                                            vehicleStatus === "REVERTED"
+                                              ? "text-amber-600 bg-amber-50 border-amber-100"
+                                              : "text-red-600 bg-red-50 border-red-100"
+                                          }`}>
+                                            {vehicleStatus === "REVERTED" ? "Revert: " : "Reason: "}{vehicleRemark}
                                           </div>
                                         )}
                                     </>
@@ -1364,10 +1419,10 @@ export default function TrafficPassesPage() {
                 </div>
               </div>
 
-              {/* REJECTION REMARKS SECTION */}
+              {/* REJECTION/REVERT REMARKS SECTION */}
               <div className="bg-orange-50 p-5 rounded-xl border border-orange-200 shadow-sm mt-4">
                 <label className="block text-xs font-bold text-orange-900 uppercase tracking-wider mb-2">
-                  Authority Remarks (Required for Rejection)
+                  Authority Remarks (Required for Rejection or Revert)
                 </label>
                 <textarea
                   value={currentRemark}
@@ -1375,7 +1430,7 @@ export default function TrafficPassesPage() {
                   disabled={isViewMode}
                   className="w-full border border-orange-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none bg-white shadow-inner"
                   rows="3"
-                  placeholder="Enter specific remarks if rejecting this entity..."
+                  placeholder="Enter specific remarks if rejecting or reverting this entity..."
                 />
               </div>
             </div>
@@ -1388,13 +1443,19 @@ export default function TrafficPassesPage() {
                 <div className="flex gap-4">
                   <button
                     onClick={() => handleEntityDecision("REJECTED")}
-                    className="bg-red-50 text-red-600 border border-red-200 px-8 py-3 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center gap-2 uppercase text-sm tracking-wider"
+                    className="bg-red-50 text-red-600 border border-red-200 px-6 py-3 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center gap-2 uppercase text-sm tracking-wider"
                   >
                     <XCircle className="h-5 w-5" /> Reject
                   </button>
                   <button
+                    onClick={() => handleEntityDecision("REVERTED")}
+                    className="bg-amber-100 text-amber-700 border border-amber-300 px-6 py-3 rounded-xl font-bold hover:bg-amber-200 transition-colors flex items-center gap-2 uppercase text-sm tracking-wider"
+                  >
+                    <RefreshCw className="h-5 w-5" /> Revert
+                  </button>
+                  <button
                     onClick={() => handleEntityDecision("APPROVED")}
-                    className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold shadow-md hover:bg-emerald-700 transition-colors flex items-center gap-2 uppercase text-sm tracking-wider"
+                    className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold shadow-md hover:bg-emerald-700 transition-colors flex items-center gap-2 uppercase text-sm tracking-wider"
                   >
                     <CheckCircle2 className="h-5 w-5" /> Approve
                   </button>
