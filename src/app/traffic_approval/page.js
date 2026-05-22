@@ -230,18 +230,19 @@ export default function TrafficPassesPage() {
     let reviewStatus = null;
     let responseMessage = null;
 
-    // 1. VALIDATION: Ensure every single entity has a decision
+    // 1. VALIDATION: Only pending/reverted entities need a decision
+    // Already approved/rejected entities are pre-populated in entityStatuses
     const unverifiedPersons = persons.filter(
-      (p) => !entityStatuses.persons[p.id],
+      (p) => !entityStatuses.persons[p.id] && (p.status === 'pending' || p.status === 'reverted'),
     );
     const unverifiedVehicles = vehicles.filter(
-      (v) => !entityStatuses.vehicles[v.id],
+      (v) => !entityStatuses.vehicles[v.id] && (v.status === 'pending' || v.status === 'reverted'),
     );
 
     if (unverifiedPersons.length > 0 || unverifiedVehicles.length > 0) {
       toast.warning("Incomplete Verification", {
         description:
-          "You must approve, reject, or revert EVERY person and vehicle before submitting.",
+          "You must approve, reject, or revert all pending persons and vehicles before submitting.",
       });
       return;
     }
@@ -419,8 +420,45 @@ export default function TrafficPassesPage() {
     setSelectedRequest(pass);
 
     if (!viewOnly) {
-      setEntityStatuses({ persons: {}, vehicles: {} });
-      setEntityRemarks({ persons: {}, vehicles: {} });
+      // Pre-populate entity statuses from DB for already-decided entities
+      // Only pending/reverted entities should need fresh review
+      const initialPersonStatuses = {};
+      const initialPersonRemarks = {};
+      const initialVehicleStatuses = {};
+      const initialVehicleRemarks = {};
+
+      (pass.persons || []).forEach((p) => {
+        if (p.status === 'approved') {
+          initialPersonStatuses[p.id] = 'APPROVED';
+        } else if (p.status === 'rejected') {
+          initialPersonStatuses[p.id] = 'REJECTED';
+          initialPersonRemarks[p.id] = p.rejectedReason || '';
+        } else if (p.status === 'reverted') {
+          // Reverted entities were reset to pending by backend
+          // Leave empty so they need fresh review
+        }
+      });
+
+      (pass.vehicles || []).forEach((v) => {
+        if (v.status === 'approved') {
+          initialVehicleStatuses[v.id] = 'APPROVED';
+        } else if (v.status === 'rejected') {
+          initialVehicleStatuses[v.id] = 'REJECTED';
+          initialVehicleRemarks[v.id] = v.rejectedReason || '';
+        } else if (v.status === 'reverted') {
+          // Reverted entities were reset to pending by backend
+          // Leave empty so they need fresh review
+        }
+      });
+
+      setEntityStatuses({
+        persons: initialPersonStatuses,
+        vehicles: initialVehicleStatuses,
+      });
+      setEntityRemarks({
+        persons: initialPersonRemarks,
+        vehicles: initialVehicleRemarks,
+      });
     }
 
     setIsViewMode(viewOnly);
@@ -795,19 +833,21 @@ export default function TrafficPassesPage() {
                           <tr
                             key={p.id}
                             onClick={() => {
-                              setEntityModal({
-                                isOpen: true,
-                                data: p,
-                                type: "person",
-                              });
-                              setCurrentRemark(
-                                entityRemarks.persons[p.id] ||
-                                  p.revertReason ||
-                                  p.rejectedReason ||
-                                  "",
-                              );
+                              if (p.status === 'pending' || p.status === 'reverted') {
+                                setEntityModal({
+                                  isOpen: true,
+                                  data: p,
+                                  type: "person",
+                                });
+                                setCurrentRemark(
+                                  entityRemarks.persons[p.id] ||
+                                    p.revertReason ||
+                                    p.rejectedReason ||
+                                    "",
+                                );
+                              }
                             }}
-                            className="hover:bg-slate-50 cursor-pointer transition-all hover:shadow-sm"
+                            className={`transition-all hover:shadow-sm ${(p.status === 'pending' || p.status === 'reverted') ? 'hover:bg-slate-50 cursor-pointer' : 'bg-slate-50/50 cursor-default'}`}
                           >
                             <td className="p-3 text-slate-800 font-mono font-bold text-xs">
                               {p.personPassNo || "-"}
@@ -863,7 +903,7 @@ export default function TrafficPassesPage() {
                                     </>
                                   );
                                 })()}
-                                {!isViewMode && (
+                                {!isViewMode && (p.status === 'pending' || p.status === 'reverted') && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -923,19 +963,21 @@ export default function TrafficPassesPage() {
                           <tr
                             key={v.id}
                             onClick={() => {
-                              setEntityModal({
-                                isOpen: true,
-                                data: v,
-                                type: "vehicle",
-                              });
-                              setCurrentRemark(
-                                entityRemarks.vehicles[v.id] ||
-                                  v.revertReason ||
-                                  v.rejectedReason ||
-                                  "",
-                              );
+                              if (v.status === 'pending' || v.status === 'reverted') {
+                                setEntityModal({
+                                  isOpen: true,
+                                  data: v,
+                                  type: "vehicle",
+                                });
+                                setCurrentRemark(
+                                  entityRemarks.vehicles[v.id] ||
+                                    v.revertReason ||
+                                    v.rejectedReason ||
+                                    "",
+                                );
+                              }
                             }}
-                            className="hover:bg-slate-50 cursor-pointer transition-all hover:shadow-sm"
+                            className={`transition-all hover:shadow-sm ${(v.status === 'pending' || v.status === 'reverted') ? 'hover:bg-slate-50 cursor-pointer' : 'bg-slate-50/50 cursor-default'}`}
                           >
                             <td className="p-3 text-slate-800 font-mono font-bold text-xs">
                               {v.vehiclePassNo || "-"}
@@ -988,7 +1030,7 @@ export default function TrafficPassesPage() {
                                     </>
                                   );
                                 })()}
-                                {!isViewMode && (
+                                {!isViewMode && (v.status === 'pending' || v.status === 'reverted') && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();

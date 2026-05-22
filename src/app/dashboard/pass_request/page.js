@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   Eye,
   AlertCircle,
+  CheckCircle,
   RefreshCw,
   Edit3,
   Car,
@@ -69,7 +70,7 @@ const calculateDateTo = (fromDate, period, type) => {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
-  // Always lock the expiry time to 05:59 AM (port pass cutoff).
+  // All passes expire at 05:59 AM on the computed end date.
   return `${yyyy}-${mm}-${dd}T${PASS_EXPIRY_TIME}`;
 };
 
@@ -601,6 +602,36 @@ export default function PassRequestPage() {
     }));
   }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom]);
 
+  // Live running time: update dateFrom every 30s while person modal is open
+  useEffect(() => {
+    if (!modals.person) return;
+
+    const interval = setInterval(() => {
+      const now = getCurrentDateTime();
+      setPersonForm((prev) => {
+        const newDateTo = calculateDateTo(now, prev.passPeriod, prev.passType);
+        return { ...prev, dateFrom: now, dateTo: newDateTo };
+      });
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [modals.person]);
+
+  // Live running time: update dateFrom every 30s while vehicle modal is open
+  useEffect(() => {
+    if (!modals.vehicle) return;
+
+    const interval = setInterval(() => {
+      const now = getCurrentDateTime();
+      setVehicleForm((prev) => {
+        const newDateTo = calculateDateTo(now, prev.passPeriod, prev.passType);
+        return { ...prev, dateFrom: now, dateTo: newDateTo };
+      });
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [modals.vehicle]);
+
   useEffect(() => {
     const selectedNationality = getLabelById(
       masterData.nationalities,
@@ -1046,7 +1077,12 @@ export default function PassRequestPage() {
   };
 
   const openAddPersonModal = () => {
-    setPersonForm(initialPersonForm);
+    const now = getCurrentDateTime();
+    setPersonForm({
+      ...initialPersonForm,
+      dateFrom: now,
+      dateTo: calculateDateTo(now, initialPersonForm.passPeriod, initialPersonForm.passType),
+    });
     setEditingPersonIndex(null);
     toggleModal("person", true);
   };
@@ -1059,7 +1095,12 @@ export default function PassRequestPage() {
   };
 
   const handleClearPerson = () => {
-    setPersonForm(initialPersonForm);
+    const now = getCurrentDateTime();
+    setPersonForm({
+      ...initialPersonForm,
+      dateFrom: now,
+      dateTo: calculateDateTo(now, initialPersonForm.passPeriod, initialPersonForm.passType),
+    });
     setEditingPersonIndex(null);
   };
 
@@ -1152,7 +1193,12 @@ export default function PassRequestPage() {
   };
 
   const openAddVehicleModal = () => {
-    setVehicleForm(initialVehicleForm);
+    const now = getCurrentDateTime();
+    setVehicleForm({
+      ...initialVehicleForm,
+      dateFrom: now,
+      dateTo: calculateDateTo(now, initialVehicleForm.passPeriod, initialVehicleForm.passType),
+    });
     setEditingVehicleIndex(null);
     toggleModal("vehicle", true);
   };
@@ -1535,28 +1581,33 @@ export default function PassRequestPage() {
   };
 
   const handleEditRevertedEntity = (type, index, entity) => {
-    // Debug: Log all available fields in the entity
-    console.log('=== ENTITY DEBUG ===');
-    console.log('Entity type:', type);
-    console.log('Entity object:', entity);
-    console.log('Entity keys:', Object.keys(entity));
-    console.log('Photo fields:', {
-      photoFileName: entity.photoFileName,
-      photoFilePATH: entity.photoFilePATH,
-      photoFilePath: entity.photoFilePath,
-    });
-    console.log('Aadhar fields:', {
-      aadharPDFFileName: entity.aadharPDFFileName,
-      aadharPDFFilePATH: entity.aadharPDFFilePATH,
-    });
-    
     // Close the reverted edit modal first
     setRevertedEditModal(false);
-    
+
     // Store the entity being edited for later use
     setEditingRevertedEntity({ type, index, id: entity.id, passId: editingRevertedPass?.id });
 
     if (type === 'person') {
+      // Set editing index so master directory dropdown is hidden and button shows "Update Person"
+      setEditingPersonIndex('reverted');
+      
+      // Map ENUM strings to numeric IDs using masterData
+      const nationalityEnum = entity.nationality; // "INDIAN" or "FOREIGNER"
+      const nationalityObj = masterData.nationalities.find(n => (n.value || n.label || n.name || "").toUpperCase() === nationalityEnum?.toUpperCase());
+      const nationalityId = nationalityObj ? String(nationalityObj.id || nationalityObj.value) : (nationalityEnum === "INDIAN" ? "1" : "2");
+      
+      const accessAreaEnum = entity.accessAreaId; // "OIL JETTY AND OTHER GATES" or "OTHER GATES ONLY"
+      const accessAreaObj = masterData.accessAreas.find(a => (a.value || a.label || a.name || "").toUpperCase() === accessAreaEnum?.toUpperCase());
+      const accessAreaId = accessAreaObj ? String(accessAreaObj.id || accessAreaObj.value) : '';
+      
+      const idProofTypeEnum = entity.idProofType; // "PASSPORT", "PAN CARD", etc.
+      const idProofTypeObj = masterData.idProofTypes.find(i => (i.value || i.label || i.name || "").toUpperCase() === idProofTypeEnum?.toUpperCase());
+      const idProofTypeId = idProofTypeObj ? String(idProofTypeObj.id || idProofTypeObj.value) : idProofTypeEnum;
+      
+      const passTypeEnum = entity.passType; // "DAILY", "MONTHLY", "YEARLY"
+      const passTypeObj = masterData.passTypes.find(p => (p.value || p.label || p.name || "").toUpperCase() === passTypeEnum?.toUpperCase());
+      const passTypeId = passTypeObj ? String(passTypeObj.id || passTypeObj.value) : passTypeEnum;
+      
       // Map reverted person data to personForm structure
       // NOTE: personForm uses: country, designation, accessArea (not countryId, designationId, accessAreaId)
       setPersonForm({
@@ -1568,21 +1619,21 @@ export default function PassRequestPage() {
         aadharNo: entity.aadharNo || entity.aadharNumber || entity.idProofNumber || '',
         designation: String(entity.designationId || ''),
         designationOther: '',
-        idProofType: entity.idProofType || '',
+        idProofType: idProofTypeId,
         idProofNumber: entity.idProofNumber || entity.aadharNo || '',
         hepType: String(entity.hepTypeId || '2'),
-        passType: String(entity.passType || '1'),
+        passType: passTypeId,
         passPeriod: entity.passPeriod || '1',
-        dateFrom: entity.dateFrom ? entity.dateFrom.split('T')[0] : '',
-        dateTo: entity.dateTo ? entity.dateTo.split('T')[0] : '',
+        dateFrom: entity.dateFrom ? (entity.dateFrom.includes('T') ? entity.dateFrom.split('T')[0] : entity.dateFrom) + 'T00:00' : '',
+        dateTo: entity.dateTo ? (entity.dateTo.includes('T') ? entity.dateTo.split('T')[0] : entity.dateTo) + 'T00:00' : '',
         amount: entity.amount || '',
-        nationality: String(entity.nationality || '1'),
+        nationality: nationalityId,
         country: String(entity.countryId || '75'),
         visaNo: entity.visaNo || '',
         cardNumber: entity.cardNumber || '',
         withTwoWheeler: entity.withTwoWheeler || false,
         vehicleNo: entity.vehicleNo || '',
-        accessArea: String(entity.accessAreaId || ''),
+        accessArea: accessAreaId,
         passportNo: entity.passportNo || '',
         cdcNumber: entity.cdcNumber || '',
         seafarerPassFor: entity.seafarerPassFor || 'Sign-On',
@@ -1620,20 +1671,29 @@ export default function PassRequestPage() {
       toast.success('Person details loaded for editing');
 
     } else if (type === 'vehicle') {
+      // Set editing index so fleet dropdown is hidden and button shows "Update Vehicle"
+      setEditingVehicleIndex('reverted');
+      
+      // Map ENUM string to numeric ID using masterData
+      const accessAreaEnum = entity.accessAreaId; // "OIL JETTY AND OTHER GATES" or "OTHER GATES ONLY"
+      const accessAreaObj = masterData.accessAreas.find(a => (a.value || a.label || a.name || "").toUpperCase() === accessAreaEnum?.toUpperCase());
+      const accessAreaId = accessAreaObj ? String(accessAreaObj.id || accessAreaObj.value) : '';
+      
       // Map reverted vehicle data to vehicleForm structure
       setVehicleForm({
         id: entity.id,
         regNo: entity.registrationNo || entity.regNo || '',
         engineNo: entity.engineNo || '',
         chassisNo: entity.chassisNo || '',
-        vehicleType: String(entity.vehicleTypeId || ''),
+        type: String(entity.vehicleTypeId || ''),
         fuelType: entity.fuelType || '',
+        accessArea: accessAreaId,
         insuranceExpiry: entity.insuranceExpiry ? entity.insuranceExpiry.split('T')[0] : '',
         rcValidity: entity.rcValidity ? entity.rcValidity.split('T')[0] : '',
         passType: String(entity.passType || ''),
         passPeriod: entity.passPeriod || '',
-        dateFrom: entity.dateFrom ? entity.dateFrom.split('T')[0] : '',
-        dateTo: entity.dateTo ? entity.dateTo.split('T')[0] : '',
+        dateFrom: entity.dateFrom ? (entity.dateFrom.includes('T') ? entity.dateFrom.split('T')[0] : entity.dateFrom) + 'T00:00' : '',
+        dateTo: entity.dateTo ? (entity.dateTo.includes('T') ? entity.dateTo.split('T')[0] : entity.dateTo) + 'T00:00' : '',
         amount: entity.amount || '',
         rcDocument: null,
         insuranceDocument: null,
@@ -1667,7 +1727,7 @@ export default function PassRequestPage() {
     const { type, index, id } = editingRevertedEntity;
 
     try {
-      const token = getToken();
+      const token = localStorage.getItem("accessToken");
       const headers = { Authorization: `Bearer ${token}` };
 
       if (type === 'person') {
@@ -1700,16 +1760,9 @@ export default function PassRequestPage() {
           declarationFormName: personForm.existingDeclarationName,
         };
 
-        // Update person via API
-        await axios.put(
-          `${API_BASE_URL}/pass-request/update-pass-person/${id}`,
-          updateData,
-          { headers }
-        );
-
-        // Update local reverted persons state
+        // Only update local reverted persons state (no DB update yet)
         const updatedPersons = [...revertedPersons];
-        updatedPersons[index] = { ...updateData, id, status: 'pending' };
+        updatedPersons[index] = { ...updateData, id, status: 'updated' };
         setRevertedPersons(updatedPersons);
 
         // Close person form and reset
@@ -1727,7 +1780,7 @@ export default function PassRequestPage() {
           regNo: vehicleForm.regNo,
           engineNo: vehicleForm.engineNo,
           chassisNo: vehicleForm.chassisNo,
-          vehicleTypeId: vehicleForm.vehicleType,
+          vehicleTypeId: vehicleForm.type,
           fuelType: vehicleForm.fuelType,
           insuranceExpiry: vehicleForm.insuranceExpiry,
           rcValidity: vehicleForm.rcValidity,
@@ -1746,16 +1799,9 @@ export default function PassRequestPage() {
           emissionCertName: vehicleForm.existingEmissionName,
         };
 
-        // Update vehicle via API
-        await axios.put(
-          `${API_BASE_URL}/pass-request/update-pass-vehicle/${id}`,
-          updateData,
-          { headers }
-        );
-
-        // Update local reverted vehicles state
+        // Only update local reverted vehicles state (no DB update yet)
         const updatedVehicles = [...revertedVehicles];
-        updatedVehicles[index] = { ...updateData, id, status: 'pending' };
+        updatedVehicles[index] = { ...updateData, id, status: 'updated' };
         setRevertedVehicles(updatedVehicles);
 
         // Close vehicle form and reset
@@ -1779,24 +1825,113 @@ export default function PassRequestPage() {
     if (!editingRevertedPass) return;
 
     try {
-      const token = getToken();
+      const token = localStorage.getItem("accessToken");
       const headers = { Authorization: `Bearer ${token}` };
 
-      // Check if all reverted entities have been updated
-      const pendingPersons = revertedPersons.filter(p => p.status === 'reverted');
-      const pendingVehicles = revertedVehicles.filter(v => v.status === 'reverted');
+      // Update all persons in DB
+      for (const person of revertedPersons) {
+        try {
+          const passTypeMap = {
+            '1': 'DAILY',
+            '2': 'MONTHLY',
+            '3': 'YEARLY'
+          };
+          const passTypeEnum = passTypeMap[person.passType] || person.passType;
 
-      if (pendingPersons.length > 0 || pendingVehicles.length > 0) {
-        toast.error(`Please update all reverted entities before resubmitting. ${pendingPersons.length + pendingVehicles.length} remaining.`);
-        return;
+          const updateData = {
+            id: person.id,
+            name: person.name,
+            mobile: person.mobile,
+            aadharNo: person.aadharNo,
+            designation: person.designation,
+            idProofType: person.idProofType,
+            hepTypeId: person.hepTypeId,
+            passType: passTypeEnum,
+            passPeriod: person.passPeriod,
+            dateFrom: person.dateFrom,
+            dateTo: person.dateTo,
+            amount: person.amount,
+            countryId: person.countryId,
+            // File names for reference
+            photoFileName: person.photoFileName,
+            aadharPDFFileName: person.aadharPDFFileName,
+            driverLicenseName: person.driverLicenseName,
+            requisitionLetterName: person.requisitionLetterName,
+            passportName: person.passportName,
+            policeVerificationName: person.policeVerificationName,
+            employmentProofName: person.employmentProofName,
+            chaLicenseName: person.chaLicenseName,
+            idProofFileName: person.idProofFileName,
+            cdcDocumentName: person.cdcDocumentName,
+            declarationFormName: person.declarationFormName,
+          };
+
+          console.log('Updating person:', person.id, updateData);
+          await axios.put(
+            `${AGENT_API}/pass-request/update-pass-person/${person.id}`,
+            updateData,
+            { headers }
+          );
+          console.log('Person updated successfully:', person.id);
+        } catch (error) {
+          console.error('Error updating person:', person.id, error);
+          throw error;
+        }
+      }
+
+      // Update all vehicles in DB
+      for (const vehicle of revertedVehicles) {
+        try {
+          const passTypeMap = {
+            '1': 'DAILY',
+            '2': 'MONTHLY',
+            '3': 'ANNUAL'
+          };
+          const passTypeEnum = passTypeMap[vehicle.passType] || vehicle.passType;
+
+          const updateData = {
+            id: vehicle.id,
+            registrationNo: vehicle.registrationNo || vehicle.regNo,
+            vehicleTypeId: vehicle.vehicleTypeId,
+            fuelType: vehicle.fuelType,
+            insuranceExpiry: vehicle.insuranceExpiry,
+            rcValidity: vehicle.rcValidity,
+            passType: passTypeEnum,
+            passPeriod: vehicle.passPeriod,
+            dateFrom: vehicle.dateFrom,
+            dateTo: vehicle.dateTo,
+            amount: vehicle.amount,
+            // File names for reference
+            scannedCopyFileName: vehicle.scannedCopyFileName,
+            insuranceFileName: vehicle.insuranceFileName,
+            permitFileName: vehicle.permitFileName,
+            fitnessFileName: vehicle.fitnessFileName,
+            requestLetterName: vehicle.requestLetterName,
+            taxDocName: vehicle.taxDocName,
+            emissionCertName: vehicle.emissionCertName,
+          };
+
+          console.log('Updating vehicle:', vehicle.id, updateData);
+          await axios.put(
+            `${AGENT_API}/pass-request/update-pass-vehicle/${vehicle.id}`,
+            updateData,
+            { headers }
+          );
+          console.log('Vehicle updated successfully:', vehicle.id);
+        } catch (error) {
+          console.error('Error updating vehicle:', vehicle.id, error);
+          throw error;
+        }
       }
 
       // Resubmit the pass - change status back to PENDING
+      console.log('Resubmitting pass:', editingRevertedPass.id);
       await axios.put(
-        `${API_BASE_URL}/pass-request/resubmit-reverted-pass/${editingRevertedPass.id}`,
+        `${AGENT_API}/pass-request/resubmit-reverted-pass/${editingRevertedPass.id}`,
         {},
         { headers }
       );
+      console.log('Pass resubmitted successfully');
 
       toast.success('Pass resubmitted successfully!');
       closeRevertedEditModal();
@@ -4856,7 +4991,7 @@ export default function PassRequestPage() {
                 <div className="text-sm text-amber-800">
                   <p className="font-semibold">Action Required</p>
                   <p>
-                    Please review and update all reverted entities below. Once updated, their status will change to "pending" and you can resubmit the pass for approval.
+                    Please review and update all reverted entities below. Once updated, you can resubmit the pass for approval.
                   </p>
                 </div>
               </div>
@@ -4991,7 +5126,8 @@ export default function PassRequestPage() {
 
               {/* All Updated Message */}
               {revertedPersons.every(p => p.status !== 'reverted') &&
-               revertedVehicles.every(v => v.status !== 'reverted') && (
+               revertedPersons.every(p => p.status === 'updated') &&
+               revertedVehicles.every(v => v.status === 'updated') && (
                 <div className="bg-green-50 border border-green-200 p-4 rounded-xl flex items-center gap-3 mb-6">
                   <CheckCircle className="h-6 w-6 text-green-600" />
                   <div>

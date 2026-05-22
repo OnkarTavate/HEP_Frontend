@@ -46,10 +46,13 @@ const getCurrentDateTime = () => {
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 };
 
+// All passes expire at 05:59 AM on the computed end date.
+const PASS_EXPIRY_TIME = "05:59";
+
 const calculateDateTo = (fromDate, period, type) => {
   if (!fromDate || !period) return "";
 
-  const [datePart, timePart = "00:00"] = String(fromDate).split("T");
+  const [datePart] = String(fromDate).split("T");
   const [year, month, day] = datePart.split("-").map(Number);
   if (!year || !month || !day) return "";
 
@@ -69,7 +72,8 @@ const calculateDateTo = (fromDate, period, type) => {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}T${timePart}`; // carries same time as dateFrom
+  // All passes expire at 05:59 AM on the computed end date.
+  return `${yyyy}-${mm}-${dd}T${PASS_EXPIRY_TIME}`;
 };
 
 const getLabelById = (arr, val, key = "label") => {
@@ -545,6 +549,36 @@ export default function VendorPassPublicPage() {
     }));
   }, [personForm.passType, personForm.passPeriod, personForm.dateFrom]);
 
+  // Live running time: update dateFrom every 30s while person modal is open
+  useEffect(() => {
+    if (!modals.person) return;
+
+    const interval = setInterval(() => {
+      const now = getCurrentDateTime();
+      setPersonForm((prev) => {
+        const newDateTo = calculateDateTo(now, prev.passPeriod, prev.passType);
+        return { ...prev, dateFrom: now, dateTo: newDateTo };
+      });
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [modals.person]);
+
+  // Live running time: update dateFrom every 30s while vehicle modal is open
+  useEffect(() => {
+    if (!modals.vehicle) return;
+
+    const interval = setInterval(() => {
+      const now = getCurrentDateTime();
+      setVehicleForm((prev) => {
+        const newDateTo = calculateDateTo(now, prev.passPeriod, prev.passType);
+        return { ...prev, dateFrom: now, dateTo: newDateTo };
+      });
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [modals.vehicle]);
+
   useEffect(() => {
     let updatedPeriod = vehicleForm.passPeriod;
 
@@ -898,7 +932,12 @@ export default function VendorPassPublicPage() {
   };
 
   const openAddPersonModal = () => {
-    setPersonForm(initialPersonForm);
+    const now = getCurrentDateTime();
+    setPersonForm({
+      ...initialPersonForm,
+      dateFrom: now,
+      dateTo: calculateDateTo(now, initialPersonForm.passPeriod, initialPersonForm.passType),
+    });
     setEditingPersonIndex(null);
     toggleModal("person", true);
   };
@@ -911,7 +950,12 @@ export default function VendorPassPublicPage() {
   };
 
   const handleClearPerson = () => {
-    setPersonForm(initialPersonForm);
+    const now = getCurrentDateTime();
+    setPersonForm({
+      ...initialPersonForm,
+      dateFrom: now,
+      dateTo: calculateDateTo(now, initialPersonForm.passPeriod, initialPersonForm.passType),
+    });
     setEditingPersonIndex(null);
   };
 
@@ -997,7 +1041,12 @@ export default function VendorPassPublicPage() {
   };
 
   const openAddVehicleModal = () => {
-    setVehicleForm(initialVehicleForm);
+    const now = getCurrentDateTime();
+    setVehicleForm({
+      ...initialVehicleForm,
+      dateFrom: now,
+      dateTo: calculateDateTo(now, initialVehicleForm.passPeriod, initialVehicleForm.passType),
+    });
     setEditingVehicleIndex(null);
     toggleModal("vehicle", true);
   };
@@ -1442,6 +1491,7 @@ export default function VendorPassPublicPage() {
               </div>
             </section>
 
+            {Number(intake?.noOfPersonsAllowed || 0) > 0 && (
             <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
             <div className="px-6 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
               <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wide flex items-center gap-2">
@@ -1470,9 +1520,11 @@ export default function VendorPassPublicPage() {
                     <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
                       Date To
                     </th>
+                    {intake?.paymentMode !== "FREE" && (
                     <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider text-right">
                       Amount
                     </th>
+                    )}
                     <th className="px-4 py-3 text-xs font-semibold text-center">
                       Action
                     </th>
@@ -1482,7 +1534,7 @@ export default function VendorPassPublicPage() {
                   {persons.length === 0 && (
                     <tr>
                       <td
-                        colSpan="7"
+                        colSpan={intake?.paymentMode === "FREE" ? 6 : 7}
                         className="p-10 text-center text-sm text-slate-400 italic bg-white"
                       >
                         No persons added yet. Click "Add Person" below.
@@ -1544,9 +1596,11 @@ export default function VendorPassPublicPage() {
                       <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
                         {p.dateTo || "-"}
                       </td>
+                      {intake?.paymentMode !== "FREE" && (
                       <td className="px-4 py-4 text-sm font-black text-[#0a1e4d] border-r border-slate-100 text-right">
                         ₹ {p.amount.toFixed(2)}
                       </td>
+                      )}
                       <td className="px-4 py-4 text-center">
                         <button
                           onClick={(e) => {
@@ -1560,7 +1614,7 @@ export default function VendorPassPublicPage() {
                       </td>
                     </tr>
                   ))}
-                  {persons.length > 0 && (
+                  {persons.length > 0 && intake?.paymentMode !== "FREE" && (
                     <tr className="bg-slate-50 border-t-2 border-slate-200">
                       <td
                         colSpan="5"
@@ -1594,7 +1648,9 @@ export default function VendorPassPublicPage() {
               </button>
             </div>
           </section>
+            )}
 
+          {Number(intake?.noOfVehiclesAllowed || 0) > 0 && (
           <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
             <div className="px-6 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
               <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wide flex items-center gap-2">
@@ -1624,9 +1680,11 @@ export default function VendorPassPublicPage() {
                     <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
                       Date To
                     </th>
+                    {intake?.paymentMode !== "FREE" && (
                     <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider text-right">
                       Amount
                     </th>
+                    )}
                     <th className="px-4 py-3 text-xs font-semibold text-center">
                       Action
                     </th>
@@ -1636,7 +1694,7 @@ export default function VendorPassPublicPage() {
                   {vehicles.length === 0 && (
                     <tr>
                       <td
-                        colSpan="7"
+                        colSpan={intake?.paymentMode === "FREE" ? 6 : 7}
                         className="p-10 text-center text-sm text-slate-400 italic bg-white"
                       >
                         No vehicles added yet. Click "Add Vehicle" below.
@@ -1671,9 +1729,11 @@ export default function VendorPassPublicPage() {
                       <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
                         {v.dateTo || "-"}
                       </td>
+                      {intake?.paymentMode !== "FREE" && (
                       <td className="px-4 py-4 text-sm font-black text-[#0a1e4d] border-r border-slate-100 text-right">
                         ₹ {v.amount.toFixed(2)}
                       </td>
+                      )}
                       <td className="px-4 py-4 text-center">
                         <button
                           onClick={(e) => {
@@ -1687,7 +1747,7 @@ export default function VendorPassPublicPage() {
                       </td>
                     </tr>
                   ))}
-                  {vehicles.length > 0 && (
+                  {vehicles.length > 0 && intake?.paymentMode !== "FREE" && (
                     <tr className="bg-slate-50 border-t-2 border-slate-200">
                       <td
                         colSpan="5"
@@ -1721,9 +1781,11 @@ export default function VendorPassPublicPage() {
               </button>
             </div>
           </section>
+            )}
 
           <footer className="flex justify-end pt-2 pb-8">
             <div className="bg-white p-8 w-full max-w-md shadow-2xl rounded-2xl border border-slate-200">
+              {intake?.paymentMode !== "FREE" && (
               <div className="space-y-4 bg-slate-50 p-5 rounded-xl border border-slate-100">
                 <div className="flex justify-between items-center text-sm">
                   <span className="font-bold text-slate-500 uppercase tracking-wider text-xs">
@@ -1750,6 +1812,8 @@ export default function VendorPassPublicPage() {
                   </span>
                 </div>
               </div>
+              )}
+              {intake?.paymentMode !== "FREE" && (
               <div className="flex justify-center items-center gap-8 py-4">
                 <label className="flex items-center gap-2 cursor-pointer text-sm font-black text-slate-700 hover:text-orange-600 transition-colors">
                   <input
@@ -1774,6 +1838,7 @@ export default function VendorPassPublicPage() {
                   E-CASH
                 </label>
               </div>
+              )}
               <div className="bg-orange-50/50 p-5 rounded-xl border border-orange-100 space-y-3">
                 <h4 className="text-xs font-black text-[#0a1e4d] uppercase flex items-center gap-2 tracking-wider">
                   <ShieldCheck className="h-4 w-4 text-emerald-600" /> Terms &
@@ -3113,7 +3178,12 @@ export default function VendorPassPublicPage() {
             <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
               <button
                 onClick={() => {
-                  setVehicleForm(initialVehicleForm);
+                  const now = getCurrentDateTime();
+                  setVehicleForm({
+                    ...initialVehicleForm,
+                    dateFrom: now,
+                    dateTo: calculateDateTo(now, initialVehicleForm.passPeriod, initialVehicleForm.passType),
+                  });
                   setEditingVehicleIndex(null);
                 }}
                 className="bg-white border border-slate-300 text-slate-700 px-8 py-2.5 rounded-xl shadow-sm text-sm font-bold hover:bg-slate-50 transition-colors uppercase tracking-wider"

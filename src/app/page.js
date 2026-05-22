@@ -129,9 +129,37 @@ const LoginPage = () => {
     }
   };
 
-  // Fetch on component mount
+  // Fetch on component mount — uses ignore flag for React 18 Strict Mode compatibility
   useEffect(() => {
-    fetchCaptcha();
+    let ignore = false;
+
+    const loadCaptcha = async () => {
+      setIsCaptchaLoading(true);
+      try {
+        const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
+        if (!ignore && res.data.success) {
+          setCaptchaData({
+            svg: res.data.captchaSvg,
+            token: res.data.captchaToken,
+          });
+          setFormData((prev) => ({ ...prev, captcha: "" }));
+        }
+      } catch (error) {
+        if (!ignore) {
+          console.error("Failed to fetch captcha", error);
+        }
+      } finally {
+        if (!ignore) {
+          setIsCaptchaLoading(false);
+        }
+      }
+    };
+
+    loadCaptcha();
+
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const handleTrackSubmit = async (e) => {
