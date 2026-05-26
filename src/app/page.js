@@ -36,8 +36,17 @@ const LoginPage = () => {
     captcha: "",
   });
   const [error, setError] = useState("");
-  const [captchaData, setCaptchaData] = useState({ svg: "", token: "" });
-  const [isCaptchaLoading, setIsCaptchaLoading] = useState(false);
+  // Numeric math captcha — generated on the CLIENT only to avoid SSR hydration mismatch.
+  // Initial value is a neutral placeholder that both server and client agree on;
+  // the real random numbers are set inside useEffect (which never runs on the server).
+  const [mathCaptcha, setMathCaptcha] = useState({ num1: 0, num2: 0, answer: 0 });
+
+  useEffect(() => {
+    const a = Math.floor(Math.random() * 9) + 1;
+    const b = Math.floor(Math.random() * 9) + 1;
+    setMathCaptcha({ num1: a, num2: b, answer: a + b });
+  }, []);
+
   const [isTrackModalOpen, setIsTrackModalOpen] = useState(false);
   const [trackReference, setTrackReference] = useState("");
   const [trackResult, setTrackResult] = useState(null);
@@ -49,7 +58,7 @@ const LoginPage = () => {
 
   // Typing animation for the welcome headline (50ms per character)
   const HEADLINE_LINE1 = "Welcome to the";
-  const HEADLINE_LINE2 = "Chennai Port Gate Automation System";
+  const HEADLINE_LINE2 = "Automated Port Access and Control System";
   const HEADLINE_FULL = `${HEADLINE_LINE1}\n${HEADLINE_LINE2}`;
   const [typedHeadline, setTypedHeadline] = useState("");
 
@@ -110,57 +119,13 @@ const LoginPage = () => {
     }
   };
 
-  const fetchCaptcha = async () => {
-    setIsCaptchaLoading(true);
-    try {
-      const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
-      if (res.data.success) {
-        setCaptchaData({
-          svg: res.data.captchaSvg,
-          token: res.data.captchaToken,
-        });
-        // Clear the user's previous input when captcha refreshes
-        setFormData((prev) => ({ ...prev, captcha: "" }));
-      }
-    } catch (error) {
-      console.error("Failed to fetch captcha", error);
-    } finally {
-      setIsCaptchaLoading(false);
-    }
+  // Refresh the math captcha and clear the user's previous answer.
+  const fetchCaptcha = () => {
+    const a = Math.floor(Math.random() * 9) + 1;
+    const b = Math.floor(Math.random() * 9) + 1;
+    setMathCaptcha({ num1: a, num2: b, answer: a + b });
+    setFormData((prev) => ({ ...prev, captcha: "" }));
   };
-
-  // Fetch on component mount — uses ignore flag for React 18 Strict Mode compatibility
-  useEffect(() => {
-    let ignore = false;
-
-    const loadCaptcha = async () => {
-      setIsCaptchaLoading(true);
-      try {
-        const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
-        if (!ignore && res.data.success) {
-          setCaptchaData({
-            svg: res.data.captchaSvg,
-            token: res.data.captchaToken,
-          });
-          setFormData((prev) => ({ ...prev, captcha: "" }));
-        }
-      } catch (error) {
-        if (!ignore) {
-          console.error("Failed to fetch captcha", error);
-        }
-      } finally {
-        if (!ignore) {
-          setIsCaptchaLoading(false);
-        }
-      }
-    };
-
-    loadCaptcha();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
 
   const handleTrackSubmit = async (e) => {
     e.preventDefault();
@@ -284,7 +249,7 @@ const LoginPage = () => {
         // Captcha tokens are single-use; fetch a fresh one and ask the user
         // to re-enter it rather than silently auto-retrying (which was
         // failing because the previous 409 flow already cleared the captcha).
-        await fetchCaptcha();
+        fetchCaptcha();
         toast.success("Previous session terminated", {
           description: "Please re-enter the security code and sign in again.",
         });
@@ -310,14 +275,19 @@ const LoginPage = () => {
       return;
     }
 
+    // Validate the numeric captcha locally before hitting the server.
+    if (parseInt(formData.captcha, 10) !== mathCaptcha.answer) {
+      toast.error("Incorrect security code. Please try again.");
+      fetchCaptcha();
+      return;
+    }
+
     try {
       const res = await axios.post(
         `${AUTH_API}/auth/login`,
         {
           loginId: formData.username.trim(),
           password: formData.password,
-          captchaToken: captchaData.token,
-          captchaValue: formData.captcha,
         },
         {
           // Treat 409 (concurrent session) as a normal response so axios
@@ -556,7 +526,7 @@ const LoginPage = () => {
           </div>
 
           {/* Right Section - Login Form */}
-          <div className="animate-in slide-in-from-bottom duration-700 w-full">
+          <div className="w-full">
             {/* Soft orange glow halo behind the card for extra polish */}
             <div className="relative w-full">
               <div
@@ -566,106 +536,125 @@ const LoginPage = () => {
               <div
                 className="relative bg-white/95 backdrop-blur-2xl rounded-[30px] shadow-[0_30px_80px_-15px_rgba(0,0,0,0.6)] ring-1 ring-white/40 overflow-hidden w-full max-w-[820px] mx-auto lg:ml-auto lg:mr-0 min-h-[560px] sm:min-h-[600px] lg:h-[78vh] lg:max-h-[680px] transition-shadow duration-500 hover:shadow-[0_35px_90px_-15px_rgba(0,0,0,0.7)]"
               >
-              {/* ── Form column (slides to the right half when forgot is active) ─── */}
-              <div
-                className={`md:absolute md:top-0 md:left-0 md:w-1/2 md:h-full bg-white z-[2] transition-transform duration-700 ease-in-out ${authMode === "forgot" ? "md:translate-x-full" : "md:translate-x-0"}`}
-              >
-                <div className="h-full flex flex-col justify-center px-6 md:px-8 lg:px-10 py-8 max-w-md mx-auto w-full">
-                {authMode === "signin" ? (
-                  <div key="signin-panel" className="animate-in fade-in duration-500 ease-out">
-                <div className="text-center mb-4">
-                  <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">Sign In</h3>
-                </div>
+                {/* ── Form column (slides to the right half when forgot is active) ─── */}
+                <div
+                  className={`md:absolute md:top-0 md:left-0 md:w-1/2 md:h-full bg-white z-[2] transition-transform duration-700 ease-in-out ${authMode === "forgot" ? "md:translate-x-full" : "md:translate-x-0"}`}
+                >
+                  <div className="h-full flex flex-col justify-center px-6 md:px-8 lg:px-10 py-8 max-w-md mx-auto w-full">
+                    {authMode === "signin" ? (
+                      <div key="signin-panel" className="animate-in fade-in duration-500 ease-out">
+                        <div className="text-center mb-4">
+                          <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">Sign In</h3>
+                        </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  {error && (
-                    <div className="p-3 text-sm bg-red-50 border border-red-200 text-red-800 rounded-lg">
-                      {error}
-                    </div>
-                  )}
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                          {error && (
+                            <div className="p-3 text-sm bg-red-50 border border-red-200 text-red-800 rounded-lg">
+                              {error}
+                            </div>
+                          )}
 
-                  {/* Username */}
-                  <div className="relative">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Username / Employee ID"
-                      value={formData.username}
-                      onChange={(e) =>
-                        setFormData({ ...formData, username: e.target.value })
-                      }
-                      className="w-full pl-11 pr-3 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                      required
-                    />
-                  </div>
+                          {/* Username */}
+                          <div className="relative">
+                            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                            <input
+                              type="text"
+                              placeholder="Username / Employee ID"
+                              value={formData.username}
+                              onChange={(e) =>
+                                setFormData({ ...formData, username: e.target.value })
+                              }
+                              className="w-full pl-11 pr-3 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                              required
+                            />
+                          </div>
 
-                  {/* Password */}
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Password"
-                      value={formData.password}
-                      onChange={(e) =>
-                        setFormData({ ...formData, password: e.target.value })
-                      }
-                      className="w-full pl-11 pr-11 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-600 transition-colors focus:outline-none"
-                      title={showPassword ? "Hide password" : "Show password"}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-5 w-5" />
-                      ) : (
-                        <Eye className="h-5 w-5" />
-                      )}
-                    </button>
-                  </div>
+                          {/* Password */}
+                          <div className="relative">
+                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                            <input
+                              type={showPassword ? "text" : "password"}
+                              placeholder="Password"
+                              value={formData.password}
+                              onChange={(e) =>
+                                setFormData({ ...formData, password: e.target.value })
+                              }
+                              className="w-full pl-11 pr-11 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-600 transition-colors focus:outline-none"
+                              title={showPassword ? "Hide password" : "Show password"}
+                            >
+                              {showPassword ? (
+                                <EyeOff className="h-5 w-5" />
+                              ) : (
+                                <Eye className="h-5 w-5" />
+                              )}
+                            </button>
+                          </div>
 
-                  {/* Captcha — input on the left, captcha image + refresh on the right.
-                      Stacks vertically on very small screens for readability. */}
-                  <div className="flex flex-col sm:flex-row gap-2 w-full">
-                    <input
-                      placeholder="Security Code"
-                      value={formData.captcha}
-                      onChange={(e) =>
-                        setFormData({ ...formData, captcha: e.target.value })
-                      }
-                      className="flex-1 min-w-0 px-4 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                      required
-                    />
-                    <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 w-full sm:w-[170px] shrink-0 justify-between">
-                      <div className="flex-1 flex items-center justify-center min-w-0 overflow-hidden">
-                        {isCaptchaLoading ? (
-                          <RefreshCw className="h-5 w-5 text-orange-400 animate-spin" />
-                        ) : (
-                          <div
-                            className="flex items-center justify-center w-full [&>svg]:w-full [&>svg]:max-w-[130px] [&>svg]:h-11"
-                            dangerouslySetInnerHTML={{
-                              __html: captchaData.svg,
-                            }}
-                          />
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={fetchCaptcha}
-                        disabled={!!isCaptchaLoading}
-                        title="Get a new security code"
-                        className="shrink-0 bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100 active:scale-95 transition-all disabled:opacity-50"
-                      >
-                        <RefreshCw
-                          className={`h-4 w-4 text-orange-600 ${isCaptchaLoading ? "animate-spin" : ""}`}
-                        />
-                      </button>
-                    </div>
-                  </div>
+                          {/* Numeric math captcha — shows "num1 + num2 = ?" and an answer input. */}
+                          <div className="flex flex-col sm:flex-row gap-2 w-full">
+                            {/* Math question display */}
+                            <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-4 py-2 shrink-0 justify-between sm:w-auto w-full">
+                              <div className="flex items-center gap-1 select-none">
+                                <span
+                                  style={{
+                                    fontFamily: 'Georgia, serif',
+                                    fontSize: '1.35rem',
+                                    fontWeight: 800,
+                                    letterSpacing: '0.05em',
+                                    color: '#92400e',
+                                    textDecoration: 'line-through wavy #f97316',
+                                    filter: 'blur(0px)',
+                                    userSelect: 'none',
+                                  }}
+                                >
+                                  {mathCaptcha.num1}
+                                </span>
+                                <span style={{ color: '#b45309', fontWeight: 700, fontSize: '1.2rem' }}>&nbsp;+&nbsp;</span>
+                                <span
+                                  style={{
+                                    fontFamily: 'Georgia, serif',
+                                    fontSize: '1.35rem',
+                                    fontWeight: 800,
+                                    letterSpacing: '0.05em',
+                                    color: '#92400e',
+                                    textDecoration: 'line-through wavy #f97316',
+                                    userSelect: 'none',
+                                  }}
+                                >
+                                  {mathCaptcha.num2}
+                                </span>
+                                <span style={{ color: '#b45309', fontWeight: 700, fontSize: '1.2rem' }}>&nbsp;=&nbsp;?</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={fetchCaptcha}
+                                title="Get a new security code"
+                                className="ml-2 shrink-0 bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100 active:scale-95 transition-all"
+                              >
+                                <RefreshCw className="h-4 w-4 text-orange-600" />
+                              </button>
+                            </div>
+                            {/* Answer input */}
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              placeholder="Answer"
+                              value={formData.captcha}
+                              onChange={(e) =>
+                                setFormData({ ...formData, captcha: e.target.value })
+                              }
+                              className="flex-1 min-w-0 px-4 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                              required
+                            />
+                          </div>
 
-                  {/* <div className="text-center">
+                          {/* <div className="text-center">
                     <button
                       type="button"
                       onClick={() => setAuthMode("forgot")}
@@ -675,109 +664,109 @@ const LoginPage = () => {
                     </button>
                   </div> */}
 
-                  <button
-                    type="submit"
-                    className="w-full py-3.5 bg-orange-600 text-white text-base font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-600/20 transition-all"
-                  >
-                    Sign In
-                  </button>
+                          <button
+                            type="submit"
+                            className="w-full py-3.5 bg-orange-600 text-white text-base font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-600/20 transition-all"
+                          >
+                            Sign In
+                          </button>
 
-                  {/* Quick-action: Track Pass button (below Sign In). */}
+                          {/* Quick-action: Track Pass button (below Sign In). */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsTrackModalOpen(true);
+                              setTrackResult(null);
+                              setTrackError("");
+                              setTrackReference("");
+                            }}
+                            className="w-full py-3.5 bg-white text-orange-600 text-base font-semibold tracking-wider uppercase rounded-xl border-2 border-orange-600 hover:bg-orange-50 active:scale-[0.99] transition-all"
+                          >
+                            Track Pass
+                          </button>
+                        </form>
+                      </div>
+                    ) : (
+                      <div key="forgot-panel" className="animate-in fade-in slide-in-from-right-6 duration-500 ease-out">
+                        <div className="text-center mb-6">
+                          <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">
+                            Reset Password
+                          </h3>
+                          <p className="text-sm text-gray-500 mt-2">
+                            Enter your registered email or employee ID — we&apos;ll
+                            send you a reset link.
+                          </p>
+                        </div>
+
+                        <form onSubmit={handleForgotSubmit} className="space-y-4">
+                          <div className="relative">
+                            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                            <input
+                              type="text"
+                              placeholder="Email or Employee ID"
+                              value={forgotEmail}
+                              onChange={(e) => setForgotEmail(e.target.value)}
+                              className="w-full pl-11 pr-3 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                              required
+                            />
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={forgotLoading}
+                            className="w-full py-3.5 bg-orange-600 text-white text-base font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-600/20 transition-all disabled:opacity-70 flex items-center justify-center"
+                          >
+                            {forgotLoading ? (
+                              <RefreshCw className="h-5 w-5 animate-spin" />
+                            ) : (
+                              "Send Reset Link"
+                            )}
+                          </button>
+
+                          <div className="text-center">
+                            <button
+                              type="button"
+                              onClick={() => setAuthMode("signin")}
+                              className="text-sm text-gray-600 hover:text-orange-600 hover:underline"
+                            >
+                              ← Back to Sign In
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Orange side panel (slides from right to left when forgot is active) ─── */}
+                <div
+                  className={`hidden md:flex absolute top-0 right-0 w-1/2 h-full flex-col items-center justify-center text-center text-white px-8 bg-gradient-to-br from-orange-500 to-orange-700 transition-all duration-700 ease-in-out ${authMode === "forgot" ? "md:-translate-x-full" : "md:translate-x-0"}`}
+                  style={{
+                    borderRadius:
+                      authMode === "forgot"
+                        ? "0 150px 100px 0"
+                        : "150px 0 0 100px",
+                  }}
+                >
+                  <h2 className="text-2xl lg:text-3xl font-bold mb-3">Hello, Friend!</h2>
+                  <p className="text-sm leading-relaxed opacity-95 max-w-[280px] mb-6">
+                    Register with your personal details to use all site features
+                  </p>
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsTrackModalOpen(true);
-                      setTrackResult(null);
-                      setTrackError("");
-                      setTrackReference("");
-                    }}
-                    className="w-full py-3.5 bg-white text-orange-600 text-base font-semibold tracking-wider uppercase rounded-xl border-2 border-orange-600 hover:bg-orange-50 active:scale-[0.99] transition-all"
+                    onClick={() => router.push("/register")}
+                    className="px-10 py-3 border border-white text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors mb-3"
                   >
-                    Track Pass
+                    Sign Up
                   </button>
-                </form>
-                  </div>
-                ) : (
-                  <div key="forgot-panel" className="animate-in fade-in slide-in-from-right-6 duration-500 ease-out">
-                    <div className="text-center mb-6">
-                      <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">
-                        Reset Password
-                      </h3>
-                      <p className="text-sm text-gray-500 mt-2">
-                        Enter your registered email or employee ID — we&apos;ll
-                        send you a reset link.
-                      </p>
-                    </div>
-
-                    <form onSubmit={handleForgotSubmit} className="space-y-4">
-                      <div className="relative">
-                        <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="Email or Employee ID"
-                          value={forgotEmail}
-                          onChange={(e) => setForgotEmail(e.target.value)}
-                          className="w-full pl-11 pr-3 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                          required
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={forgotLoading}
-                        className="w-full py-3.5 bg-orange-600 text-white text-base font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-600/20 transition-all disabled:opacity-70 flex items-center justify-center"
-                      >
-                        {forgotLoading ? (
-                          <RefreshCw className="h-5 w-5 animate-spin" />
-                        ) : (
-                          "Send Reset Link"
-                        )}
-                      </button>
-
-                      <div className="text-center">
-                        <button
-                          type="button"
-                          onClick={() => setAuthMode("signin")}
-                          className="text-sm text-gray-600 hover:text-orange-600 hover:underline"
-                        >
-                          ← Back to Sign In
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => setAuthMode(authMode === "forgot" ? "signin" : "forgot")}
+                    className="px-10 py-3 bg-white/10 border border-white/60 text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors"
+                  >
+                    {authMode === "forgot" ? "Back to Sign In" : "Forgot Password?"}
+                  </button>
                 </div>
-              </div>
-
-              {/* ── Orange side panel (slides from right to left when forgot is active) ─── */}
-              <div
-                className={`hidden md:flex absolute top-0 right-0 w-1/2 h-full flex-col items-center justify-center text-center text-white px-8 bg-gradient-to-br from-orange-500 to-orange-700 transition-all duration-700 ease-in-out ${authMode === "forgot" ? "md:-translate-x-full" : "md:translate-x-0"}`}
-                style={{
-                  borderRadius:
-                    authMode === "forgot"
-                      ? "0 150px 100px 0"
-                      : "150px 0 0 100px",
-                }}
-              >
-                <h2 className="text-2xl lg:text-3xl font-bold mb-3">Hello, Friend!</h2>
-                <p className="text-sm leading-relaxed opacity-95 max-w-[280px] mb-6">
-                  Register with your personal details to use all site features
-                </p>
-                <button
-                  type="button"
-                  onClick={() => router.push("/register")}
-                  className="px-10 py-3 border border-white text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors mb-3"
-                >
-                  Sign Up
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAuthMode(authMode === "forgot" ? "signin" : "forgot")}
-                  className="px-10 py-3 bg-white/10 border border-white/60 text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors"
-                >
-                  {authMode === "forgot" ? "Back to Sign In" : "Forgot Password?"}
-                </button>
-              </div>
               </div>
             </div>
           </div>
@@ -852,15 +841,14 @@ const LoginPage = () => {
                     {/* Dynamic Status Badge */}
                     <div
                       className={`px-4 py-2 rounded-lg text-sm font-bold border flex items-center gap-1.5 shadow-sm
-                      ${
-                        trackResult.status === "approved"
+                      ${trackResult.status === "approved"
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                           : trackResult.status === "rejected"
                             ? "bg-red-50 text-red-700 border-red-200"
                             : trackResult.status === "reverted"
                               ? "bg-amber-50 text-amber-700 border-amber-200"
                               : "bg-yellow-50 text-yellow-700 border-yellow-200"
-                      }`}
+                        }`}
                     >
                       {trackResult.status === "approved" && (
                         <CheckCircle className="h-4 w-4" />
@@ -873,8 +861,8 @@ const LoginPage = () => {
                       )}
                       {(!trackResult.status ||
                         trackResult.status === "pending") && (
-                        <Clock className="h-4 w-4" />
-                      )}
+                          <Clock className="h-4 w-4" />
+                        )}
                       {(trackResult.status || "PENDING").toUpperCase()}
                     </div>
                   </div>
@@ -960,7 +948,7 @@ const LoginPage = () => {
             <div className="p-6 space-y-4">
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                 <p className="text-sm text-gray-700 leading-relaxed">
-                  Your account is currently active on another device or browser. 
+                  Your account is currently active on another device or browser.
                   You can either:
                 </p>
                 <ul className="mt-3 space-y-2 text-sm text-gray-600">
