@@ -59,7 +59,7 @@ export default function AdminLayout({ children }) {
       const next = !prev;
       try {
         localStorage.setItem("admin-theme", next ? "dark" : "light");
-      } catch {}
+      } catch { }
       return next;
     });
   };
@@ -78,7 +78,7 @@ export default function AdminLayout({ children }) {
       const next = !prev;
       try {
         localStorage.setItem("admin-sidebar", next ? "expanded" : "collapsed");
-      } catch {}
+      } catch { }
       return next;
     });
   };
@@ -567,10 +567,9 @@ export default function AdminLayout({ children }) {
             </div>
           </header>
 
-          {/* Page content — fills remaining vertical space, no body scroll;
-              individual scrollable surfaces (e.g., the records list) handle
-              their own overflow. */}
-          <main className="flex-1 px-4 sm:px-6 lg:px-8 pb-4 min-h-0 overflow-hidden">
+          {/* Page content — fills remaining vertical space and scrolls
+              vertically while the sidebar and header stay fixed. */}
+          <main className="flex-1 px-4 sm:px-6 lg:px-8 pb-6 min-h-0 overflow-y-auto scroll-smooth [scrollbar-width:thin] [scrollbar-color:theme(colors.stone.300)_transparent] dark:[scrollbar-color:theme(colors.stone.700)_transparent]">
             {children}
           </main>
         </div>

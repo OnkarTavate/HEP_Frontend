@@ -107,7 +107,7 @@ export default function DashboardLayout({ children }) {
       const next = !prev;
       try {
         localStorage.setItem("dashboard-theme", next ? "dark" : "light");
-      } catch {}
+      } catch { }
       return next;
     });
   };
@@ -129,7 +129,7 @@ export default function DashboardLayout({ children }) {
           "dashboard-sidebar",
           next ? "expanded" : "collapsed",
         );
-      } catch {}
+      } catch { }
       return next;
     });
   };

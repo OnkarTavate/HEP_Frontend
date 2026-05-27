@@ -322,7 +322,7 @@ export default function AdminDashboard() {
     : 0;
 
   return (
-    <div className="w-full h-full flex flex-col gap-3 lg:gap-4 min-h-0 overflow-hidden">
+    <div className="w-full h-full flex flex-col gap-3 lg:gap-4 min-h-0 overflow-y-auto lg:overflow-hidden">
       {/* ── Chennai Port live ops + weather strip ───────── */}
       <div className="relative overflow-hidden rounded-[20px] bg-gradient-to-r from-[#1a1d27] via-[#252836] to-[#1a1d27] dark:from-black dark:via-[#1a1d27] dark:to-black text-white shadow-md ring-1 ring-white/5 shrink-0">
         <svg
@@ -445,58 +445,78 @@ export default function AdminDashboard() {
 
       {/* ── Top Grid: Activity bubbles + Quick stats ────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-4 shrink-0">
-        {/* Pass Activity (Workout-card analogue) */}
-        <div className="lg:col-span-2 bg-[#d6cebf] dark:bg-[#272a36] rounded-[28px] p-6 relative overflow-hidden min-h-[260px] ring-1 ring-stone-300/50 dark:ring-white/5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]">
+        {/* Pass Activity — fully responsive bubble layout */}
+        <div className="lg:col-span-2 bg-[#d6cebf] dark:bg-[#272a36] rounded-[28px] p-5 sm:p-6 relative overflow-hidden ring-1 ring-stone-300/50 dark:ring-white/5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]">
           <div aria-hidden className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-amber-300/40 dark:bg-amber-400/15 blur-3xl" />
-          <h2 className="text-2xl font-extrabold text-[#1f1f1f] dark:text-stone-100 tracking-tight">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-[#1f1f1f] dark:text-stone-100 tracking-tight">
             Pass Activity
           </h2>
           <p className="text-stone-700 dark:text-stone-400 text-sm font-medium mb-4">
             Snapshot for today
           </p>
 
-          {/* Bubble stats — original circular design */}
-          <div className="relative w-full h-[170px]">
-            <div className="absolute top-3 left-24 sm:left-32 w-24 h-24 bg-[#1d1d1d] rounded-full flex items-center justify-center text-white shadow-xl z-10 ring-4 ring-white/40 dark:ring-white/10">
-              <div className="text-center">
-                <p className="font-extrabold text-xl leading-none tabular-nums">{totalCount}</p>
-                <p className="text-[10px] uppercase tracking-widest mt-1 font-bold">Total</p>
+          {/* Responsive bubble stats */}
+          <div className="flex flex-wrap items-center justify-around gap-4 pb-2">
+            {/* Total bubble */}
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-[#1d1d1d] rounded-full flex items-center justify-center text-white shadow-xl ring-4 ring-white/40 dark:ring-white/10">
+                <div className="text-center">
+                  <p className="font-extrabold text-xl sm:text-2xl leading-none tabular-nums">{totalCount}</p>
+                  <p className="text-[9px] sm:text-[10px] uppercase tracking-widest mt-1 font-bold">Total</p>
+                </div>
               </div>
+              <span className="flex items-center gap-1.5 text-xs text-stone-700 dark:text-stone-300 font-semibold">
+                <span className="w-7 h-2 rounded-full bg-black dark:bg-stone-200 inline-block" />
+                Total
+              </span>
             </div>
 
-            <div className="absolute top-0 right-2 sm:right-12 w-36 h-36 sm:w-40 sm:h-40 bg-amber-300/85 rounded-full flex items-center justify-center shadow-xl ring-4 ring-amber-200/40">
-              <div className="text-center text-black">
-                <p className="font-extrabold text-3xl leading-none tabular-nums">{approvedCount}</p>
-                <p className="text-xs mt-1 font-bold uppercase tracking-wider">Approved</p>
+            {/* Approved bubble */}
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-28 h-28 sm:w-36 sm:h-36 bg-amber-300/85 rounded-full flex items-center justify-center shadow-xl ring-4 ring-amber-200/40">
+                <div className="text-center text-black">
+                  <p className="font-extrabold text-3xl sm:text-4xl leading-none tabular-nums">{approvedCount}</p>
+                  <p className="text-xs mt-1 font-bold uppercase tracking-wider">Approved</p>
+                </div>
               </div>
+              <span className="flex items-center gap-1.5 text-xs text-stone-700 dark:text-stone-300 font-semibold">
+                <span className="w-7 h-2 rounded-full bg-amber-400 inline-block" />
+                Approved
+              </span>
             </div>
 
-            <div className="absolute bottom-0 left-28 sm:left-40 w-28 h-28 bg-orange-300/85 rounded-full flex items-center justify-center shadow-lg ring-4 ring-orange-200/40">
-              <div className="text-center text-black">
-                <p className="font-extrabold text-2xl leading-none tabular-nums">{pendingCount}</p>
-                <p className="text-xs mt-1 font-bold uppercase tracking-wider">Pending</p>
+            {/* Pending bubble */}
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 bg-orange-300/85 rounded-full flex items-center justify-center shadow-lg ring-4 ring-orange-200/40">
+                <div className="text-center text-black">
+                  <p className="font-extrabold text-2xl sm:text-3xl leading-none tabular-nums">{pendingCount}</p>
+                  <p className="text-xs mt-1 font-bold uppercase tracking-wider">Pending</p>
+                </div>
               </div>
+              <span className="flex items-center gap-1.5 text-xs text-stone-700 dark:text-stone-300 font-semibold">
+                <span className="w-7 h-2 rounded-full bg-orange-400 inline-block" />
+                Pending
+              </span>
             </div>
-          </div>
 
-          <div className="absolute bottom-4 left-6 space-y-1.5 text-xs text-stone-700 dark:text-stone-300 font-semibold">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-2 rounded-full bg-amber-400" />
-              <span>Approved {approvedCount}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-2 rounded-full bg-orange-400" />
-              <span>Pending {pendingCount}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-2 rounded-full bg-black dark:bg-stone-200" />
-              <span>Total {totalCount}</span>
+            {/* Rejected bubble */}
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-red-400/80 rounded-full flex items-center justify-center shadow-lg ring-4 ring-red-200/40">
+                <div className="text-center text-black">
+                  <p className="font-extrabold text-xl sm:text-2xl leading-none tabular-nums">{rejectedCount}</p>
+                  <p className="text-[9px] sm:text-xs mt-1 font-bold uppercase tracking-wider">Rejected</p>
+                </div>
+              </div>
+              <span className="flex items-center gap-1.5 text-xs text-stone-700 dark:text-stone-300 font-semibold">
+                <span className="w-7 h-2 rounded-full bg-red-400 inline-block" />
+                Rejected
+              </span>
             </div>
           </div>
         </div>
 
         {/* Right: dark stats panel */}
-        <div className="bg-[#1f232d] dark:bg-[#0f1117] ring-1 ring-white/5 text-white rounded-[28px] p-6 flex flex-col shadow-[0_8px_30px_-12px_rgba(0,0,0,0.5)]">
+        <div className="bg-[#1f232d] dark:bg-[#0f1117] ring-1 ring-white/5 text-white rounded-[28px] p-5 sm:p-6 flex flex-col shadow-[0_8px_30px_-12px_rgba(0,0,0,0.5)]">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-extrabold tracking-tight">Console Health</h2>
             <span className="inline-flex items-center gap-1.5 text-emerald-300 text-xs font-bold uppercase tracking-wider bg-emerald-500/10 ring-1 ring-emerald-400/30 px-2.5 py-1 rounded-full">
@@ -513,12 +533,12 @@ export default function AdminDashboard() {
             ].map((t) => (
               <div
                 key={t.label}
-                className="bg-[#2b313d] hover:bg-[#333a48] rounded-2xl p-4 ring-1 ring-white/5 transition-colors"
+                className="bg-[#2b313d] hover:bg-[#333a48] rounded-2xl p-3 sm:p-4 ring-1 ring-white/5 transition-colors"
               >
                 <p className="text-[11px] text-stone-400 uppercase tracking-wider font-bold">
                   {t.label}
                 </p>
-                <p className={`text-3xl font-extrabold mt-1.5 tabular-nums leading-none ${t.color}`}>
+                <p className={`text-2xl sm:text-3xl font-extrabold mt-1.5 tabular-nums leading-none ${t.color}`}>
                   {t.value}
                 </p>
               </div>
@@ -527,72 +547,73 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ── Bottom Grid: takes all remaining vertical space; only the records list scrolls ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-4 flex-1 min-h-0 overflow-hidden">
-        {/* Left column: 2 stacked stat-cards */}
-        <div className="flex flex-col gap-3 lg:gap-4 min-h-0 overflow-hidden">
-          {/* Approval progress dial */}
-          <div className="bg-white dark:bg-[#1f232d] rounded-[24px] p-5 ring-1 ring-stone-200/70 dark:ring-white/5 shadow-[0_8px_30px_-16px_rgba(15,23,42,0.18)] flex-1 min-h-0 flex flex-col">
+      {/* ── Bottom Grid: stat-cards + records list ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
+        {/* Approval progress dial */}
+        <div className="bg-white dark:bg-[#1f232d] rounded-[24px] p-5 ring-1 ring-stone-200/70 dark:ring-white/5 shadow-[0_8px_30px_-16px_rgba(15,23,42,0.18)] flex flex-col gap-4">
+          <div>
             <h3 className="text-lg font-extrabold text-[#1f1f1f] dark:text-stone-100 tracking-tight">
               Approval Rate
             </h3>
-            <p className="text-stone-500 dark:text-stone-400 text-sm mb-3">
+            <p className="text-stone-500 dark:text-stone-400 text-sm">
               Approved out of total
             </p>
+          </div>
 
-            <div className="flex items-center justify-between flex-1">
-              <Button
-                onClick={() => setShowCreateAdmin(true)}
-                className="bg-[#1f1f1f] hover:bg-black text-white dark:bg-amber-400 dark:hover:bg-amber-300 dark:text-[#1f1f1f] px-4 py-2.5 rounded-full text-sm font-bold h-auto shadow-md hover:scale-[1.03] transition"
-              >
-                <UserPlus className="h-4 w-4 mr-1.5" strokeWidth={2.5} />
-                Add Admin
-              </Button>
+          <div className="flex items-center justify-between">
+            <Button
+              onClick={() => setShowCreateAdmin(true)}
+              className="bg-[#1f1f1f] hover:bg-black text-white dark:bg-amber-400 dark:hover:bg-amber-300 dark:text-[#1f1f1f] px-4 py-2.5 rounded-full text-sm font-bold h-auto shadow-md hover:scale-[1.03] transition"
+            >
+              <UserPlus className="h-4 w-4 mr-1.5" strokeWidth={2.5} />
+              Add Admin
+            </Button>
 
-              <div
-                className="relative w-24 h-24 rounded-full flex items-center justify-center shadow-md shadow-amber-200/40 dark:shadow-amber-500/10"
-                style={{
-                  background: `conic-gradient(#f59e0b ${approvalProgress * 3.6}deg, rgba(251,146,60,0.18) 0deg)`,
-                }}
-              >
-                <div className="absolute inset-2 rounded-full bg-white dark:bg-[#1f232d] flex items-center justify-center">
-                  <div className="text-center">
-                    <p className="text-xl font-extrabold text-[#1f1f1f] dark:text-stone-100 leading-none tabular-nums">
-                      {approvalProgress}%
-                    </p>
-                    <p className="text-[10px] text-stone-500 dark:text-stone-400 uppercase tracking-wider mt-1 font-bold">
-                      Approved
-                    </p>
-                  </div>
+            <div
+              className="relative w-24 h-24 rounded-full flex items-center justify-center shadow-md shadow-amber-200/40 dark:shadow-amber-500/10"
+              style={{
+                background: `conic-gradient(#f59e0b ${approvalProgress * 3.6}deg, rgba(251,146,60,0.18) 0deg)`,
+              }}
+            >
+              <div className="absolute inset-2 rounded-full bg-white dark:bg-[#1f232d] flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-xl font-extrabold text-[#1f1f1f] dark:text-stone-100 leading-none tabular-nums">
+                    {approvalProgress}%
+                  </p>
+                  <p className="text-[10px] text-stone-500 dark:text-stone-400 uppercase tracking-wider mt-1 font-bold">
+                    Approved
+                  </p>
                 </div>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Pending progress bar */}
-          <div className="bg-white dark:bg-[#1f232d] rounded-[24px] p-5 ring-1 ring-stone-200/70 dark:ring-white/5 shadow-[0_8px_30px_-16px_rgba(15,23,42,0.18)] flex-1 min-h-0 flex flex-col">
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <h3 className="text-lg font-extrabold text-[#1f1f1f] dark:text-stone-100 flex items-center gap-1.5 tracking-tight">
-                  <Clock className="h-5 w-5 text-orange-500 dark:text-orange-300" />
-                  Pending Queue
-                </h3>
-                <p className="text-stone-500 dark:text-stone-400 text-sm mt-1">
-                  Awaiting review
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-3xl font-extrabold text-orange-600 dark:text-orange-300 leading-none tabular-nums">
-                  {pendingCount}
-                </p>
-                <p className="text-[11px] uppercase tracking-wider text-stone-500 dark:text-stone-400 mt-1.5 font-bold">
-                  Open
-                </p>
-              </div>
+        {/* Pending progress bar */}
+        <div className="bg-white dark:bg-[#1f232d] rounded-[24px] p-5 ring-1 ring-stone-200/70 dark:ring-white/5 shadow-[0_8px_30px_-16px_rgba(15,23,42,0.18)] flex flex-col gap-3">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-lg font-extrabold text-[#1f1f1f] dark:text-stone-100 flex items-center gap-1.5 tracking-tight">
+                <Clock className="h-5 w-5 text-orange-500 dark:text-orange-300" />
+                Pending Queue
+              </h3>
+              <p className="text-stone-500 dark:text-stone-400 text-sm mt-1">
+                Awaiting review
+              </p>
             </div>
+            <div className="text-right">
+              <p className="text-3xl font-extrabold text-orange-600 dark:text-orange-300 leading-none tabular-nums">
+                {pendingCount}
+              </p>
+              <p className="text-[11px] uppercase tracking-wider text-stone-500 dark:text-stone-400 mt-1.5 font-bold">
+                Open
+              </p>
+            </div>
+          </div>
 
-            <div className="relative mb-2 mt-auto">
-              <div className="w-full h-3 bg-stone-200 dark:bg-white/10 rounded-full overflow-hidden" />
+          <div className="mt-auto">
+            <div className="relative mb-2">
+              <div className="w-full h-3 bg-stone-200 dark:bg-white/10 rounded-full" />
               <div
                 className="absolute top-0 left-0 h-3 bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all shadow-sm"
                 style={{
@@ -602,7 +623,6 @@ export default function AdminDashboard() {
                 }}
               />
             </div>
-
             <div className="flex justify-between text-xs text-stone-500 dark:text-stone-400 font-semibold">
               <span>0</span>
               <span>{totalCount} companies</span>
@@ -610,8 +630,8 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Right column: Habit-style records list — only this card scrolls */}
-        <div className="lg:col-span-2 bg-white dark:bg-[#1f232d] rounded-[28px] p-5 ring-1 ring-stone-200/70 dark:ring-white/5 shadow-[0_8px_30px_-16px_rgba(15,23,42,0.18)] flex flex-col min-h-0 overflow-hidden">
+        {/* Right column: records list — scrolls on all screen sizes */}
+        <div className="sm:col-span-2 lg:col-span-1 bg-white dark:bg-[#1f232d] rounded-[28px] p-5 ring-1 ring-stone-200/70 dark:ring-white/5 shadow-[0_8px_30px_-16px_rgba(15,23,42,0.18)] flex flex-col min-h-[280px] lg:min-h-0 lg:overflow-hidden">
           <div className="flex items-center justify-between mb-4 gap-4 shrink-0">
             <h2 className="text-xl md:text-2xl font-extrabold text-[#1f1f1f] dark:text-stone-100 flex items-center gap-2.5 tracking-tight">
               <span className="flex items-center justify-center h-9 w-9 rounded-xl bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300">
