@@ -429,26 +429,24 @@ export default function TrafficPassesPage() {
 
       (pass.persons || []).forEach((p) => {
         if (p.status === 'approved') {
+          // Pre-fill as APPROVED (read-only, approver cannot change)
           initialPersonStatuses[p.id] = 'APPROVED';
         } else if (p.status === 'rejected') {
           initialPersonStatuses[p.id] = 'REJECTED';
           initialPersonRemarks[p.id] = p.rejectedReason || '';
-        } else if (p.status === 'reverted') {
-          // Reverted entities were reset to pending by backend
-          // Leave empty so they need fresh review
         }
+        // 'pending' and 'reverted' entities need fresh review — leave empty
       });
 
       (pass.vehicles || []).forEach((v) => {
         if (v.status === 'approved') {
+          // Pre-fill as APPROVED (read-only, approver cannot change)
           initialVehicleStatuses[v.id] = 'APPROVED';
         } else if (v.status === 'rejected') {
           initialVehicleStatuses[v.id] = 'REJECTED';
           initialVehicleRemarks[v.id] = v.rejectedReason || '';
-        } else if (v.status === 'reverted') {
-          // Reverted entities were reset to pending by backend
-          // Leave empty so they need fresh review
         }
+        // 'pending' and 'reverted' entities need fresh review — leave empty
       });
 
       setEntityStatuses({
@@ -466,7 +464,7 @@ export default function TrafficPassesPage() {
   };
 
   // --- FILTER & SORT LOGIC ---
-  const PENDING_STATUSES = ["SUBMITTED", "PENDING", "IN_REVIEW"];
+  const PENDING_STATUSES = ["SUBMITTED", "PENDING", "IN_REVIEW", "VENDOR_SUBMITTED"];
   const PROCESSED_STATUSES = ["APPROVED", "REJECTED", "REVERTED", "PROCESSED", "COMPLETED"];
 
   const pendingPasses = requests.filter((r) =>
@@ -920,7 +918,7 @@ export default function TrafficPassesPage() {
                                   >
                                     {entityStatuses.persons[p.id]
                                       ? "Re-verify"
-                                      : "Verify Full Dossier"}
+                                      : "Verify"}
                                   </button>
                                 )}
                               </div>
@@ -1047,7 +1045,7 @@ export default function TrafficPassesPage() {
                                   >
                                     {entityStatuses.vehicles[v.id]
                                       ? "Re-verify"
-                                      : "Verify Full Dossier"}
+                                      : "Verify"}
                                   </button>
                                 )}
                               </div>
@@ -1175,10 +1173,10 @@ export default function TrafficPassesPage() {
                         label="ID Proof No."
                         value={entityModal.data.idProofNumber}
                       />
-                      <DetailItem
+                      {/* <DetailItem
                         label="RFID Card"
                         value={entityModal.data.cardNumber}
-                      />
+                      /> */}
                       {entityModal.data.hepTypeId === "Seafarers" && (
                         <DetailItem
                           label="Seafarer Pass For"
@@ -1213,10 +1211,10 @@ export default function TrafficPassesPage() {
                         label="Vehicle Type"
                         value={entityModal.data.vehicleTypeId}
                       />
-                      <DetailItem
+                      {/* <DetailItem
                         label="RFID Card"
                         value={entityModal.data.rfidCardNumber}
-                      />
+                      /> */}
                       <DetailItem
                         label="Insurance Expiry"
                         value={entityModal.data.insuranceExpiry}
@@ -1440,7 +1438,7 @@ export default function TrafficPassesPage() {
                       />
                       <DocumentCard
                         label="Tax Document"
-                        filePath={entityModal.data.taxDocPath}
+                        filePath={entityModal.data.taxFilePath}
                         documentType="vehicleTax"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
@@ -1449,7 +1447,7 @@ export default function TrafficPassesPage() {
                       />
                       <DocumentCard
                         label="Emission Certificate (PUC)"
-                        filePath={entityModal.data.emissionCertPath}
+                        filePath={entityModal.data.emissionFilePath}
                         documentType="vehicleEmission"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}

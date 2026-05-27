@@ -14,9 +14,8 @@ export default function VendorPassSubmittedPage() {
           Application Submitted
         </h1>
         <p className="text-sm text-slate-600 mt-2">
-          Your vendor pass application has been forwarded to the Traffic
-          Department for approval. You will be notified at the registered email
-          once a decision is made.
+          Your vendor pass application has been sent for approval. You will be
+          notified at the registered email once a decision is made.
         </p>
         <p className="text-xs text-slate-400 mt-6">
           You may close this window.

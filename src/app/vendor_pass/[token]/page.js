@@ -174,10 +174,10 @@ const getValidationError = (field, value, extra = {}) => {
       return VALIDATORS.name(value)
         ? null
         : "Name must be 2-80 characters (letters only)";
-    case "cardNumber":
-      return value && !VALIDATORS.rfidCard(value)
-        ? "RFID Card must be 4-20 alphanumeric characters"
-        : null;
+    // case "cardNumber":
+    //   return value && !VALIDATORS.rfidCard(value)
+    //     ? "RFID Card must be 4-20 alphanumeric characters"
+    //     : null;
     case "vehicleNo": // two-wheeler plate
       return value && !VALIDATORS.vehicleReg(value)
         ? "Enter a valid vehicle registration (e.g. TN-01-AB-1234)"
@@ -883,31 +883,12 @@ export default function VendorPassPublicPage() {
       return toast.error("Please fill all mandatory fields including Photo.");
     }
 
-    if (!(personForm.requisitionLetter || personForm.existingReqName))
-      return toast.error("Requisition Letter is mandatory.");
+    if (!(personForm.aadharFile || personForm.existingAadharName))
+      return toast.error("Aadhar Card upload is mandatory.");
 
-    if (
-      personForm.hepType === "1" &&
-      !(personForm.driverLicence || personForm.existingDlName)
-    )
-      return toast.error("Driver Licence is mandatory for Drivers.");
-
-    if (
-      personForm.hepType === "3" &&
-      !(personForm.passportDoc || personForm.existingPassportName)
-    )
-      return toast.error("Passport is mandatory for Seafarers.");
-
-    if (personForm.passType === "2" || personForm.passType === "3") {
-      if (
-        !(personForm.policeVerification || personForm.existingPoliceName) ||
-        !(personForm.proofOfEmployment || personForm.existingEmpName) ||
-        !(personForm.copyOfLicence || personForm.existingChaName)
-      ) {
-        return toast.error(
-          "Police Verification, Employment Proof, and Licence are mandatory for Monthly/Yearly passes.",
-        );
-      }
+    const isMonthlyOrYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(personForm.passType));
+    if (isMonthlyOrYearly && !(personForm.policeVerification || personForm.existingPoliceName)) {
+      return toast.error("Police Verification Certificate is mandatory for Monthly/Yearly passes.");
     }
 
     if (editingPersonIndex !== null) {
@@ -1009,13 +990,10 @@ export default function VendorPassPublicPage() {
       String(vehicleForm.passType) === "3"
     ) {
       if (
-        !(vehicleForm.requestLetter || vehicleForm.existingReqName) ||
         !(vehicleForm.taxDoc || vehicleForm.existingTaxName) ||
         !(vehicleForm.emissionCert || vehicleForm.existingEmissionName)
       ) {
-        return toast.error(
-          "Request Letter, Tax, and Emission Cert are mandatory for Monthly/Yearly passes.",
-        );
+        return toast.error("Tax Document and Emission Certificate are mandatory for Monthly/Yearly passes.");
       }
     }
 
@@ -1472,9 +1450,20 @@ export default function VendorPassPublicPage() {
                   <>
                     <DetailItem label="Ref Doc No / PO No / Work Order No" value={generalForm.refDocNo} />
                     {generalForm.workOrderFile && (
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Work Order Copy</span>
-                        <span className="text-sm font-semibold text-slate-700">{generalForm.workOrderFile.name}</span>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Work Order Copy</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-700">{generalForm.workOrderFile.name}</span>
+                          {intake?.workOrderFilePath && (
+                            <button
+                              type="button"
+                              onClick={() => window.open(`${AGENT_API}/vendor-pass/public/work-order/${intake.id}`, "_blank")}
+                              className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-white px-2 py-1 rounded shadow-sm border border-slate-200"
+                            >
+                              <Eye className="h-3 w-3" /> View
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </>
@@ -2031,7 +2020,7 @@ export default function VendorPassPublicPage() {
                           existingFileName={personForm.existingAadharName}
                           onView={() =>
                             window.open(
-                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=personAadhar`,
+                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=personAadhar&isVendorPass=true`,
                               "_blank",
                             )
                           }
@@ -2543,6 +2532,8 @@ export default function VendorPassPublicPage() {
                 </div>
               </div>
 
+              {(String(personForm.passType) === "2" ||
+                String(personForm.passType) === "3") && (
               <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
                   <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
@@ -2550,128 +2541,26 @@ export default function VendorPassPublicPage() {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   <FileUploadBox
-                    label="Requisition Letter"
+                    label="Police Verification Certificate"
                     isRequired
-                    file={personForm.requisitionLetter}
-                    existingFileName={personForm.existingReqName}
+                    file={personForm.policeVerification}
+                    existingFileName={personForm.existingPoliceName}
                     onView={() =>
                       window.open(
-                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=requisitionLetter`,
+                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=policeVerification`,
                         "_blank",
                       )
                     }
                     onChange={(e) =>
                       setPersonForm({
                         ...personForm,
-                        requisitionLetter: e.target.files[0],
+                        policeVerification: e.target.files[0],
                       })
                     }
                   />
-                  {personForm.hepType === "1" && ( // 1 = Driver ID
-                    <FileUploadBox
-                      label="Driver Licence"
-                      isRequired
-                      file={personForm.driverLicence}
-                      existingFileName={personForm.existingDlName}
-                      onView={() =>
-                        window.open(
-                          `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=driverLicense`,
-                          "_blank",
-                        )
-                      }
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          driverLicence: e.target.files[0],
-                        })
-                      }
-                    />
-                  )}
-                  {(String(personForm.passType) === "2" ||
-                    String(personForm.passType) === "3") && (
-                    <>
-                      <FileUploadBox
-                        label="Police Verification"
-                        isRequired
-                        file={personForm.policeVerification}
-                        existingFileName={personForm.existingPoliceName}
-                        onView={() =>
-                          window.open(
-                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=policeVerification`,
-                            "_blank",
-                          )
-                        }
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            policeVerification: e.target.files[0],
-                          })
-                        }
-                      />
-                      <FileUploadBox
-                        label="Proof of Employment"
-                        isRequired
-                        file={personForm.proofOfEmployment}
-                        existingFileName={personForm.existingEmpName}
-                        onView={() =>
-                          window.open(
-                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=employmentProof`,
-                            "_blank",
-                          )
-                        }
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            proofOfEmployment: e.target.files[0],
-                          })
-                        }
-                      />
-                      <FileUploadBox
-                        label="Copy of Licence"
-                        hint="(Stevedore/CHA)"
-                        isRequired
-                        file={personForm.copyOfLicence}
-                        existingFileName={personForm.existingChaName}
-                        onView={() =>
-                          window.open(
-                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=chaLicenseCopy`,
-                            "_blank",
-                          )
-                        }
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            copyOfLicence: e.target.files[0],
-                          })
-                        }
-                      />
-                    </>
-                  )}
-                  {(String(personForm.passType) === "2" ||
-                    String(personForm.passType) === "3" ||
-                    personForm.hepType === "3") && (
-                    <FileUploadBox
-                      label="Passport"
-                      isRequired={personForm.hepType === "3"}
-                      hint={personForm.hepType !== "3" && "(Optional)"}
-                      file={personForm.passportDoc}
-                      existingFileName={personForm.existingPassportName}
-                      onView={() =>
-                        window.open(
-                          `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=passportDoc`,
-                          "_blank",
-                        )
-                      }
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          passportDoc: e.target.files[0],
-                        })
-                      }
-                    />
-                  )}
                 </div>
               </div>
+              )}
 
               <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
                 <table className="w-full text-left border-collapse">
@@ -3024,24 +2913,6 @@ export default function VendorPassPublicPage() {
                   {(String(vehicleForm.passType) === "2" ||
                     String(vehicleForm.passType) === "3") && (
                     <>
-                      <FileUploadBox
-                        label="Request Letters"
-                        isRequired
-                        file={vehicleForm.requestLetter}
-                        existingFileName={vehicleForm.existingReqName}
-                        onView={() =>
-                          window.open(
-                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleRequestLetter`,
-                            "_blank",
-                          )
-                        }
-                        onChange={(e) =>
-                          setVehicleForm({
-                            ...vehicleForm,
-                            requestLetter: e.target.files[0],
-                          })
-                        }
-                      />
                       <FileUploadBox
                         label="Tax Document"
                         isRequired
