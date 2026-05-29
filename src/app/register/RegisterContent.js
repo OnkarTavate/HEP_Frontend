@@ -173,7 +173,7 @@ export default function RegisterPage() {
   const [selectedUserTypeId, setSelectedUserTypeId] = useState("");
 
   // Captcha State
-  const [captchaSvg, setCaptchaSvg] = useState("");
+  const [captchaQuestion, setCaptchaQuestion] = useState("");
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaInput, setCaptchaInput] = useState("");
   const [captchaError, setCaptchaError] = useState("");
@@ -244,10 +244,10 @@ export default function RegisterPage() {
 
       if (data.success) {
         setUserTypes(data.userTypes);
-        setCaptchaSvg(data.captchaSvg);
+        setCaptchaQuestion(data.captchaQuestion);
         setCaptchaToken(data.captchaToken);
-        setCaptchaInput(""); // Clear input when refreshing captcha
-        setCaptchaError(""); // Clear captcha error on refresh
+        setCaptchaInput("");
+        setCaptchaError("");
       }
     } catch (error) {
       console.error("Error fetching initial data:", error);
@@ -1263,10 +1263,13 @@ export default function RegisterPage() {
                       <div className="flex flex-col items-center gap-6">
                         <div className="flex flex-col items-center gap-2">
                           <div className="flex gap-2">
-                            <div
+                            {/* <div
                               className="flex items-center justify-center bg-white border border-slate-300 rounded-xl h-14 overflow-hidden w-40 shadow-sm"
                               dangerouslySetInnerHTML={{ __html: captchaSvg }}
-                            />
+                            /> */}
+                            <div className="flex items-center justify-center bg-white border border-orange-200 rounded-xl h-14 w-40 shadow-sm text-xl font-bold tracking-widest text-blue-700">
+                              {captchaQuestion || "Loading..."}
+                            </div>
                             <button
                               type="button"
                               onClick={fetchInitialData}
