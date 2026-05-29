@@ -657,6 +657,18 @@ export default function VendorPassApprovedPage() {
     const passTypeEnumMap = { '1': 'DAILY', '2': 'MONTHLY', '3': 'YEARLY' };
     const toPassTypeEnum = (val) => passTypeEnumMap[String(val)] || val || 'DAILY';
 
+    const nationalityEnumMap = { '1': 'INDIAN', '2': 'FOREIGNER' };
+    const toNationalityEnum = (val) => nationalityEnumMap[String(val)] || val || 'INDIAN';
+
+    const idProofTypeEnumMap = {
+      '1': 'DRIVING LICENSE',
+      '2': 'PAN CARD',
+      '3': 'PASSPORT',
+      '4': 'ELECTION CARD',
+      '5': 'COMPANY ID CARD'
+    };
+    const toIdProofTypeEnum = (val) => idProofTypeEnumMap[String(val)] || val || '';
+
     try {
       if (type === 'person') {
         const updateData = {
@@ -667,7 +679,7 @@ export default function VendorPassApprovedPage() {
           aadharNo: personForm.aadharNo,
           designation: personForm.designation,
           designationOther: personForm.designationOther,
-          idProofType: personForm.idProofType,
+          idProofType: toIdProofTypeEnum(personForm.idProofType),
           idProofNumber: personForm.idProofNumber,
           hepTypeId: personForm.hepType,
           hepType: personForm.hepType,
@@ -676,7 +688,7 @@ export default function VendorPassApprovedPage() {
           dateFrom: personForm.dateFrom,
           dateTo: personForm.dateTo,
           amount: personForm.amount,
-          nationality: personForm.nationality,
+          nationality: toNationalityEnum(personForm.nationality),
           countryId: personForm.country,
           accessAreaId: personForm.accessArea,
           visaNo: personForm.visaNo,
