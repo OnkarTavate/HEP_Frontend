@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import Select from "react-select";
+import { extractAadharFromPdf } from "@/lib/extractAadharFromPdf";
 import {
   Wallet,
   Info,
@@ -2981,12 +2982,149 @@ export default function PassRequestPage() {
                               "_blank",
                             )
                           }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              aadharFile: e.target.files[0],
-                            })
-                          }
+                    
+                          // onChange={async (e) => {
+                          //   const file =
+                          //     e?.target?.files?.[0] ||
+                          //     e?.files?.[0] ||
+                          //     e?.file ||
+                          //     e;
+
+                          //   setPersonForm((prev) => ({
+                          //     ...prev,
+                          //     aadharFile: file,
+                          //   }));
+
+                          //   if (!file) return;
+
+                          //   try {
+                          //     toast.loading("Reading Aadhaar PDF...", {
+                          //       id: "aadhar-ocr",
+                          //     });
+
+                          //     const extractedAadhar =
+                          //       await extractAadharFromPdf(file);
+
+                          //     if (!extractedAadhar) {
+                          //       setPersonForm((prev) => ({
+                          //         ...prev,
+                          //         aadharFile: file,
+                          //         aadharNo: "", // clear old number
+                          //       }));
+
+                          //       toast.warning(
+                          //         "Could not detect Aadhaar automatically. Please enter manually."
+                          //       );
+
+                          //       return;
+                          //     }
+
+                          //     toast.dismiss("aadhar-ocr");
+
+                          //     if (extractedAadhar) {
+
+                          //       setPersonForm((prev) => ({
+                          //         ...prev,
+                          //         aadharFile: file,
+                          //         aadharNo: extractedAadhar,
+                          //       }));
+
+                          //       toast.success(
+                          //         `Aadhaar detected: ${extractedAadhar}`
+                          //       );
+
+                          //     } else {
+
+                          //       toast.warning(
+                          //         "Could not detect Aadhaar automatically. Please enter manually."
+                          //       );
+                          //     }
+
+                          //   } catch (error) {
+
+                          //     toast.dismiss("aadhar-ocr");
+
+                          //     console.error(error);
+
+                          //     toast.error("Failed to read Aadhaar PDF");
+                          //   }
+                          // }}
+                          onChange={async (e) => {
+                            const file =
+                              e?.target?.files?.[0] ||
+                              e?.files?.[0] ||
+                              e?.file ||
+                              e;
+
+                            if (!file) return;
+
+                            // Immediately store uploaded file
+                            setPersonForm((prev) => ({
+                              ...prev,
+                              aadharFile: file,
+                            }));
+
+                            try {
+                              toast.loading(
+                                "Reading Aadhaar PDF...",
+                                {
+                                  id: "aadhar-ocr",
+                                }
+                              );
+
+                              const extractedAadhar =
+                                await extractAadharFromPdf(file);
+
+                              // Always stop loading toast
+                              toast.dismiss("aadhar-ocr");
+
+                              // ==========================
+                              // Aadhaar NOT detected
+                              // ==========================
+                              if (!extractedAadhar) {
+                                setPersonForm((prev) => ({
+                                  ...prev,
+                                  aadharFile: file,
+                                  aadharNo: "", // clear previous Aadhaar
+                                }));
+
+                                toast.warning(
+                                  "Could not detect Aadhaar automatically. Please enter manually."
+                                );
+
+                                return;
+                              }
+
+                              // ==========================
+                              // Aadhaar detected
+                              // ==========================
+                              setPersonForm((prev) => ({
+                                ...prev,
+                                aadharFile: file,
+                                aadharNo: extractedAadhar,
+                              }));
+
+                              toast.success(
+                                `Aadhaar detected: ${extractedAadhar}`
+                              );
+
+                            } catch (error) {
+                              toast.dismiss("aadhar-ocr");
+
+                              console.error(error);
+
+                              // Clear old Aadhaar on failure
+                              setPersonForm((prev) => ({
+                                ...prev,
+                                aadharFile: file,
+                                aadharNo: "",
+                              }));
+
+                              toast.error(
+                                "Failed to read Aadhaar PDF"
+                              );
+                            }
+                          }}
                         />
                       </div>
                     </>

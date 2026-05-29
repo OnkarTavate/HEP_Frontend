@@ -36,17 +36,12 @@ const LoginPage = () => {
     captcha: "",
   });
   const [error, setError] = useState("");
-  // Numeric math captcha — generated on the CLIENT only to avoid SSR hydration mismatch.
-  // Initial value is a neutral placeholder that both server and client agree on;
-  // the real random numbers are set inside useEffect (which never runs on the server).
-  const [mathCaptcha, setMathCaptcha] = useState({ num1: 0, num2: 0, answer: 0 });
-
-  useEffect(() => {
-    const a = Math.floor(Math.random() * 9) + 1;
-    const b = Math.floor(Math.random() * 9) + 1;
-    setMathCaptcha({ num1: a, num2: b, answer: a + b });
-  }, []);
-
+  // const [captchaData, setCaptchaData] = useState({ svg: "", token: "" });
+  const [captchaData, setCaptchaData] = useState({
+    question: "",
+    token: "",
+  });
+  const [isCaptchaLoading, setIsCaptchaLoading] = useState(false);
   const [isTrackModalOpen, setIsTrackModalOpen] = useState(false);
   const [trackReference, setTrackReference] = useState("");
   const [trackResult, setTrackResult] = useState(null);
@@ -119,13 +114,86 @@ const LoginPage = () => {
     }
   };
 
-  // Refresh the math captcha and clear the user's previous answer.
-  const fetchCaptcha = () => {
-    const a = Math.floor(Math.random() * 9) + 1;
-    const b = Math.floor(Math.random() * 9) + 1;
-    setMathCaptcha({ num1: a, num2: b, answer: a + b });
-    setFormData((prev) => ({ ...prev, captcha: "" }));
+  const fetchCaptcha = async () => {
+    setIsCaptchaLoading(true);
+
+    try {
+      const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
+
+      if (res.data.success) {
+        setCaptchaData({
+          question: res.data.captchaQuestion,
+          token: res.data.captchaToken,
+        });
+
+        // clear old entered captcha
+        setFormData((prev) => ({
+          ...prev,
+          captcha: "",
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch captcha", error);
+    } finally {
+      setIsCaptchaLoading(false);
+    }
   };
+
+  // const fetchCaptcha = async () => {
+  //   setIsCaptchaLoading(true);
+  //   try {
+  //     const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
+  //     if (res.data.success) {
+  //       setCaptchaData({
+  //         svg: res.data.captchaSvg,
+  //         token: res.data.captchaToken,
+  //       });
+  //       // Clear the user's previous input when captcha refreshes
+  //       setFormData((prev) => ({ ...prev, captcha: "" }));
+  //     }
+  //   } catch (error) {
+  //     console.error("Failed to fetch captcha", error);
+  //   } finally {
+  //     setIsCaptchaLoading(false);
+  //   }
+  // };
+
+  // Fetch on component mount — uses ignore flag for React 18 Strict Mode compatibility
+  useEffect(() => {
+    let ignore = false;
+
+    const loadCaptcha = async () => {
+      setIsCaptchaLoading(true);
+      try {
+        const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
+        if (!ignore && res.data.success) {
+          // setCaptchaData({
+          //   svg: res.data.captchaSvg,
+          //   token: res.data.captchaToken,
+          // });
+          setCaptchaData({
+            question: res.data.captchaQuestion,
+            token: res.data.captchaToken,
+          });
+          setFormData((prev) => ({ ...prev, captcha: "" }));
+        }
+      } catch (error) {
+        if (!ignore) {
+          console.error("Failed to fetch captcha", error);
+        }
+      } finally {
+        if (!ignore) {
+          setIsCaptchaLoading(false);
+        }
+      }
+    };
+
+    loadCaptcha();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const handleTrackSubmit = async (e) => {
     e.preventDefault();
@@ -257,13 +325,13 @@ const LoginPage = () => {
     } catch (err) {
       console.error("Force logout error:", err);
       toast.error("Force logout failed", {
-        description: err.response?.data?.message || "Unable to terminate previous session",
+        description:
+          err.response?.data?.message || "Unable to terminate previous session",
       });
     } finally {
       setForceLogoutLoading(false);
     }
   };
-
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -275,24 +343,16 @@ const LoginPage = () => {
       return;
     }
 
-    // Validate the numeric captcha locally before hitting the server.
-    if (parseInt(formData.captcha, 10) !== mathCaptcha.answer) {
-      toast.error("Incorrect security code. Please try again.");
-      fetchCaptcha();
-      return;
-    }
-
     try {
       const res = await axios.post(
         `${AUTH_API}/auth/login`,
         {
           loginId: formData.username.trim(),
           password: formData.password,
+          captchaToken: captchaData.token,
+          captchaValue: formData.captcha,
         },
         {
-          // Treat 409 (concurrent session) as a normal response so axios
-          // does NOT throw — prevents the Next.js dev overlay from
-          // reporting "AxiosError 409" for an expected UX flow.
           validateStatus: (status) =>
             (status >= 200 && status < 300) || status === 409,
         },
@@ -361,10 +421,11 @@ const LoginPage = () => {
         } else {
           toast.error(message);
         }
-      } else if (err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK') {
+      } else if (err.code === "ECONNREFUSED" || err.code === "ERR_NETWORK") {
         console.error("Login error:", err);
         toast.error("Connection Error", {
-          description: "Unable to reach the authentication server. Please check your network connection.",
+          description:
+            "Unable to reach the authentication server. Please check your network connection.",
           duration: 4000,
         });
       } else {
@@ -386,7 +447,10 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="h-screen relative overflow-hidden bg-zinc-900" style={{ fontFamily: 'Arial, sans-serif' }}>
+    <div
+      className="h-screen relative overflow-hidden bg-zinc-900"
+      style={{ fontFamily: "Arial, sans-serif" }}
+    >
       {/* Cinematic ship video background */}
       <video
         className="absolute inset-0 w-full h-full object-cover"
@@ -518,7 +582,9 @@ const LoginPage = () => {
                   <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center mb-3 shadow-lg shadow-orange-900/40">
                     <item.icon className="h-6 w-6 text-white" />
                   </div>
-                  <p className="font-semibold text-white text-sm">{item.title}</p>
+                  <p className="font-semibold text-white text-sm">
+                    {item.title}
+                  </p>
                   <p className="text-xs text-stone-200/80 mt-1">{item.desc}</p>
                 </div>
               ))}
@@ -533,18 +599,21 @@ const LoginPage = () => {
                 aria-hidden
                 className="hidden lg:block absolute -inset-6 bg-gradient-to-br from-orange-400/30 via-orange-300/20 to-transparent blur-3xl rounded-[40px] -z-10"
               />
-              <div
-                className="relative bg-white/95 backdrop-blur-2xl rounded-[30px] shadow-[0_30px_80px_-15px_rgba(0,0,0,0.6)] ring-1 ring-white/40 overflow-hidden w-full max-w-[820px] mx-auto lg:ml-auto lg:mr-0 min-h-[560px] sm:min-h-[600px] lg:h-[78vh] lg:max-h-[680px] transition-shadow duration-500 hover:shadow-[0_35px_90px_-15px_rgba(0,0,0,0.7)]"
-              >
+              <div className="relative bg-white/95 backdrop-blur-2xl rounded-[30px] shadow-[0_30px_80px_-15px_rgba(0,0,0,0.6)] ring-1 ring-white/40 overflow-hidden w-full max-w-[820px] mx-auto lg:ml-auto lg:mr-0 min-h-[560px] sm:min-h-[600px] lg:h-[78vh] lg:max-h-[680px] transition-shadow duration-500 hover:shadow-[0_35px_90px_-15px_rgba(0,0,0,0.7)]">
                 {/* ── Form column (slides to the right half when forgot is active) ─── */}
                 <div
                   className={`md:absolute md:top-0 md:left-0 md:w-1/2 md:h-full bg-white z-[2] transition-transform duration-700 ease-in-out ${authMode === "forgot" ? "md:translate-x-full" : "md:translate-x-0"}`}
                 >
                   <div className="h-full flex flex-col justify-center px-6 md:px-8 lg:px-10 py-8 max-w-md mx-auto w-full">
                     {authMode === "signin" ? (
-                      <div key="signin-panel" className="animate-in fade-in duration-500 ease-out">
+                      <div
+                        key="signin-panel"
+                        className="animate-in fade-in duration-500 ease-out"
+                      >
                         <div className="text-center mb-4">
-                          <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">Sign In</h3>
+                          <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">
+                            Sign In
+                          </h3>
                         </div>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -562,7 +631,10 @@ const LoginPage = () => {
                               placeholder="Username / Employee ID"
                               value={formData.username}
                               onChange={(e) =>
-                                setFormData({ ...formData, username: e.target.value })
+                                setFormData({
+                                  ...formData,
+                                  username: e.target.value,
+                                })
                               }
                               className="w-full pl-11 pr-3 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                               required
@@ -577,7 +649,10 @@ const LoginPage = () => {
                               placeholder="Password"
                               value={formData.password}
                               onChange={(e) =>
-                                setFormData({ ...formData, password: e.target.value })
+                                setFormData({
+                                  ...formData,
+                                  password: e.target.value,
+                                })
                               }
                               className="w-full pl-11 pr-11 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                               required
@@ -586,7 +661,9 @@ const LoginPage = () => {
                               type="button"
                               onClick={() => setShowPassword(!showPassword)}
                               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-600 transition-colors focus:outline-none"
-                              title={showPassword ? "Hide password" : "Show password"}
+                              title={
+                                showPassword ? "Hide password" : "Show password"
+                              }
                             >
                               {showPassword ? (
                                 <EyeOff className="h-5 w-5" />
@@ -596,62 +673,71 @@ const LoginPage = () => {
                             </button>
                           </div>
 
-                          {/* Numeric math captcha — shows "num1 + num2 = ?" and an answer input. */}
+                          {/* Captcha — input on the left, captcha image + refresh on the right.
+                      Stacks vertically on very small screens for readability. */}
                           <div className="flex flex-col sm:flex-row gap-2 w-full">
-                            {/* Math question display */}
-                            <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-4 py-2 shrink-0 justify-between sm:w-auto w-full">
-                              <div className="flex items-center gap-1 select-none">
-                                <span
-                                  style={{
-                                    fontFamily: 'Georgia, serif',
-                                    fontSize: '1.35rem',
-                                    fontWeight: 800,
-                                    letterSpacing: '0.05em',
-                                    color: '#92400e',
-                                    textDecoration: 'line-through wavy #f97316',
-                                    filter: 'blur(0px)',
-                                    userSelect: 'none',
-                                  }}
-                                >
-                                  {mathCaptcha.num1}
-                                </span>
-                                <span style={{ color: '#b45309', fontWeight: 700, fontSize: '1.2rem' }}>&nbsp;+&nbsp;</span>
-                                <span
-                                  style={{
-                                    fontFamily: 'Georgia, serif',
-                                    fontSize: '1.35rem',
-                                    fontWeight: 800,
-                                    letterSpacing: '0.05em',
-                                    color: '#92400e',
-                                    textDecoration: 'line-through wavy #f97316',
-                                    userSelect: 'none',
-                                  }}
-                                >
-                                  {mathCaptcha.num2}
-                                </span>
-                                <span style={{ color: '#b45309', fontWeight: 700, fontSize: '1.2rem' }}>&nbsp;=&nbsp;?</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={fetchCaptcha}
-                                title="Get a new security code"
-                                className="ml-2 shrink-0 bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100 active:scale-95 transition-all"
-                              >
-                                <RefreshCw className="h-4 w-4 text-orange-600" />
-                              </button>
-                            </div>
-                            {/* Answer input */}
                             <input
-                              type="number"
-                              inputMode="numeric"
-                              placeholder="Answer"
+                              placeholder="Security Code"
                               value={formData.captcha}
                               onChange={(e) =>
-                                setFormData({ ...formData, captcha: e.target.value })
+                                setFormData({
+                                  ...formData,
+                                  captcha: e.target.value,
+                                })
                               }
                               className="flex-1 min-w-0 px-4 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
                               required
                             />
+                            {/* <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 w-full sm:w-[170px] shrink-0 justify-between">
+                      <div className="flex-1 flex items-center justify-center min-w-0 overflow-hidden">
+                        {isCaptchaLoading ? (
+                          <RefreshCw className="h-5 w-5 text-orange-400 animate-spin" />
+                        ) : (
+                          <div
+                            className="flex items-center justify-center w-full [&>svg]:w-full [&>svg]:max-w-[130px] [&>svg]:h-11"
+                            dangerouslySetInnerHTML={{
+                              __html: captchaData.svg,
+                            }}
+                          />
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={fetchCaptcha}
+                        disabled={!!isCaptchaLoading}
+                        title="Get a new security code"
+                        className="shrink-0 bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100 active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        <RefreshCw
+                          className={`h-4 w-4 text-orange-600 ${isCaptchaLoading ? "animate-spin" : ""}`}
+                        />
+                      </button>
+                    </div> */}
+                            <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 w-full sm:w-[190px] shrink-0 justify-between">
+                              <div className="flex-1 flex items-center justify-center min-w-0 overflow-hidden">
+                                {isCaptchaLoading ? (
+                                  <RefreshCw className="h-5 w-5 text-orange-400 animate-spin" />
+                                ) : (
+                                  <div className="font-bold text-lg text-blue-700 tracking-wide select-none">
+                                    {captchaData.question}
+                                  </div>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={fetchCaptcha}
+                                disabled={!!isCaptchaLoading}
+                                title="Refresh captcha"
+                                className="shrink-0 bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100 active:scale-95 transition-all disabled:opacity-50"
+                              >
+                                <RefreshCw
+                                  className={`h-4 w-4 text-orange-600 ${
+                                    isCaptchaLoading ? "animate-spin" : ""
+                                  }`}
+                                />
+                              </button>
+                            </div>
                           </div>
 
                           {/* <div className="text-center">
@@ -687,18 +773,24 @@ const LoginPage = () => {
                         </form>
                       </div>
                     ) : (
-                      <div key="forgot-panel" className="animate-in fade-in slide-in-from-right-6 duration-500 ease-out">
+                      <div
+                        key="forgot-panel"
+                        className="animate-in fade-in slide-in-from-right-6 duration-500 ease-out"
+                      >
                         <div className="text-center mb-6">
                           <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">
                             Reset Password
                           </h3>
                           <p className="text-sm text-gray-500 mt-2">
-                            Enter your registered email or employee ID — we&apos;ll
-                            send you a reset link.
+                            Enter your registered email or employee ID —
+                            we&apos;ll send you a reset link.
                           </p>
                         </div>
 
-                        <form onSubmit={handleForgotSubmit} className="space-y-4">
+                        <form
+                          onSubmit={handleForgotSubmit}
+                          className="space-y-4"
+                        >
                           <div className="relative">
                             <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                             <input
@@ -748,7 +840,9 @@ const LoginPage = () => {
                         : "150px 0 0 100px",
                   }}
                 >
-                  <h2 className="text-2xl lg:text-3xl font-bold mb-3">Hello, Friend!</h2>
+                  <h2 className="text-2xl lg:text-3xl font-bold mb-3">
+                    Hello, Friend!
+                  </h2>
                   <p className="text-sm leading-relaxed opacity-95 max-w-[280px] mb-6">
                     Register with your personal details to use all site features
                   </p>
@@ -761,10 +855,14 @@ const LoginPage = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAuthMode(authMode === "forgot" ? "signin" : "forgot")}
+                    onClick={() =>
+                      setAuthMode(authMode === "forgot" ? "signin" : "forgot")
+                    }
                     className="px-10 py-3 bg-white/10 border border-white/60 text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors"
                   >
-                    {authMode === "forgot" ? "Back to Sign In" : "Forgot Password?"}
+                    {authMode === "forgot"
+                      ? "Back to Sign In"
+                      : "Forgot Password?"}
                   </button>
                 </div>
               </div>
@@ -801,14 +899,14 @@ const LoginPage = () => {
                     setTrackReference(e.target.value.toUpperCase())
                   }
                   className="flex-1 px-4 py-4 text-lg bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-medium uppercase transition-all"
-                  style={{ fontFamily: 'Arial, sans-serif' }}
+                  style={{ fontFamily: "Arial, sans-serif" }}
                   required
                 />
                 <button
                   type="submit"
                   disabled={trackLoading}
                   className="px-8 py-4 text-lg bg-[#0a1e4d] text-white font-bold rounded-xl hover:bg-orange-600 transition-colors shadow-md disabled:opacity-70 flex items-center justify-center min-w-[130px]"
-                  style={{ fontFamily: 'Arial, sans-serif' }}
+                  style={{ fontFamily: "Arial, sans-serif" }}
                 >
                   {trackLoading ? (
                     <RefreshCw className="h-6 w-6 animate-spin" />
@@ -841,14 +939,15 @@ const LoginPage = () => {
                     {/* Dynamic Status Badge */}
                     <div
                       className={`px-4 py-2 rounded-lg text-sm font-bold border flex items-center gap-1.5 shadow-sm
-                      ${trackResult.status === "approved"
+                      ${
+                        trackResult.status === "approved"
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                           : trackResult.status === "rejected"
                             ? "bg-red-50 text-red-700 border-red-200"
                             : trackResult.status === "reverted"
                               ? "bg-amber-50 text-amber-700 border-amber-200"
                               : "bg-yellow-50 text-yellow-700 border-yellow-200"
-                        }`}
+                      }`}
                     >
                       {trackResult.status === "approved" && (
                         <CheckCircle className="h-4 w-4" />
@@ -861,8 +960,8 @@ const LoginPage = () => {
                       )}
                       {(!trackResult.status ||
                         trackResult.status === "pending") && (
-                          <Clock className="h-4 w-4" />
-                        )}
+                        <Clock className="h-4 w-4" />
+                      )}
                       {(trackResult.status || "PENDING").toUpperCase()}
                     </div>
                   </div>
@@ -886,7 +985,7 @@ const LoginPage = () => {
                           )
                         }
                         className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
-                        style={{ fontFamily: 'Arial, sans-serif' }}
+                        style={{ fontFamily: "Arial, sans-serif" }}
                       >
                         <RefreshCw className="h-5 w-5" />
                         UPDATE APPLICATION
@@ -954,7 +1053,9 @@ const LoginPage = () => {
                 <ul className="mt-3 space-y-2 text-sm text-gray-600">
                   <li className="flex items-start gap-2">
                     <span className="text-orange-500 font-bold">•</span>
-                    <span>Wait for the other session to expire (15-30 minutes)</span>
+                    <span>
+                      Wait for the other session to expire (15-30 minutes)
+                    </span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-orange-500 font-bold">•</span>
@@ -962,7 +1063,9 @@ const LoginPage = () => {
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-orange-500 font-bold">•</span>
-                    <span className="font-semibold text-gray-700">Force logout and login here (recommended)</span>
+                    <span className="font-semibold text-gray-700">
+                      Force logout and login here (recommended)
+                    </span>
                   </li>
                 </ul>
               </div>
