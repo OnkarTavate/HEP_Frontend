@@ -52,7 +52,10 @@ export default function AdminLayout({ children }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const saved = localStorage.getItem("admin-theme");
-    if (saved === "dark") setDarkMode(true);
+    if (saved === "dark") {
+      const timer = setTimeout(() => setDarkMode(true), 0);
+      return () => clearTimeout(timer);
+    }
   }, []);
   const toggleDarkMode = () => {
     setDarkMode((prev) => {
@@ -70,8 +73,13 @@ export default function AdminLayout({ children }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const saved = localStorage.getItem("admin-sidebar");
-    if (saved === "collapsed") setSidebarExpanded(false);
-    else if (saved === "expanded") setSidebarExpanded(true);
+    if (saved === "collapsed") {
+      const timer = setTimeout(() => setSidebarExpanded(false), 0);
+      return () => clearTimeout(timer);
+    } else if (saved === "expanded") {
+      const timer = setTimeout(() => setSidebarExpanded(true), 0);
+      return () => clearTimeout(timer);
+    }
   }, []);
   const toggleSidebar = () => {
     setSidebarExpanded((prev) => {
@@ -98,7 +106,10 @@ export default function AdminLayout({ children }) {
         router.push("/");
         return;
       }
-      setUser(parsedUser);
+      const timer = setTimeout(() => {
+        setUser(parsedUser);
+      }, 0);
+      return () => clearTimeout(timer);
     } else {
       router.push("/");
     }
@@ -129,14 +140,14 @@ export default function AdminLayout({ children }) {
       <div
         className={cn(
           "h-screen w-screen overflow-hidden flex transition-colors duration-300",
-          "bg-[#d8d0c8] dark:bg-[#0d0f17]",
+          "bg-slate-100 dark:bg-slate-950",
           darkMode && "dark",
         )}
         style={{ fontFamily: "'Montserrat', 'Inter', Arial, sans-serif" }}
       >
-        <div className="w-full h-full bg-[#f5f1eb] dark:bg-[#1a1d27] flex overflow-hidden">
+        <div className="w-full h-full bg-slate-50 dark:bg-[#11131e] flex overflow-hidden">
           {/* Sidebar silhouette */}
-          <aside className="hidden lg:flex w-64 flex-shrink-0 bg-[#0a0a0a] dark:bg-black border-r border-black/20 dark:border-white/5 p-4 flex-col gap-4">
+          <aside className="hidden lg:flex w-64 flex-shrink-0 bg-slate-900 dark:bg-slate-950 border-r border-slate-800 dark:border-white/5 p-4 flex-col gap-4">
             <div className="flex items-center gap-3">
               <span className="flex items-center justify-center w-12 h-12 rounded-2xl bg-amber-400 text-[#1f1f1f] shadow-lg shrink-0">
                 <ShieldCheck className="h-6 w-6" strokeWidth={2.5} />
@@ -177,30 +188,30 @@ export default function AdminLayout({ children }) {
             {/* Content skeleton */}
             <main className="flex-1 px-4 sm:px-6 lg:px-8 pb-4 min-h-0 overflow-hidden">
               <div className="relative h-full w-full">
-                <div className="h-14 rounded-3xl bg-gradient-to-r from-[#1a1d27] via-[#252836] to-[#1a1d27] dark:from-black dark:via-[#1a1d27] dark:to-black animate-pulse mb-4" />
+                <div className="h-14 rounded-3xl bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 animate-pulse mb-4" />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
                   <div
-                    className="h-56 rounded-3xl bg-[#d6cebf] dark:bg-[#272a36] animate-pulse lg:col-span-2"
+                    className="h-56 rounded-3xl bg-white dark:bg-slate-800/60 ring-1 ring-slate-200/50 dark:ring-white/5 animate-pulse lg:col-span-2"
                     style={{ animationDelay: "100ms" }}
                   />
                   <div
-                    className="h-56 rounded-3xl bg-[#1f232d] dark:bg-[#1f232d] animate-pulse"
+                    className="h-56 rounded-3xl bg-slate-900 dark:bg-slate-950 animate-pulse"
                     style={{ animationDelay: "180ms" }}
                   />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div
-                    className="h-40 rounded-3xl bg-white dark:bg-[#1f232d] ring-1 ring-stone-200/60 dark:ring-white/5 animate-pulse"
+                    className="h-40 rounded-3xl bg-white dark:bg-slate-800/60 ring-1 ring-slate-200/60 dark:ring-white/5 animate-pulse"
                     style={{ animationDelay: "220ms" }}
                   />
                   <div
-                    className="h-40 rounded-3xl bg-white dark:bg-[#1f232d] ring-1 ring-stone-200/60 dark:ring-white/5 animate-pulse"
+                    className="h-40 rounded-3xl bg-white dark:bg-slate-800/60 ring-1 ring-slate-200/60 dark:ring-white/5 animate-pulse"
                     style={{ animationDelay: "300ms" }}
                   />
                 </div>
 
                 <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center">
-                  <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-white/85 dark:bg-[#1f232d]/90 backdrop-blur-md ring-1 ring-stone-200/70 dark:ring-white/10 shadow-lg">
+                  <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-md ring-1 ring-slate-200/70 dark:ring-white/10 shadow-lg">
                     <span className="relative flex h-7 w-7 items-center justify-center rounded-xl bg-amber-400 text-[#1f1f1f] shrink-0">
                       <ShieldCheck className="h-4 w-4" strokeWidth={2.5} />
                       <span className="absolute inset-0 rounded-xl ring-2 ring-amber-400/60 animate-ping" />
@@ -310,10 +321,10 @@ export default function AdminLayout({ children }) {
   // Sidebar — collapses to a 24-wide icon column or expands to a 64-wide
   // labeled column. The mobile slide-over always uses the expanded variant
   // so nav labels are visible in the drawer.
-  const IconSidebar = ({ onNavigate, expanded = sidebarExpanded, showCollapseToggle = true }) => (
+  const renderIconSidebar = ({ onNavigate, expanded = sidebarExpanded, showCollapseToggle = true }) => (
     <div
       className={cn(
-        "h-full flex flex-col justify-between py-8 bg-[#0a0a0a] dark:bg-black border-r border-black/20 dark:border-white/5 transition-all duration-300",
+        "h-full flex flex-col justify-between py-8 bg-slate-900 dark:bg-slate-950 border-r border-slate-850 dark:border-white/5 transition-all duration-300",
         expanded ? "items-stretch px-4 w-full" : "items-center w-full",
       )}
     >
@@ -325,7 +336,7 @@ export default function AdminLayout({ children }) {
             className="flex items-center gap-3 group"
             onClick={onNavigate}
           >
-            <span className="flex items-center justify-center w-12 h-12 rounded-2xl bg-[#1f1f1f] dark:bg-amber-400 text-amber-300 dark:text-[#1f1f1f] shadow-lg shrink-0">
+            <span className="flex items-center justify-center w-12 h-12 rounded-2xl bg-slate-800 dark:bg-amber-400 text-amber-400 dark:text-[#1f1f1f] shadow-lg shrink-0 group-hover:scale-105 transition-transform duration-200">
               <Ship className="h-6 w-6" />
             </span>
             {expanded && (
@@ -346,7 +357,7 @@ export default function AdminLayout({ children }) {
               onClick={toggleSidebar}
               title={expanded ? "Collapse sidebar" : "Expand sidebar"}
               className={cn(
-                "hidden lg:flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 shadow-sm text-white hover:bg-amber-400 hover:text-black transition font-bold",
+                "hidden lg:flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 text-white hover:bg-amber-500 hover:text-slate-950 active:scale-95 transition-all duration-200 font-bold",
                 !expanded && "absolute -right-3 top-10 z-10",
               )}
             >
@@ -361,7 +372,7 @@ export default function AdminLayout({ children }) {
 
         {/* Section label (only when expanded) */}
         {expanded && (
-          <p className="px-2 text-xs font-bold text-stone-400 uppercase tracking-widest">
+          <p className="px-2 text-xs font-bold text-slate-500 uppercase tracking-widest">
             Global Menu
           </p>
         )}
@@ -377,13 +388,13 @@ export default function AdminLayout({ children }) {
                 title={item.name}
                 onClick={onNavigate}
                 className={cn(
-                  "flex items-center rounded-2xl transition-all",
+                  "flex items-center rounded-2xl transition-all duration-200 active:scale-[0.98]",
                   expanded
                     ? "gap-3 px-4 py-3.5 text-base font-bold"
                     : "justify-center w-12 h-12",
                   isActive
-                    ? "bg-amber-400 text-black shadow-lg"
-                    : "text-stone-300 hover:text-amber-300 hover:bg-white/10",
+                    ? "bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20"
+                    : "text-slate-300 hover:text-amber-400 hover:bg-white/5",
                 )}
               >
                 <item.icon className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")} strokeWidth={2.5} />
@@ -398,7 +409,7 @@ export default function AdminLayout({ children }) {
         <button
           title="Help / Logs"
           className={cn(
-            "flex items-center rounded-2xl bg-white/10 text-white hover:bg-amber-400 hover:text-black transition font-bold",
+            "flex items-center rounded-2xl bg-white/10 text-white hover:bg-amber-500 hover:text-slate-950 active:scale-[0.98] transition-all duration-200 font-bold",
             expanded ? "gap-3 px-4 py-3 text-base" : "justify-center w-12 h-12",
           )}
         >
@@ -410,7 +421,7 @@ export default function AdminLayout({ children }) {
   );
 
   // Reusable user/name card — rendered in the top-right of the header.
-  const UserNameCard = () => (
+  const renderUserNameCard = () => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-3 rounded-2xl px-3 py-2 bg-black/90 hover:bg-black text-white dark:bg-white/5 dark:hover:bg-white/10 dark:border dark:border-white/10 shadow-md transition focus:outline-none">
@@ -464,14 +475,14 @@ export default function AdminLayout({ children }) {
     <div
       className={cn(
         "h-screen w-screen overflow-hidden flex transition-colors duration-300",
-        "bg-[#d8d0c8] dark:bg-[#0d0f17]",
+        "bg-slate-100 dark:bg-slate-950",
         darkMode && "dark",
       )}
       style={{ fontFamily: "'Montserrat', 'Inter', Arial, sans-serif" }}
     >
       {/* Full-viewport shell — no outer padding, no max-width cap, no rounded
           corners on edges. Contains the sidebar + main column. */}
-      <div className="w-full h-full bg-[#f5f1eb] dark:bg-[#1a1d27] flex overflow-hidden transition-colors duration-300">
+      <div className="w-full h-full bg-slate-50 dark:bg-[#11131e] flex overflow-hidden transition-colors duration-300">
         {/* Desktop icon sidebar (collapsible) */}
         <aside
           className={cn(
@@ -479,27 +490,27 @@ export default function AdminLayout({ children }) {
             sidebarExpanded ? "w-64" : "w-24",
           )}
         >
-          <IconSidebar />
+          {renderIconSidebar({})}
         </aside>
 
         {/* Mobile sidebar (slide-over) — always shows labels for clarity */}
         <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
           <SheetContent
             side="left"
-            className="w-72 p-0 bg-[#f8f4ef] dark:bg-[#161821] border-stone-200 dark:border-white/5"
+            className="w-72 p-0 bg-slate-900 dark:bg-slate-950 border-slate-800 dark:border-white/5"
           >
-            <IconSidebar
-              onNavigate={() => setIsMobileMenuOpen(false)}
-              expanded={true}
-              showCollapseToggle={false}
-            />
+            {renderIconSidebar({
+              onNavigate: () => setIsMobileMenuOpen(false),
+              expanded: true,
+              showCollapseToggle: false,
+            })}
           </SheetContent>
         </Sheet>
 
         {/* Main content area — fills remaining viewport, never overflows */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           {/* Top header */}
-          <header className="px-4 sm:px-6 lg:px-8 pt-4 pb-3 flex items-center justify-between gap-3 shrink-0">
+          <header className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-3 shrink-0 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 transition-all duration-300">
             <div className="flex items-center gap-3 min-w-0">
               {/* Mobile menu trigger */}
               <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
@@ -507,7 +518,7 @@ export default function AdminLayout({ children }) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="hover:bg-white dark:hover:bg-white/10 rounded-full"
+                    className="hover:bg-white dark:hover:bg-white/10 rounded-full text-slate-800 dark:text-stone-200"
                   >
                     <Menu className="h-5 w-5 text-[#1f1f1f] dark:text-stone-200" />
                   </Button>
@@ -527,7 +538,7 @@ export default function AdminLayout({ children }) {
 
             <div className="flex items-center gap-3">
               {/* Search pill */}
-              <div className="hidden md:flex bg-white dark:bg-white/5 px-4 py-2.5 rounded-full shadow-sm items-center gap-2 w-72 border border-transparent dark:border-white/10">
+              <div className="hidden md:flex bg-white dark:bg-slate-800/40 px-4 py-2.5 rounded-full shadow-sm items-center gap-2 w-72 border border-slate-200/60 dark:border-white/5 focus-within:ring-4 focus-within:ring-amber-500/10 focus-within:border-amber-400 transition-all duration-200">
                 <Search className="h-4 w-4 text-stone-400 dark:text-stone-500" />
                 <input
                   type="text"
@@ -542,7 +553,7 @@ export default function AdminLayout({ children }) {
                 variant="ghost"
                 size="icon"
                 title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-                className="relative bg-white dark:bg-white/5 shadow-sm rounded-full hover:bg-stone-50 dark:hover:bg-white/10 dark:border dark:border-white/10"
+                className="relative bg-white dark:bg-white/5 dark:border dark:border-white/10 shadow-sm rounded-full hover:bg-stone-50 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
               >
                 {darkMode ? (
                   <Sun className="h-5 w-5 text-amber-300" />
@@ -555,7 +566,7 @@ export default function AdminLayout({ children }) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="relative bg-white dark:bg-white/5 shadow-sm rounded-full hover:bg-stone-50 dark:hover:bg-white/10 dark:border dark:border-white/10"
+                className="relative bg-white dark:bg-white/5 dark:border dark:border-white/10 shadow-sm rounded-full hover:bg-stone-50 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
               >
                 <Bell className="h-5 w-5 text-stone-600 dark:text-stone-300" />
                 <span className="absolute top-2 right-2 w-2 h-2 bg-orange-500 rounded-full" />
@@ -563,7 +574,7 @@ export default function AdminLayout({ children }) {
 
               {/* User name card (moved here from the sidebar bottom).
                   Clicking opens a menu with Change Password / Sign Out. */}
-              <UserNameCard />
+              {renderUserNameCard()}
             </div>
           </header>
 

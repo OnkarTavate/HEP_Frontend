@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -23,33 +23,8 @@ import {
   Eye,
 } from "lucide-react";
 
-// Map the identification fields cleanly to match the backend schema exactly
-const identificationTypes = [
-  {
-    label: "GST",
-    numName: "gstinNumber",
-    fileName: "gstinDoc",
-    fileId: "gstFileInput",
-    req: true,
-    docType: "gst",
-  },
-  {
-    label: "PAN",
-    numName: "panNumber",
-    fileName: "panDoc",
-    fileId: "panFileInput",
-    req: true,
-    docType: "pan",
-  },
-  {
-    label: "TAN",
-    numName: "tanNumber",
-    fileName: "tanDoc",
-    fileId: "tanFileInput",
-    req: false,
-    docType: "tan",
-  },
-];
+// identificationTypes is now computed dynamically inside the component
+// to support conditional required fields based on user type (e.g. Transport)
 
 // ============================================================
 // VALIDATION UTILITIES  (same pattern as pass-request page)
@@ -60,6 +35,14 @@ const FIELD_VALIDATORS = {
   email: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
   contactEmail: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
   entityName: (v) => v.trim().length >= 2,
+  licenseNumber: (v) => v.trim().length >= 2,
+  licenseValidityDate: (v) => {
+    if (!v) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selected = new Date(v);
+    return selected >= today;
+  },
   firstName: (v) => /^[a-zA-Z\s.'-]{2,50}$/.test(v.trim()),
   lastName: (v) => /^[a-zA-Z\s.'-]{1,50}$/.test(v.trim()),
   pincode: (v) => /^\d{6}$/.test(v),
@@ -90,6 +73,14 @@ const getFieldError = (field, value) => {
       return FIELD_VALIDATORS.entityName(value)
         ? null
         : "Entity name must be at least 2 characters";
+    case "licenseNumber":
+      return FIELD_VALIDATORS.licenseNumber(value)
+        ? null
+        : "License number must be at least 2 characters";
+    case "licenseValidityDate":
+      return FIELD_VALIDATORS.licenseValidityDate(value)
+        ? null
+        : "License has expired or date is invalid. Please enter a valid future date.";
     case "firstName":
       return FIELD_VALIDATORS.firstName(value)
         ? null
@@ -144,6 +135,38 @@ const validatePdfFile = (file) => {
 };
 // ============================================================
 
+// Context to share errors with static components declared outside of render
+const ErrorContext = React.createContext({ fieldErrors: {}, fileErrors: {} });
+
+const SectionHeader = ({ icon: Icon, title }) => (
+  <div className="flex items-center gap-3 mb-6 pb-3 border-b border-orange-100">
+    <div className="p-2 bg-orange-100 rounded-lg">
+      <Icon className="h-5 w-5 text-orange-600" />
+    </div>
+    <h3 className="text-xl font-bold text-slate-800">{title}</h3>
+  </div>
+);
+
+const FieldError = ({ field }) => {
+  const { fieldErrors } = React.useContext(ErrorContext);
+  return fieldErrors[field] ? (
+    <p className="text-xs text-red-500 font-medium mt-0.5 flex items-center gap-1 animate-in fade-in duration-200">
+      <XCircle className="h-3.5 w-3.5 shrink-0" />
+      {fieldErrors[field]}
+    </p>
+  ) : null;
+};
+
+const FileError = ({ fileKey }) => {
+  const { fileErrors } = React.useContext(ErrorContext);
+  return fileErrors[fileKey] ? (
+    <p className="text-xs text-red-500 font-medium mt-1 flex items-center gap-1 animate-in fade-in duration-200">
+      <XCircle className="h-3.5 w-3.5 shrink-0" />
+      {fileErrors[fileKey]}
+    </p>
+  ) : null;
+};
+
 export default function RegisterPage() {
   const searchParams = useSearchParams(); // <-- 2. Initialize hook
   const editRef = searchParams.get("ref");
@@ -152,6 +175,8 @@ export default function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false); // NEW: Prevents double-clicks
   const [referenceNo, setReferenceNo] = useState("");
   const [entityFileName, setEntityFileName] = useState("");
+  const [requisitionLetterFileName, setRequisitionLetterFileName] = useState("");
+  const [workOrderFileName, setWorkOrderFileName] = useState("");
   const [tableFiles, setTableFiles] = useState({});
 
   // ── Inline field error state ──────────────────────────────
@@ -184,6 +209,8 @@ export default function RegisterPage() {
     mobileNo: "",
     email: "",
     entityName: "",
+    licenseNumber: "",
+    licenseValidityDate: "",
     addressLine: "",
     pincode: "",
     gstinNumber: "",
@@ -254,11 +281,7 @@ export default function RegisterPage() {
     }
   };
 
-  useEffect(() => {
-    if (viewingDocUrl) {
-      setIframeLoading(true);
-    }
-  }, [viewingDocUrl]);
+
 
   useEffect(() => {
     const fetchExistingApplication = async () => {
@@ -292,6 +315,10 @@ export default function RegisterPage() {
           // 🚀 FIX: Tell the UI that files exist in the database
           if (data.entityFile)
             setEntityFileName("Previously Uploaded Document.pdf");
+          if (data.requisitionLetter)
+            setRequisitionLetterFileName("Previously Uploaded Document.pdf");
+          if (data.workOrder)
+            setWorkOrderFileName("Previously Uploaded Document.pdf");
 
           setTableFiles({
             gstinDoc: data.gstinDoc ? "Previously Uploaded Document.pdf" : "",
@@ -304,6 +331,8 @@ export default function RegisterPage() {
             mobileNo: data.mobileNo || "",
             email: data.email || "",
             entityName: data.entityName || "",
+            licenseNumber: data.licenseNumber || "",
+            licenseValidityDate: data.licenseValidityDate || "",
             addressLine: data.addressLine || "",
             pincode: data.pincode || "",
             gstinNumber: data.gstinNumber || "",
@@ -331,6 +360,7 @@ export default function RegisterPage() {
   }, [editRef]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchInitialData();
   }, []);
 
@@ -422,6 +452,8 @@ export default function RegisterPage() {
     formData.append("mobileNo", formElements.mobileNo.value || "");
     formData.append("entityName", formElements.entityName.value || "");
     formData.append("email", formElements.email.value || "");
+    formData.append("licenseNumber", fieldValues.licenseNumber || "");
+    formData.append("licenseValidityDate", fieldValues.licenseValidityDate || "");
 
     formData.append("addressLine", formElements.addressLine.value || "");
     formData.append("city", formElements.city.value || "");
@@ -456,11 +488,15 @@ export default function RegisterPage() {
 
     // 2. Append File Fields
     const entityFile = document.getElementById("entityFileInput")?.files[0];
+    const requisitionLetterFile = document.getElementById("requisitionLetterFileInput")?.files[0];
+    const workOrderFile = document.getElementById("workOrderFileInput")?.files[0];
     const gstFile = document.getElementById("gstFileInput")?.files[0];
     const panFile = document.getElementById("panFileInput")?.files[0];
     const tanFile = document.getElementById("tanFileInput")?.files[0];
 
     if (entityFile) formData.append("entityFile", entityFile);
+    if (requisitionLetterFile) formData.append("requisitionLetter", requisitionLetterFile);
+    if (workOrderFile) formData.append("workOrder", workOrderFile);
     if (gstFile) formData.append("gstinDoc", gstFile);
     if (panFile) formData.append("panDoc", panFile);
     if (tanFile) formData.append("tanDoc", tanFile);
@@ -514,55 +550,68 @@ export default function RegisterPage() {
     }
   };
 
-  const SectionHeader = ({ icon: Icon, title }) => (
-    <div className="flex items-center gap-3 mb-6 pb-3 border-b border-orange-100">
-      <div className="p-2 bg-orange-100 rounded-lg">
-        <Icon className="h-5 w-5 text-orange-600" />
-      </div>
-      <h3 className="text-xl font-bold text-slate-800">{title}</h3>
-    </div>
-  );
 
-  // Reusable inline error message component
-  const FieldError = ({ field }) =>
-    fieldErrors[field] ? (
-      <p className="text-xs text-red-500 font-medium mt-0.5 flex items-center gap-1">
-        <XCircle className="h-3.5 w-3.5 shrink-0" />
-        {fieldErrors[field]}
-      </p>
-    ) : null;
 
-  // Reusable file error message component
-  const FileError = ({ fileKey }) =>
-    fileErrors[fileKey] ? (
-      <p className="text-xs text-red-500 font-medium mt-1 flex items-center gap-1">
-        <XCircle className="h-3.5 w-3.5 shrink-0" />
-        {fileErrors[fileKey]}
-      </p>
-    ) : null;
-
-  // Shared input class helper
-  const inputCls = (field) =>
-    `w-full h-12 px-4 bg-white border focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all ${
-      fieldErrors[field]
-        ? "border-red-400 focus:ring-red-500/20 focus:border-red-500 bg-red-50"
-        : "border-slate-200"
-    }`;
-
+  // Determine if the selected user type is a Transport category (case-insensitive)
+  // Covers: Truck owners, Trailer operators, Container transport companies,
+  //         Logistics service providers, Fleet operators, Lorry owners, Transport contractors
+  const TRANSPORT_KEYWORDS = [
+    "transport", "truck", "trailer", "container", "logistics",
+    "fleet", "lorry", "carrier", "freight", "haulage",
+  ];
   const selectedTypeObj = userTypes.find(
     (type) => type.id.toString() === selectedUserTypeId.toString(),
   );
+  const selectedTypeName = (selectedTypeObj?.type_name || selectedTypeObj?.name || "").toLowerCase();
+  const isTransportUser = TRANSPORT_KEYWORDS.some((kw) => selectedTypeName.includes(kw));
+
+  // Placeholder for identificationTypes
+  const identificationTypes = useMemo(() => [
+    {
+      label: "GST",
+      numName: "gstinNumber",
+      fileName: "gstinDoc",
+      fileId: "gstFileInput",
+      req: !isTransportUser, // optional for Transport users
+      docType: "gst",
+    },
+    {
+      label: "PAN",
+      numName: "panNumber",
+      fileName: "panDoc",
+      fileId: "panFileInput",
+      req: true, // always mandatory
+      docType: "pan",
+    },
+    {
+      label: "TAN",
+      numName: "tanNumber",
+      fileName: "tanDoc",
+      fileId: "tanFileInput",
+      req: false,
+      docType: "tan",
+    },
+  ], [isTransportUser]);
+
+  // Shared input class helper
+  const inputCls = (field) =>
+    `w-full h-12 px-4 bg-stone-50 border focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl transition-all duration-200 ${fieldErrors[field]
+      ? "border-red-400 focus:ring-red-500/20 focus:border-red-500 bg-red-50"
+      : "border-stone-200"
+    }`;
+
   const documentUploadLabel = selectedTypeObj
     ? selectedTypeObj.document_instruction
     : "Upload Required Document";
 
   return (
-    <div
-      onMouseMove={handleMouseMove}
-      className="min-h-screen relative bg-zinc-950 overflow-hidden flex flex-col"
-    >
+    <ErrorContext.Provider value={{ fieldErrors, fileErrors }}>
       <div
-        className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-500 ease-out pointer-events-none fixed"
+        onMouseMove={handleMouseMove}
+        className="min-h-screen relative bg-zinc-950 overflow-x-hidden flex flex-col"
+      >
+      <div
+        className="fixed inset-0 z-0 bg-cover bg-center transition-transform duration-500 ease-out pointer-events-none"
         style={{
           backgroundImage: "url('/port-bg.jpg')",
           transform: `scale(1.1) translate(${-mousePos.x}px, ${-mousePos.y}px)`,
@@ -570,7 +619,7 @@ export default function RegisterPage() {
         }}
       />
 
-      <div className="relative z-10 flex-1 overflow-y-auto w-full">
+      <div className="relative z-10 flex-grow w-full">
         <nav className="w-full max-w-6xl mx-auto px-6 py-6 flex justify-between items-center animate-in fade-in duration-700">
           <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/20">
             <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -584,7 +633,7 @@ export default function RegisterPage() {
           </div>
           <Link
             href="/"
-            className="flex items-center gap-2 text-white hover:text-orange-400 transition-colors font-medium bg-white/10 px-4 py-2 rounded-xl backdrop-blur-md border border-white/20"
+            className="flex items-center gap-2 text-white hover:text-orange-400 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 font-medium bg-white/10 px-4 py-2 rounded-xl backdrop-blur-md border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/20"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Login
@@ -592,9 +641,9 @@ export default function RegisterPage() {
         </nav>
 
         <main className="max-w-5xl mx-auto px-4 pb-20 pt-4 animate-in slide-in-from-bottom-8 duration-700">
-          <div className="bg-white/95 backdrop-blur-xl rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
             {!isSubmitted ? (
-              <div className="p-8 md:p-12">
+              <div className="p-4 sm:p-8 md:p-12">
                 <div className="mb-10 text-center max-w-2xl mx-auto">
                   <h2 className="text-4xl font-bold text-slate-900 mb-3">
                     User Registration
@@ -637,7 +686,7 @@ export default function RegisterPage() {
                       </div>
                     )}
                     {/* ── GENERAL INFORMATION ── */}
-                    <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
+                    <div className="bg-orange-50/30 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-orange-100/50">
                       <SectionHeader
                         icon={Building2}
                         title="General Information"
@@ -654,7 +703,7 @@ export default function RegisterPage() {
                             onChange={(e) =>
                               setSelectedUserTypeId(e.target.value)
                             }
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
+                            className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
                             required
                           >
                             <option value="">-- Select User Type --</option>
@@ -697,7 +746,7 @@ export default function RegisterPage() {
                         {/* Entity Name */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            Name of the Entity{" "}
+                            Name of the Firm{" "}
                             <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -707,7 +756,7 @@ export default function RegisterPage() {
                             placeholder="Enter organization name"
                             className={inputCls("entityName")}
                             onChange={(e) =>
-                              handleFieldChange("entityName", e.target.value)
+                              handleFieldChange("entityName", e.target.value.toUpperCase())
                             }
                             onBlur={(e) =>
                               validateField("entityName", e.target.value)
@@ -715,6 +764,61 @@ export default function RegisterPage() {
                             required
                           />
                           <FieldError field="entityName" />
+                        </div>
+
+                        {/* License Number */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            License Number{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            name="licenseNumber"
+                            type="text"
+                            value={fieldValues.licenseNumber}
+                            placeholder="Enter license number"
+                            className={inputCls("licenseNumber")}
+                            onChange={(e) =>
+                              handleFieldChange("licenseNumber", e.target.value.toUpperCase())
+                            }
+                            onBlur={(e) =>
+                              validateField("licenseNumber", e.target.value)
+                            }
+                            required
+                          />
+                          <FieldError field="licenseNumber" />
+                        </div>
+
+                        {/* License Validity Date */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            License Validity Date{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            name="licenseValidityDate"
+                            type="date"
+                            value={fieldValues.licenseValidityDate}
+                            className={inputCls("licenseValidityDate")}
+                            onChange={(e) =>
+                              handleFieldChange("licenseValidityDate", e.target.value)
+                            }
+                            onBlur={(e) =>
+                              validateField("licenseValidityDate", e.target.value)
+                            }
+                            required
+                          />
+                          <FieldError field="licenseValidityDate" />
+                          {fieldValues.licenseValidityDate && (() => {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const selected = new Date(fieldValues.licenseValidityDate);
+                            return selected < today ? (
+                              <p className="text-xs text-red-600 font-semibold mt-1 flex items-center gap-1 bg-red-50 px-2 py-1 rounded border border-red-200">
+                                ⚠️ This license has expired. Your request may be reverted if the validity date does not match the submitted document.
+                              </p>
+                            ) : null;
+                          })()}
                         </div>
 
                         {/* Entity Email */}
@@ -739,16 +843,16 @@ export default function RegisterPage() {
                           <FieldError field="email" />
                         </div>
 
-                        {/* Entity File Upload */}
-                        <div className="md:col-span-2 space-y-1.5 mt-2">
+
+                        {/* Requisition Letter Upload */}
+                        <div className="md:col-span-1 space-y-1.5 mt-2">
                           <label className="text-xs font-semibold text-orange-700 uppercase tracking-wider ml-1 bg-orange-100 px-3 py-1 rounded-full">
-                            {documentUploadLabel}{" "}
-                            <span className="text-red-500">*</span>
+                            Requisition Letter <span className="text-red-500">*</span>
                           </label>
 
                           <div className="flex flex-col gap-2 w-full mt-3">
                             {/* Top Row: Status & View Action */}
-                            {isEditMode && existingData?.entityFile && (
+                            {isEditMode && existingData?.requisitionLetter && (
                               <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-lg w-full">
                                 <div className="flex items-center gap-2 px-1">
                                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -760,8 +864,9 @@ export default function RegisterPage() {
                                   type="button"
                                   onClick={(e) => {
                                     e.preventDefault();
+                                    setIframeLoading(true);
                                     setViewingDocUrl(
-                                      `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=entity`,
+                                      `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=requisitionLetter`,
                                     );
                                   }}
                                   className="flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors shadow-sm border border-blue-200/50"
@@ -771,19 +876,18 @@ export default function RegisterPage() {
                               </div>
                             )}
 
-                            {/* Bottom Row: File Input */}
+                            {/* File Input */}
                             <label
-                              className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-4 py-6 rounded-xl text-sm font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-2 w-full text-center ${
-                                fileErrors["entityFileInput"]
+                              className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-4 py-6 rounded-xl text-sm font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-2 w-full text-center ${fileErrors["requisitionLetterFileInput"]
                                   ? "border-red-400 bg-red-50"
-                                  : isEditMode && existingData?.entityFile
+                                  : isEditMode && existingData?.requisitionLetter
                                     ? "border-orange-300 text-orange-700"
                                     : "border-slate-300 text-slate-600 border-dashed border-2"
-                              }`}
+                                }`}
                             >
                               <div className="flex items-center gap-2">
                                 <UploadCloud className="h-6 w-6" />
-                                {isEditMode && existingData?.entityFile
+                                {isEditMode && existingData?.requisitionLetter
                                   ? "Replace File"
                                   : "Click to upload or drag and drop"}
                               </div>
@@ -791,16 +895,15 @@ export default function RegisterPage() {
                                 PDF only · Max 1 MB
                               </span>
 
-                              {/* Display selected filename */}
-                              {entityFileName && (
+                              {requisitionLetterFileName && (
                                 <span className="text-emerald-600 text-xs truncate max-w-sm mt-1 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
-                                  {entityFileName}
+                                  {requisitionLetterFileName}
                                 </span>
                               )}
 
                               <input
-                                id="entityFileInput"
-                                name="entityFile"
+                                id="requisitionLetterFileInput"
+                                name="requisitionLetter"
                                 type="file"
                                 accept="application/pdf"
                                 className="hidden"
@@ -808,20 +911,98 @@ export default function RegisterPage() {
                                 onChange={(e) => {
                                   const file = e.target.files[0];
                                   handleFileChange(
-                                    "entityFileInput",
+                                    "requisitionLetterFileInput",
                                     file,
-                                    (name) => setEntityFileName(name),
+                                    (name) => setRequisitionLetterFileName(name),
                                   );
                                 }}
                               />
                             </label>
-                            <FileError fileKey="entityFileInput" />
+                            <FileError fileKey="requisitionLetterFileInput" />
+                          </div>
+                        </div>
+
+                        {/* Work Order Upload */}
+                        <div className="md:col-span-1 space-y-1.5 mt-2">
+                          <label className="text-xs font-semibold text-orange-700 uppercase tracking-wider ml-1 bg-orange-100 px-3 py-1 rounded-full">
+                            Work Order <span className="text-red-500">*</span>
+                          </label>
+
+                          <div className="flex flex-col gap-2 w-full mt-3">
+                            {/* Top Row: Status & View Action */}
+                            {isEditMode && existingData?.workOrder && (
+                              <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-lg w-full">
+                                <div className="flex items-center gap-2 px-1">
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                  <span className="text-xs font-bold text-slate-600">
+                                    PREVIOUSLY UPLOADED
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setIframeLoading(true);
+                                    setViewingDocUrl(
+                                      `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=workOrder`,
+                                    );
+                                  }}
+                                  className="flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors shadow-sm border border-blue-200/50"
+                                >
+                                  <Eye className="h-4 w-4" /> View Document
+                                </button>
+                              </div>
+                            )}
+
+                            {/* File Input */}
+                            <label
+                              className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-4 py-6 rounded-xl text-sm font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-2 w-full text-center ${fileErrors["workOrderFileInput"]
+                                  ? "border-red-400 bg-red-50"
+                                  : isEditMode && existingData?.workOrder
+                                    ? "border-orange-300 text-orange-700"
+                                    : "border-slate-300 text-slate-600 border-dashed border-2"
+                                }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <UploadCloud className="h-6 w-6" />
+                                {isEditMode && existingData?.workOrder
+                                  ? "Replace File"
+                                  : "Click to upload or drag and drop"}
+                              </div>
+                              <span className="text-[11px] font-normal text-slate-400">
+                                PDF only · Max 1 MB
+                              </span>
+
+                              {workOrderFileName && (
+                                <span className="text-emerald-600 text-xs truncate max-w-sm mt-1 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
+                                  {workOrderFileName}
+                                </span>
+                              )}
+
+                              <input
+                                id="workOrderFileInput"
+                                name="workOrder"
+                                type="file"
+                                accept="application/pdf"
+                                className="hidden"
+                                required={!isEditMode}
+                                onChange={(e) => {
+                                  const file = e.target.files[0];
+                                  handleFileChange(
+                                    "workOrderFileInput",
+                                    file,
+                                    (name) => setWorkOrderFileName(name),
+                                  );
+                                }}
+                              />
+                            </label>
+                            <FileError fileKey="workOrderFileInput" />
                           </div>
                         </div>
                       </div>
                     </div>
                     {/* ── ADDRESS INFORMATION ── */}
-                    <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
+                    <div className="bg-orange-50/30 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-orange-100/50">
                       <SectionHeader
                         icon={MapPin}
                         title="Address Information"
@@ -836,11 +1017,10 @@ export default function RegisterPage() {
                             rows="2"
                             value={fieldValues.addressLine}
                             placeholder="Enter complete address"
-                            className={`w-full p-4 bg-white border focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all ${
-                              fieldErrors.addressLine
+                            className={`w-full p-4 bg-stone-50 border focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl transition-all duration-200 focus:outline-none ${fieldErrors.addressLine
                                 ? "border-red-400 focus:ring-red-500/20 focus:border-red-500 bg-red-50"
-                                : "border-slate-200"
-                            }`}
+                                : "border-stone-200"
+                              }`}
                             onChange={(e) =>
                               handleFieldChange("addressLine", e.target.value)
                             }
@@ -859,7 +1039,7 @@ export default function RegisterPage() {
                           <select
                             name="city"
                             defaultValue={existingData?.city || ""}
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
+                            className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
                             required
                           >
                             <option value="">-- Select --</option>
@@ -875,7 +1055,7 @@ export default function RegisterPage() {
                           <select
                             name="state"
                             defaultValue={existingData?.state || ""}
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
+                            className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
                             required
                           >
                             <option value="">-- Select --</option>
@@ -917,7 +1097,7 @@ export default function RegisterPage() {
                           <select
                             name="country"
                             defaultValue={existingData?.country || "India"}
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
+                            className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
                             required
                           >
                             <option value="India">India</option>
@@ -926,13 +1106,13 @@ export default function RegisterPage() {
                       </div>
                     </div>
                     {/* ── IDENTIFICATION INFORMATION ── */}
-                    <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50 overflow-x-auto">
+                    <div className="bg-orange-50/30 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-orange-100/50">
                       <SectionHeader
                         icon={FileText}
                         title="Identification Information"
                       />
-                      <table className="w-full text-left border-collapse min-w-[600px]">
-                        <thead>
+                      <table className="w-full text-left border-collapse min-w-0 md:min-w-[600px] md:table block">
+                        <thead className="hidden md:table-header-group">
                           <tr className="border-b-2 border-orange-100">
                             <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-24">
                               Type
@@ -945,14 +1125,17 @@ export default function RegisterPage() {
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-slate-100 md:table-row-group block space-y-6 md:space-y-0 md:divide-y">
                           {identificationTypes.map((idType) => (
                             <tr
                               key={idType.label}
-                              className="hover:bg-white/50 transition-colors"
+                              className="hover:bg-white/50 transition-colors md:table-row flex flex-col gap-4 bg-white md:bg-transparent p-5 md:p-0 rounded-2xl md:rounded-none border border-stone-200/60 md:border-none shadow-sm md:shadow-none"
                             >
                               {/* COLUMN 1: Label */}
-                              <td className="py-4 px-2 text-sm font-bold text-slate-800">
+                              <td className="text-sm font-bold text-slate-800 md:table-cell block md:py-4 md:px-2 py-0 px-0 w-full">
+                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1 md:hidden">
+                                  Type
+                                </span>
                                 {idType.label}{" "}
                                 {idType.req && (
                                   <span className="text-red-500">*</span>
@@ -960,7 +1143,10 @@ export default function RegisterPage() {
                               </td>
 
                               {/* COLUMN 2: Identification Number */}
-                              <td className="py-4 px-2">
+                              <td className="md:table-cell block md:py-4 md:px-2 py-0 px-0 w-full">
+                                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1 md:hidden">
+                                  Identification No.
+                                </label>
                                 <input
                                   name={idType.numName}
                                   type="text"
@@ -974,17 +1160,16 @@ export default function RegisterPage() {
                                           ? "AAAA12345A (optional)"
                                           : ""
                                   }
-                                  className={`w-full h-10 px-3 bg-white border focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-lg uppercase font-mono tracking-wider ${
-                                    fieldErrors[idType.numName]
+                                  className={`w-full h-11 px-3 bg-stone-50 border focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl transition-all duration-200 uppercase font-mono tracking-wider ${fieldErrors[idType.numName]
                                       ? "border-red-400 focus:ring-red-500/20 focus:border-red-500 bg-red-50"
                                       : existingData?.rejectedReason
-                                            ?.toLowerCase()
-                                            .includes(
-                                              idType.label.toLowerCase(),
-                                            )
+                                        ?.toLowerCase()
+                                        .includes(
+                                          idType.label.toLowerCase(),
+                                        )
                                         ? "border-red-400 bg-red-50"
-                                        : "border-slate-200"
-                                  }`}
+                                        : "border-stone-200"
+                                    }`}
                                   onChange={(e) => {
                                     const val = e.target.value.toUpperCase();
                                     handleFieldChange(idType.numName, val);
@@ -1006,12 +1191,15 @@ export default function RegisterPage() {
                               </td>
 
                               {/* COLUMN 3: ID Copy (File Input & Badge) */}
-                              <td className="py-4 px-2 align-middle w-1/3">
+                              <td className="align-middle md:w-1/3 md:table-cell block md:py-4 md:px-2 py-0 px-0 w-full">
                                 <div className="flex flex-col gap-2">
+                                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block md:hidden">
+                                    ID Copy (PDF only)
+                                  </label>
                                   {/* Top Row: Status & View Action */}
                                   {isEditMode &&
                                     existingData?.[idType.fileName] && (
-                                      <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-1.5 rounded-lg w-full">
+                                      <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2 rounded-lg w-full">
                                         <div className="flex items-center gap-1.5 px-1">
                                           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                                           <span className="text-[10px] font-bold text-slate-600">
@@ -1022,42 +1210,42 @@ export default function RegisterPage() {
                                           type="button"
                                           onClick={(e) => {
                                             e.preventDefault();
+                                            setIframeLoading(true);
                                             setViewingDocUrl(
                                               `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=${idType.docType}`,
                                             );
                                           }}
-                                          className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-2.5 py-1 rounded transition-colors shadow-sm border border-blue-200/50"
+                                          className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-2.5 py-1.5 rounded transition-colors shadow-sm border border-blue-200/50"
                                         >
-                                          <Eye className="h-3 w-3" /> View
+                                          <Eye className="h-3 w-3" /> View Document
                                         </button>
                                       </div>
                                     )}
 
                                   {/* UNIFIED CUSTOM UPLOAD BUTTON */}
                                   <label
-                                    className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-3 py-2 rounded-lg text-[10px] font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-1 w-full text-center ${
-                                      fileErrors[idType.fileId]
+                                    className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-3 py-3 rounded-xl text-xs font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-1 w-full text-center ${fileErrors[idType.fileId]
                                         ? "border-red-400 bg-red-50"
                                         : isEditMode &&
-                                            existingData?.[idType.fileName]
+                                          existingData?.[idType.fileName]
                                           ? "border-orange-300 text-orange-700"
-                                          : "border-slate-300 text-slate-600"
-                                    }`}
+                                          : "border-slate-300 text-slate-600 border-dashed border-2"
+                                      }`}
                                   >
                                     <div className="flex items-center gap-1.5">
-                                      <UploadCloud className="h-4 w-4" />
+                                      <UploadCloud className="h-4.5 w-4.5" />
                                       {isEditMode &&
-                                      existingData?.[idType.fileName]
+                                        existingData?.[idType.fileName]
                                         ? "Replace File"
                                         : "Upload PDF"}
                                     </div>
-                                    <span className="text-[9px] font-normal text-slate-400">
+                                    <span className="text-[10px] font-normal text-slate-400">
                                       PDF only · Max 1 MB
                                     </span>
 
                                     {/* Display selected filename */}
                                     {tableFiles[idType.fileName] && (
-                                      <span className="text-emerald-600 truncate w-32 mt-0.5">
+                                      <span className="text-emerald-600 truncate max-w-xs mt-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
                                         {tableFiles[idType.fileName]}
                                       </span>
                                     )}
@@ -1105,13 +1293,13 @@ export default function RegisterPage() {
                         <input
                           name="remark"
                           type="text"
-                          className="mt-1 w-full h-10 px-3 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-lg"
+                          className="mt-1 w-full h-11 px-3 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
                           placeholder="Notes about your documentation"
                         />
                       </div>
                     </div>
                     {/* ── CONTACT INFORMATION ── */}
-                    <div className="bg-orange-50/30 p-8 rounded-3xl border border-orange-100/50">
+                    <div className="bg-orange-50/30 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-orange-100/50">
                       <SectionHeader
                         icon={Contact2}
                         title="Contact Information"
@@ -1125,7 +1313,7 @@ export default function RegisterPage() {
                           <select
                             name="title"
                             defaultValue={existingData?.title || "Mr."}
-                            className="w-full h-12 px-4 bg-white border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl transition-all appearance-none"
+                            className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
                             required
                           >
                             <option value="Mr.">Mr.</option>
@@ -1273,9 +1461,9 @@ export default function RegisterPage() {
                             <button
                               type="button"
                               onClick={fetchInitialData}
-                              className="p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
+                              className="p-4 bg-white border border-stone-200 rounded-xl hover:bg-stone-50 active:scale-95 transition-all duration-200 shadow-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10"
                             >
-                              <RefreshCw className="h-5 w-5 text-slate-500" />
+                              <RefreshCw className="h-5 w-5 text-stone-500" />
                             </button>
                           </div>
                           <input
@@ -1293,11 +1481,10 @@ export default function RegisterPage() {
                                 );
                             }}
                             placeholder="Enter Security Code"
-                            className={`w-full text-center h-12 bg-white border focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 rounded-xl tracking-widest font-bold shadow-sm ${
-                              captchaError
+                            className={`w-full text-center h-12 bg-stone-50 border focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl tracking-widest font-bold shadow-sm transition-all duration-200 focus:outline-none ${captchaError
                                 ? "border-red-400 focus:ring-red-500/20 focus:border-red-500 bg-red-50"
-                                : "border-slate-200"
-                            }`}
+                                : "border-stone-200"
+                              }`}
                             required
                           />
                           {captchaError && (
@@ -1308,25 +1495,34 @@ export default function RegisterPage() {
                           )}
                         </div>
 
-                        <button
-                          type="submit"
-                          disabled={isSubmitting}
-                          className={`gradient-orange hover:opacity-90 text-white font-bold py-4 px-16 rounded-2xl shadow-lg shadow-orange-600/25 transition-all text-lg flex items-center gap-2 w-full md:w-auto justify-center ${
-                            isSubmitting ? "opacity-70 cursor-not-allowed" : ""
-                          }`}
-                        >
-                          {isSubmitting ? (
-                            <>
-                              <Loader2 className="h-6 w-6 animate-spin" />
-                              Submitting...
-                            </>
-                          ) : (
-                            <>
-                              <ShieldCheck className="h-6 w-6" />
-                              Submit Registration
-                            </>
-                          )}
-                        </button>
+                        <div className="flex flex-col sm:flex-row gap-4 w-full justify-center items-center">
+                          <Link
+                            href="/"
+                            className="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-4 px-10 rounded-2xl shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 text-lg w-full sm:w-auto justify-center focus:outline-none focus:ring-4 focus:ring-slate-500/20 border border-slate-200"
+                          >
+                            <ArrowLeft className="h-5 w-5" />
+                            Back to Login
+                          </Link>
+
+                          <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className={`gradient-orange hover:opacity-90 text-white font-bold py-4 px-16 rounded-2xl shadow-lg shadow-orange-600/25 hover:shadow-orange-600/35 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 text-lg flex items-center gap-2 w-full sm:w-auto justify-center focus:outline-none focus:ring-4 focus:ring-orange-500/20 ${isSubmitting ? "opacity-70 cursor-not-allowed pointer-events-none" : ""
+                              }`}
+                          >
+                            {isSubmitting ? (
+                              <>
+                                <Loader2 className="h-6 w-6 animate-spin" />
+                                Submitting...
+                              </>
+                            ) : (
+                              <>
+                                <ShieldCheck className="h-6 w-6" />
+                                Submit Registration
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </form>
@@ -1366,7 +1562,7 @@ export default function RegisterPage() {
 
                 <Link
                   href="/"
-                  className="inline-flex items-center gap-2 bg-slate-900 hover:bg-orange-600 text-white font-bold py-4 px-10 rounded-xl shadow-lg transition-colors"
+                  className="inline-flex items-center gap-2 bg-slate-900 hover:bg-orange-600 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] text-white font-bold py-4 px-10 rounded-xl shadow-lg transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-slate-500/20"
                 >
                   Return to Login
                 </Link>
@@ -1377,16 +1573,14 @@ export default function RegisterPage() {
         {/* 🚀 PDF VIEWER OVERLAY 🚀 */}
         {viewingDocUrl && (
           <div
-            className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-all duration-300 ${
-              isFullscreen ? "p-0" : "p-4 md:p-8"
-            }`}
+            className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-all duration-300 ${isFullscreen ? "p-0" : "p-4 md:p-8"
+              }`}
           >
             <div
-              className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${
-                isFullscreen
+              className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 animate-in zoom-in-95 duration-200 ${isFullscreen
                   ? "max-w-full rounded-none border-none"
                   : "max-w-6xl rounded-xl border border-slate-700"
-              }`}
+                }`}
             >
               {/* Viewer Header */}
               <div className="flex justify-between items-center px-4 py-3 bg-slate-800 text-white">
@@ -1447,5 +1641,6 @@ export default function RegisterPage() {
         </footer>
       </div>
     </div>
+    </ErrorContext.Provider>
   );
 }

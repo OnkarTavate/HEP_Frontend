@@ -26,6 +26,7 @@ import {
   Droplets,
   ArrowUpCircle,
   CloudSun,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -80,24 +81,6 @@ export default function AdminDashboard() {
     [now],
   );
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      // Ensure only Admins can access this page
-      const userRole = (parsedUser.role || "").toLowerCase();
-      if (userRole !== "admin" && userRole !== "administrator") {
-        router.push("/");
-        return;
-      }
-      setUser(parsedUser);
-      fetchDashboardData();
-      fetchFormOptions();
-    } else {
-      router.push("/");
-    }
-  }, [router]);
-
   const fetchDashboardData = async () => {
     try {
       const response = await axios.get(`${BASE_URL}/user/agent-users`);
@@ -123,6 +106,27 @@ export default function AdminDashboard() {
       console.error("Failed to fetch form options", error);
     }
   };
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      // Ensure only Admins can access this page
+      const userRole = (parsedUser.role || "").toLowerCase();
+      if (userRole !== "admin" && userRole !== "administrator") {
+        router.push("/");
+        return;
+      }
+      const timer = setTimeout(() => {
+        setUser(parsedUser);
+        fetchDashboardData();
+        fetchFormOptions();
+      }, 0);
+      return () => clearTimeout(timer);
+    } else {
+      router.push("/");
+    }
+  }, [router]);
 
   const validateForm = () => {
     const errors = {};
@@ -322,14 +326,14 @@ export default function AdminDashboard() {
     : 0;
 
   return (
-    <div className="w-full h-full flex flex-col gap-3 lg:gap-4 min-h-0 overflow-y-auto lg:overflow-hidden">
+    <div className="w-full h-full flex flex-col gap-3 lg:gap-4 overflow-y-auto p-2 sm:p-3 lg:p-4">
       {/* ── Chennai Port live ops + weather strip ───────── */}
-      <div className="relative overflow-hidden rounded-[20px] bg-gradient-to-r from-[#1a1d27] via-[#252836] to-[#1a1d27] dark:from-black dark:via-[#1a1d27] dark:to-black text-white shadow-md ring-1 ring-white/5 shrink-0">
+      <div className="relative overflow-hidden rounded-2xl bg-slate-900/95 dark:bg-slate-950/70 border border-slate-800 dark:border-white/5 backdrop-blur-md text-white shadow-lg shrink-0">
         <svg
           aria-hidden
           viewBox="0 0 1440 120"
           preserveAspectRatio="none"
-          className="absolute inset-x-0 bottom-0 h-10 w-full text-amber-400/10"
+          className="absolute inset-x-0 bottom-0 h-8 w-full text-amber-400/10"
         >
           <path
             fill="currentColor"
@@ -337,208 +341,184 @@ export default function AdminDashboard() {
           />
         </svg>
 
-        <div className="relative px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        <div className="relative px-3 sm:px-4 py-2.5 sm:py-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
           {/* Status pill + location */}
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/15 ring-1 ring-emerald-400/40 shrink-0">
-              <Radar className="h-4 w-4 text-emerald-400" />
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="relative flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-xl bg-emerald-500/15 ring-1 ring-emerald-400/40 shrink-0">
+              <Radar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400" />
               <span className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/50 animate-ping" />
             </div>
             <div className="leading-tight min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-emerald-300">
+              <div className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <span className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-widest text-emerald-300">
                   Port Operational
                 </span>
               </div>
-              <p className="text-xs text-stone-300 truncate">
-                <span className="font-semibold text-white">Chennai Port</span>{" "}
-                <span className="text-stone-500">• Bay of Bengal</span>
+              <p className="text-[11px] sm:text-xs text-stone-300 truncate">
+                <span className="font-semibold text-white">Chennai Port</span>
+                <span className="text-stone-500 hidden sm:inline"> • Bay of Bengal</span>
               </p>
             </div>
           </div>
 
-          <span className="hidden md:inline-block h-6 w-px bg-white/10" />
+          <span className="hidden md:inline-block h-5 w-px bg-white/10" />
 
-          {/* Compact ops chips */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 ring-1 ring-white/10 px-2 py-0.5 text-[11px]">
-              <CheckCircle2 className="h-3 w-3 text-emerald-300" />
-              <span className="text-stone-400">Gates</span>
+          {/* Compact ops chips — hidden on smallest screens, shown from xs */}
+          <div className="flex items-center gap-1 flex-wrap">
+            <span className="inline-flex items-center gap-0.5 sm:gap-1 rounded-full bg-slate-800/40 ring-1 ring-slate-700/50 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-[11px]">
+              <CheckCircle2 className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-emerald-300" />
+              <span className="text-stone-400 hidden xs:inline">Gates</span>
               <span className="font-semibold text-emerald-300 tabular-nums">4/4</span>
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 ring-1 ring-white/10 px-2 py-0.5 text-[11px]">
-              <Anchor className="h-3 w-3 text-amber-300" />
-              <span className="text-stone-400">Vessels</span>
+            <span className="inline-flex items-center gap-0.5 sm:gap-1 rounded-full bg-slate-800/40 ring-1 ring-slate-700/50 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-[11px]">
+              <Anchor className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-amber-300" />
+              <span className="text-stone-400 hidden xs:inline">Vessels</span>
               <span className="font-semibold text-amber-300 tabular-nums">7</span>
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 ring-1 ring-white/10 px-2 py-0.5 text-[11px]">
+            <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-slate-800/40 ring-1 ring-slate-700/50 px-2 py-0.5 text-[11px]">
               <Clock className="h-3 w-3 text-orange-300" />
               <span className="text-stone-400">Queue</span>
               <span className="font-semibold text-orange-300 tabular-nums">12</span>
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/5 ring-1 ring-white/10 px-2 py-0.5 text-[11px]">
+            <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-slate-800/40 ring-1 ring-slate-700/50 px-2 py-0.5 text-[11px]">
               <Container className="h-3 w-3 text-fuchsia-300" />
               <span className="text-stone-400">TEU</span>
               <span className="font-semibold text-fuchsia-300 tabular-nums">1,284</span>
             </span>
           </div>
 
-          <span className="hidden md:inline-block h-6 w-px bg-white/10" />
+          <span className="hidden md:inline-block h-5 w-px bg-white/10" />
 
-          {/* Weather chip */}
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-sky-500/10 ring-1 ring-sky-400/20 px-2.5 py-1 text-[11px]">
-            <CloudSun className="h-4 w-4 text-amber-300" />
+          {/* Weather — hidden on mobile */}
+          <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-sky-500/10 ring-1 ring-sky-400/20 px-2.5 py-1 text-[11px]">
+            <CloudSun className="h-3.5 w-3.5 text-amber-300" />
             <span className="font-bold text-white tabular-nums">32°C</span>
-            <span className="text-stone-300">Partly Cloudy</span>
-            <span className="text-stone-500">·</span>
-            <Wind className="h-3 w-3 text-sky-300" />
-            <span className="text-stone-300 tabular-nums">14 SSW</span>
-            <span className="text-stone-500">·</span>
+            <span className="text-stone-300 hidden md:inline">Partly Cloudy</span>
+            <span className="text-stone-500 hidden md:inline">·</span>
+            <Wind className="h-3 w-3 text-sky-300 hidden md:inline" />
+            <span className="text-stone-300 tabular-nums hidden md:inline">14 SSW</span>
+            <span className="text-stone-500 hidden md:inline">·</span>
             <Droplets className="h-3 w-3 text-sky-300" />
             <span className="text-stone-300 tabular-nums">78%</span>
           </div>
 
-          {/* Tide chip */}
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 ring-1 ring-cyan-400/20 px-2.5 py-1 text-[11px]">
+          {/* Tide — hidden on mobile */}
+          <div className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 ring-1 ring-cyan-400/20 px-2.5 py-1 text-[11px]">
             <ArrowUpCircle className="h-3.5 w-3.5 text-cyan-300" />
             <span className="text-stone-400">High</span>
             <span className="font-semibold text-cyan-300 tabular-nums">13:42</span>
             <span className="text-stone-500 tabular-nums">1.2m</span>
           </div>
 
-          {/* Live clock */}
-          <div className="ml-auto text-right leading-tight">
-            <p className="font-mono text-base font-bold tabular-nums text-amber-200">
+          {/* Live clock — always visible, compact on mobile */}
+          <div className="ml-auto text-right leading-tight shrink-0">
+            <p className="font-mono text-sm sm:text-base font-bold tabular-nums text-amber-200">
               {portClock.time}
             </p>
-            <p className="text-[10px] text-stone-400">{portClock.date} · IST</p>
+            <p className="text-[9px] sm:text-[10px] text-stone-400">{portClock.date} · IST</p>
           </div>
         </div>
       </div>
 
       {/* ── Intro / CTA bar ─────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0">
-        <div className="min-w-0">
-          <h2 className="text-2xl md:text-3xl font-extrabold text-[#1f1f1f] dark:text-stone-100 tracking-tight">
-            Admin Overview
-          </h2>
-          <p className="text-stone-600 dark:text-stone-400 text-base mt-1">
-            Let&apos;s take a look at your admin console activity today.
-          </p>
+      <div className="flex flex-col gap-3 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-[#1f1f1f] dark:text-stone-100 tracking-tight">
+              Admin Overview
+            </h2>
+            <p className="text-stone-500 dark:text-stone-400 text-sm sm:text-base mt-0.5">
+              Let&apos;s take a look at your admin console activity today.
+            </p>
+          </div>
+          <Button
+            onClick={() => setShowCreateAdmin(true)}
+            className="group relative overflow-hidden bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 dark:from-amber-400 dark:to-orange-400 text-white dark:text-[#1f1f1f] rounded-2xl w-full sm:w-auto px-5 sm:px-7 py-4 sm:py-5 text-sm sm:text-base font-extrabold shadow-xl shadow-amber-500/30 hover:shadow-2xl hover:shadow-amber-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all ring-2 ring-amber-300/40 dark:ring-amber-200/40"
+          >
+            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+            <span className="relative flex items-center justify-center gap-2">
+              <span className="flex items-center justify-center h-7 w-7 sm:h-8 sm:w-8 rounded-xl bg-white/25 dark:bg-black/15 shrink-0">
+                <UserPlus className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.6} />
+              </span>
+              <span className="tracking-wide">Create Department Admin</span>
+            </span>
+          </Button>
         </div>
-        <Button
-          onClick={() => setShowCreateAdmin(true)}
-          className="group relative overflow-hidden bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 dark:from-amber-400 dark:to-orange-400 text-white dark:text-[#1f1f1f] rounded-2xl px-7 py-7 text-base font-extrabold shadow-xl shadow-amber-500/30 hover:shadow-2xl hover:shadow-amber-500/40 hover:scale-[1.03] transition-all ring-2 ring-amber-300/40 dark:ring-amber-200/40"
-        >
-          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
-          <span className="relative flex items-center gap-2.5">
-            <span className="flex items-center justify-center h-9 w-9 rounded-xl bg-white/25 dark:bg-black/15">
-              <UserPlus className="h-5 w-5" strokeWidth={2.6} />
-            </span>
-            <span className="text-base sm:text-lg tracking-wide">
-              Create Department Admin
-            </span>
-          </span>
-        </Button>
       </div>
 
-      {/* ── Top Grid: Activity bubbles + Quick stats ────── */}
+      {/* ── Top Grid: Activity cards + Quick stats ────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-4 shrink-0">
-        {/* Pass Activity — fully responsive bubble layout */}
-        <div className="lg:col-span-2 bg-[#d6cebf] dark:bg-[#272a36] rounded-[28px] p-5 sm:p-6 relative overflow-hidden ring-1 ring-stone-300/50 dark:ring-white/5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]">
+        {/* Pass Activity — fully responsive grid layout */}
+        <div className="lg:col-span-2 bg-white dark:bg-[#1e293b] rounded-2xl sm:rounded-[28px] p-4 sm:p-5 lg:p-6 relative overflow-hidden ring-1 ring-slate-200/60 dark:ring-white/5 shadow-xl shadow-slate-100/50 dark:shadow-none">
           <div aria-hidden className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-amber-300/40 dark:bg-amber-400/15 blur-3xl" />
-          <h2 className="text-xl sm:text-2xl font-extrabold text-[#1f1f1f] dark:text-stone-100 tracking-tight">
+          <h2 className="text-lg sm:text-xl lg:text-2xl font-extrabold text-slate-800 dark:text-stone-100 tracking-tight">
             Pass Activity
           </h2>
-          <p className="text-stone-700 dark:text-stone-400 text-sm font-medium mb-4">
+          <p className="text-slate-500 dark:text-stone-400 text-xs sm:text-sm font-medium mb-3">
             Snapshot for today
           </p>
 
-          {/* Responsive bubble stats */}
-          <div className="flex flex-wrap items-center justify-around gap-4 pb-2">
-            {/* Total bubble */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-[#1d1d1d] rounded-full flex items-center justify-center text-white shadow-xl ring-4 ring-white/40 dark:ring-white/10">
-                <div className="text-center">
-                  <p className="font-extrabold text-xl sm:text-2xl leading-none tabular-nums">{totalCount}</p>
-                  <p className="text-[9px] sm:text-[10px] uppercase tracking-widest mt-1 font-bold">Total</p>
-                </div>
+          {/* Responsive stats cards — 2 cols on mobile, 4 on sm+ */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 pb-1">
+            {/* Total */}
+            <div className="flex flex-col items-center p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full bg-slate-900 dark:bg-slate-800 flex items-center justify-center text-white ring-[3px] ring-slate-200 dark:ring-slate-700">
+                <span className="font-extrabold text-base sm:text-lg tabular-nums">{totalCount}</span>
               </div>
-              <span className="flex items-center gap-1.5 text-xs text-stone-700 dark:text-stone-300 font-semibold">
-                <span className="w-7 h-2 rounded-full bg-black dark:bg-stone-200 inline-block" />
-                Total
-              </span>
+              <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 mt-1.5 sm:mt-2 uppercase tracking-wider">Total</span>
             </div>
 
-            {/* Approved bubble */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-28 h-28 sm:w-36 sm:h-36 bg-amber-300/85 rounded-full flex items-center justify-center shadow-xl ring-4 ring-amber-200/40">
-                <div className="text-center text-black">
-                  <p className="font-extrabold text-3xl sm:text-4xl leading-none tabular-nums">{approvedCount}</p>
-                  <p className="text-xs mt-1 font-bold uppercase tracking-wider">Approved</p>
-                </div>
+            {/* Approved */}
+            <div className="flex flex-col items-center p-3 sm:p-4 bg-emerald-50/50 dark:bg-emerald-500/5 rounded-xl sm:rounded-2xl border border-emerald-100/60 dark:border-emerald-500/10 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-[3px] ring-emerald-100 dark:ring-emerald-500/20">
+                <span className="font-extrabold text-base sm:text-lg tabular-nums">{approvedCount}</span>
               </div>
-              <span className="flex items-center gap-1.5 text-xs text-stone-700 dark:text-stone-300 font-semibold">
-                <span className="w-7 h-2 rounded-full bg-amber-400 inline-block" />
-                Approved
-              </span>
+              <span className="text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1.5 sm:mt-2 uppercase tracking-wider">Approved</span>
             </div>
 
-            {/* Pending bubble */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-24 h-24 sm:w-28 sm:h-28 bg-orange-300/85 rounded-full flex items-center justify-center shadow-lg ring-4 ring-orange-200/40">
-                <div className="text-center text-black">
-                  <p className="font-extrabold text-2xl sm:text-3xl leading-none tabular-nums">{pendingCount}</p>
-                  <p className="text-xs mt-1 font-bold uppercase tracking-wider">Pending</p>
-                </div>
+            {/* Pending */}
+            <div className="flex flex-col items-center p-3 sm:p-4 bg-amber-50/50 dark:bg-amber-500/5 rounded-xl sm:rounded-2xl border border-amber-100/60 dark:border-amber-500/10 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full bg-amber-500 text-white flex items-center justify-center ring-[3px] ring-amber-100 dark:ring-amber-500/20">
+                <span className="font-extrabold text-base sm:text-lg tabular-nums">{pendingCount}</span>
               </div>
-              <span className="flex items-center gap-1.5 text-xs text-stone-700 dark:text-stone-300 font-semibold">
-                <span className="w-7 h-2 rounded-full bg-orange-400 inline-block" />
-                Pending
-              </span>
+              <span className="text-[10px] sm:text-xs font-bold text-amber-600 dark:text-amber-400 mt-1.5 sm:mt-2 uppercase tracking-wider">Pending</span>
             </div>
 
-            {/* Rejected bubble */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-red-400/80 rounded-full flex items-center justify-center shadow-lg ring-4 ring-red-200/40">
-                <div className="text-center text-black">
-                  <p className="font-extrabold text-xl sm:text-2xl leading-none tabular-nums">{rejectedCount}</p>
-                  <p className="text-[9px] sm:text-xs mt-1 font-bold uppercase tracking-wider">Rejected</p>
-                </div>
+            {/* Rejected */}
+            <div className="flex flex-col items-center p-3 sm:p-4 bg-red-50/50 dark:bg-red-500/5 rounded-xl sm:rounded-2xl border border-red-100/60 dark:border-red-500/10 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full bg-red-500 text-white flex items-center justify-center ring-[3px] ring-red-100 dark:ring-red-500/20">
+                <span className="font-extrabold text-base sm:text-lg tabular-nums">{rejectedCount}</span>
               </div>
-              <span className="flex items-center gap-1.5 text-xs text-stone-700 dark:text-stone-300 font-semibold">
-                <span className="w-7 h-2 rounded-full bg-red-400 inline-block" />
-                Rejected
-              </span>
+              <span className="text-[10px] sm:text-xs font-bold text-red-600 dark:text-red-400 mt-1.5 sm:mt-2 uppercase tracking-wider">Rejected</span>
             </div>
           </div>
         </div>
 
-        {/* Right: dark stats panel */}
-        <div className="bg-[#1f232d] dark:bg-[#0f1117] ring-1 ring-white/5 text-white rounded-[28px] p-5 sm:p-6 flex flex-col shadow-[0_8px_30px_-12px_rgba(0,0,0,0.5)]">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-extrabold tracking-tight">Console Health</h2>
-            <span className="inline-flex items-center gap-1.5 text-emerald-300 text-xs font-bold uppercase tracking-wider bg-emerald-500/10 ring-1 ring-emerald-400/30 px-2.5 py-1 rounded-full">
+        {/* Right: Health stats panel */}
+        <div className="bg-slate-900 dark:bg-[#0b0f19] border border-slate-800 dark:border-white/5 text-white rounded-2xl sm:rounded-[28px] p-4 sm:p-5 lg:p-6 flex flex-col shadow-xl">
+          <div className="flex justify-between items-center mb-3 sm:mb-4">
+            <h2 className="text-lg sm:text-xl font-extrabold tracking-tight">Console Health</h2>
+            <span className="inline-flex items-center gap-1 sm:gap-1.5 text-emerald-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-emerald-500/10 ring-1 ring-emerald-400/30 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 flex-grow">
             {[
-              { label: "Companies", value: totalCount, color: "text-stone-100" },
+              { label: "Companies", value: totalCount, color: "text-slate-100" },
               { label: "Pending", value: pendingCount, color: "text-orange-300" },
               { label: "Approved", value: approvedCount, color: "text-amber-300" },
               { label: "Rejected", value: rejectedCount, color: "text-red-300" },
             ].map((t) => (
               <div
                 key={t.label}
-                className="bg-[#2b313d] hover:bg-[#333a48] rounded-2xl p-3 sm:p-4 ring-1 ring-white/5 transition-colors"
+                className="bg-slate-800/60 hover:bg-slate-800 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-700/50 transition-colors"
               >
-                <p className="text-[11px] text-stone-400 uppercase tracking-wider font-bold">
+                <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-bold">
                   {t.label}
                 </p>
-                <p className={`text-2xl sm:text-3xl font-extrabold mt-1.5 tabular-nums leading-none ${t.color}`}>
+                <p className={`text-xl sm:text-2xl lg:text-3xl font-extrabold mt-1 sm:mt-1.5 tabular-nums leading-none ${t.color}`}>
                   {t.value}
                 </p>
               </div>
@@ -548,40 +528,40 @@ export default function AdminDashboard() {
       </div>
 
       {/* ── Bottom Grid: stat-cards + records list ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4 pb-4">
         {/* Approval progress dial */}
-        <div className="bg-white dark:bg-[#1f232d] rounded-[24px] p-5 ring-1 ring-stone-200/70 dark:ring-white/5 shadow-[0_8px_30px_-16px_rgba(15,23,42,0.18)] flex flex-col gap-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[28px] p-4 sm:p-5 lg:p-6 border border-slate-100 dark:border-slate-800/80 shadow-xl shadow-slate-100/50 dark:shadow-none hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 flex flex-col gap-3 sm:gap-4 min-h-[180px]">
           <div>
-            <h3 className="text-lg font-extrabold text-[#1f1f1f] dark:text-stone-100 tracking-tight">
+            <h3 className="text-base sm:text-lg font-extrabold text-slate-800 dark:text-stone-100 tracking-tight">
               Approval Rate
             </h3>
-            <p className="text-stone-500 dark:text-stone-400 text-sm">
+            <p className="text-slate-500 dark:text-stone-400 text-xs sm:text-sm">
               Approved out of total
             </p>
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <Button
               onClick={() => setShowCreateAdmin(true)}
-              className="bg-[#1f1f1f] hover:bg-black text-white dark:bg-amber-400 dark:hover:bg-amber-300 dark:text-[#1f1f1f] px-4 py-2.5 rounded-full text-sm font-bold h-auto shadow-md hover:scale-[1.03] transition"
+              className="bg-slate-900 hover:bg-slate-800 dark:bg-amber-400 dark:hover:bg-amber-300 text-white dark:text-slate-900 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold h-auto shadow-md hover:scale-[1.03] active:scale-[0.97] transition-all duration-200 shrink-0"
             >
-              <UserPlus className="h-4 w-4 mr-1.5" strokeWidth={2.5} />
+              <UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" strokeWidth={2.5} />
               Add Admin
             </Button>
 
             <div
-              className="relative w-24 h-24 rounded-full flex items-center justify-center shadow-md shadow-amber-200/40 dark:shadow-amber-500/10"
+              className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center shadow-md shadow-amber-200/40 dark:shadow-amber-500/10 shrink-0"
               style={{
                 background: `conic-gradient(#f59e0b ${approvalProgress * 3.6}deg, rgba(251,146,60,0.18) 0deg)`,
               }}
             >
-              <div className="absolute inset-2 rounded-full bg-white dark:bg-[#1f232d] flex items-center justify-center">
+              <div className="absolute inset-2 rounded-full bg-white dark:bg-slate-900 flex items-center justify-center">
                 <div className="text-center">
-                  <p className="text-xl font-extrabold text-[#1f1f1f] dark:text-stone-100 leading-none tabular-nums">
+                  <p className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-stone-100 leading-none tabular-nums">
                     {approvalProgress}%
                   </p>
-                  <p className="text-[10px] text-stone-500 dark:text-stone-400 uppercase tracking-wider mt-1 font-bold">
-                    Approved
+                  <p className="text-[9px] sm:text-[10px] text-slate-500 dark:text-stone-400 uppercase tracking-wider mt-0.5 sm:mt-1 font-bold">
+                    Done
                   </p>
                 </div>
               </div>
@@ -590,22 +570,22 @@ export default function AdminDashboard() {
         </div>
 
         {/* Pending progress bar */}
-        <div className="bg-white dark:bg-[#1f232d] rounded-[24px] p-5 ring-1 ring-stone-200/70 dark:ring-white/5 shadow-[0_8px_30px_-16px_rgba(15,23,42,0.18)] flex flex-col gap-3">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[28px] p-4 sm:p-5 lg:p-6 border border-slate-100 dark:border-slate-800/80 shadow-xl shadow-slate-100/50 dark:shadow-none hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 flex flex-col gap-3 min-h-[180px]">
           <div className="flex justify-between items-start">
             <div>
-              <h3 className="text-lg font-extrabold text-[#1f1f1f] dark:text-stone-100 flex items-center gap-1.5 tracking-tight">
-                <Clock className="h-5 w-5 text-orange-500 dark:text-orange-300" />
+              <h3 className="text-base sm:text-lg font-extrabold text-slate-800 dark:text-stone-100 flex items-center gap-1.5 tracking-tight">
+                <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500 dark:text-orange-300" />
                 Pending Queue
               </h3>
-              <p className="text-stone-500 dark:text-stone-400 text-sm mt-1">
+              <p className="text-slate-500 dark:text-stone-400 text-xs sm:text-sm mt-1">
                 Awaiting review
               </p>
             </div>
             <div className="text-right">
-              <p className="text-3xl font-extrabold text-orange-600 dark:text-orange-300 leading-none tabular-nums">
+              <p className="text-2xl sm:text-3xl font-extrabold text-orange-600 dark:text-orange-300 leading-none tabular-nums">
                 {pendingCount}
               </p>
-              <p className="text-[11px] uppercase tracking-wider text-stone-500 dark:text-stone-400 mt-1.5 font-bold">
+              <p className="text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-500 dark:text-stone-400 mt-1 sm:mt-1.5 font-bold">
                 Open
               </p>
             </div>
@@ -613,9 +593,9 @@ export default function AdminDashboard() {
 
           <div className="mt-auto">
             <div className="relative mb-2">
-              <div className="w-full h-3 bg-stone-200 dark:bg-white/10 rounded-full" />
+              <div className="w-full h-2.5 sm:h-3 bg-slate-100 dark:bg-slate-800 rounded-full" />
               <div
-                className="absolute top-0 left-0 h-3 bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all shadow-sm"
+                className="absolute top-0 left-0 h-2.5 sm:h-3 bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all shadow-sm"
                 style={{
                   width: totalCount
                     ? `${Math.min(100, (pendingCount / totalCount) * 100)}%`
@@ -623,7 +603,7 @@ export default function AdminDashboard() {
                 }}
               />
             </div>
-            <div className="flex justify-between text-xs text-stone-500 dark:text-stone-400 font-semibold">
+            <div className="flex justify-between text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-semibold">
               <span>0</span>
               <span>{totalCount} companies</span>
             </div>
@@ -631,76 +611,74 @@ export default function AdminDashboard() {
         </div>
 
         {/* Right column: records list — scrolls on all screen sizes */}
-        <div className="sm:col-span-2 lg:col-span-1 bg-white dark:bg-[#1f232d] rounded-[28px] p-5 ring-1 ring-stone-200/70 dark:ring-white/5 shadow-[0_8px_30px_-16px_rgba(15,23,42,0.18)] flex flex-col min-h-[280px] lg:min-h-0 lg:overflow-hidden">
-          <div className="flex items-center justify-between mb-4 gap-4 shrink-0">
-            <h2 className="text-xl md:text-2xl font-extrabold text-[#1f1f1f] dark:text-stone-100 flex items-center gap-2.5 tracking-tight">
-              <span className="flex items-center justify-center h-9 w-9 rounded-xl bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300">
-                <Shield className="h-5 w-5" strokeWidth={2.5} />
+        <div className="sm:col-span-2 lg:col-span-1 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[28px] p-4 sm:p-5 lg:p-6 border border-slate-100 dark:border-slate-800/80 shadow-xl shadow-slate-100/50 dark:shadow-none flex flex-col min-h-[350px] max-h-[500px] sm:max-h-[600px]">
+          <div className="flex items-center justify-between mb-3 sm:mb-4 gap-3 shrink-0">
+            <h2 className="text-base sm:text-xl font-extrabold text-slate-800 dark:text-stone-100 flex items-center gap-2 tracking-tight">
+              <span className="flex items-center justify-center h-7 w-7 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300 shrink-0">
+                <Shield className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.5} />
               </span>
-              System Pass Overview
+              <span className="truncate">System Pass Overview</span>
             </h2>
 
-            <div className="hidden sm:flex bg-[#f6f2ee] dark:bg-white/5 px-4 py-2 rounded-full items-center gap-2 w-64 dark:border dark:border-white/10">
-              <Search className="h-4 w-4 text-stone-400 dark:text-stone-500" />
+            <div className="hidden sm:flex bg-slate-50 dark:bg-slate-800/40 px-3 py-1.5 rounded-xl items-center gap-2 min-w-[140px] max-w-[200px] border border-slate-200/60 dark:border-slate-700">
+              <Search className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
               <input
                 type="text"
-                placeholder="Search records..."
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="outline-none bg-transparent w-full text-sm text-stone-700 dark:text-stone-200 placeholder:text-stone-400 dark:placeholder:text-stone-500"
+                className="outline-none bg-transparent w-full text-xs text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </div>
           </div>
 
           {/* Mobile search */}
-          <div className="sm:hidden mb-4 bg-[#f6f2ee] dark:bg-white/5 px-4 py-2 rounded-full flex items-center gap-2 dark:border dark:border-white/10">
-            <Search className="h-4 w-4 text-stone-400 dark:text-stone-500" />
+          <div className="sm:hidden mb-3 bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-xl flex items-center gap-2 border border-slate-200/60 dark:border-slate-700">
+            <Search className="h-4 w-4 text-slate-400 dark:text-slate-500 shrink-0" />
             <input
               type="text"
               placeholder="Search records..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="outline-none bg-transparent w-full text-sm text-stone-700 dark:text-stone-200 placeholder:text-stone-400 dark:placeholder:text-stone-500"
+              className="outline-none bg-transparent w-full text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
           </div>
 
-          <div className="space-y-2.5 flex-1 min-h-0 overflow-y-auto pr-1">
+          <div className="space-y-2 flex-1 overflow-y-auto pr-0.5 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800 scrollbar-track-transparent">
             {filteredData.map((req) => {
               const status = (req.status || "pending").toLowerCase();
               const statusColor =
                 status === "approved"
                   ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
                   : status === "rejected"
-                  ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
-                  : "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300";
+                    ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
+                    : "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300";
               const initial = (req.entityName || "?")
                 .charAt(0)
                 .toUpperCase();
               return (
                 <div
                   key={req.id}
-                  className="bg-[#f6f2ee] dark:bg-white/5 dark:border dark:border-white/10 rounded-2xl p-4 flex items-center justify-between hover:shadow-md dark:hover:bg-white/10 transition gap-4"
+                  className="bg-slate-50/75 dark:bg-slate-800/30 border border-slate-100/80 dark:border-slate-800/60 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between hover:shadow-md hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all duration-200 gap-2 sm:gap-4"
                 >
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-300 to-amber-200 dark:from-amber-500 dark:to-orange-500 flex items-center justify-center font-bold text-[#1f1f1f] shadow-sm shrink-0">
+                  <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br from-orange-300 to-amber-200 dark:from-amber-500 dark:to-orange-500 flex items-center justify-center font-bold text-sm text-[#1f1f1f] shadow-sm shrink-0">
                       {initial}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="font-semibold text-[#1f1f1f] dark:text-stone-100 truncate">
+                      <h4 className="font-semibold text-slate-800 dark:text-stone-100 truncate text-sm sm:text-base">
                         {req.entityName || "Unknown"}
                       </h4>
-                      <p className="text-sm text-stone-500 dark:text-stone-400 truncate">
-                        {req.referenceNumber} · {req.email || "—"}
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                        {req.referenceNumber}
+                        <span className="hidden sm:inline"> · {req.email || "—"}</span>
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 sm:gap-6 shrink-0">
-                    <span className="hidden md:inline-flex bg-white dark:bg-white/10 text-stone-700 dark:text-stone-300 px-3 py-1 rounded-full text-xs font-semibold border border-stone-200 dark:border-white/10">
-                      {req.userTypeName || "Agent"}
-                    </span>
+                  <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
                     <span
-                      className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${statusColor}`}
+                      className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wider ${statusColor}`}
                     >
                       {status}
                     </span>
@@ -710,8 +688,8 @@ export default function AdminDashboard() {
             })}
 
             {filteredData.length === 0 && (
-              <div className="py-16 text-center text-stone-400 dark:text-stone-500">
-                <ShieldAlert className="h-10 w-10 mx-auto text-stone-300 dark:text-stone-600 mb-3" />
+              <div className="py-12 sm:py-16 text-center text-stone-400 dark:text-stone-500">
+                <ShieldAlert className="h-8 w-8 sm:h-10 sm:w-10 mx-auto text-stone-300 dark:text-stone-600 mb-2 sm:mb-3" />
                 <p className="text-sm font-medium">No records found.</p>
               </div>
             )}
@@ -721,45 +699,46 @@ export default function AdminDashboard() {
 
       {/* CREATE NEW ACCOUNT MODAL */}
       {showCreateAdmin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md">
-          <div className="bg-white dark:bg-[#1f232d] dark:ring-1 dark:ring-white/10 rounded-[28px] shadow-2xl w-full max-w-[680px] max-h-[92vh] overflow-y-auto relative">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/75 backdrop-blur-md">
+          <div className="bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800/80 rounded-t-[28px] sm:rounded-[28px] shadow-2xl w-full sm:max-w-[680px] max-h-[95vh] sm:max-h-[92vh] overflow-y-auto relative">
             {/* Decorative banner header */}
-            <div className="relative h-32 bg-gradient-to-br from-amber-300 via-orange-300 to-amber-400 dark:from-amber-500 dark:via-orange-500 dark:to-amber-400 rounded-t-[28px] overflow-hidden">
+            <div className="relative h-24 sm:h-32 bg-gradient-to-br from-amber-300 via-orange-300 to-amber-400 dark:from-amber-500 dark:via-orange-500 dark:to-amber-400 rounded-t-[28px] overflow-hidden shrink-0">
               <div className="absolute -top-6 -left-4 w-24 h-24 bg-white/30 rounded-full blur-xl" />
               <div className="absolute -bottom-8 right-6 w-36 h-36 bg-orange-500/30 rounded-full blur-xl" />
+              {/* Mobile drag indicator */}
+              <div className="sm:hidden absolute top-2.5 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-white/50" />
               <button
                 onClick={() => {
                   setShowCreateAdmin(false);
                   setFieldErrors({});
                   setCreateMessage({ type: "", text: "" });
                 }}
-                className="absolute top-4 right-4 h-9 w-9 rounded-full bg-white/30 hover:bg-white/60 backdrop-blur-sm flex items-center justify-center text-[#1f1f1f] transition"
+                className="absolute top-3 sm:top-4 right-3 sm:right-4 h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-white/30 hover:bg-white/60 active:scale-95 backdrop-blur-sm flex items-center justify-center text-slate-900 transition-all"
                 aria-label="Close"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
             </div>
 
-            {/* Floating icon badge — sibling of banner so it isn't clipped by overflow-hidden */}
-            <div className="absolute top-[92px] left-8 h-[72px] w-[72px] rounded-2xl bg-[#1f1f1f] dark:bg-[#0f1117] flex items-center justify-center shadow-xl ring-4 ring-white dark:ring-[#1f232d]">
-              <UserPlus className="h-8 w-8 text-amber-300" />
+            {/* Floating icon badge */}
+            <div className="absolute top-[68px] sm:top-[92px] left-5 sm:left-8 h-[56px] w-[56px] sm:h-[72px] sm:w-[72px] rounded-xl sm:rounded-2xl bg-slate-900 dark:bg-slate-950 flex items-center justify-center shadow-xl ring-4 ring-white dark:ring-slate-900">
+              <UserPlus className="h-6 w-6 sm:h-8 sm:w-8 text-amber-300" />
             </div>
 
-            <div className="px-6 sm:px-8 pb-8 pt-16">
-              <h2 className="text-2xl font-bold text-[#1f1f1f] dark:text-stone-100">
+            <div className="px-4 sm:px-6 lg:px-8 pb-6 sm:pb-8 pt-12 sm:pt-16">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-stone-100">
                 Create a new account
               </h2>
-              <p className="text-sm text-stone-500 dark:text-stone-400 mt-1 mb-5">
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-stone-400 mt-1 mb-4 sm:mb-5">
                 Register a new department admin to access the console.
               </p>
 
               {createMessage.text && (
                 <div
-                  className={`p-3.5 mb-5 rounded-xl text-sm font-medium flex items-start gap-2.5 ${
-                    createMessage.type === "success"
-                      ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30"
-                      : "bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-500/30"
-                  }`}
+                  className={`p-3 sm:p-3.5 mb-4 sm:mb-5 rounded-xl text-sm font-medium flex items-start gap-2.5 ${createMessage.type === "success"
+                    ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30"
+                    : "bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-500/30"
+                    }`}
                 >
                   {createMessage.type === "success" ? (
                     <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
@@ -770,14 +749,14 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              <form onSubmit={handleCreateAdmin} noValidate className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4">
+              <form onSubmit={handleCreateAdmin} noValidate className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 sm:gap-x-5 gap-y-3 sm:gap-y-4">
                 {/* User name */}
                 <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">
+                  <label className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 sm:mb-1.5">
                     User name
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400 dark:text-stone-500 pointer-events-none" />
+                    <User className="absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
                     <input
                       type="text"
                       value={newAdmin.userName}
@@ -787,11 +766,10 @@ export default function AdminDashboard() {
                           setFieldErrors({ ...fieldErrors, userName: "" });
                       }}
                       placeholder="e.g. Aarav Sharma"
-                      className={`w-full pl-10 pr-3.5 py-2.5 border bg-[#f6f2ee] dark:bg-white/5 dark:text-stone-100 rounded-xl focus:outline-none focus:ring-2 text-sm transition placeholder:text-stone-400 dark:placeholder:text-stone-500 ${
-                        fieldErrors.userName
-                          ? "border-red-400 focus:ring-red-200 focus:border-red-500 dark:border-red-500/60"
-                          : "border-stone-200 dark:border-white/10 focus:ring-amber-200 focus:border-amber-400 dark:focus:ring-amber-500/30 dark:focus:border-amber-500"
-                      }`}
+                      className={`w-full pl-9 sm:pl-10 pr-3 sm:pr-3.5 py-2.5 border bg-slate-50/50 dark:bg-slate-800/40 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-4 text-sm transition placeholder:text-slate-400 dark:placeholder:text-slate-500 ${fieldErrors.userName
+                        ? "border-red-400 focus:ring-red-500/10 focus:border-red-500 dark:border-red-500/60"
+                        : "border-slate-200 dark:border-slate-800/80 focus:ring-amber-500/10 focus:border-amber-400 dark:focus:ring-amber-500/20 dark:focus:border-amber-500"
+                        }`}
                     />
                   </div>
                   {fieldErrors.userName && (
@@ -803,11 +781,11 @@ export default function AdminDashboard() {
 
                 {/* Email */}
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">
+                  <label className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 sm:mb-1.5">
                     Email
                   </label>
                   <div className="relative">
-                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400 dark:text-stone-500 pointer-events-none" />
+                    <Mail className="absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
                     <input
                       type="email"
                       value={newAdmin.email}
@@ -817,11 +795,10 @@ export default function AdminDashboard() {
                           setFieldErrors({ ...fieldErrors, email: "" });
                       }}
                       placeholder="name@company.com"
-                      className={`w-full pl-10 pr-3.5 py-2.5 border bg-[#f6f2ee] dark:bg-white/5 dark:text-stone-100 rounded-xl focus:outline-none focus:ring-2 text-sm transition placeholder:text-stone-400 dark:placeholder:text-stone-500 ${
-                        fieldErrors.email
-                          ? "border-red-400 focus:ring-red-200 focus:border-red-500 dark:border-red-500/60"
-                          : "border-stone-200 dark:border-white/10 focus:ring-amber-200 focus:border-amber-400 dark:focus:ring-amber-500/30 dark:focus:border-amber-500"
-                      }`}
+                      className={`w-full pl-9 sm:pl-10 pr-3 sm:pr-3.5 py-2.5 border bg-slate-50/50 dark:bg-slate-800/40 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-4 text-sm transition placeholder:text-slate-400 dark:placeholder:text-slate-500 ${fieldErrors.email
+                        ? "border-red-400 focus:ring-red-500/10 focus:border-red-500 dark:border-red-500/60"
+                        : "border-slate-200 dark:border-slate-800/80 focus:ring-amber-500/10 focus:border-amber-400 dark:focus:ring-amber-500/20 dark:focus:border-amber-500"
+                        }`}
                     />
                   </div>
                   {fieldErrors.email && (
@@ -833,12 +810,12 @@ export default function AdminDashboard() {
 
                 {/* Phone */}
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">
+                  <label className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 sm:mb-1.5">
                     Phone Number
                   </label>
                   <div className="relative">
-                    <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400 dark:text-stone-500 pointer-events-none" />
-                    <span className="absolute left-9 top-1/2 -translate-y-1/2 text-sm text-stone-500 dark:text-stone-400 font-medium pointer-events-none">
+                    <Phone className="absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
+                    <span className="absolute left-8 sm:left-9 top-1/2 -translate-y-1/2 text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium pointer-events-none">
                       +91
                     </span>
                     <input
@@ -855,11 +832,10 @@ export default function AdminDashboard() {
                           setFieldErrors({ ...fieldErrors, phoneNumber: "" });
                       }}
                       placeholder="98765 43210"
-                      className={`w-full pl-[58px] pr-3.5 py-2.5 border bg-[#f6f2ee] dark:bg-white/5 dark:text-stone-100 rounded-xl focus:outline-none focus:ring-2 text-sm transition placeholder:text-stone-400 dark:placeholder:text-stone-500 tracking-wide ${
-                        fieldErrors.phoneNumber
-                          ? "border-red-400 focus:ring-red-200 focus:border-red-500 dark:border-red-500/60"
-                          : "border-stone-200 dark:border-white/10 focus:ring-amber-200 focus:border-amber-400 dark:focus:ring-amber-500/30 dark:focus:border-amber-500"
-                      }`}
+                      className={`w-full pl-[52px] sm:pl-[58px] pr-3 sm:pr-3.5 py-2.5 border bg-slate-50/50 dark:bg-slate-800/40 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-4 text-sm transition placeholder:text-slate-400 dark:placeholder:text-slate-500 tracking-wide ${fieldErrors.phoneNumber
+                        ? "border-red-400 focus:ring-red-500/10 focus:border-red-500 dark:border-red-500/60"
+                        : "border-slate-200 dark:border-slate-800/80 focus:ring-amber-500/10 focus:border-amber-400 dark:focus:ring-amber-500/20 dark:focus:border-amber-500"
+                        }`}
                     />
                   </div>
                   {fieldErrors.phoneNumber && (
@@ -871,11 +847,11 @@ export default function AdminDashboard() {
 
                 {/* Role */}
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">
+                  <label className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 sm:mb-1.5">
                     Role
                   </label>
                   <div className="relative">
-                    <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400 dark:text-stone-500 pointer-events-none z-10" />
+                    <Briefcase className="absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 dark:text-slate-500 pointer-events-none z-10" />
                     <select
                       value={newAdmin.roleId}
                       onChange={(e) => {
@@ -883,19 +859,19 @@ export default function AdminDashboard() {
                         if (fieldErrors.roleId)
                           setFieldErrors({ ...fieldErrors, roleId: "" });
                       }}
-                      className={`w-full pl-10 pr-3.5 py-2.5 border bg-[#f6f2ee] dark:bg-white/5 dark:text-stone-100 rounded-xl focus:outline-none focus:ring-2 text-sm transition appearance-none ${
-                        fieldErrors.roleId
-                          ? "border-red-400 focus:ring-red-200 focus:border-red-500 dark:border-red-500/60"
-                          : "border-stone-200 dark:border-white/10 focus:ring-amber-200 focus:border-amber-400 dark:focus:ring-amber-500/30 dark:focus:border-amber-500"
-                      }`}
+                      className={`w-full pl-9 sm:pl-10 pr-9 sm:pr-10 py-2.5 border bg-slate-50/50 dark:bg-slate-800/40 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-4 text-sm transition appearance-none ${fieldErrors.roleId
+                        ? "border-red-400 focus:ring-red-500/10 focus:border-red-500 dark:border-red-500/60"
+                        : "border-slate-200 dark:border-slate-800/80 focus:ring-amber-500/10 focus:border-amber-400 dark:focus:ring-amber-500/20 dark:focus:border-amber-500"
+                        }`}
                     >
                       <option value="">-- Select role --</option>
                       {formOptions.roles.map((r) => (
-                        <option key={r.id} value={r.id}>
+                        <option key={r.id} value={r.id} className="dark:bg-slate-900">
                           {r.roleName}
                         </option>
                       ))}
                     </select>
+                    <ChevronDown className="absolute right-3 sm:right-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 dark:text-slate-500 pointer-events-none z-10" />
                   </div>
                   {fieldErrors.roleId && (
                     <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
@@ -906,11 +882,11 @@ export default function AdminDashboard() {
 
                 {/* Department */}
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">
+                  <label className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 sm:mb-1.5">
                     Department
                   </label>
                   <div className="relative">
-                    <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400 dark:text-stone-500 pointer-events-none z-10" />
+                    <Building2 className="absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 dark:text-slate-500 pointer-events-none z-10" />
                     <select
                       value={newAdmin.departmentId}
                       onChange={(e) => {
@@ -921,19 +897,19 @@ export default function AdminDashboard() {
                         if (fieldErrors.departmentId)
                           setFieldErrors({ ...fieldErrors, departmentId: "" });
                       }}
-                      className={`w-full pl-10 pr-3.5 py-2.5 border bg-[#f6f2ee] dark:bg-white/5 dark:text-stone-100 rounded-xl focus:outline-none focus:ring-2 text-sm transition appearance-none ${
-                        fieldErrors.departmentId
-                          ? "border-red-400 focus:ring-red-200 focus:border-red-500 dark:border-red-500/60"
-                          : "border-stone-200 dark:border-white/10 focus:ring-amber-200 focus:border-amber-400 dark:focus:ring-amber-500/30 dark:focus:border-amber-500"
-                      }`}
+                      className={`w-full pl-9 sm:pl-10 pr-9 sm:pr-10 py-2.5 border bg-slate-50/50 dark:bg-slate-800/40 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-4 text-sm transition appearance-none ${fieldErrors.departmentId
+                        ? "border-red-400 focus:ring-red-500/10 focus:border-red-500 dark:border-red-500/60"
+                        : "border-slate-200 dark:border-slate-800/80 focus:ring-amber-500/10 focus:border-amber-400 dark:focus:ring-amber-500/20 dark:focus:border-amber-500"
+                        }`}
                     >
                       <option value="">-- Select department --</option>
                       {formOptions.departments.map((d) => (
-                        <option key={d.id} value={d.id}>
+                        <option key={d.id} value={d.id} className="dark:bg-slate-900">
                           {d.departmentName}
                         </option>
                       ))}
                     </select>
+                    <ChevronDown className="absolute right-3 sm:right-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 dark:text-slate-500 pointer-events-none z-10" />
                   </div>
                   {fieldErrors.departmentId && (
                     <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
@@ -944,44 +920,44 @@ export default function AdminDashboard() {
 
                 {/* Password */}
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">
+                  <label className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 sm:mb-1.5">
                     Password
                   </label>
                   <div className="relative">
-                    <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400 dark:text-stone-500 pointer-events-none" />
+                    <KeyRound className="absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
                     <input
                       type="text"
                       value={newAdmin.password}
                       readOnly
-                      className="w-full pl-10 pr-3.5 py-2.5 border border-stone-200 dark:border-white/10 rounded-xl bg-stone-100/70 dark:bg-white/5 text-stone-500 dark:text-stone-400 text-sm cursor-not-allowed"
+                      className="w-full pl-9 sm:pl-10 pr-3 sm:pr-3.5 py-2.5 border border-slate-200 dark:border-slate-800/80 rounded-xl bg-slate-100/70 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 text-sm cursor-not-allowed"
                     />
                   </div>
-                  <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
+                  <p className="mt-1 text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500">
                     Default temporary password.
                   </p>
                 </div>
 
                 {/* Confirm Password */}
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">
+                  <label className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 sm:mb-1.5">
                     Confirm password
                   </label>
                   <div className="relative">
-                    <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400 dark:text-stone-500 pointer-events-none" />
+                    <KeyRound className="absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
                     <input
                       type="text"
                       value={newAdmin.confirmPassword}
                       readOnly
-                      className="w-full pl-10 pr-3.5 py-2.5 border border-stone-200 dark:border-white/10 rounded-xl bg-stone-100/70 dark:bg-white/5 text-stone-500 dark:text-stone-400 text-sm cursor-not-allowed"
+                      className="w-full pl-9 sm:pl-10 pr-3 sm:pr-3.5 py-2.5 border border-slate-200 dark:border-slate-800/80 rounded-xl bg-slate-100/70 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 text-sm cursor-not-allowed"
                     />
                   </div>
-                  <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
+                  <p className="mt-1 text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500">
                     User can change after first login.
                   </p>
                 </div>
 
-                {/* Action buttons */}
-                <div className="pt-3 sm:col-span-2 flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+                {/* Action buttons — stacked full-width on mobile, row on sm+ */}
+                <div className="pt-2 sm:pt-3 sm:col-span-2 flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
                   <button
                     type="button"
                     onClick={() => {
@@ -989,21 +965,21 @@ export default function AdminDashboard() {
                       setFieldErrors({});
                       setCreateMessage({ type: "", text: "" });
                     }}
-                    className="px-6 py-3 rounded-full text-sm font-semibold border border-stone-200 dark:border-white/10 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-white/5 transition"
+                    className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl text-sm font-semibold border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:scale-[0.98] transition-all duration-200"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
                     onClick={resetCreateForm}
-                    className="px-6 py-3 rounded-full text-sm font-semibold border border-stone-200 dark:border-white/10 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-white/5 transition"
+                    className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl text-sm font-semibold border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:scale-[0.98] transition-all duration-200"
                   >
                     Reset
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-6 py-3 rounded-full bg-[#1f1f1f] hover:bg-black dark:bg-amber-400 dark:hover:bg-amber-300 text-white dark:text-[#1f1f1f] text-sm font-bold shadow-lg hover:scale-[1.02] transition flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-amber-400 dark:hover:bg-amber-300 text-white dark:text-slate-900 text-sm font-bold shadow-lg hover:scale-[1.02] active:scale-[0.97] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
                   >
                     {submitting ? (
                       <>

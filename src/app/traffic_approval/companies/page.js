@@ -286,15 +286,14 @@ export default function TrafficCompanyApprovals() {
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span
-                      className={`px-3 py-1 rounded-full text-[11px] font-bold border ${
-                        req.status === "approved"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : req.status === "reverted"
-                            ? "bg-amber-50 text-amber-700 border-amber-200"
-                            : req.status === "rejected"
-                              ? "bg-red-50 text-red-700 border-red-200"
-                              : "bg-blue-50 text-blue-700 border-blue-200" // For pending
-                      }`}
+                      className={`px-3 py-1 rounded-full text-[11px] font-bold border ${req.status === "approved"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : req.status === "reverted"
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : req.status === "rejected"
+                            ? "bg-red-50 text-red-700 border-red-200"
+                            : "bg-blue-50 text-blue-700 border-blue-200" // For pending
+                        }`}
                     >
                       {req.status?.toUpperCase() || "PENDING"}
                     </span>
@@ -511,64 +510,67 @@ export default function TrafficCompanyApprovals() {
               {(!isViewMode ||
                 selectedRequest?.status !== "approved" ||
                 remarks) && (
-                <div className="bg-orange-50 p-5 rounded-lg border border-orange-200 shadow-sm">
-                  <label className="block text-xs font-bold text-orange-900 uppercase tracking-wider mb-3">
-                    Authority Remarks / Reason for Rejection
-                  </label>
-                  <textarea
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    disabled={isViewMode}
-                    className="w-full border border-orange-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-[#ff6b00]/20 focus:border-[#ff6b00] outline-none shadow-inner bg-white"
-                    rows="3"
-                    placeholder="Enter specific remarks if rejecting or reverting..."
-                  ></textarea>
-                </div>
-              )}
+                  <div className="bg-orange-50 p-5 rounded-lg border border-orange-200 shadow-sm">
+                    <label className="block text-xs font-bold text-orange-900 uppercase tracking-wider mb-3">
+                      Authority Remarks / Reason for Rejection
+                    </label>
+                    <textarea
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      disabled={isViewMode}
+                      className="w-full border border-orange-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-[#ff6b00]/20 focus:border-[#ff6b00] outline-none shadow-inner bg-white"
+                      rows="3"
+                      placeholder="Enter specific remarks if rejecting or reverting..."
+                    ></textarea>
+                  </div>
+                )}
             </div>
 
             {/* Replace the existing buttons container with this */}
             <div className="flex justify-end gap-3 p-4 border-t border-slate-200 bg-white">
               {!isViewMode && (
-                <>
+                <div className="flex items-center gap-4">
+                  {/* Reject Button */}
                   <button
                     onClick={() => handleActionClick("rejected")}
-                    className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2"
+                    className="bg-gradient-to-br from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 px-7 py-3 rounded-xl font-bold flex items-center gap-2.5 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
                   >
                     <XCircle className="h-5 w-5" /> Reject
                   </button>
 
-                  {/* NEW REVERT BUTTON */}
-                  <button
-                    onClick={handleRevertClick}
-                    className="bg-amber-100 border border-amber-300 text-amber-700 hover:bg-amber-200 px-6 py-2.5 rounded-lg font-bold flex items-center gap-2"
-                  >
-                    <RefreshCw className="h-5 w-5" /> Revert
-                  </button>
-
+                  {/* Approve Button */}
                   <button
                     onClick={() => handleActionClick("approved")}
-                    className="bg-[#10b981] text-white px-8 py-2.5 rounded-lg shadow-md font-bold hover:bg-[#059669] flex items-center gap-2"
+                    className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 px-8 py-3 rounded-xl shadow-lg hover:shadow-xl font-bold flex items-center gap-2.5 transform hover:scale-105 transition-all duration-200"
                   >
                     <CheckCircle2 className="h-5 w-5" /> Approve
                   </button>
-                </>
+
+                  {/* Separator */}
+                  <div className="h-12 w-px bg-gradient-to-b from-transparent via-slate-300 to-transparent"></div>
+
+                  {/* Revert Button */}
+                  <button
+                    onClick={handleRevertClick}
+                    className="bg-gradient-to-br from-slate-700 to-slate-900 text-white hover:from-slate-800 hover:to-black px-7 py-3 rounded-xl font-bold flex items-center gap-2.5 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-200 ring-2 ring-slate-600 hover:ring-slate-500"
+                  >
+                    <RefreshCw className="h-5 w-5" /> Revert
+                  </button>
+                </div>
               )}
             </div>
           </div>
           {/* PDF VIEWER OVERLAY */}
           {viewingDocUrl && (
             <div
-              className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-all duration-300 ${
-                isFullscreen ? "p-0" : "p-4 md:p-8"
-              }`}
+              className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-all duration-300 ${isFullscreen ? "p-0" : "p-4 md:p-8"
+                }`}
             >
               <div
-                className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${
-                  isFullscreen
-                    ? "max-w-full rounded-none border-none"
-                    : "max-w-6xl rounded-xl border border-slate-700"
-                }`}
+                className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${isFullscreen
+                  ? "max-w-full rounded-none border-none"
+                  : "max-w-6xl rounded-xl border border-slate-700"
+                  }`}
               >
                 {/* Viewer Header */}
                 <div className="flex justify-between items-center px-4 py-3 bg-slate-800 text-white">
@@ -668,11 +670,10 @@ export default function TrafficCompanyApprovals() {
                   </button>
                   <button
                     onClick={processDecision}
-                    className={`flex-1 px-4 py-4 text-white font-bold transition-colors ${
-                      confirmDialog.decision === "approved"
-                        ? "bg-[#10b981] hover:bg-[#059669]"
-                        : "bg-red-500 hover:bg-red-600"
-                    }`}
+                    className={`flex-1 px-4 py-4 text-white font-bold transition-colors ${confirmDialog.decision === "approved"
+                      ? "bg-[#10b981] hover:bg-[#059669]"
+                      : "bg-red-500 hover:bg-red-600"
+                      }`}
                   >
                     Yes, Proceed
                   </button>

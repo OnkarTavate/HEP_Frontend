@@ -27,6 +27,11 @@ import { jwtDecode } from "jwt-decode";
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 
+// Typing animation constants (defined outside component to avoid dependency warnings and cascading renders)
+const HEADLINE_LINE1 = "Welcome to the";
+const HEADLINE_LINE2 = "Automated Port Access and Control System";
+const HEADLINE_FULL = `${HEADLINE_LINE1}\n${HEADLINE_LINE2}`;
+
 const LoginPage = () => {
   const router = useRouter();
 
@@ -51,14 +56,9 @@ const LoginPage = () => {
   const [showForceLogoutDialog, setShowForceLogoutDialog] = useState(false);
   const [forceLogoutLoading, setForceLogoutLoading] = useState(false);
 
-  // Typing animation for the welcome headline (50ms per character)
-  const HEADLINE_LINE1 = "Welcome to the";
-  const HEADLINE_LINE2 = "Automated Port Access and Control System";
-  const HEADLINE_FULL = `${HEADLINE_LINE1}\n${HEADLINE_LINE2}`;
   const [typedHeadline, setTypedHeadline] = useState("");
 
   useEffect(() => {
-    setTypedHeadline("");
     let i = 0;
     const interval = setInterval(() => {
       i += 1;
@@ -448,7 +448,7 @@ const LoginPage = () => {
 
   return (
     <div
-      className="h-screen relative overflow-hidden bg-zinc-900"
+      className="min-h-screen relative overflow-y-auto overflow-x-hidden bg-zinc-900 flex flex-col justify-center"
       style={{ fontFamily: "Arial, sans-serif" }}
     >
       {/* Cinematic ship video background */}
@@ -473,7 +473,7 @@ const LoginPage = () => {
       <div className="absolute top-20 left-10 w-72 h-72 bg-orange-500/20 rounded-full blur-3xl pointer-events-none"></div>
       <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-600/20 rounded-full blur-3xl pointer-events-none"></div>
 
-      <div className="relative z-10 h-screen flex items-center p-4 sm:p-6 lg:pl-12 lg:pr-16 lg:py-6 overflow-hidden">
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 sm:p-6 lg:pl-12 lg:pr-16 lg:py-6">
         <div className="w-full mx-auto grid lg:grid-cols-[5fr_6fr] gap-6 lg:gap-10 items-center">
           {/* Left Section - Branding */}
           <div className="hidden lg:block space-y-8 animate-in fade-in duration-700">
@@ -599,12 +599,27 @@ const LoginPage = () => {
                 aria-hidden
                 className="hidden lg:block absolute -inset-6 bg-gradient-to-br from-orange-400/30 via-orange-300/20 to-transparent blur-3xl rounded-[40px] -z-10"
               />
-              <div className="relative bg-white/95 backdrop-blur-2xl rounded-[30px] shadow-[0_30px_80px_-15px_rgba(0,0,0,0.6)] ring-1 ring-white/40 overflow-hidden w-full max-w-[820px] mx-auto lg:ml-auto lg:mr-0 min-h-[560px] sm:min-h-[600px] lg:h-[78vh] lg:max-h-[680px] transition-shadow duration-500 hover:shadow-[0_35px_90px_-15px_rgba(0,0,0,0.7)]">
+              <div className="relative bg-white/95 backdrop-blur-2xl rounded-[30px] shadow-[0_30px_80px_-15px_rgba(0,0,0,0.6)] ring-1 ring-white/40 overflow-hidden w-full max-w-[820px] mx-auto lg:ml-auto lg:mr-0 min-h-0 md:min-h-[560px] sm:min-h-[600px] lg:h-[78vh] lg:max-h-[680px] transition-shadow duration-500 hover:shadow-[0_35px_90px_-15px_rgba(0,0,0,0.7)]">
                 {/* ── Form column (slides to the right half when forgot is active) ─── */}
                 <div
                   className={`md:absolute md:top-0 md:left-0 md:w-1/2 md:h-full bg-white z-[2] transition-transform duration-700 ease-in-out ${authMode === "forgot" ? "md:translate-x-full" : "md:translate-x-0"}`}
                 >
                   <div className="h-full flex flex-col justify-center px-6 md:px-8 lg:px-10 py-8 max-w-md mx-auto w-full">
+                    {/* Mobile/Tablet Header (Hidden on Desktop lg) */}
+                    <div className="flex items-center gap-3 mb-6 lg:hidden justify-center bg-stone-50 border border-stone-100 p-3 rounded-2xl">
+                      <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center shadow-md shadow-orange-900/20">
+                        <Ship className="h-5 w-5 text-white" strokeWidth={2.5} />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-lg font-bold text-gray-900 leading-none">
+                          Chennai Port
+                        </div>
+                        <p className="text-xs font-semibold text-orange-600 mt-0.5 mb-0">
+                          Authority
+                        </p>
+                      </div>
+                    </div>
+
                     {authMode === "signin" ? (
                       <div
                         key="signin-panel"
@@ -624,8 +639,8 @@ const LoginPage = () => {
                           )}
 
                           {/* Username */}
-                          <div className="relative">
-                            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                          <div className="relative group">
+                            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
                             <input
                               type="text"
                               placeholder="Username / Employee ID"
@@ -636,14 +651,14 @@ const LoginPage = () => {
                                   username: e.target.value,
                                 })
                               }
-                              className="w-full pl-11 pr-3 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                              className="w-full pl-11 pr-3 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
                               required
                             />
                           </div>
 
                           {/* Password */}
-                          <div className="relative">
-                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                          <div className="relative group">
+                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
                             <input
                               type={showPassword ? "text" : "password"}
                               placeholder="Password"
@@ -654,13 +669,13 @@ const LoginPage = () => {
                                   password: e.target.value,
                                 })
                               }
-                              className="w-full pl-11 pr-11 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                              className="w-full pl-11 pr-11 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
                               required
                             />
                             <button
                               type="button"
                               onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-600 transition-colors focus:outline-none"
+                              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-orange-600 active:scale-90 transition-all focus:outline-none"
                               title={
                                 showPassword ? "Hide password" : "Show password"
                               }
@@ -675,7 +690,7 @@ const LoginPage = () => {
 
                           {/* Captcha — input on the left, captcha image + refresh on the right.
                       Stacks vertically on very small screens for readability. */}
-                          <div className="flex flex-col sm:flex-row gap-2 w-full">
+                          <div className="flex flex-col sm:flex-row gap-2.5 w-full">
                             <input
                               placeholder="Security Code"
                               value={formData.captcha}
@@ -685,7 +700,7 @@ const LoginPage = () => {
                                   captcha: e.target.value,
                                 })
                               }
-                              className="flex-1 min-w-0 px-4 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                              className="flex-1 min-w-0 px-4 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
                               required
                             />
                             {/* <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 w-full sm:w-[170px] shrink-0 justify-between">
@@ -732,9 +747,8 @@ const LoginPage = () => {
                                 className="shrink-0 bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100 active:scale-95 transition-all disabled:opacity-50"
                               >
                                 <RefreshCw
-                                  className={`h-4 w-4 text-orange-600 ${
-                                    isCaptchaLoading ? "animate-spin" : ""
-                                  }`}
+                                  className={`h-4 w-4 text-orange-600 ${isCaptchaLoading ? "animate-spin" : ""
+                                    }`}
                                 />
                               </button>
                             </div>
@@ -752,7 +766,7 @@ const LoginPage = () => {
 
                           <button
                             type="submit"
-                            className="w-full py-3.5 bg-orange-600 text-white text-base font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-600/20 transition-all"
+                            className="w-full py-3.5 bg-orange-600 text-white text-base font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 hover:shadow-orange-600/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] shadow-lg shadow-orange-600/20 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-orange-500/20"
                           >
                             Sign In
                           </button>
@@ -766,10 +780,31 @@ const LoginPage = () => {
                               setTrackError("");
                               setTrackReference("");
                             }}
-                            className="w-full py-3.5 bg-white text-orange-600 text-base font-semibold tracking-wider uppercase rounded-xl border-2 border-orange-600 hover:bg-orange-50 active:scale-[0.99] transition-all"
+                            className="w-full py-3.5 bg-white text-orange-600 text-base font-semibold tracking-wider uppercase rounded-xl border-2 border-orange-600 hover:bg-orange-50 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-orange-500/20"
                           >
                             Track Pass
                           </button>
+
+                          {/* Mobile-only navigation links (hidden on desktop) */}
+                          <div className="flex flex-col gap-2.5 pt-2 text-center md:hidden border-t border-gray-100">
+                            <button
+                              type="button"
+                              onClick={() => setAuthMode("forgot")}
+                              className="text-sm font-semibold text-orange-600 hover:text-orange-700 transition-colors focus:outline-none"
+                            >
+                              Forgot Password?
+                            </button>
+                            <p className="text-sm text-gray-500">
+                              Don&apos;t have an account?{" "}
+                              <button
+                                type="button"
+                                onClick={() => router.push("/register")}
+                                className="font-bold text-orange-600 hover:text-orange-700 transition-colors focus:outline-none"
+                              >
+                                Sign Up
+                              </button>
+                            </p>
+                          </div>
                         </form>
                       </div>
                     ) : (
@@ -791,14 +826,14 @@ const LoginPage = () => {
                           onSubmit={handleForgotSubmit}
                           className="space-y-4"
                         >
-                          <div className="relative">
-                            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                          <div className="relative group">
+                            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
                             <input
                               type="text"
                               placeholder="Email or Employee ID"
                               value={forgotEmail}
                               onChange={(e) => setForgotEmail(e.target.value)}
-                              className="w-full pl-11 pr-3 py-3.5 text-base bg-[#eee] border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                              className="w-full pl-11 pr-3 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
                               required
                             />
                           </div>
@@ -806,7 +841,7 @@ const LoginPage = () => {
                           <button
                             type="submit"
                             disabled={forgotLoading}
-                            className="w-full py-3.5 bg-orange-600 text-white text-base font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 shadow-lg shadow-orange-600/20 transition-all disabled:opacity-70 flex items-center justify-center"
+                            className="w-full py-3.5 bg-orange-600 text-white text-base font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 hover:shadow-orange-600/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] shadow-lg shadow-orange-600/20 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-orange-500/20 disabled:opacity-70 disabled:pointer-events-none flex items-center justify-center"
                           >
                             {forgotLoading ? (
                               <RefreshCw className="h-5 w-5 animate-spin" />
@@ -814,15 +849,24 @@ const LoginPage = () => {
                               "Send Reset Link"
                             )}
                           </button>
-
-                          <div className="text-center">
+                          <div className="text-center flex flex-col gap-2.5 pt-2 border-t border-gray-100 md:border-none md:pt-0">
                             <button
                               type="button"
                               onClick={() => setAuthMode("signin")}
-                              className="text-sm text-gray-600 hover:text-orange-600 hover:underline"
+                              className="text-sm text-gray-600 hover:text-orange-600 hover:underline focus:outline-none"
                             >
                               ← Back to Sign In
                             </button>
+                            <p className="text-sm text-gray-500 md:hidden">
+                              Don&apos;t have an account?{" "}
+                              <button
+                                type="button"
+                                onClick={() => router.push("/register")}
+                                className="font-bold text-orange-600 hover:text-orange-700 transition-colors focus:outline-none"
+                              >
+                                Sign Up
+                              </button>
+                            </p>
                           </div>
                         </form>
                       </div>
@@ -841,7 +885,7 @@ const LoginPage = () => {
                   }}
                 >
                   <h2 className="text-2xl lg:text-3xl font-bold mb-3">
-                    Hello, Friend!
+                    Hello,ChennaiPort User
                   </h2>
                   <p className="text-sm leading-relaxed opacity-95 max-w-[280px] mb-6">
                     Register with your personal details to use all site features
@@ -873,7 +917,7 @@ const LoginPage = () => {
       {/* 🚀 TRACKING MODAL OVERLAY 🚀 */}
       {isTrackModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="flex justify-between items-center px-6 py-4 bg-slate-50 border-b border-gray-100">
               <h3 className="font-bold text-xl text-gray-900 flex items-center gap-2">
@@ -882,7 +926,7 @@ const LoginPage = () => {
               </h3>
               <button
                 onClick={() => setIsTrackModalOpen(false)}
-                className="text-gray-400 hover:text-red-500 transition-colors bg-white p-1.5 rounded-lg shadow-sm"
+                className="text-gray-400 hover:text-red-500 active:scale-90 transition-all bg-white p-1.5 rounded-lg shadow-sm focus:outline-none"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -890,7 +934,7 @@ const LoginPage = () => {
 
             <div className="p-6 space-y-6">
               {/* Form */}
-              <form onSubmit={handleTrackSubmit} className="flex gap-3">
+              <form onSubmit={handleTrackSubmit} className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="text"
                   placeholder="e.g. CHPT00001"
@@ -898,14 +942,14 @@ const LoginPage = () => {
                   onChange={(e) =>
                     setTrackReference(e.target.value.toUpperCase())
                   }
-                  className="flex-1 px-4 py-4 text-lg bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-medium uppercase transition-all"
+                  className="flex-1 px-4 py-4 text-lg bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none font-medium uppercase transition-all duration-200"
                   style={{ fontFamily: "Arial, sans-serif" }}
                   required
                 />
                 <button
                   type="submit"
                   disabled={trackLoading}
-                  className="px-8 py-4 text-lg bg-[#0a1e4d] text-white font-bold rounded-xl hover:bg-orange-600 transition-colors shadow-md disabled:opacity-70 flex items-center justify-center min-w-[130px]"
+                  className="px-8 py-4 text-lg bg-[#0a1e4d] text-white font-bold rounded-xl hover:bg-orange-600 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 shadow-md disabled:opacity-70 flex items-center justify-center min-w-[130px] focus:outline-none focus:ring-4 focus:ring-orange-500/20"
                   style={{ fontFamily: "Arial, sans-serif" }}
                 >
                   {trackLoading ? (
@@ -939,15 +983,14 @@ const LoginPage = () => {
                     {/* Dynamic Status Badge */}
                     <div
                       className={`px-4 py-2 rounded-lg text-sm font-bold border flex items-center gap-1.5 shadow-sm
-                      ${
-                        trackResult.status === "approved"
+                      ${trackResult.status === "approved"
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                           : trackResult.status === "rejected"
                             ? "bg-red-50 text-red-700 border-red-200"
                             : trackResult.status === "reverted"
                               ? "bg-amber-50 text-amber-700 border-amber-200"
                               : "bg-yellow-50 text-yellow-700 border-yellow-200"
-                      }`}
+                        }`}
                     >
                       {trackResult.status === "approved" && (
                         <CheckCircle className="h-4 w-4" />
@@ -960,8 +1003,8 @@ const LoginPage = () => {
                       )}
                       {(!trackResult.status ||
                         trackResult.status === "pending") && (
-                        <Clock className="h-4 w-4" />
-                      )}
+                          <Clock className="h-4 w-4" />
+                        )}
                       {(trackResult.status || "PENDING").toUpperCase()}
                     </div>
                   </div>
@@ -984,7 +1027,7 @@ const LoginPage = () => {
                             `/register?ref=${trackResult.referenceNumber}`,
                           )
                         }
-                        className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
+                        className="w-full py-3 bg-amber-600 hover:bg-amber-700 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] text-white text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm focus:outline-none focus:ring-4 focus:ring-amber-500/20"
                         style={{ fontFamily: "Arial, sans-serif" }}
                       >
                         <RefreshCw className="h-5 w-5" />
@@ -1031,7 +1074,7 @@ const LoginPage = () => {
       {/* 🔐 FORCE LOGOUT DIALOG 🔐 */}
       {showForceLogoutDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-orange-200">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-orange-200 animate-in zoom-in-95 duration-200">
             <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 text-white">
               <div className="flex items-center gap-3">
                 <ShieldAlert className="h-8 w-8" />
