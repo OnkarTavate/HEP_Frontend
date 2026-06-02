@@ -683,8 +683,7 @@ export default function TrafficPassesPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200">
-                        {pass.persons?.length || 0} Persons |{" "}
-                        {pass.vehicles?.length || 0} Vehicles
+                        {pass.persons?.length || 0} Persons
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-500">

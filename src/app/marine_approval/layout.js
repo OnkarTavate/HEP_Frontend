@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
 
-export default function TrafficLayout({ children }) {
+export default function MarineLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState(null);
@@ -52,18 +52,18 @@ export default function TrafficLayout({ children }) {
         .toLowerCase()
         .trim();
 
-      // ❌ Admins have their own portal — block them from traffic pages
+      // ❌ Admins have their own portal — block them
       const isAdmin = role === "admin" || role === "administrator";
       if (isAdmin) {
         router.push("/admin");
         return;
       }
 
-      // Allow "approval" role with traffic dept OR any role containing "traffic"
-      const isTrafficApprover = (role === "approval" && dept.includes("traffic")) || role.includes("traffic");
+      // Allow "approval" role with marine dept OR any role containing "marine"
+      const isMarineApprover = (role === "approval" && dept.includes("marine")) || role.includes("marine");
 
-      if (!isTrafficApprover) {
-        alert("Unauthorized Access: Traffic Department Only.");
+      if (!isMarineApprover) {
+        alert("Unauthorized Access: Marine Department Only.");
         router.push("/");
         return;
       }
@@ -103,21 +103,16 @@ export default function TrafficLayout({ children }) {
 
   if (!user) return <div className="p-12 text-center">Loading...</div>;
 
-  // TRAFFIC SPECIFIC NAVIGATION
+  // MARINE SPECIFIC NAVIGATION
   const navigationItems = [
-    { name: "Pass Approvals", href: "/traffic_approval", icon: FileText },
-    {
-      name: "Company Approvals",
-      href: "/traffic_approval/companies",
-      icon: Building2,
-    },
+    { name: "Pass Approvals", href: "/marine_approval", icon: FileText },
   ];
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-white">
       <div className="p-6 border-b border-orange-100">
         <Link
-          href="/traffic_approval" // <-- FIXED: Matches your exact folder name
+          href="/marine_approval"
           className="flex items-center gap-3 group"
         >
           <div className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-[#ff6b00] shadow-lg shadow-orange-600/20">
@@ -125,7 +120,7 @@ export default function TrafficLayout({ children }) {
           </div>
           <div>
             <h1 className="font-bold text-slate-800 text-lg leading-tight">
-              Traffic Dept
+              Marine Dept
             </h1>
             <p className="text-xs text-orange-600 font-medium">
               Port Approvals
@@ -179,7 +174,7 @@ export default function TrafficLayout({ children }) {
             <div className="hidden lg:flex items-center gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-800">
-                  Traffic Approval Dashboard
+                  Marine Approval Dashboard
                 </h2>
                 <p className="text-xs text-slate-500">
                   Manage Permits and Company Registrations
@@ -196,12 +191,12 @@ export default function TrafficLayout({ children }) {
                   >
                     <Avatar className="h-9 w-9 border-2 border-primary/20">
                       <AvatarFallback className="bg-[#0a1e4d] text-white text-sm font-bold">
-                        TA
+                        MA
                       </AvatarFallback>
                     </Avatar>
                     <div className="hidden md:block text-left">
                       <p className="text-sm font-medium text-slate-800 leading-tight">
-                        Traffic Admin
+                        Marine Admin
                       </p>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-[#ff6b00]">
                         Approver

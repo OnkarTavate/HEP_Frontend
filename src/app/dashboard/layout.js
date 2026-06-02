@@ -140,7 +140,17 @@ export default function DashboardLayout({ children }) {
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      const role = String(parsedUser.role || "").toLowerCase().trim();
+
+      // ❌ Admins belong on /admin — block them from the user dashboard
+      const isAdmin = role === "admin" || role === "administrator";
+      if (isAdmin) {
+        router.push("/admin");
+        return;
+      }
+
+      setUser(parsedUser);
     } else {
       router.push("/");
     }

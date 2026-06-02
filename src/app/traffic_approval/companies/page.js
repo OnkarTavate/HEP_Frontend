@@ -16,132 +16,94 @@ import {
   Minimize,
   Loader2,
   RefreshCw,
+  Clock,
+  Users,
 } from "lucide-react";
 
-const BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API;
-// Fallback logic to grab the documents from the agent API port (5001)
-const AGENT_API =
-  process.env.NEXT_PUBLIC_AGENT_API ||
-  `${BASE_URL.replace(/\/$/, "")}:5001/api`;
-const DOC_BASE_URL = AGENT_API.replace("/api", "");
+// ── API constants ────────────────────────────────────────────────────────────
+const ADMIN_API  = process.env.NEXT_PUBLIC_ADMIN_API  || "http://localhost:5005/api";
+const AGENT_API  = process.env.NEXT_PUBLIC_AGENT_API  || "http://localhost:5001/api";
 
 export default function TrafficCompanyApprovals() {
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("pending");
-  const [isViewMode, setIsViewMode] = useState(false);
+  const [requests,        setRequests]        = useState([]);
+  const [loading,         setLoading]         = useState(true);
+  const [searchQuery,     setSearchQuery]     = useState("");
+  const [activeTab,       setActiveTab]       = useState("pending");
+  const [isViewMode,      setIsViewMode]      = useState(false);
 
   // Modal States
   const [selectedRequest, setSelectedRequest] = useState(null);
-  const [remarks, setRemarks] = useState("");
-  const [viewingDocUrl, setViewingDocUrl] = useState(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [iframeLoading, setIframeLoading] = useState(true);
-  const [confirmDialog, setConfirmDialog] = useState({
-    isOpen: false,
-    decision: null,
-  });
+  const [remarks,         setRemarks]         = useState("");
+  const [viewingDocUrl,   setViewingDocUrl]   = useState(null);
+  const [isFullscreen,    setIsFullscreen]    = useState(false);
+  const [iframeLoading,   setIframeLoading]   = useState(true);
+  const [confirmDialog,   setConfirmDialog]   = useState({ isOpen: false, decision: null });
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  useEffect(() => { fetchDashboardData(); }, []);
+  useEffect(() => { if (viewingDocUrl) setIframeLoading(true); }, [viewingDocUrl]);
 
-  useEffect(() => {
-    if (viewingDocUrl) {
-      setIframeLoading(true);
-    }
-  }, [viewingDocUrl]);
-
-  // const fetchDashboardData = async () => {
-  //   try {
-  //     const response = await axios.get(`${BASE_URL}/user/agent-users`);
-  //     setRequests(response.data.data || response.data);
-  //   } catch (error) {
-  //     console.error("Failed to fetch requests", error);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
+  // ── Data fetching — uses auth token + correct ADMIN_API ──────────────────
   const fetchDashboardData = async () => {
-    setLoading(true); // Start loading state
-
+    setLoading(true);
     try {
-      // Log the BASE_URL to ensure it's correctly defined
-      console.log("BASE_URL:", BASE_URL);
+      const token    = localStorage.getItem("accessToken");
+      const headers  = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await axios.get(`${ADMIN_API}/user/agent-users`, { headers });
 
-      // Make the API request
-      const response = await axios.get(`${BASE_URL}/user/agent-users`);
-
-      // Log the entire response to inspect the structure
-      console.log("API Response:", response);
-
-      // Check if the expected data structure is present
-      if (!response.data || !response.data.data) {
-        console.warn("No data found in the response");
-        setRequests([]); // Handle empty data
+      if (response.data?.data) {
+        setRequests(response.data.data);
+      } else if (Array.isArray(response.data)) {
+        setRequests(response.data);
       } else {
-        setRequests(response.data.data || response.data); // Set the data if available
+        setRequests([]);
+        console.warn("Unexpected response shape:", response.data);
       }
     } catch (error) {
-      // Log the full error for better debugging
-      console.error(
-        "Failed to fetch requests",
-        error.response || error.message,
-      );
-
-      // Optionally, you can set some error state here to show a message to the user
-      // setError(true);  // Example of setting an error flag
+      console.error("Failed to fetch company requests:", error.response || error.message);
+      toast.error("Failed to load company data. Check backend connection.");
+      setRequests([]);
     } finally {
-      setLoading(false); // Set loading to false after the request completes (success or failure)
+      setLoading(false);
     }
   };
 
+  // ── Action helpers ────────────────────────────────────────────────────────
   const handleRevertClick = () => {
     if (!remarks.trim()) {
-      toast.warning("Remarks Required", {
-        description:
-          "Please specify which fields need updating in the remarks.",
-      });
+      toast.warning("Remarks Required", { description: "Please specify which fields need updating." });
       return;
     }
     setConfirmDialog({ isOpen: true, decision: "reverted" });
   };
 
-  // 1. Validates input and opens the centered confirmation modal
   const handleActionClick = (decision) => {
     if (decision === "rejected" && !remarks.trim()) {
-      toast.warning("Remarks Required", {
-        description:
-          "Please provide a reason for rejection in the remarks field.",
-      });
+      toast.warning("Remarks Required", { description: "Please provide a reason for rejection." });
       return;
     }
-    // Opens the center modal instead of window.confirm
     setConfirmDialog({ isOpen: true, decision });
   };
 
-  // 2. Executes the API call when "Yes, Proceed" is clicked in the modal
   const processDecision = async () => {
     const { decision } = confirmDialog;
-    setConfirmDialog({ isOpen: false, decision: null }); // Close modal immediately
-
+    setConfirmDialog({ isOpen: false, decision: null });
     const loadingToastId = toast.loading(`Processing ${decision} request...`);
-
     try {
-      const response = await axios.put(`${AGENT_API}/agents/action`, {
-        agentId: selectedRequest.id,
-        decision: decision,
-        rejectedReason:
-          decision === "rejected" || decision === "reverted" ? remarks : null,
-      });
-
+      const token    = localStorage.getItem("accessToken");
+      const response = await axios.put(
+        `${AGENT_API}/agents/action`,
+        {
+          agentId:        selectedRequest.id,
+          decision,
+          rejectedReason: decision === "rejected" || decision === "reverted" ? remarks : null,
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
       if (response.data.success) {
         toast.success(`Company ${decision.toUpperCase()}`, {
-          id: loadingToastId,
+          id:          loadingToastId,
           description: "Email notifications have been triggered successfully.",
         });
-
         setSelectedRequest(null);
         setRemarks("");
         fetchDashboardData();
@@ -149,531 +111,421 @@ export default function TrafficCompanyApprovals() {
     } catch (error) {
       console.error("Action failed:", error);
       toast.error("Action Failed", {
-        id: loadingToastId,
-        description:
-          error.response?.data?.message ||
-          "Failed to process action. Please check your backend services.",
+        id:          loadingToastId,
+        description: error.response?.data?.message || "Failed to process action.",
       });
     }
   };
 
-  if (loading)
-    return (
-      <div className="p-12 text-center text-slate-500 font-medium">
-        Loading Company Requests...
-      </div>
-    );
+  // ── Derived data ──────────────────────────────────────────────────────────
+  const pendingRequests   = requests.filter((r) => r.status === "pending"  || !r.status);
+  const processedRequests = requests.filter((r) => ["approved", "rejected", "reverted"].includes(r.status));
 
-  // Filter Data for Tabs
-  const pendingRequests = requests.filter(
-    (r) => r.status === "pending" || !r.status,
-  );
-  const processedRequests = requests.filter(
-    (r) =>
-      r.status === "approved" ||
-      r.status === "rejected" ||
-      r.status === "reverted",
-  );
-
-  const displayedRequests = (
-    activeTab === "pending" ? pendingRequests : processedRequests
-  ).filter(
+  const displayedRequests = (activeTab === "pending" ? pendingRequests : processedRequests).filter(
     (req) =>
       req.referenceNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       req.entityName?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 font-sans">
-      <header className="bg-white/80 backdrop-blur-lg rounded-xl p-6 flex items-center justify-between shadow-sm border border-slate-200">
-        <div className="flex items-center gap-4">
-          <div className="bg-orange-100 p-3 rounded-xl">
-            <Building2 className="h-6 w-6 text-[#ff6b00]" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-[#0a1e4d]">
-              Company Registration Approvals
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
-              Verify documents and approve new port operators
-            </p>
+  // ── Loading skeleton ───────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="w-full flex flex-col gap-4 p-2">
+        {/* Stat cards skeleton */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-24 rounded-2xl bg-slate-200 dark:bg-slate-800/60 animate-pulse" style={{ animationDelay: `${i * 100}ms` }} />
+          ))}
+        </div>
+        <div className="h-10 rounded-xl bg-slate-200 dark:bg-slate-800/40 animate-pulse" />
+        <div className="h-64 rounded-2xl bg-slate-200 dark:bg-slate-800/40 animate-pulse" />
+        {/* Floating loader */}
+        <div className="pointer-events-none absolute inset-x-0 top-[50%] flex justify-center">
+          <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-md ring-1 ring-slate-200/70 dark:ring-white/10 shadow-lg">
+            <span className="relative flex h-7 w-7 items-center justify-center rounded-xl bg-amber-400 text-[#1f1f1f] shrink-0">
+              <Building2 className="h-4 w-4" strokeWidth={2.5} />
+              <span className="absolute inset-0 rounded-xl ring-2 ring-amber-400/60 animate-ping" />
+            </span>
+            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200 tracking-wide">Loading company data</span>
+            <span className="flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce" />
+            </span>
           </div>
         </div>
-      </header>
+      </div>
+    );
+  }
 
-      {/* TABS */}
-      <div className="flex gap-4 border-b border-slate-200 pb-2">
+  // ── Main render ────────────────────────────────────────────────────────────
+  return (
+    <div className="w-full flex flex-col gap-4 lg:gap-5">
+
+      {/* ── Stat cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 lg:gap-4 shrink-0">
+        {/* Total */}
+        <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-slate-200/60 dark:ring-white/5 shadow-lg flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Total</span>
+            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800">
+              <Users className="h-4 w-4 text-slate-600 dark:text-slate-300" strokeWidth={2.5} />
+            </span>
+          </div>
+          <p className="text-3xl font-extrabold text-slate-900 dark:text-stone-100 tabular-nums">{requests.length}</p>
+        </div>
+
+        {/* Pending */}
+        <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-amber-200/60 dark:ring-amber-500/10 shadow-lg flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">Pending</span>
+            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-50 dark:bg-amber-500/10">
+              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" strokeWidth={2.5} />
+            </span>
+          </div>
+          <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-300 tabular-nums">{pendingRequests.length}</p>
+        </div>
+
+        {/* Processed */}
+        <div className="col-span-2 sm:col-span-1 bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-emerald-200/60 dark:ring-emerald-500/10 shadow-lg flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Processed</span>
+            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-emerald-50 dark:bg-emerald-500/10">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
+            </span>
+          </div>
+          <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-300 tabular-nums">{processedRequests.length}</p>
+        </div>
+      </div>
+
+      {/* ── Page header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-800 dark:text-stone-100 tracking-tight flex items-center gap-2">
+            <Building2 className="h-6 w-6 text-amber-500" strokeWidth={2.5} />
+            Company Registration Approvals
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-stone-400 mt-0.5">Verify documents and approve new port operators</p>
+        </div>
         <button
-          onClick={() => setActiveTab("pending")}
-          className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "pending" ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"}`}
+          onClick={fetchDashboardData}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 dark:bg-amber-400 text-white dark:text-slate-900 text-sm font-bold shadow hover:opacity-90 active:scale-95 transition-all"
         >
-          Pending Approvals ({pendingRequests.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("processed")}
-          className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "processed" ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"}`}
-        >
-          Processed ({processedRequests.length})
+          <RefreshCw className="h-4 w-4" strokeWidth={2.5} />
+          Refresh
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="flex flex-col md:flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50 p-4 gap-4">
-          <h3 className="font-bold text-slate-900 uppercase text-xs tracking-widest pl-2 flex items-center gap-2">
-            {activeTab === "pending" ? (
-              <ShieldAlert className="h-4 w-4 text-[#ff6b00]" />
-            ) : (
-              <History className="h-4 w-4 text-[#ff6b00]" />
-            )}
+      {/* ── Tabs ── */}
+      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-0">
+        {[
+          { id: "pending",   label: "Pending",   count: pendingRequests.length },
+          { id: "processed", label: "Processed", count: processedRequests.length },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${
+              activeTab === tab.id
+                ? "bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-900 shadow"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-stone-200 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+            }`}
+          >
+            {tab.label}
+            <span className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
+              activeTab === tab.id ? "bg-white/20 text-white dark:bg-black/20 dark:text-slate-900" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+            }`}>
+              {tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* ── Table card ── */}
+      <div className="bg-white dark:bg-[#1e293b] rounded-2xl ring-1 ring-slate-200/60 dark:ring-white/5 shadow-xl overflow-hidden">
+        {/* Table toolbar */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/60 dark:bg-slate-800/30">
+          <h3 className="font-bold text-slate-800 dark:text-stone-100 uppercase text-xs tracking-widest flex items-center gap-2">
             {activeTab === "pending"
-              ? "Awaiting Traffic Approval"
-              : "Processed Companies"}
+              ? <><ShieldAlert className="h-4 w-4 text-amber-500" /> Awaiting Approval</>
+              : <><History className="h-4 w-4 text-emerald-500" /> Processed Companies</>}
           </h3>
           <div className="relative w-full md:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
             <input
               type="text"
-              placeholder="Search Company or Ref..."
+              placeholder="Search company or ref..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-[#ff6b00] focus:ring-1 focus:ring-[#ff6b00]"
+              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-amber-400 dark:focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 transition"
             />
           </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-slate-50/50 border-b border-slate-100">
-              <tr>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">
-                  Ref No
-                </th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">
-                  Company Name
-                </th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">
-                  Operator Type
-                </th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-center">
-                  {activeTab === "pending" ? "Action" : "Status"}
-                </th>
+            <thead>
+              <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
+                {["Ref No", "Company Name", "Operator Type", activeTab === "pending" ? "Action" : "Status"].map((h) => (
+                  <th key={h} className={`px-5 py-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${h === "Action" || h === "Status" ? "text-center" : ""}`}>
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
-              {displayedRequests.map((req) => (
-                <tr
-                  key={req.id}
-                  onClick={() => {
-                    setSelectedRequest(req);
-                    setIsViewMode(activeTab === "processed");
-                    setRemarks(req.rejectedReason || "");
-                  }}
-                  className="hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d]">
-                    {req.referenceNumber}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-bold text-slate-800">
-                      {req.entityName}
-                    </div>
-                    <div className="text-xs text-slate-500">{req.email}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200">
-                      {req.userTypeName || "Agent"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span
-                      className={`px-3 py-1 rounded-full text-[11px] font-bold border ${req.status === "approved"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : req.status === "reverted"
-                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                          : req.status === "rejected"
-                            ? "bg-red-50 text-red-700 border-red-200"
-                            : "bg-blue-50 text-blue-700 border-blue-200" // For pending
-                        }`}
-                    >
-                      {req.status?.toUpperCase() || "PENDING"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {displayedRequests.length === 0 && (
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-700/30">
+              {displayedRequests.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="py-16 text-center text-slate-500">
-                    <Building2 className="h-10 w-10 mx-auto text-slate-200 mb-3" />
+                  <td colSpan="4" className="py-16 text-center text-slate-400 dark:text-slate-500">
+                    <Building2 className="h-10 w-10 mx-auto text-slate-200 dark:text-slate-700 mb-3" />
                     <p className="text-sm font-medium">No records found.</p>
                   </td>
                 </tr>
+              ) : (
+                displayedRequests.map((req) => {
+                  const statusColors = {
+                    approved: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
+                    reverted: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
+                    rejected: "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
+                  };
+                  const statusClass = statusColors[req.status] || "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+                  return (
+                    <tr
+                      key={req.id}
+                      onClick={() => { setSelectedRequest(req); setIsViewMode(activeTab === "processed"); setRemarks(req.rejectedReason || ""); }}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group"
+                    >
+                      <td className="px-5 py-4 text-sm font-bold text-slate-800 dark:text-stone-200 font-mono">
+                        {req.referenceNumber || "—"}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-300 to-orange-400 dark:from-amber-400 dark:to-orange-500 flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0">
+                            {(req.entityName || "?").charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-slate-800 dark:text-stone-100">{req.entityName || "—"}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">{req.email || "—"}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200 dark:border-blue-500/20">
+                          {req.userTypeName || "Agent"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-center">
+                        <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}>
+                          {(req.status || "PENDING").toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* ADMIN-STYLE REVIEW DETAILS MODAL */}
+      {/* ── Review / View Modal ── */}
       {selectedRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
-              <h2 className="text-xl font-bold text-[#0a1e4d] flex items-center gap-2">
-                <Building2 className="text-orange-600" />
-                {isViewMode
-                  ? "Company Details (Read Only)"
-                  : "Company Verification"}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden ring-1 ring-slate-200 dark:ring-white/10">
+
+            {/* Modal header */}
+            <div className="flex justify-between items-center px-6 py-4 bg-slate-900 dark:bg-slate-950 text-white">
+              <h2 className="text-lg font-bold tracking-wide flex items-center gap-2.5">
+                <Building2 className="text-amber-400 h-5 w-5" strokeWidth={2.5} />
+                {isViewMode ? "Company Details (Read Only)" : "Company Verification"}
+                {selectedRequest.referenceNumber && (
+                  <span className="ml-1 text-amber-400 font-mono text-sm">· {selectedRequest.referenceNumber}</span>
+                )}
               </h2>
               <button
-                onClick={() => {
-                  setSelectedRequest(null);
-                  setRemarks("");
-                }}
-                className="text-slate-400 hover:text-red-500 transition-colors"
+                onClick={() => { setSelectedRequest(null); setRemarks(""); }}
+                className="text-white/60 hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-white/10"
               >
                 <XCircle className="h-6 w-6" />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50 space-y-6">
-              {/* General Information */}
-              <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
-                <h3 className="font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2 text-sm uppercase tracking-wider text-orange-600">
+            {/* Modal body */}
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-50 dark:bg-slate-900/50 space-y-5">
+              {/* Company Info */}
+              <div className="bg-white dark:bg-slate-800/60 p-5 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                <h3 className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100 dark:border-slate-700/50">
                   Company Information
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                      Reference Number
-                    </label>
-                    <div className="bg-slate-50 border border-slate-200 rounded p-2 text-sm font-bold text-[#0a1e4d]">
-                      {selectedRequest.referenceNumber}
+                  {[
+                    { label: "Reference Number",  value: selectedRequest.referenceNumber, span: 1 },
+                    { label: "Entity Name",        value: selectedRequest.entityName,       span: 2 },
+                    { label: "Operator Type",      value: selectedRequest.userTypeName || "N/A", span: 1 },
+                    { label: "Contact Email",      value: selectedRequest.email,            span: 1 },
+                    { label: "Mobile No.",         value: selectedRequest.mobileNo,         span: 1 },
+                    { label: "Address",            value: [selectedRequest.addressLine, selectedRequest.city, selectedRequest.state, selectedRequest.pincode].filter(Boolean).join(", "), span: 2 },
+                  ].map(({ label, value, span }) => (
+                    <div key={label} className={span > 1 ? `md:col-span-${span}` : ""}>
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">{label}</label>
+                      <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
+                        {value || "—"}
+                      </div>
                     </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                      Entity Name
-                    </label>
-                    <div className="bg-slate-50 border border-slate-200 rounded p-2 text-sm font-medium">
-                      {selectedRequest.entityName}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                      Operator Type
-                    </label>
-                    <div className="bg-slate-50 border border-slate-200 rounded p-2 text-sm font-bold text-blue-700">
-                      {selectedRequest.userTypeName || "N/A"}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                      Contact Email
-                    </label>
-                    <div className="bg-slate-50 border border-slate-200 rounded p-2 text-sm font-medium">
-                      {selectedRequest.email}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                      Mobile No.
-                    </label>
-                    <div className="bg-slate-50 border border-slate-200 rounded p-2 text-sm font-medium">
-                      {selectedRequest.mobileNo}
-                    </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                      Address
-                    </label>
-                    <div className="bg-slate-50 border border-slate-200 rounded p-2 text-sm font-medium">
-                      {selectedRequest.addressLine}, {selectedRequest.city},{" "}
-                      {selectedRequest.state} - {selectedRequest.pincode}
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
 
               {/* Identification */}
-              <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
-                <h3 className="font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2 text-sm uppercase tracking-wider text-[#0a1e4d]">
+              <div className="bg-white dark:bg-slate-800/60 p-5 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                <h3 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-100 dark:border-slate-700/50">
                   Identification Details
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                      GSTIN Number
-                    </label>
-                    <div className="text-sm font-bold text-slate-800">
-                      {selectedRequest.gstinNumber || "N/A"}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  {[
+                    { label: "GSTIN Number", value: selectedRequest.gstinNumber },
+                    { label: "PAN Number",   value: selectedRequest.panNumber },
+                    { label: "TAN Number",   value: selectedRequest.tanNumber },
+                  ].map(({ label, value }) => (
+                    <div key={label}>
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">{label}</label>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200 font-mono">{value || "N/A"}</p>
                     </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                      PAN Number
-                    </label>
-                    <div className="text-sm font-bold text-slate-800">
-                      {selectedRequest.panNumber || "N/A"}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                      TAN Number
-                    </label>
-                    <div className="text-sm font-bold text-slate-800">
-                      {selectedRequest.tanNumber || "N/A"}
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
 
-              {/* Verification Documents */}
-              <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
-                <h3 className="font-bold text-slate-800 text-sm border-b border-slate-100 pb-2 mb-4 uppercase tracking-wider flex items-center gap-2">
-                  <CheckCircle2 className="text-[#ff6b00] h-5 w-5" />{" "}
-                  Verification Documents
+              {/* Documents */}
+              <div className="bg-white dark:bg-slate-800/60 p-5 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                <h3 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100 dark:border-slate-700/50 flex items-center gap-2">
+                  <CheckCircle2 className="text-amber-500 h-4 w-4" /> Verification Documents
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  {/* Entity Document (Always Required) */}
-                  <button
-                    onClick={() =>
-                      setViewingDocUrl(
-                        `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=entity`,
-                      )
-                    }
-                    className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group w-full text-left"
-                  >
-                    <FileText className="text-blue-500 h-5 w-5 shrink-0" />
-                    <span className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-700">
-                      Entity Document
-                    </span>
-                    <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500 shrink-0" />
-                  </button>
-
-                  {/* GSTIN Document (Shows if GSTIN Number exists) */}
-                  {selectedRequest.gstinNumber && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: "Entity Document", type: "entity", always: true },
+                    { label: "GSTIN Document",  type: "gst",    show: !!selectedRequest.gstinNumber },
+                    { label: "PAN Document",    type: "pan",    show: !!selectedRequest.panNumber },
+                    { label: "TAN Document",    type: "tan",    show: !!selectedRequest.tanNumber },
+                  ].filter((d) => d.always || d.show).map(({ label, type }) => (
                     <button
+                      key={type}
                       onClick={() =>
                         setViewingDocUrl(
-                          `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=gst`,
+                          `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=${type}`,
                         )
                       }
-                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group w-full text-left"
+                      className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-amber-400 dark:hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/5 transition-all group text-left"
                     >
-                      <FileText className="text-blue-500 h-5 w-5 shrink-0" />
-                      <span className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-700">
-                        GSTIN Document
-                      </span>
-                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500 shrink-0" />
+                      <FileText className="text-amber-500 h-5 w-5 shrink-0" />
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate group-hover:text-amber-700 dark:group-hover:text-amber-400">{label}</span>
+                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-amber-500 shrink-0" />
                     </button>
-                  )}
-
-                  {/* PAN Document (Shows if PAN Number exists) */}
-                  {selectedRequest.panNumber && (
-                    <button
-                      onClick={() =>
-                        setViewingDocUrl(
-                          `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=pan`,
-                        )
-                      }
-                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group w-full text-left"
-                    >
-                      <FileText className="text-blue-500 h-5 w-5 shrink-0" />
-                      <span className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-700">
-                        PAN Document
-                      </span>
-                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500 shrink-0" />
-                    </button>
-                  )}
-
-                  {/* TAN Document (Shows if TAN Number exists) */}
-                  {selectedRequest.tanNumber && (
-                    <button
-                      onClick={() =>
-                        setViewingDocUrl(
-                          `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=tan`,
-                        )
-                      }
-                      className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors group w-full text-left"
-                    >
-                      <FileText className="text-blue-500 h-5 w-5 shrink-0" />
-                      <span className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-700">
-                        TAN Document
-                      </span>
-                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-blue-500 shrink-0" />
-                    </button>
-                  )}
+                  ))}
                 </div>
               </div>
 
-              {/* Remarks - Conditionally Rendered */}
-              {(!isViewMode ||
-                selectedRequest?.status !== "approved" ||
-                remarks) && (
-                  <div className="bg-orange-50 p-5 rounded-lg border border-orange-200 shadow-sm">
-                    <label className="block text-xs font-bold text-orange-900 uppercase tracking-wider mb-3">
-                      Authority Remarks / Reason for Rejection
-                    </label>
-                    <textarea
-                      value={remarks}
-                      onChange={(e) => setRemarks(e.target.value)}
-                      disabled={isViewMode}
-                      className="w-full border border-orange-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-[#ff6b00]/20 focus:border-[#ff6b00] outline-none shadow-inner bg-white"
-                      rows="3"
-                      placeholder="Enter specific remarks if rejecting or reverting..."
-                    ></textarea>
-                  </div>
-                )}
-            </div>
-
-            {/* Replace the existing buttons container with this */}
-            <div className="flex justify-end gap-3 p-4 border-t border-slate-200 bg-white">
-              {!isViewMode && (
-                <div className="flex items-center gap-4">
-                  {/* Reject Button */}
-                  <button
-                    onClick={() => handleActionClick("rejected")}
-                    className="bg-gradient-to-br from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 px-7 py-3 rounded-xl font-bold flex items-center gap-2.5 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
-                  >
-                    <XCircle className="h-5 w-5" /> Reject
-                  </button>
-
-                  {/* Approve Button */}
-                  <button
-                    onClick={() => handleActionClick("approved")}
-                    className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 px-8 py-3 rounded-xl shadow-lg hover:shadow-xl font-bold flex items-center gap-2.5 transform hover:scale-105 transition-all duration-200"
-                  >
-                    <CheckCircle2 className="h-5 w-5" /> Approve
-                  </button>
-
-                  {/* Separator */}
-                  <div className="h-12 w-px bg-gradient-to-b from-transparent via-slate-300 to-transparent"></div>
-
-                  {/* Revert Button */}
-                  <button
-                    onClick={handleRevertClick}
-                    className="bg-gradient-to-br from-slate-700 to-slate-900 text-white hover:from-slate-800 hover:to-black px-7 py-3 rounded-xl font-bold flex items-center gap-2.5 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-200 ring-2 ring-slate-600 hover:ring-slate-500"
-                  >
-                    <RefreshCw className="h-5 w-5" /> Revert
-                  </button>
+              {/* Remarks */}
+              {(!isViewMode || selectedRequest?.status !== "approved" || remarks) && (
+                <div className="bg-amber-50 dark:bg-amber-500/5 p-5 rounded-xl border border-amber-200 dark:border-amber-500/20">
+                  <label className="block text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2">
+                    Authority Remarks / Reason for Rejection
+                  </label>
+                  <textarea
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    disabled={isViewMode}
+                    className="w-full border border-amber-200 dark:border-amber-500/20 bg-white dark:bg-slate-800 rounded-xl p-3 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 outline-none resize-none disabled:opacity-60"
+                    rows="3"
+                    placeholder="Enter specific remarks if rejecting or reverting..."
+                  />
                 </div>
               )}
             </div>
-          </div>
-          {/* PDF VIEWER OVERLAY */}
-          {viewingDocUrl && (
-            <div
-              className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-all duration-300 ${isFullscreen ? "p-0" : "p-4 md:p-8"
-                }`}
-            >
-              <div
-                className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${isFullscreen
-                  ? "max-w-full rounded-none border-none"
-                  : "max-w-6xl rounded-xl border border-slate-700"
-                  }`}
-              >
-                {/* Viewer Header */}
-                <div className="flex justify-between items-center px-4 py-3 bg-slate-800 text-white">
-                  <h3 className="font-bold flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-blue-400" />
-                    Document Viewer
-                  </h3>
 
-                  {/* Action Buttons */}
+            {/* Modal footer */}
+            {!isViewMode && (
+              <div className="flex items-center justify-end gap-3 p-4 border-t border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-900">
+                <button
+                  onClick={() => handleActionClick("rejected")}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm shadow hover:shadow-lg active:scale-95 transition-all"
+                >
+                  <XCircle className="h-4 w-4" /> Reject
+                </button>
+                <button
+                  onClick={handleRevertClick}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-700 dark:bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm shadow hover:shadow-lg active:scale-95 transition-all"
+                >
+                  <RefreshCw className="h-4 w-4" /> Revert
+                </button>
+                <button
+                  onClick={() => handleActionClick("approved")}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm shadow hover:shadow-lg active:scale-95 transition-all"
+                >
+                  <CheckCircle2 className="h-4 w-4" /> Approve
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ── PDF Document Viewer ── */}
+          {viewingDocUrl && (
+            <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm ${isFullscreen ? "p-0" : "p-4 md:p-8"}`}>
+              <div className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${isFullscreen ? "max-w-full rounded-none" : "max-w-5xl rounded-2xl ring-1 ring-slate-700"}`}>
+                <div className="flex justify-between items-center px-4 py-3 bg-slate-900 text-white">
+                  <h3 className="font-bold flex items-center gap-2 text-sm">
+                    <FileText className="h-5 w-5 text-amber-400" /> Document Viewer
+                  </h3>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setIsFullscreen(!isFullscreen)}
-                      className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg transition-colors"
-                      title={isFullscreen ? "Exit Fullscreen" : "Maximize"}
-                    >
-                      {isFullscreen ? (
-                        <Minimize className="h-5 w-5" />
-                      ) : (
-                        <Maximize className="h-5 w-5" />
-                      )}
+                    <button onClick={() => setIsFullscreen(!isFullscreen)} className="bg-slate-800 hover:bg-slate-700 p-2 rounded-lg transition-colors" title={isFullscreen ? "Exit Fullscreen" : "Maximize"}>
+                      {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
                     </button>
-                    <button
-                      onClick={() => {
-                        setViewingDocUrl(null);
-                        setIsFullscreen(false);
-                      }}
-                      className="bg-slate-700 hover:bg-red-500 p-2 rounded-lg transition-colors"
-                      title="Close Viewer"
-                    >
-                      <XCircle className="h-5 w-5" />
+                    <button onClick={() => { setViewingDocUrl(null); setIsFullscreen(false); }} className="bg-slate-800 hover:bg-red-500 p-2 rounded-lg transition-colors" title="Close">
+                      <XCircle className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
-
-                {/* Iframe Container */}
                 <div className="flex-1 w-full bg-slate-100 relative">
-                  {/* Loading State Overlay */}
                   {iframeLoading && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50">
-                      <Loader2 className="h-10 w-10 text-[#ff6b00] animate-spin mb-4" />
-                      <p className="text-slate-500 font-bold animate-pulse">
-                        Fetching secure document...
-                      </p>
+                      <Loader2 className="h-10 w-10 text-amber-500 animate-spin mb-3" />
+                      <p className="text-slate-500 font-bold animate-pulse text-sm">Fetching secure document...</p>
                     </div>
                   )}
-
-                  <iframe
-                    src={viewingDocUrl}
-                    className="w-full h-full border-none relative z-0"
-                    title="Document Viewer"
-                    onLoad={() => setIframeLoading(false)} // Hides spinner when PDF renders
-                  />
+                  <iframe src={viewingDocUrl} className="w-full h-full border-none" title="Document Viewer" onLoad={() => setIframeLoading(false)} />
                 </div>
               </div>
             </div>
           )}
-          {/* 🚀 CENTERED CONFIRMATION MODAL 🚀 */}
+
+          {/* ── Confirm Dialog ── */}
           {confirmDialog.isOpen && (
-            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 transform scale-100 animate-in zoom-in-95 duration-200">
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden ring-1 ring-slate-200 dark:ring-white/10">
                 <div className="p-6 text-center space-y-4">
-                  <div
-                    className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-2 ${confirmDialog.decision === "approved" ? "bg-emerald-100" : "bg-red-100"}`}
-                  >
-                    {confirmDialog.decision === "approved" ? (
-                      <CheckCircle2 className="h-8 w-8 text-emerald-600" />
-                    ) : (
-                      <ShieldAlert className="h-8 w-8 text-red-600" />
-                    )}
+                  <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center ${confirmDialog.decision === "approved" ? "bg-emerald-100 dark:bg-emerald-500/10" : "bg-red-100 dark:bg-red-500/10"}`}>
+                    {confirmDialog.decision === "approved"
+                      ? <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                      : <ShieldAlert className="h-8 w-8 text-red-600 dark:text-red-400" />}
                   </div>
-                  <h3 className="text-xl font-bold text-[#0a1e4d]">
-                    Confirm Action
-                  </h3>
-                  <p className="text-slate-500 text-sm">
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-stone-100">Confirm Action</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">
                     Are you sure you want to{" "}
-                    <strong
-                      className={
-                        confirmDialog.decision === "approved"
-                          ? "text-emerald-600"
-                          : "text-red-600"
-                      }
-                    >
+                    <strong className={confirmDialog.decision === "approved" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}>
                       {confirmDialog.decision}
                     </strong>{" "}
                     this company?
                   </p>
                 </div>
-
-                <div className="flex border-t border-slate-100">
+                <div className="flex border-t border-slate-100 dark:border-slate-800">
                   <button
-                    onClick={() =>
-                      setConfirmDialog({ isOpen: false, decision: null })
-                    }
-                    className="flex-1 px-4 py-4 text-slate-500 font-bold hover:bg-slate-50 transition-colors border-r border-slate-100"
+                    onClick={() => setConfirmDialog({ isOpen: false, decision: null })}
+                    className="flex-1 px-4 py-4 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-r border-slate-100 dark:border-slate-800 text-sm"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={processDecision}
-                    className={`flex-1 px-4 py-4 text-white font-bold transition-colors ${confirmDialog.decision === "approved"
-                      ? "bg-[#10b981] hover:bg-[#059669]"
-                      : "bg-red-500 hover:bg-red-600"
-                      }`}
+                    className={`flex-1 px-4 py-4 text-white font-bold transition-colors text-sm ${confirmDialog.decision === "approved" ? "bg-emerald-500 hover:bg-emerald-600" : "bg-red-500 hover:bg-red-600"}`}
                   >
                     Yes, Proceed
                   </button>

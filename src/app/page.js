@@ -396,6 +396,8 @@ const LoginPage = () => {
           router.push("/admin");
         } else if (role === "approval" && dept.includes("traffic")) {
           router.push("/traffic_approval");
+        } else if (role === "approval" && dept.includes("marine")) {
+          router.push("/marine_approval");
         } else if (role === "approval") {
           router.push("/admin/vendor_pass");
         } else {
