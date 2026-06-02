@@ -389,16 +389,31 @@ const LoginPage = () => {
         toast.success("Login successful!");
 
         // 🚀 ROLE-BASED ROUTING
+        // Uses numeric departmentId for precision — immune to departmentName typos/renames.
+        //
+        // port_departments IDs (from DB):
+        //   Traffic sub-depts : 9, 10, 11, 12, 13, 14, 15
+        //   Marine            : 7
+        //   Engineering Civil : 3  |  Engineering Mechanical : 4
+        //   Finance           : 5  |  General Administration : 6
         const role = (data.role || "").toLowerCase();
-        const dept = (data.departmentName || "").toLowerCase();
+        const deptId = data.departmentId; // numeric — comes from JWT/login response
+
+        const TRAFFIC_DEPT_IDS  = [9, 10, 11, 12, 13, 14, 15];
+        const MARINE_DEPT_ID    = 7;
+        // Civil, Mechanical, Finance, General Admin → vendor pass only (no dedicated portal)
+        const VENDOR_ONLY_DEPT_IDS = [3, 4, 5, 6];
 
         if (role === "admin" || role === "administrator") {
           router.push("/admin");
-        } else if (role === "approval" && dept.includes("traffic")) {
+        } else if (role === "approval" && TRAFFIC_DEPT_IDS.includes(deptId)) {
           router.push("/traffic_approval");
-        } else if (role === "approval" && dept.includes("marine")) {
+        } else if (role === "approval" && deptId === MARINE_DEPT_ID) {
           router.push("/marine_approval");
+        } else if (role === "approval" && VENDOR_ONLY_DEPT_IDS.includes(deptId)) {
+          router.push("/admin/vendor_pass");
         } else if (role === "approval") {
+          // Catch-all for any other approval dept not explicitly listed above
           router.push("/admin/vendor_pass");
         } else {
           router.push("/dashboard");

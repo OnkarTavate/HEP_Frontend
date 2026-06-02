@@ -224,7 +224,18 @@ function CreateIntakeForm({ user, onCreated }) {
               required
               className={inputCls}
               value={form.visitorTypeId}
-              onChange={(e) => update("visitorTypeId", e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setForm((s) => {
+                  const t = visitorTypes.find((v) => String(v.id) === String(val));
+                  const isOther = t?.name?.toLowerCase() === "others";
+                  return {
+                    ...s,
+                    visitorTypeId: val,
+                    visitorTypeOther: isOther ? s.visitorTypeOther : "",
+                  };
+                });
+              }}
             >
               <option value="">-- Select --</option>
               {visitorTypes.map((v) => (
@@ -235,17 +246,18 @@ function CreateIntakeForm({ user, onCreated }) {
             </select>
           </div>
 
-          <div>
-            <Label>Others</Label>
-            <input
-              type="text"
-              className={inputCls}
-              disabled={!visitorIsOther}
-              value={form.visitorTypeOther}
-              onChange={(e) => update("visitorTypeOther", e.target.value)}
-              placeholder={visitorIsOther ? "Specify visitor type" : ""}
-            />
-          </div>
+          {visitorIsOther && (
+            <div>
+              <Label required>Others</Label>
+              <input
+                type="text"
+                className={inputCls}
+                value={form.visitorTypeOther}
+                onChange={(e) => update("visitorTypeOther", e.target.value)}
+                placeholder="Specify visitor type"
+              />
+            </div>
+          )}
 
           <div>
             <Label required>Company Name</Label>
@@ -267,27 +279,29 @@ function CreateIntakeForm({ user, onCreated }) {
             />
           </div>
 
-          <div>
-            <Label>Ref Doc No / PO No / Work Order No</Label>
-            <input
-              type="text"
-              className={inputCls}
-              value={form.refDocNo}
-              onChange={(e) => update("refDocNo", e.target.value)}
-              disabled={!form.hasWorkOrder}
-            />
-          </div>
+          {form.hasWorkOrder && (
+            <>
+              <div>
+                <Label required>Ref Doc No / PO No / Work Order No</Label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={form.refDocNo}
+                  onChange={(e) => update("refDocNo", e.target.value)}
+                />
+              </div>
 
-          <div>
-            <Label>Work order copy</Label>
-            <input
-              type="file"
-              accept=".pdf,.png,.jpg,.jpeg"
-              className="block w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
-              onChange={(e) => update("workOrderFile", e.target.files?.[0] || null)}
-              disabled={!form.hasWorkOrder}
-            />
-          </div>
+              <div>
+                <Label>Work order copy</Label>
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  className="block w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+                  onChange={(e) => update("workOrderFile", e.target.files?.[0] || null)}
+                />
+              </div>
+            </>
+          )}
 
           <div>
             <Label>Detail of Equipment/Material</Label>
@@ -380,7 +394,18 @@ function CreateIntakeForm({ user, onCreated }) {
               required
               className={inputCls}
               value={form.purposeOfVisitId}
-              onChange={(e) => update("purposeOfVisitId", e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setForm((s) => {
+                  const t = purposes.find((p) => String(p.id) === String(val));
+                  const isOther = t?.name?.toLowerCase() === "others";
+                  return {
+                    ...s,
+                    purposeOfVisitId: val,
+                    purposeOther: isOther ? s.purposeOther : "",
+                  };
+                });
+              }}
             >
               <option value="">-- Select --</option>
               {purposes.map((p) => (
@@ -391,17 +416,18 @@ function CreateIntakeForm({ user, onCreated }) {
             </select>
           </div>
 
-          <div>
-            <Label>Others</Label>
-            <input
-              type="text"
-              className={inputCls}
-              disabled={!purposeIsOther}
-              value={form.purposeOther}
-              onChange={(e) => update("purposeOther", e.target.value)}
-              placeholder={purposeIsOther ? "Specify purpose" : ""}
-            />
-          </div>
+          {purposeIsOther && (
+            <div>
+              <Label required>Others</Label>
+              <input
+                type="text"
+                className={inputCls}
+                value={form.purposeOther}
+                onChange={(e) => update("purposeOther", e.target.value)}
+                placeholder="Specify purpose"
+              />
+            </div>
+          )}
 
           <div>
             <Label required>Vendor Mobile number</Label>
@@ -435,7 +461,11 @@ function CreateIntakeForm({ user, onCreated }) {
                   name="hasWorkOrder"
                   className="accent-orange-500"
                   checked={form.hasWorkOrder === false}
-                  onChange={() => update("hasWorkOrder", false)}
+                  onChange={() => {
+                    update("hasWorkOrder", false);
+                    update("refDocNo", "");
+                    update("workOrderFile", null);
+                  }}
                 />
                 No
               </label>
