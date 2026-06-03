@@ -556,100 +556,161 @@ export default function TrafficPassesPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 font-sans relative">
-      <header className="bg-white/80 backdrop-blur-lg rounded-xl p-6 flex items-center justify-between shadow-sm border border-slate-200">
-        <div className="flex items-center gap-4">
-          <div className="bg-orange-100 p-3 rounded-xl">
-            <ShieldCheck className="h-6 w-6 text-[#ff6b00]" />
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 font-sans relative">
+      {/* ── Stat cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 lg:gap-4 shrink-0">
+        {/* Total */}
+        <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-slate-200/60 dark:ring-white/5 shadow-lg flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Total Passes</span>
+            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800">
+              <Users className="h-4 w-4 text-slate-600 dark:text-slate-300" strokeWidth={2.5} />
+            </span>
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-[#0a1e4d]">
-              Pass Approvals
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
-              Review and authorize personnel and vehicle entry passes
-            </p>
-          </div>
-        </div>
-      </header>
-
-      {/* TABS, SEARCH & SORT */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-2 mt-4">
-        <div className="flex gap-4">
-          <button
-            onClick={() => handleCardClick("pending", "ALL")}
-            className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "pending" ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"}`}
-          >
-            Pending Approvals ({pendingPasses.length})
-          </button>
-          <button
-            onClick={() => handleCardClick("processed", "ALL")}
-            className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "processed" && cardFilter === "ALL" ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"}`}
-          >
-            All Processed ({processedPasses.length})
-          </button>
+          <p className="text-3xl font-extrabold text-[#0a1e4d] dark:text-stone-100 tabular-nums">{requests.length}</p>
         </div>
 
-        <div className="flex flex-col md:flex-row w-full md:w-auto gap-3 items-center">
-          <div className="relative w-full md:w-auto">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="w-full md:w-auto pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600 focus:outline-none focus:border-[#ff6b00] appearance-none cursor-pointer"
-            >
-              <option value="DATE_DESC">Newest First</option>
-              <option value="DATE_ASC">Oldest First</option>
-              <option value="EXPIRY_SOON">Expiring Soon</option>
-            </select>
+        {/* Pending */}
+        <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-amber-200/60 dark:ring-amber-500/10 shadow-lg flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">Pending</span>
+            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-50 dark:bg-amber-500/10">
+              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" strokeWidth={2.5} />
+            </span>
           </div>
+          <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-300 tabular-nums">{pendingPasses.length}</p>
+        </div>
 
-          <div className="relative w-full md:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-            <input
-              type="text"
-              placeholder="Search Ref ID, Name, Reg No..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
-              className="w-full pl-9 pr-10 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-[#ff6b00] focus:ring-1 focus:ring-[#ff6b00]"
-            />
-            {searchInput && (
-              <button
-                onClick={() => setSearchInput("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 transition-colors"
-                title="Clear Search"
-              >
-                <XCircle className="h-5 w-5" />
-              </button>
-            )}
+        {/* Processed */}
+        <div className="col-span-2 sm:col-span-1 bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-emerald-200/60 dark:ring-emerald-500/10 shadow-lg flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Processed</span>
+            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-emerald-50 dark:bg-emerald-500/10">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
+            </span>
           </div>
+          <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-300 tabular-nums">{processedPasses.length}</p>
         </div>
       </div>
 
-      {/* MAIN DATA TABLE */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      {/* ── Page header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-extrabold text-[#0a1e4d] dark:text-stone-100 tracking-tight flex items-center gap-2">
+            <ShieldCheck className="h-6 w-6 text-[#ff6b00]" strokeWidth={2.5} />
+            Pass Approvals
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-stone-400 mt-0.5">
+            Review and authorize personnel and vehicle entry passes
+          </p>
+        </div>
+        <button
+          onClick={fetchPassRequests}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0a1e4d] hover:bg-blue-900 text-white text-sm font-bold shadow hover:opacity-90 active:scale-95 transition-all"
+        >
+          <RefreshCw className="h-4 w-4" strokeWidth={2.5} />
+          Refresh
+        </button>
+      </div>
+
+      {/* ── Tabs ── */}
+      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-0">
+        {[
+          { id: "pending", label: "Pending Approvals", count: pendingPasses.length },
+          { id: "processed", label: "Processed Passes", count: processedPasses.length },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              setActiveTab(tab.id);
+              setCardFilter("ALL");
+              setSearchInput("");
+            }}
+            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${
+              activeTab === tab.id
+                ? "bg-[#0a1e4d] text-white shadow"
+                : "text-slate-500 hover:text-[#0a1e4d] hover:bg-slate-100"
+            }`}
+          >
+            {tab.label}
+            <span className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
+              activeTab === tab.id ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
+            }`}>
+              {tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* ── Table card ── */}
+      <div className="bg-white dark:bg-[#1e293b] rounded-2xl ring-1 ring-slate-200/60 dark:ring-white/5 shadow-xl overflow-hidden">
+        {/* Table toolbar */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/60 dark:bg-slate-800/30">
+          <h3 className="font-bold text-slate-800 dark:text-stone-100 uppercase text-xs tracking-widest flex items-center gap-2">
+            {activeTab === "pending" ? (
+              <>
+                <ShieldAlert className="h-4 w-4 text-[#ff6b00]" /> Awaiting Review
+              </>
+            ) : (
+              <>
+                <History className="h-4 w-4 text-emerald-500" /> Processed Passes
+              </>
+            )}
+          </h3>
+
+          <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 items-center">
+            <div className="relative w-full md:w-auto">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full md:w-auto pl-9 pr-8 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 focus:outline-none focus:border-[#ff6b00] appearance-none cursor-pointer"
+              >
+                <option value="DATE_DESC">Newest First</option>
+                <option value="DATE_ASC">Oldest First</option>
+                <option value="EXPIRY_SOON">Expiring Soon</option>
+              </select>
+            </div>
+
+            <div className="relative w-full md:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+              <input
+                type="text"
+                placeholder="Search Ref ID, Name, Reg No..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
+                className="w-full pl-9 pr-10 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#ff6b00]"
+              />
+              {searchInput && (
+                <button
+                  onClick={() => setSearchInput("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 transition-colors"
+                  title="Clear Search"
+                >
+                  <XCircle className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-slate-50/50 border-b border-slate-100">
-              <tr>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Reference
-                </th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Company
-                </th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Entities
-                </th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Applied On
-                </th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">
-                  Action
-                </th>
+            <thead>
+              <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
+                {["Ref No", "Company Details", "Entities Included", "Applied On", "Status"].map((h) => (
+                  <th
+                    key={h}
+                    className={`px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${
+                      h === "Status" ? "text-center" : ""
+                    }`}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-700/30">
               {loading ? (
                 <tr>
                   <td colSpan="5" className="py-16 text-center text-slate-500">
@@ -667,41 +728,54 @@ export default function TrafficPassesPage() {
                   </td>
                 </tr>
               ) : (
-                filteredData.map((pass) => (
-                  <tr
-                    key={pass.originType === "VENDOR" ? `vpr-${pass.id}` : pass.id}
-                    onClick={() =>
-                      openReviewModal(pass, activeTab === "processed")
-                    }
-                    className="hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d]">
-                      {pass.referenceNo || `REQ-${pass.id}`}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-700">
-                      {pass.entityName || "N/A"}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200">
-                        {pass.persons?.length || 0} Persons
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">
-                      {new Date(pass.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span
-                        className={`px-3 py-1 rounded-full text-[11px] font-bold border ${pass.status === "PROCESSED" ||
-                          pass.status === "APPROVED"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-red-50 text-red-700 border-red-200"
-                          }`}
-                      >
-                        {pass.status.toUpperCase()}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                filteredData.map((pass) => {
+                  const statusColors = {
+                    approved: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
+                    processed: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
+                    reverted: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
+                    rejected: "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
+                  };
+                  const statusKey = (pass.status || "").toLowerCase();
+                  const statusClass = statusColors[statusKey] || "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+                  
+                  return (
+                    <tr
+                      key={pass.originType === "VENDOR" ? `vpr-${pass.id}` : pass.id}
+                      onClick={() =>
+                        openReviewModal(pass, activeTab === "processed")
+                      }
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group"
+                    >
+                      <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d] dark:text-stone-200 font-mono">
+                        {pass.referenceNo || `REQ-${pass.id}`}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-300 to-orange-400 dark:from-amber-400 dark:to-orange-500 flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0">
+                            {(pass.entityName || "?").charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-slate-800 dark:text-stone-100">{pass.entityName || "—"}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">{pass.email || "—"}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200 dark:border-blue-500/20">
+                          {pass.persons?.length || 0} Persons | {pass.vehicles?.length || 0} Vehicles
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
+                        {new Date(pass.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}>
+                          {(pass.status || "PENDING").toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

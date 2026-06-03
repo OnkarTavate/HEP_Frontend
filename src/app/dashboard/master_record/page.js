@@ -30,6 +30,15 @@ const DetailItem = ({ label, value, highlight = false }) => (
   </div>
 );
 
+// Helper: Mask Aadhar to show only last 4 digits (e.g. "XXXX XXXX 1234")
+const maskAadhar = (aadhar) => {
+  if (!aadhar) return "N/A";
+  const cleaned = aadhar.replace(/\s+/g, "");
+  if (cleaned.length <= 4) return aadhar;
+  const last4 = cleaned.slice(-4);
+  return `XXXX XXXX ${last4}`;
+};
+
 export default function MasterRecordsPage() {
   const [activeTab, setActiveTab] = useState("personnel");
   const [searchQuery, setSearchQuery] = useState("");
@@ -364,15 +373,15 @@ export default function MasterRecordsPage() {
                         <p className="text-sm font-bold text-[#0a1e4d]">
                           {p.name}
                         </p>
-                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                          MASTER ID: {p.id}
+                        <p className="text-[10px] font-semibold text-slate-500 mt-0.5 font-mono">
+                          {maskAadhar(p.aadhar)}
                         </p>
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-slate-700 border-r border-slate-100">
                         {p.designation}
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 font-mono">
-                        {p.aadhar}
+                        {maskAadhar(p.aadhar)}
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
                         {p.phone}
@@ -623,8 +632,8 @@ export default function MasterRecordsPage() {
                         value={
                           selectedRecord.insuranceExpiry
                             ? new Date(
-                                selectedRecord.insuranceExpiry,
-                              ).toLocaleDateString()
+                              selectedRecord.insuranceExpiry,
+                            ).toLocaleDateString()
                             : ""
                         }
                       />
@@ -633,8 +642,8 @@ export default function MasterRecordsPage() {
                         value={
                           selectedRecord.rcValidity
                             ? new Date(
-                                selectedRecord.rcValidity,
-                              ).toLocaleDateString()
+                              selectedRecord.rcValidity,
+                            ).toLocaleDateString()
                             : ""
                         }
                       />

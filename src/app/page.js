@@ -637,6 +637,13 @@ const LoginPage = () => {
                       </div>
                     </div>
 
+                    {/* Mobile-only Greeting */}
+                    <div className="md:hidden text-center mb-4">
+                      <h2 className="text-2xl font-bold text-orange-600">
+                        Hello,<br />ChennaiPort User
+                      </h2>
+                    </div>
+
                     {authMode === "signin" ? (
                       <div
                         key="signin-panel"
@@ -902,7 +909,7 @@ const LoginPage = () => {
                   }}
                 >
                   <h2 className="text-2xl lg:text-3xl font-bold mb-3">
-                    Hello,ChennaiPort User
+                    Hello,<br />ChennaiPort User
                   </h2>
                   <p className="text-sm leading-relaxed opacity-95 max-w-[280px] mb-6">
                     Register with your personal details to use all site features

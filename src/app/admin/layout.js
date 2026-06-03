@@ -234,9 +234,12 @@ export default function AdminLayout({ children }) {
     );
   }
 
+  const isAdmin = user && (user.role?.toLowerCase() === "admin" || user.role?.toLowerCase() === "administrator");
+  const consoleHref = isAdmin ? "/admin" : "/admin/vendor_pass";
+
   // Strictly Admin Navigation Items
   const navigationItems = [
-    { name: "Admin Console", href: "/admin", icon: ShieldCheck },
+    { name: isAdmin ? "Admin Console" : "Vendor Pass", href: consoleHref, icon: ShieldCheck },
     { name: "Pass Approvals", href: "/admin/pass-approvals", icon: FileText },
     { name: "Company Approvals", href: "/admin/companies", icon: Building2 },
     { name: "All Passes", href: "/admin/all-passes", icon: FileText },
@@ -246,7 +249,7 @@ export default function AdminLayout({ children }) {
     <div className="flex flex-col h-full bg-white">
       {/* Logo Section */}
       <div className="p-6 border-b border-orange-100">
-        <Link href="/admin" className="flex items-center gap-3 group">
+        <Link href={consoleHref} className="flex items-center gap-3 group">
           <div className="relative flex items-center justify-center w-11 h-11 rounded-xl gradient-orange shadow-lg shadow-orange-600/20">
             <Ship className="h-6 w-6 text-white" />
           </div>
@@ -332,7 +335,7 @@ export default function AdminLayout({ children }) {
         {/* Brand row */}
         <div className={cn("flex items-center", expanded ? "justify-between" : "justify-center")}>
           <Link
-            href="/admin"
+            href={consoleHref}
             className="flex items-center gap-3 group"
             onClick={onNavigate}
           >
