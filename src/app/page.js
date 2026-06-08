@@ -406,6 +406,8 @@ const LoginPage = () => {
 
         if (role === "admin" || role === "administrator") {
           router.push("/admin");
+        } else if (role === "atm") {
+          router.push("/atm_dashboard");
         } else if (role === "approval" && TRAFFIC_DEPT_IDS.includes(deptId)) {
           router.push("/traffic_approval");
         } else if (role === "approval" && deptId === MARINE_DEPT_ID) {
