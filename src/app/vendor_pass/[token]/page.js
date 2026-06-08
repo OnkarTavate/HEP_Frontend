@@ -381,7 +381,6 @@ export default function VendorPassPublicPage() {
     hepTypes: [
       { id: 1, name: "Drivers" },
       { id: 2, name: "Personnel" },
-      { id: 3, name: "Seafarers" },
     ],
     purposes: [
       { id: 1, name: "Inspection" },
@@ -1804,17 +1803,6 @@ export default function VendorPassPublicPage() {
               )}
               {intake?.paymentMode !== "FREE" && (
               <div className="flex justify-center items-center gap-8 py-4">
-                <label className="flex items-center gap-2 cursor-pointer text-sm font-black text-slate-700 hover:text-orange-600 transition-colors">
-                  <input
-                    type="radio"
-                    name="paymentMode"
-                    value="Account"
-                    checked={paymentMode === "Account"}
-                    onChange={(e) => setPaymentMode(e.target.value)}
-                    className="w-4 h-4 text-orange-600 focus:ring-orange-500 cursor-pointer"
-                  />
-                  ACCOUNT
-                </label>
                 <label className="flex items-center gap-2 cursor-pointer text-sm font-black text-slate-700 hover:text-orange-600 transition-colors">
                   <input
                     type="radio"

@@ -166,7 +166,6 @@ export default function VendorPassApprovedPage() {
     hepTypes: [
       { id: 1, name: "Drivers" },
       { id: 2, name: "Personnel" },
-      { id: 3, name: "Seafarers" },
     ],
     purposes: [
       { id: 1, name: "Inspection" },
@@ -253,7 +252,7 @@ export default function VendorPassApprovedPage() {
     amount: 25.5,
   };
   const [vehicleForm, setVehicleForm] = useState(initialVehicleForm);
-  
+
   const validatePersonField = (field, value, extra = {}) => {
     const err = getValidationError(field, value, extra);
     setPersonErrors((prev) => ({ ...prev, [field]: err }));
@@ -265,7 +264,7 @@ export default function VendorPassApprovedPage() {
     setVehicleErrors((prev) => ({ ...prev, [field]: err }));
     return !err;
   };
-  
+
   const toggleModal = (modalName, state) => {
     setModals({ ...modals, [modalName]: state });
     if (!state) {
@@ -279,9 +278,9 @@ export default function VendorPassApprovedPage() {
       }
     }
   };
-  
+
   const inputClass = "w-full h-10 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm bg-white outline-none transition-all";
-  
+
   const FileUploadBox = ({
     label,
     isRequired,
@@ -360,8 +359,8 @@ export default function VendorPassApprovedPage() {
         />
         <div
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${file
-              ? "border-orange-300 bg-orange-50"
-              : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
+            ? "border-orange-300 bg-orange-50"
+            : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
             } transition-colors`}
         >
           <Upload
@@ -380,14 +379,14 @@ export default function VendorPassApprovedPage() {
       </div>
     </div>
   );
-  
+
   const handleAddPerson = () => { handleSaveRevertedEntity(); };
   const handleAddVehicle = () => { handleSaveRevertedEntity(); };
   const handleClearPerson = () => {
     setPersonForm(initialPersonForm);
     setPersonErrors({});
   };
-  
+
   const handleHepTypeChange = (e) => {
     const selectedType = String(e.target.value);
     if (selectedType === "1") {
@@ -406,7 +405,7 @@ export default function VendorPassApprovedPage() {
       });
     }
   };
-  
+
   const getFilteredDesignations = () => {
     return masterData.designations || [];
   };
@@ -416,7 +415,7 @@ export default function VendorPassApprovedPage() {
     fetchVendorPassData();
     fetchMasterData();
   }, [vendorPassId]);
-  
+
   const fetchMasterData = async () => {
     try {
       const [natRes, passRes, idRes, accessRes, vehRes, desigRes] = await Promise.all([
@@ -472,7 +471,7 @@ export default function VendorPassApprovedPage() {
     setEditingRevertedEntity(null);
   };
 
-  
+
   const handleEditEntity = (type, index, entity) => {
     // Close the reverted edit modal first
     setRevertedEditModal(false);
@@ -493,9 +492,9 @@ export default function VendorPassApprovedPage() {
       };
 
       const nationalityId = resolveId(masterData.nationalities, entity.nationality, entity.nationality === 'FOREIGNER' ? '2' : '1');
-      const accessAreaId  = resolveId(masterData.accessAreas,   entity.accessAreaId, '');
-      const idProofTypeId = resolveId(masterData.idProofTypes,  entity.idProofType,  entity.idProofType || '');
-      const passTypeId    = resolveId(masterData.passTypes,     entity.passType,     entity.passType || '1');
+      const accessAreaId = resolveId(masterData.accessAreas, entity.accessAreaId, '');
+      const idProofTypeId = resolveId(masterData.idProofTypes, entity.idProofType, entity.idProofType || '');
+      const passTypeId = resolveId(masterData.passTypes, entity.passType, entity.passType || '1');
 
       setPersonForm({
         ...initialPersonForm,
@@ -566,9 +565,9 @@ export default function VendorPassApprovedPage() {
         return found ? String(found.id || found.value) : fallback;
       };
 
-      const accessAreaId  = resolveId(masterData.accessAreas,  entity.accessAreaId, '');
+      const accessAreaId = resolveId(masterData.accessAreas, entity.accessAreaId, '');
       const vehicleTypeId = resolveId(masterData.vehicleTypes, entity.vehicleTypeId, entity.vehicleTypeId || '');
-      const passTypeId    = resolveId(masterData.passTypes,    entity.passType,      entity.passType || '1');
+      const passTypeId = resolveId(masterData.passTypes, entity.passType, entity.passType || '1');
 
       const toDateOnly = (val) => {
         if (!val) return '';
@@ -648,7 +647,7 @@ export default function VendorPassApprovedPage() {
     setSubmitLoading(false);
   };
 
-  
+
   const handleSaveRevertedEntity = async () => {
     if (!editingRevertedEntity) return;
 
@@ -795,7 +794,7 @@ export default function VendorPassApprovedPage() {
         const person = revertedPersons[i];
         if (person.status === 'updated') {
           const formData = new FormData();
-          
+
           // Append text fields
           formData.append('name', person.name || '');
           formData.append('mobile', person.mobile || '');
@@ -822,7 +821,7 @@ export default function VendorPassApprovedPage() {
           formData.append('seafarerIdType', person.seafarerIdType || '');
           formData.append('withTwoWheeler', person.withTwoWheeler ? 'true' : 'false');
           formData.append('vehicleNo', person.vehicleNo || '');
-          
+
           formData.append('photoFileName', person.photoFileName || '');
           formData.append('aadharPDFFileName', person.aadharPDFFileName || '');
           formData.append('driverLicenseName', person.driverLicenseName || '');
@@ -1511,31 +1510,27 @@ export default function VendorPassApprovedPage() {
                     {revertedPersons.map((person, idx) => (
                       <div
                         key={person.id || idx}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          person.status === 'updated'
-                            ? 'bg-green-50 border-green-300'
-                            : 'bg-white border-amber-300'
-                        }`}
+                        className={`p-4 rounded-xl border-2 transition-all ${person.status === 'updated'
+                          ? 'bg-green-50 border-green-300'
+                          : 'bg-white border-amber-300'
+                          }`}
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              person.status === 'updated' ? 'bg-green-100' : 'bg-amber-100'
-                            }`}>
-                              <User className={`h-5 w-5 ${
-                                person.status === 'updated' ? 'text-green-600' : 'text-amber-600'
-                              }`} />
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${person.status === 'updated' ? 'bg-green-100' : 'bg-amber-100'
+                              }`}>
+                              <User className={`h-5 w-5 ${person.status === 'updated' ? 'text-green-600' : 'text-amber-600'
+                                }`} />
                             </div>
                             <div>
                               <p className="font-semibold text-slate-800">{person.name || 'Person'}</p>
                               <p className="text-xs text-slate-500 font-mono">{person.aadharNo || ''}</p>
                             </div>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            person.status === 'updated'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-amber-100 text-amber-700'
-                          }`}>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${person.status === 'updated'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-amber-100 text-amber-700'
+                            }`}>
                             {person.status === 'updated' ? 'Updated ✓' : 'Needs Update'}
                           </span>
                         </div>
@@ -1584,31 +1579,27 @@ export default function VendorPassApprovedPage() {
                     {revertedVehicles.map((vehicle, idx) => (
                       <div
                         key={vehicle.id || idx}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          vehicle.status === 'updated'
-                            ? 'bg-green-50 border-green-300'
-                            : 'bg-white border-amber-300'
-                        }`}
+                        className={`p-4 rounded-xl border-2 transition-all ${vehicle.status === 'updated'
+                          ? 'bg-green-50 border-green-300'
+                          : 'bg-white border-amber-300'
+                          }`}
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              vehicle.status === 'updated' ? 'bg-green-100' : 'bg-amber-100'
-                            }`}>
-                              <Car className={`h-5 w-5 ${
-                                vehicle.status === 'updated' ? 'text-green-600' : 'text-amber-600'
-                              }`} />
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${vehicle.status === 'updated' ? 'bg-green-100' : 'bg-amber-100'
+                              }`}>
+                              <Car className={`h-5 w-5 ${vehicle.status === 'updated' ? 'text-green-600' : 'text-amber-600'
+                                }`} />
                             </div>
                             <div>
                               <p className="font-semibold text-slate-800">{vehicle.registrationNo || vehicle.regNo || 'Vehicle'}</p>
                               <p className="text-xs text-slate-500">{vehicle.vehicleType || ''}</p>
                             </div>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            vehicle.status === 'updated'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-amber-100 text-amber-700'
-                          }`}>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${vehicle.status === 'updated'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-amber-100 text-amber-700'
+                            }`}>
                             {vehicle.status === 'updated' ? 'Updated ✓' : 'Needs Update'}
                           </span>
                         </div>
@@ -1648,16 +1639,16 @@ export default function VendorPassApprovedPage() {
 
               {/* All Updated Message */}
               {revertedPersons.length + revertedVehicles.length > 0 &&
-               revertedPersons.every(p => p.status === 'updated') &&
-               revertedVehicles.every(v => v.status === 'updated') && (
-                <div className="bg-green-50 border border-green-200 p-4 rounded-xl flex items-center gap-3 mb-2">
-                  <CheckCircle2 className="h-6 w-6 text-green-600" />
-                  <div>
-                    <p className="font-semibold text-green-800">All entities updated!</p>
-                    <p className="text-sm text-green-700">You can now resubmit your pass for approval.</p>
+                revertedPersons.every(p => p.status === 'updated') &&
+                revertedVehicles.every(v => v.status === 'updated') && (
+                  <div className="bg-green-50 border border-green-200 p-4 rounded-xl flex items-center gap-3 mb-2">
+                    <CheckCircle2 className="h-6 w-6 text-green-600" />
+                    <div>
+                      <p className="font-semibold text-green-800">All entities updated!</p>
+                      <p className="text-sm text-green-700">You can now resubmit your pass for approval.</p>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
 
             {/* Footer */}
@@ -1675,13 +1666,12 @@ export default function VendorPassApprovedPage() {
                   revertedPersons.some(p => p.status !== 'updated') ||
                   revertedVehicles.some(v => v.status !== 'updated')
                 }
-                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${
-                  submitLoading ||
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${submitLoading ||
                   revertedPersons.some(p => p.status !== 'updated') ||
                   revertedVehicles.some(v => v.status !== 'updated')
-                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                    : 'bg-amber-500 hover:bg-amber-600 text-white'
-                }`}
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                  : 'bg-amber-500 hover:bg-amber-600 text-white'
+                  }`}
               >
                 {submitLoading ? (
                   <><Loader2 className="h-4 w-4 animate-spin" /> Resubmitting...</>
@@ -1693,7 +1683,7 @@ export default function VendorPassApprovedPage() {
           </div>
         </div>
       )}
-    
+
       {/* PERSON MODAL */}
       {modals.person && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
@@ -1790,8 +1780,8 @@ export default function VendorPassApprovedPage() {
                           }
                         }}
                         className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${personErrors.seafarerIdType
-                            ? "border-red-400 bg-red-50"
-                            : "border-slate-300 bg-white"
+                          ? "border-red-400 bg-red-50"
+                          : "border-slate-300 bg-white"
                           }`}
                       >
                         <option value="">-- Select ID Type --</option>
@@ -1827,8 +1817,8 @@ export default function VendorPassApprovedPage() {
                             }
                           }}
                           className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none transition-all ${personErrors.aadharNo
-                              ? "border-red-400 bg-red-50"
-                              : "border-slate-300 bg-white"
+                            ? "border-red-400 bg-red-50"
+                            : "border-slate-300 bg-white"
                             }`}
                           placeholder="XXXX XXXX XXXX"
                           maxLength={12}
@@ -1883,8 +1873,8 @@ export default function VendorPassApprovedPage() {
                             }
                           }}
                           className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${personErrors.passportNo
-                              ? "border-red-400 bg-red-50"
-                              : "border-slate-300 bg-white"
+                            ? "border-red-400 bg-red-50"
+                            : "border-slate-300 bg-white"
                             }`}
                           placeholder="A1234567"
                           maxLength={8}
@@ -1950,8 +1940,8 @@ export default function VendorPassApprovedPage() {
                         type="tel"
                         value={personForm.mobile} // Fixed: Removed URL wrapper
                         className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${personErrors.mobile
-                            ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
-                            : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
+                          ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
+                          : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
                           }`}
                         placeholder="00000 00000"
                         maxLength={10}
@@ -2549,32 +2539,32 @@ export default function VendorPassApprovedPage() {
               </div>
 
               {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(personForm.passType)) && (
-              <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
-                  <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
-                  Mandatory Documents
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  <FileUploadBox
-                    label="Police Verification Certificate"
-                    isRequired
-                    file={personForm.policeVerification}
-                    existingFileName={personForm.existingPoliceName}
-                    onView={() =>
-                      window.open(
-                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=policeVerification&isVendorPass=true&entityIndex=${editingRevertedEntity?.index ?? 0}`,
-                        "_blank",
-                      )
-                    }
-                    onChange={(e) =>
-                      setPersonForm({
-                        ...personForm,
-                        policeVerification: e.target.files[0],
-                      })
-                    }
-                  />
+                <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
+                    <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
+                    Mandatory Documents
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <FileUploadBox
+                      label="Police Verification Certificate"
+                      isRequired
+                      file={personForm.policeVerification}
+                      existingFileName={personForm.existingPoliceName}
+                      onView={() =>
+                        window.open(
+                          `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=policeVerification&isVendorPass=true&entityIndex=${editingRevertedEntity?.index ?? 0}`,
+                          "_blank",
+                        )
+                      }
+                      onChange={(e) =>
+                        setPersonForm({
+                          ...personForm,
+                          policeVerification: e.target.files[0],
+                        })
+                      }
+                    />
+                  </div>
                 </div>
-              </div>
               )}
             </div>
 
@@ -2996,6 +2986,6 @@ export default function VendorPassApprovedPage() {
           </div>
         </div>
       )}
-</div>
+    </div>
   );
 }
