@@ -2942,32 +2942,56 @@ export default function PassRequestPage() {
                         <label className="text-xs font-bold text-slate-700 uppercase">
                           Aadhaar No. <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="text"
-                          value={personForm.aadharNo}
-                          onChange={(e) => {
-                            const val = e.target.value
-                              .replace(/\D/g, "")
-                              .slice(0, 12);
-                            setPersonForm({ ...personForm, aadharNo: val });
-                            // Clear error on change
-                            if (personErrors.aadharNo) {
-                              setPersonErrors((prev) => ({ ...prev, aadharNo: null }));
-                            }
-                          }}
-                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none transition-all ${personErrors.aadharNo
-                              ? "border-red-400 bg-red-50"
-                              : "border-slate-300 bg-white"
-                            }`}
-                          placeholder="XXXX XXXX XXXX"
-                          maxLength={12}
-                          inputMode="numeric"
-                        />
-                        {personErrors.aadharNo && (
-                          <p className="text-xs text-red-500 mt-0.5 font-medium">
-                            {personErrors.aadharNo}
-                          </p>
-                        )}
+                        {(() => {
+                          const hasVal = !!personForm.aadharNo.trim();
+                          const isValid = /^\d{12}$/.test(personForm.aadharNo);
+                          const hasError = !!personErrors.aadharNo;
+                          
+                          let customBorderClass = "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
+                          if (hasVal) {
+                            customBorderClass = (hasError || !isValid)
+                              ? "border-red-400 focus:ring-red-500/20 focus:border-red-400"
+                              : "border-emerald-500 focus:ring-emerald-500/20 focus:border-emerald-500";
+                          }
+                          
+                          return (
+                            <>
+                              <input
+                                type="text"
+                                value={personForm.aadharNo}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                    .replace(/\D/g, "")
+                                    .slice(0, 12);
+                                  setPersonForm({ ...personForm, aadharNo: val });
+                                  if (val.length === 12) {
+                                    validatePersonField("aadharNo", val);
+                                  }
+                                }}
+                                onBlur={(e) => validatePersonField("aadharNo", e.target.value)}
+                                className={`w-full h-10 border rounded-lg text-sm px-3 shadow-sm outline-none transition-all focus:ring-2 ${customBorderClass}`}
+                                placeholder="XXXX XXXX XXXX"
+                                maxLength={12}
+                                inputMode="numeric"
+                              />
+                              {hasVal && (
+                                <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all animate-in fade-in duration-200">
+                                  {(hasError || !isValid) ? (
+                                    <>
+                                      <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                      <span className="text-red-500">Aadhaar must be exactly 12 digits</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                      <span className="text-emerald-600">Valid Aadhaar format</span>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700 uppercase">
@@ -3273,51 +3297,71 @@ export default function PassRequestPage() {
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       With Two wheeler
                     </label>
-                    <div className="flex h-10 shadow-sm rounded-lg overflow-hidden border border-slate-300 focus-within:ring-2 focus-within:ring-orange-500/30 focus-within:border-orange-500 transition-all">
-                      <div className="border-r border-slate-300 flex items-center justify-center px-4 bg-slate-50">
-                        <input
-                          type="checkbox"
-                          checked={personForm.withTwoWheeler}
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              withTwoWheeler: e.target.checked,
-                            })
-                          }
-                          className="rounded text-[#0a1e4d] focus:ring-[#0a1e4d] h-4 w-4 cursor-pointer"
-                        />
+                    {(() => {
+                      const hasVal = !!personForm.vehicleNo.trim();
+                      const isTwoWheeler = personForm.withTwoWheeler;
+                      const hasError = !!personErrors.vehicleNo;
+                      
+                      let containerClass = "border-slate-300 focus-within:ring-2 focus-within:ring-orange-500/30 focus-within:border-orange-500";
+                      if (isTwoWheeler && hasVal) {
+                        containerClass = hasError
+                          ? "border-red-400 focus-within:ring-2 focus-within:ring-red-500/20 focus-within:border-red-400"
+                          : "border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500";
+                      }
+                      
+                      return (
+                        <div className={`flex h-10 shadow-sm rounded-lg overflow-hidden border transition-all ${containerClass}`}>
+                          <div className="border-r border-slate-300 flex items-center justify-center px-4 bg-slate-50">
+                            <input
+                              type="checkbox"
+                              checked={personForm.withTwoWheeler}
+                              onChange={(e) =>
+                                setPersonForm({
+                                  ...personForm,
+                                  withTwoWheeler: e.target.checked,
+                                })
+                              }
+                              className="rounded text-[#0a1e4d] focus:ring-[#0a1e4d] h-4 w-4 cursor-pointer"
+                            />
+                          </div>
+                          <input
+                            type="text"
+                            value={personForm.vehicleNo}
+                            disabled={!personForm.withTwoWheeler}
+                            placeholder="Vehicle No (e.g. TN-01-AB-1234)"
+                            className="w-full text-sm disabled:bg-slate-100 disabled:cursor-not-allowed px-3 outline-none uppercase font-bold text-[#0a1e4d]"
+                            onBlur={(e) => {
+                              if (personForm.withTwoWheeler)
+                                validatePersonField("vehicleNo", e.target.value);
+                            }}
+                            onChange={(e) => {
+                              const val = e.target.value.toUpperCase().slice(0, 13);
+                              setPersonForm({
+                                ...personForm,
+                                vehicleNo: val,
+                              });
+                              if (personForm.withTwoWheeler && val.length >= 8) {
+                                validatePersonField("vehicleNo", val);
+                              }
+                            }}
+                          />
+                        </div>
+                      );
+                    })()}
+                    {personForm.withTwoWheeler && personForm.vehicleNo.trim() && (
+                      <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all">
+                        {personErrors.vehicleNo ? (
+                          <>
+                            <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                            <span className="text-red-500">{personErrors.vehicleNo}</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                            <span className="text-emerald-600">Valid vehicle registration format</span>
+                          </>
+                        )}
                       </div>
-                      <input
-                        type="text"
-                        value={personForm.vehicleNo}
-                        disabled={!personForm.withTwoWheeler}
-                        placeholder="Vehicle No (e.g. TN01AB1234)"
-                        className="w-full text-sm disabled:bg-slate-100 disabled:cursor-not-allowed px-3 outline-none uppercase font-bold text-[#0a1e4d]"
-                        onBlur={(e) => {
-                          if (personForm.withTwoWheeler)
-                            validatePersonField("vehicleNo", e.target.value);
-                        }}
-                        // Combined single onChange handler
-                        onChange={(e) => {
-                          const val = e.target.value.toUpperCase().slice(0, 13);
-
-                          // Update the form state
-                          setPersonForm({
-                            ...personForm,
-                            vehicleNo: val,
-                          });
-
-                          // Run validation if applicable
-                          if (personForm.withTwoWheeler && val.length >= 8) {
-                            validatePersonField("vehicleNo", val);
-                          }
-                        }}
-                      />
-                    </div>
-                    {personErrors.vehicleNo && personForm.withTwoWheeler && (
-                      <p className="text-xs text-red-500 mt-1 font-medium">
-                        {personErrors.vehicleNo}
-                      </p>
                     )}
                   </div>
                   <div className="space-y-1.5">
@@ -3966,26 +4010,54 @@ export default function PassRequestPage() {
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Registration No. <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      value={vehicleForm.regNo}
-                      onChange={(e) => {
-                        const val = e.target.value.toUpperCase().slice(0, 13);
-                        setVehicleForm({ ...vehicleForm, regNo: val });
-                        if (val.length >= 8) validateVehicleField("regNo", val);
-                      }}
-                      onBlur={(e) =>
-                        validateVehicleField("regNo", e.target.value)
+                    {(() => {
+                      const hasVal = !!vehicleForm.regNo.trim();
+                      const hasError = !!vehicleErrors.regNo;
+                      
+                      let customBorderClass = "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
+                      if (hasVal) {
+                        customBorderClass = hasError
+                          ? "border-red-400 focus:border-red-500 focus:ring-red-500/20"
+                          : "border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/20";
                       }
-                      className={`${inputClass} uppercase font-bold text-[#0a1e4d] tracking-wider ${vehicleErrors.regNo ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                      placeholder="TN-XX-XX-XXXX"
-                      maxLength={13}
-                    />
-                    {vehicleErrors.regNo && (
-                      <p className="text-xs text-red-500 mt-0.5 font-medium">
-                        {vehicleErrors.regNo}
-                      </p>
-                    )}
+                      
+                      const baseInputClass = "w-full h-10 rounded-lg text-sm px-3 shadow-sm bg-white outline-none transition-all border focus:ring-2";
+                      
+                      return (
+                        <>
+                          <input
+                            type="text"
+                            value={vehicleForm.regNo}
+                            onChange={(e) => {
+                              const val = e.target.value.toUpperCase().slice(0, 13);
+                              setVehicleForm({ ...vehicleForm, regNo: val });
+                              if (val.length >= 8) validateVehicleField("regNo", val);
+                            }}
+                            onBlur={(e) =>
+                              validateVehicleField("regNo", e.target.value)
+                            }
+                            className={`${baseInputClass} ${customBorderClass} uppercase font-bold text-[#0a1e4d] tracking-wider`}
+                            placeholder="TN-XX-XX-XXXX"
+                            maxLength={13}
+                          />
+                          {hasVal && (
+                            <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all">
+                              {hasError ? (
+                                <>
+                                  <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                  <span className="text-red-500">{vehicleErrors.regNo}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                  <span className="text-emerald-600">Valid vehicle registration format</span>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">

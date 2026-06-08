@@ -20,7 +20,6 @@ import {
   XCircle,
   RefreshCw,
   Filter,
-  DollarSign,
   FileText,
   ChevronRight,
   Ban,
@@ -36,6 +35,25 @@ import {
   Wallet,
   Globe,
 } from "lucide-react";
+
+// Inline IndianRupee SVG icon component to match Lucide style
+const IndianRupee = ({ className, ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <path d="M6 3h12M6 8h12M6 13h4a5.5 5.5 0 0 0 0-11M9 13l9 9" />
+  </svg>
+);
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
 
@@ -74,6 +92,26 @@ const PENALTY_STATUS_CONFIG = {
   NOT_APPLICABLE: { color: "text-slate-400", label: "N/A" },
   PENDING: { color: "text-amber-600 font-bold", label: "Pending" },
   PAID: { color: "text-emerald-600 font-bold", label: "Paid" },
+};
+
+const validateVehicleRegNo = (val) => {
+  const clean = val.replace(/\s/g, "");
+  const regex = /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i;
+  return regex.test(clean);
+};
+
+const validateAadhar = (val) => {
+  const clean = val.replace(/\s/g, "");
+  return /^\d{12}$/.test(clean);
+};
+
+const validateDL = (val) => {
+  const clean = val.replace(/[-\s]/g, "");
+  return /^[A-Z]{2}[0-9]{13}$/i.test(clean);
+};
+
+const validateDriverID = (val) => {
+  return validateAadhar(val) || validateDL(val);
 };
 
 /* ─────────── Main Page ─────────── */
@@ -255,6 +293,18 @@ export default function ATMBlacklistPage() {
     e.preventDefault();
     if (!createForm.identifier.trim() || !createForm.reason.trim()) {
       toast.warning("Please fill in all required fields");
+      return;
+    }
+    if (createForm.entity_type === "VEHICLE" && !validateVehicleRegNo(createForm.identifier)) {
+      toast.warning("Please enter a valid Vehicle Registration Number (e.g. TN-01-AB-1234)");
+      return;
+    }
+    if (createForm.entity_type === "PERSON" && !validateAadhar(createForm.identifier)) {
+      toast.warning("Please enter a valid 12-digit Aadhaar Number");
+      return;
+    }
+    if (createForm.entity_type === "DRIVER" && !validateDriverID(createForm.identifier)) {
+      toast.warning("Please enter a valid Driver ID (12-digit Aadhaar or Driving License)");
       return;
     }
     if (createForm.has_penalty && (!createForm.penalty_amount || parseFloat(createForm.penalty_amount) <= 0)) {
@@ -538,7 +588,7 @@ export default function ATMBlacklistPage() {
           {
             label: "Pending Penalties",
             value: stats?.pending_penalties || 0,
-            icon: DollarSign,
+            icon: IndianRupee,
             color: "text-orange-600",
             bgIcon: "bg-orange-50",
             ring: "ring-orange-200/60",
@@ -840,14 +890,72 @@ export default function ATMBlacklistPage() {
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                   {getEntityConfig(createForm.entity_type).idLabel} <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={createForm.identifier}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, identifier: e.target.value.toUpperCase() }))}
-                  placeholder={getEntityConfig(createForm.entity_type).placeholder}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:border-red-400 focus:ring-4 focus:ring-red-500/10 focus:outline-none transition-all"
-                  required
-                />
+                {(() => {
+                  const type = createForm.entity_type;
+                  const hasValue = !!createForm.identifier.trim();
+                  
+                  let isValid = true;
+                  let helperText = "";
+                  let formatText = "";
+                  if (type === "VEHICLE") {
+                    isValid = validateVehicleRegNo(createForm.identifier);
+                    formatText = "Format: TN-01-AB-1234 or TN01AB1234";
+                    helperText = isValid ? "Valid Vehicle Registration format" : "Invalid Vehicle Registration format";
+                  } else if (type === "PERSON") {
+                    isValid = validateAadhar(createForm.identifier);
+                    formatText = "Format: 12-digit Aadhaar Number";
+                    helperText = isValid ? "Valid Aadhaar format" : "Aadhaar must be exactly 12 digits";
+                  } else if (type === "DRIVER") {
+                    isValid = validateDriverID(createForm.identifier);
+                    formatText = "Format: 12-digit Aadhaar or Driving License (e.g. TN0120200001234)";
+                    helperText = isValid ? "Valid Driver ID format" : "Must be a 12-digit Aadhaar or 15-digit Driving License";
+                  }
+
+                  let borderClass = "border-slate-200 focus:border-red-400 focus:ring-red-500/10";
+                  if (hasValue) {
+                    borderClass = isValid 
+                      ? "border-emerald-500 focus:border-emerald-600 focus:ring-emerald-500/10" 
+                      : "border-red-500 focus:border-red-600 focus:ring-red-500/10";
+                  }
+
+                  return (
+                    <>
+                      <input
+                        type="text"
+                        value={createForm.identifier}
+                        onChange={(e) => {
+                          let val = e.target.value;
+                          if (type === "PERSON") {
+                            val = val.replace(/\D/g, "").slice(0, 12);
+                          } else if (type === "VEHICLE") {
+                            val = val.toUpperCase().slice(0, 13);
+                          } else if (type === "DRIVER") {
+                            val = val.toUpperCase().slice(0, 16);
+                          }
+                          setCreateForm((f) => ({ ...f, identifier: val }));
+                        }}
+                        placeholder={getEntityConfig(type).placeholder}
+                        className={`w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none transition-all ${borderClass}`}
+                        required
+                      />
+                      {hasValue && (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-xs font-medium animate-in fade-in duration-200">
+                          {isValid ? (
+                            <>
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                              <span className="text-emerald-600 font-semibold">{helperText}</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle className="h-4 w-4 text-red-500 animate-pulse" />
+                              <span className="text-red-500 font-semibold">{helperText}. {formatText}</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Entity Name */}
@@ -970,7 +1078,7 @@ export default function ATMBlacklistPage() {
                       Penalty Amount (₹) <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <input
                         type="number"
                         min="1"

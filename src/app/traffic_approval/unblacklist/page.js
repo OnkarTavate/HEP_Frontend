@@ -18,7 +18,6 @@ import {
   XCircle,
   RefreshCw,
   Filter,
-  DollarSign,
   FileText,
   Loader2,
   CircleDot,

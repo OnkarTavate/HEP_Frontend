@@ -17,7 +17,6 @@ import {
   XCircle,
   RefreshCw,
   Filter,
-  DollarSign,
   FileText,
   Loader2,
   CircleDot,
@@ -28,6 +27,25 @@ import {
   ArrowRight,
   ClipboardCheck,
 } from "lucide-react";
+
+// Inline IndianRupee SVG icon component to match Lucide style
+const IndianRupee = ({ className, ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <path d="M6 3h12M6 8h12M6 13h4a5.5 5.5 0 0 0 0-11M9 13l9 9" />
+  </svg>
+);
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
 
@@ -671,7 +689,7 @@ export default function TrafficCompanyBlacklistPage() {
                       Penalty Amount (₹) <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <input
                         type="number"
                         min="1"
