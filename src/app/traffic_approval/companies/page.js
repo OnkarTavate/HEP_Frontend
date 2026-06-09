@@ -21,34 +21,45 @@ import {
 } from "lucide-react";
 
 // ── API constants ────────────────────────────────────────────────────────────
-const ADMIN_API  = process.env.NEXT_PUBLIC_ADMIN_API  || "http://localhost:5005/api";
-const AGENT_API  = process.env.NEXT_PUBLIC_AGENT_API  || "http://localhost:5001/api";
+const ADMIN_API =
+  process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
+const AGENT_API =
+  process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
 export default function TrafficCompanyApprovals() {
-  const [requests,        setRequests]        = useState([]);
-  const [loading,         setLoading]         = useState(true);
-  const [searchQuery,     setSearchQuery]     = useState("");
-  const [activeTab,       setActiveTab]       = useState("pending");
-  const [isViewMode,      setIsViewMode]      = useState(false);
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("pending");
+  const [isViewMode, setIsViewMode] = useState(false);
 
   // Modal States
   const [selectedRequest, setSelectedRequest] = useState(null);
-  const [remarks,         setRemarks]         = useState("");
-  const [viewingDocUrl,   setViewingDocUrl]   = useState(null);
-  const [isFullscreen,    setIsFullscreen]    = useState(false);
-  const [iframeLoading,   setIframeLoading]   = useState(true);
-  const [confirmDialog,   setConfirmDialog]   = useState({ isOpen: false, decision: null });
+  const [remarks, setRemarks] = useState("");
+  const [viewingDocUrl, setViewingDocUrl] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [iframeLoading, setIframeLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    decision: null,
+  });
 
-  useEffect(() => { fetchDashboardData(); }, []);
-  useEffect(() => { if (viewingDocUrl) setIframeLoading(true); }, [viewingDocUrl]);
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+  useEffect(() => {
+    if (viewingDocUrl) setIframeLoading(true);
+  }, [viewingDocUrl]);
 
   // ── Data fetching — uses auth token + correct ADMIN_API ──────────────────
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const token    = localStorage.getItem("accessToken");
-      const headers  = token ? { Authorization: `Bearer ${token}` } : {};
-      const response = await axios.get(`${ADMIN_API}/user/agent-users`, { headers });
+      const token = localStorage.getItem("accessToken");
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await axios.get(`${ADMIN_API}/user/agent-users`, {
+        headers,
+      });
 
       if (response.data?.data) {
         setRequests(response.data.data);
@@ -59,7 +70,10 @@ export default function TrafficCompanyApprovals() {
         console.warn("Unexpected response shape:", response.data);
       }
     } catch (error) {
-      console.error("Failed to fetch company requests:", error.response || error.message);
+      console.error(
+        "Failed to fetch company requests:",
+        error.response || error.message,
+      );
       toast.error("Failed to load company data. Check backend connection.");
       setRequests([]);
     } finally {
@@ -70,7 +84,9 @@ export default function TrafficCompanyApprovals() {
   // ── Action helpers ────────────────────────────────────────────────────────
   const handleRevertClick = () => {
     if (!remarks.trim()) {
-      toast.warning("Remarks Required", { description: "Please specify which fields need updating." });
+      toast.warning("Remarks Required", {
+        description: "Please specify which fields need updating.",
+      });
       return;
     }
     setConfirmDialog({ isOpen: true, decision: "reverted" });
@@ -78,7 +94,9 @@ export default function TrafficCompanyApprovals() {
 
   const handleActionClick = (decision) => {
     if (decision === "rejected" && !remarks.trim()) {
-      toast.warning("Remarks Required", { description: "Please provide a reason for rejection." });
+      toast.warning("Remarks Required", {
+        description: "Please provide a reason for rejection.",
+      });
       return;
     }
     setConfirmDialog({ isOpen: true, decision });
@@ -89,19 +107,20 @@ export default function TrafficCompanyApprovals() {
     setConfirmDialog({ isOpen: false, decision: null });
     const loadingToastId = toast.loading(`Processing ${decision} request...`);
     try {
-      const token    = localStorage.getItem("accessToken");
+      const token = localStorage.getItem("accessToken");
       const response = await axios.put(
         `${AGENT_API}/agents/action`,
         {
-          agentId:        selectedRequest.id,
+          agentId: selectedRequest.id,
           decision,
-          rejectedReason: decision === "rejected" || decision === "reverted" ? remarks : null,
+          rejectedReason:
+            decision === "rejected" || decision === "reverted" ? remarks : null,
         },
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (response.data.success) {
         toast.success(`Company ${decision.toUpperCase()}`, {
-          id:          loadingToastId,
+          id: loadingToastId,
           description: "Email notifications have been triggered successfully.",
         });
         setSelectedRequest(null);
@@ -111,17 +130,24 @@ export default function TrafficCompanyApprovals() {
     } catch (error) {
       console.error("Action failed:", error);
       toast.error("Action Failed", {
-        id:          loadingToastId,
-        description: error.response?.data?.message || "Failed to process action.",
+        id: loadingToastId,
+        description:
+          error.response?.data?.message || "Failed to process action.",
       });
     }
   };
 
   // ── Derived data ──────────────────────────────────────────────────────────
-  const pendingRequests   = requests.filter((r) => r.status === "pending"  || !r.status);
-  const processedRequests = requests.filter((r) => ["approved", "rejected", "reverted"].includes(r.status));
+  const pendingRequests = requests.filter(
+    (r) => r.status === "pending" || !r.status,
+  );
+  const processedRequests = requests.filter((r) =>
+    ["approved", "rejected", "reverted"].includes(r.status),
+  );
 
-  const displayedRequests = (activeTab === "pending" ? pendingRequests : processedRequests).filter(
+  const displayedRequests = (
+    activeTab === "pending" ? pendingRequests : processedRequests
+  ).filter(
     (req) =>
       req.referenceNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       req.entityName?.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -134,7 +160,11 @@ export default function TrafficCompanyApprovals() {
         {/* Stat cards skeleton */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-24 rounded-2xl bg-slate-200 dark:bg-slate-800/60 animate-pulse" style={{ animationDelay: `${i * 100}ms` }} />
+            <div
+              key={i}
+              className="h-24 rounded-2xl bg-slate-200 dark:bg-slate-800/60 animate-pulse"
+              style={{ animationDelay: `${i * 100}ms` }}
+            />
           ))}
         </div>
         <div className="h-10 rounded-xl bg-slate-200 dark:bg-slate-800/40 animate-pulse" />
@@ -146,7 +176,9 @@ export default function TrafficCompanyApprovals() {
               <Building2 className="h-4 w-4" strokeWidth={2.5} />
               <span className="absolute inset-0 rounded-xl ring-2 ring-amber-400/60 animate-ping" />
             </span>
-            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200 tracking-wide">Loading company data</span>
+            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200 tracking-wide">
+              Loading company data
+            </span>
             <span className="flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce [animation-delay:-0.3s]" />
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce [animation-delay:-0.15s]" />
@@ -161,40 +193,60 @@ export default function TrafficCompanyApprovals() {
   // ── Main render ────────────────────────────────────────────────────────────
   return (
     <div className="w-full flex flex-col gap-4 lg:gap-5">
-
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 lg:gap-4 shrink-0">
         {/* Total */}
         <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-slate-200/60 dark:ring-white/5 shadow-lg flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Total</span>
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+              Total
+            </span>
             <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800">
-              <Users className="h-4 w-4 text-slate-600 dark:text-slate-300" strokeWidth={2.5} />
+              <Users
+                className="h-4 w-4 text-slate-600 dark:text-slate-300"
+                strokeWidth={2.5}
+              />
             </span>
           </div>
-          <p className="text-3xl font-extrabold text-slate-900 dark:text-stone-100 tabular-nums">{requests.length}</p>
+          <p className="text-3xl font-extrabold text-slate-900 dark:text-stone-100 tabular-nums">
+            {requests.length}
+          </p>
         </div>
 
         {/* Pending */}
         <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-amber-200/60 dark:ring-amber-500/10 shadow-lg flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">Pending</span>
+            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+              Pending
+            </span>
             <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-50 dark:bg-amber-500/10">
-              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" strokeWidth={2.5} />
+              <Clock
+                className="h-4 w-4 text-amber-600 dark:text-amber-400"
+                strokeWidth={2.5}
+              />
             </span>
           </div>
-          <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-300 tabular-nums">{pendingRequests.length}</p>
+          <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-300 tabular-nums">
+            {pendingRequests.length}
+          </p>
         </div>
 
         {/* Processed */}
         <div className="col-span-2 sm:col-span-1 bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-emerald-200/60 dark:ring-emerald-500/10 shadow-lg flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Processed</span>
+            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+              Processed
+            </span>
             <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-emerald-50 dark:bg-emerald-500/10">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
+              <CheckCircle2
+                className="h-4 w-4 text-emerald-600 dark:text-emerald-400"
+                strokeWidth={2.5}
+              />
             </span>
           </div>
-          <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-300 tabular-nums">{processedRequests.length}</p>
+          <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-300 tabular-nums">
+            {processedRequests.length}
+          </p>
         </div>
       </div>
 
@@ -205,7 +257,9 @@ export default function TrafficCompanyApprovals() {
             <Building2 className="h-6 w-6 text-amber-500" strokeWidth={2.5} />
             Company Registration Approvals
           </h2>
-          <p className="text-sm text-slate-500 dark:text-stone-400 mt-0.5">Verify documents and approve new port operators</p>
+          <p className="text-sm text-slate-500 dark:text-stone-400 mt-0.5">
+            Verify documents and approve new port operators
+          </p>
         </div>
         <button
           onClick={fetchDashboardData}
@@ -219,8 +273,12 @@ export default function TrafficCompanyApprovals() {
       {/* ── Tabs ── */}
       <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-0">
         {[
-          { id: "pending",   label: "Pending",   count: pendingRequests.length },
-          { id: "processed", label: "Processed", count: processedRequests.length },
+          { id: "pending", label: "Pending", count: pendingRequests.length },
+          {
+            id: "processed",
+            label: "Processed",
+            count: processedRequests.length,
+          },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -232,9 +290,13 @@ export default function TrafficCompanyApprovals() {
             }`}
           >
             {tab.label}
-            <span className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
-              activeTab === tab.id ? "bg-white/20 text-white dark:bg-black/20 dark:text-slate-900" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-            }`}>
+            <span
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
+                activeTab === tab.id
+                  ? "bg-white/20 text-white dark:bg-black/20 dark:text-slate-900"
+                  : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+              }`}
+            >
               {tab.count}
             </span>
           </button>
@@ -246,9 +308,17 @@ export default function TrafficCompanyApprovals() {
         {/* Table toolbar */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/60 dark:bg-slate-800/30">
           <h3 className="font-bold text-slate-800 dark:text-stone-100 uppercase text-xs tracking-widest flex items-center gap-2">
-            {activeTab === "pending"
-              ? <><ShieldAlert className="h-4 w-4 text-amber-500" /> Awaiting Approval</>
-              : <><History className="h-4 w-4 text-emerald-500" /> Processed Companies</>}
+            {activeTab === "pending" ? (
+              <>
+                <ShieldAlert className="h-4 w-4 text-amber-500" /> Awaiting
+                Approval
+              </>
+            ) : (
+              <>
+                <History className="h-4 w-4 text-emerald-500" /> Processed
+                Companies
+              </>
+            )}
           </h3>
           <div className="relative w-full md:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
@@ -266,8 +336,16 @@ export default function TrafficCompanyApprovals() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
-                {["Ref No", "Company Name", "Operator Type", activeTab === "pending" ? "Action" : "Status"].map((h) => (
-                  <th key={h} className={`px-5 py-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${h === "Action" || h === "Status" ? "text-center" : ""}`}>
+                {[
+                  "Ref No",
+                  "Company Name",
+                  "Operator Type",
+                  activeTab === "pending" ? "Action" : "Status",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className={`px-5 py-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${h === "Action" || h === "Status" ? "text-center" : ""}`}
+                  >
                     {h}
                   </th>
                 ))}
@@ -276,7 +354,10 @@ export default function TrafficCompanyApprovals() {
             <tbody className="divide-y divide-slate-50 dark:divide-slate-700/30">
               {displayedRequests.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="py-16 text-center text-slate-400 dark:text-slate-500">
+                  <td
+                    colSpan="4"
+                    className="py-16 text-center text-slate-400 dark:text-slate-500"
+                  >
                     <Building2 className="h-10 w-10 mx-auto text-slate-200 dark:text-slate-700 mb-3" />
                     <p className="text-sm font-medium">No records found.</p>
                   </td>
@@ -284,15 +365,24 @@ export default function TrafficCompanyApprovals() {
               ) : (
                 displayedRequests.map((req) => {
                   const statusColors = {
-                    approved: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
-                    reverted: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
-                    rejected: "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
+                    approved:
+                      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
+                    reverted:
+                      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
+                    rejected:
+                      "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
                   };
-                  const statusClass = statusColors[req.status] || "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+                  const statusClass =
+                    statusColors[req.status] ||
+                    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
                   return (
                     <tr
                       key={req.id}
-                      onClick={() => { setSelectedRequest(req); setIsViewMode(activeTab === "processed"); setRemarks(req.rejectedReason || ""); }}
+                      onClick={() => {
+                        setSelectedRequest(req);
+                        setIsViewMode(activeTab === "processed");
+                        setRemarks(req.rejectedReason || "");
+                      }}
                       className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group"
                     >
                       <td className="px-5 py-4 text-sm font-bold text-slate-800 dark:text-stone-200 font-mono">
@@ -304,8 +394,12 @@ export default function TrafficCompanyApprovals() {
                             {(req.entityName || "?").charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <div className="text-sm font-bold text-slate-800 dark:text-stone-100">{req.entityName || "—"}</div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">{req.email || "—"}</div>
+                            <div className="text-sm font-bold text-slate-800 dark:text-stone-100">
+                              {req.entityName || "—"}
+                            </div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                              {req.email || "—"}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -315,7 +409,9 @@ export default function TrafficCompanyApprovals() {
                         </span>
                       </td>
                       <td className="px-5 py-4 text-center">
-                        <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}>
+                        <span
+                          className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}
+                        >
                           {(req.status || "PENDING").toUpperCase()}
                         </span>
                       </td>
@@ -332,18 +428,27 @@ export default function TrafficCompanyApprovals() {
       {selectedRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden ring-1 ring-slate-200 dark:ring-white/10">
-
             {/* Modal header */}
             <div className="flex justify-between items-center px-6 py-4 bg-slate-900 dark:bg-slate-950 text-white">
               <h2 className="text-lg font-bold tracking-wide flex items-center gap-2.5">
-                <Building2 className="text-amber-400 h-5 w-5" strokeWidth={2.5} />
-                {isViewMode ? "Company Details (Read Only)" : "Company Verification"}
+                <Building2
+                  className="text-amber-400 h-5 w-5"
+                  strokeWidth={2.5}
+                />
+                {isViewMode
+                  ? "Company Details (Read Only)"
+                  : "Company Verification"}
                 {selectedRequest.referenceNumber && (
-                  <span className="ml-1 text-amber-400 font-mono text-sm">· {selectedRequest.referenceNumber}</span>
+                  <span className="ml-1 text-amber-400 font-mono text-sm">
+                    · {selectedRequest.referenceNumber}
+                  </span>
                 )}
               </h2>
               <button
-                onClick={() => { setSelectedRequest(null); setRemarks(""); }}
+                onClick={() => {
+                  setSelectedRequest(null);
+                  setRemarks("");
+                }}
                 className="text-white/60 hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-white/10"
               >
                 <XCircle className="h-6 w-6" />
@@ -359,15 +464,51 @@ export default function TrafficCompanyApprovals() {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   {[
-                    { label: "Reference Number",  value: selectedRequest.referenceNumber, span: 1 },
-                    { label: "Entity Name",        value: selectedRequest.entityName,       span: 2 },
-                    { label: "Operator Type",      value: selectedRequest.userTypeName || "N/A", span: 1 },
-                    { label: "Contact Email",      value: selectedRequest.email,            span: 1 },
-                    { label: "Mobile No.",         value: selectedRequest.mobileNo,         span: 1 },
-                    { label: "Address",            value: [selectedRequest.addressLine, selectedRequest.city, selectedRequest.state, selectedRequest.pincode].filter(Boolean).join(", "), span: 2 },
+                    {
+                      label: "Reference Number",
+                      value: selectedRequest.referenceNumber,
+                      span: 1,
+                    },
+                    {
+                      label: "Entity Name",
+                      value: selectedRequest.entityName,
+                      span: 2,
+                    },
+                    {
+                      label: "Operator Type",
+                      value: selectedRequest.userTypeName || "N/A",
+                      span: 1,
+                    },
+                    {
+                      label: "Contact Email",
+                      value: selectedRequest.email,
+                      span: 1,
+                    },
+                    {
+                      label: "Mobile No.",
+                      value: selectedRequest.mobileNo,
+                      span: 1,
+                    },
+                    {
+                      label: "Address",
+                      value: [
+                        selectedRequest.addressLine,
+                        selectedRequest.city,
+                        selectedRequest.state,
+                        selectedRequest.pincode,
+                      ]
+                        .filter(Boolean)
+                        .join(", "),
+                      span: 2,
+                    },
                   ].map(({ label, value, span }) => (
-                    <div key={label} className={span > 1 ? `md:col-span-${span}` : ""}>
-                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">{label}</label>
+                    <div
+                      key={label}
+                      className={span > 1 ? `md:col-span-${span}` : ""}
+                    >
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
+                        {label}
+                      </label>
                       <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
                         {value || "—"}
                       </div>
@@ -383,13 +524,20 @@ export default function TrafficCompanyApprovals() {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   {[
-                    { label: "GSTIN Number", value: selectedRequest.gstinNumber },
-                    { label: "PAN Number",   value: selectedRequest.panNumber },
-                    { label: "TAN Number",   value: selectedRequest.tanNumber },
+                    {
+                      label: "GSTIN Number",
+                      value: selectedRequest.gstinNumber,
+                    },
+                    { label: "PAN Number", value: selectedRequest.panNumber },
+                    { label: "TAN Number", value: selectedRequest.tanNumber },
                   ].map(({ label, value }) => (
                     <div key={label}>
-                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">{label}</label>
-                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200 font-mono">{value || "N/A"}</p>
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
+                        {label}
+                      </label>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200 font-mono">
+                        {value || "N/A"}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -398,34 +546,58 @@ export default function TrafficCompanyApprovals() {
               {/* Documents */}
               <div className="bg-white dark:bg-slate-800/60 p-5 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm">
                 <h3 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100 dark:border-slate-700/50 flex items-center gap-2">
-                  <CheckCircle2 className="text-amber-500 h-4 w-4" /> Verification Documents
+                  <CheckCircle2 className="text-amber-500 h-4 w-4" />{" "}
+                  Verification Documents
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   {[
-                    { label: "Entity Document", type: "entity", always: true },
-                    { label: "GSTIN Document",  type: "gst",    show: !!selectedRequest.gstinNumber },
-                    { label: "PAN Document",    type: "pan",    show: !!selectedRequest.panNumber },
-                    { label: "TAN Document",    type: "tan",    show: !!selectedRequest.tanNumber },
-                  ].filter((d) => d.always || d.show).map(({ label, type }) => (
-                    <button
-                      key={type}
-                      onClick={() =>
-                        setViewingDocUrl(
-                          `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=${type}`,
-                        )
-                      }
-                      className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-amber-400 dark:hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/5 transition-all group text-left"
-                    >
-                      <FileText className="text-amber-500 h-5 w-5 shrink-0" />
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate group-hover:text-amber-700 dark:group-hover:text-amber-400">{label}</span>
-                      <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-amber-500 shrink-0" />
-                    </button>
-                  ))}
+                    {
+                      label: "Requisition Letter",
+                      type: "requisitionLetter",
+                      always: true,
+                    },
+                    { label: "Work Order", type: "workOrder", always: true },
+                    {
+                      label: "GSTIN Document",
+                      type: "gst",
+                      show: !!selectedRequest.gstinNumber,
+                    },
+                    {
+                      label: "PAN Document",
+                      type: "pan",
+                      show: !!selectedRequest.panNumber,
+                    },
+                    {
+                      label: "TAN Document",
+                      type: "tan",
+                      show: !!selectedRequest.tanNumber,
+                    },
+                  ]
+                    .filter((d) => d.always || d.show)
+                    .map(({ label, type }) => (
+                      <button
+                        key={type}
+                        onClick={() =>
+                          setViewingDocUrl(
+                            `${AGENT_API}/agents/viewAgentDocument?referenceNumber=${selectedRequest.referenceNumber}&documentType=${type}`,
+                          )
+                        }
+                        className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-amber-400 dark:hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/5 transition-all group text-left"
+                      >
+                        <FileText className="text-amber-500 h-5 w-5 shrink-0" />
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate group-hover:text-amber-700 dark:group-hover:text-amber-400">
+                          {label}
+                        </span>
+                        <Eye className="h-4 w-4 ml-auto text-slate-400 group-hover:text-amber-500 shrink-0" />
+                      </button>
+                    ))}
                 </div>
               </div>
 
               {/* Remarks */}
-              {(!isViewMode || selectedRequest?.status !== "approved" || remarks) && (
+              {(!isViewMode ||
+                selectedRequest?.status !== "approved" ||
+                remarks) && (
                 <div className="bg-amber-50 dark:bg-amber-500/5 p-5 rounded-xl border border-amber-200 dark:border-amber-500/20">
                   <label className="block text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2">
                     Authority Remarks / Reason for Rejection
@@ -469,17 +641,37 @@ export default function TrafficCompanyApprovals() {
 
           {/* ── PDF Document Viewer ── */}
           {viewingDocUrl && (
-            <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm ${isFullscreen ? "p-0" : "p-4 md:p-8"}`}>
-              <div className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${isFullscreen ? "max-w-full rounded-none" : "max-w-5xl rounded-2xl ring-1 ring-slate-700"}`}>
+            <div
+              className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm ${isFullscreen ? "p-0" : "p-4 md:p-8"}`}
+            >
+              <div
+                className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${isFullscreen ? "max-w-full rounded-none" : "max-w-5xl rounded-2xl ring-1 ring-slate-700"}`}
+              >
                 <div className="flex justify-between items-center px-4 py-3 bg-slate-900 text-white">
                   <h3 className="font-bold flex items-center gap-2 text-sm">
-                    <FileText className="h-5 w-5 text-amber-400" /> Document Viewer
+                    <FileText className="h-5 w-5 text-amber-400" /> Document
+                    Viewer
                   </h3>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setIsFullscreen(!isFullscreen)} className="bg-slate-800 hover:bg-slate-700 p-2 rounded-lg transition-colors" title={isFullscreen ? "Exit Fullscreen" : "Maximize"}>
-                      {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+                    <button
+                      onClick={() => setIsFullscreen(!isFullscreen)}
+                      className="bg-slate-800 hover:bg-slate-700 p-2 rounded-lg transition-colors"
+                      title={isFullscreen ? "Exit Fullscreen" : "Maximize"}
+                    >
+                      {isFullscreen ? (
+                        <Minimize className="h-4 w-4" />
+                      ) : (
+                        <Maximize className="h-4 w-4" />
+                      )}
                     </button>
-                    <button onClick={() => { setViewingDocUrl(null); setIsFullscreen(false); }} className="bg-slate-800 hover:bg-red-500 p-2 rounded-lg transition-colors" title="Close">
+                    <button
+                      onClick={() => {
+                        setViewingDocUrl(null);
+                        setIsFullscreen(false);
+                      }}
+                      className="bg-slate-800 hover:bg-red-500 p-2 rounded-lg transition-colors"
+                      title="Close"
+                    >
                       <XCircle className="h-4 w-4" />
                     </button>
                   </div>
@@ -488,10 +680,17 @@ export default function TrafficCompanyApprovals() {
                   {iframeLoading && (
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50">
                       <Loader2 className="h-10 w-10 text-amber-500 animate-spin mb-3" />
-                      <p className="text-slate-500 font-bold animate-pulse text-sm">Fetching secure document...</p>
+                      <p className="text-slate-500 font-bold animate-pulse text-sm">
+                        Fetching secure document...
+                      </p>
                     </div>
                   )}
-                  <iframe src={viewingDocUrl} className="w-full h-full border-none" title="Document Viewer" onLoad={() => setIframeLoading(false)} />
+                  <iframe
+                    src={viewingDocUrl}
+                    className="w-full h-full border-none"
+                    title="Document Viewer"
+                    onLoad={() => setIframeLoading(false)}
+                  />
                 </div>
               </div>
             </div>
@@ -502,15 +701,27 @@ export default function TrafficCompanyApprovals() {
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
               <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden ring-1 ring-slate-200 dark:ring-white/10">
                 <div className="p-6 text-center space-y-4">
-                  <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center ${confirmDialog.decision === "approved" ? "bg-emerald-100 dark:bg-emerald-500/10" : "bg-red-100 dark:bg-red-500/10"}`}>
-                    {confirmDialog.decision === "approved"
-                      ? <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-                      : <ShieldAlert className="h-8 w-8 text-red-600 dark:text-red-400" />}
+                  <div
+                    className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center ${confirmDialog.decision === "approved" ? "bg-emerald-100 dark:bg-emerald-500/10" : "bg-red-100 dark:bg-red-500/10"}`}
+                  >
+                    {confirmDialog.decision === "approved" ? (
+                      <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <ShieldAlert className="h-8 w-8 text-red-600 dark:text-red-400" />
+                    )}
                   </div>
-                  <h3 className="text-xl font-bold text-slate-800 dark:text-stone-100">Confirm Action</h3>
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-stone-100">
+                    Confirm Action
+                  </h3>
                   <p className="text-slate-500 dark:text-slate-400 text-sm">
                     Are you sure you want to{" "}
-                    <strong className={confirmDialog.decision === "approved" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}>
+                    <strong
+                      className={
+                        confirmDialog.decision === "approved"
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-red-600 dark:text-red-400"
+                      }
+                    >
                       {confirmDialog.decision}
                     </strong>{" "}
                     this company?
@@ -518,7 +729,9 @@ export default function TrafficCompanyApprovals() {
                 </div>
                 <div className="flex border-t border-slate-100 dark:border-slate-800">
                   <button
-                    onClick={() => setConfirmDialog({ isOpen: false, decision: null })}
+                    onClick={() =>
+                      setConfirmDialog({ isOpen: false, decision: null })
+                    }
                     className="flex-1 px-4 py-4 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-r border-slate-100 dark:border-slate-800 text-sm"
                   >
                     Cancel

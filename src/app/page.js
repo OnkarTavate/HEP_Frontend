@@ -74,43 +74,131 @@ const LoginPage = () => {
   const [authMode, setAuthMode] = useState("signin"); // "signin" | "forgot"
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1); // 1 or 2
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
+  const [resolvedLoginId, setResolvedLoginId] = useState("");
+  const [resolvedUserName, setResolvedUserName] = useState("");
+  const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
+  const [showForgotConfirmPassword, setShowForgotConfirmPassword] = useState(false);
+  const [isDeptUser, setIsDeptUser] = useState(false);
 
   const handleForgotSubmit = async (e) => {
     e.preventDefault();
-    if (!forgotEmail.trim()) {
-      toast.warning("Please enter your registered email or login ID.");
-      return;
-    }
-    setForgotLoading(true);
-    try {
-      const res = await axios.post(
-        `${AUTH_API}/auth/forgot-password`,
-        { loginId: forgotEmail.trim() },
-        {
-          // Don't throw on 404 — backend may not have implemented this yet.
-          validateStatus: (s) => s < 500,
-        },
-      );
-      if (res.status >= 200 && res.status < 300 && res.data?.success) {
-        toast.success("Reset link sent", {
-          description:
-            "If an account exists for this ID, a password reset link has been emailed.",
-        });
-        setAuthMode("signin");
-        setForgotEmail("");
-      } else if (res.status === 404) {
-        toast.error("Feature unavailable", {
-          description:
-            "Password reset is not yet enabled. Please contact your administrator.",
-        });
-      } else {
-        toast.error(res.data?.message || "Unable to process the request.");
+
+    if (forgotStep === 1) {
+      if (!forgotEmail.trim()) {
+        toast.warning(isDeptUser ? "Please enter your departmental email ID." : "Please enter your registered email or employee ID.");
+        return;
       }
-    } catch (err) {
-      console.error("Forgot password error:", err);
-      toast.error("Server not reachable");
-    } finally {
-      setForgotLoading(false);
+      setForgotLoading(true);
+      try {
+        const res = await axios.post(
+          `${AUTH_API}/auth/forgot-password`,
+          {
+            loginId: forgotEmail.trim(),
+            userType: isDeptUser ? "user" : "agent"
+          },
+          {
+            validateStatus: (s) => s < 500,
+          }
+        );
+        if (res.status >= 200 && res.status < 300 && res.data?.success) {
+          toast.success("OTP Sent", {
+            description: "A One-Time Password has been sent to your registered email.",
+          });
+          setResolvedLoginId(res.data.loginId);
+          setResolvedUserName(res.data.userName || "");
+          setForgotStep(2);
+        } else {
+          toast.error(res.data?.message || "No registered account found.");
+        }
+      } catch (err) {
+        console.error("Forgot password error:", err);
+        toast.error("Server not reachable");
+      } finally {
+        setForgotLoading(false);
+      }
+    } else if (forgotStep === 2) {
+      if (!forgotOtp.trim()) {
+        toast.warning("Please enter the 6-digit OTP code.");
+        return;
+      }
+      setForgotLoading(true);
+      try {
+        const res = await axios.post(
+          `${AUTH_API}/auth/verify-otp`,
+          {
+            loginId: resolvedLoginId,
+            otp: forgotOtp.trim(),
+            userType: isDeptUser ? "user" : "agent"
+          },
+          {
+            validateStatus: (s) => s < 500,
+          }
+        );
+        if (res.status >= 200 && res.status < 300 && res.data?.success) {
+          toast.success("OTP Verified", {
+            description: "Please enter your new password below.",
+          });
+          setForgotStep(3);
+        } else {
+          toast.error(res.data?.message || "Invalid or expired OTP.");
+        }
+      } catch (err) {
+        console.error("Verify OTP error:", err);
+        toast.error("Server not reachable");
+      } finally {
+        setForgotLoading(false);
+      }
+    } else if (forgotStep === 3) {
+      if (!forgotNewPassword || !forgotConfirmPassword) {
+        toast.warning("Please fill in all password fields.");
+        return;
+      }
+      if (forgotNewPassword !== forgotConfirmPassword) {
+        toast.warning("Passwords do not match.");
+        return;
+      }
+
+      setForgotLoading(true);
+      try {
+        const res = await axios.post(
+          `${AUTH_API}/auth/reset-password`,
+          {
+            loginId: resolvedLoginId,
+            otp: forgotOtp.trim(),
+            newPassword: forgotNewPassword,
+            confirmPassword: forgotConfirmPassword,
+            userType: isDeptUser ? "user" : "agent"
+          },
+          {
+            validateStatus: (s) => s < 500,
+          }
+        );
+        if (res.status >= 200 && res.status < 300 && res.data?.success) {
+          toast.success("Password Reset Successful", {
+            description: "Your password has been updated. Please sign in with your new password.",
+          });
+          setAuthMode("signin");
+          setForgotStep(1);
+          setForgotEmail("");
+          setForgotOtp("");
+          setForgotNewPassword("");
+          setForgotConfirmPassword("");
+          setResolvedLoginId("");
+          setResolvedUserName("");
+          setIsDeptUser(false);
+        } else {
+          toast.error(res.data?.message || "Failed to reset password.");
+        }
+      } catch (err) {
+        console.error("Reset password error:", err);
+        toast.error("Server not reachable");
+      } finally {
+        setForgotLoading(false);
+      }
     }
   };
 
@@ -382,6 +470,7 @@ const LoginPage = () => {
           role: data.role,
           departmentName: data.departmentName || null,
           departmentId: data.departmentId || null,
+          isPasswordChanged: data.isPasswordChanged,
         };
 
         localStorage.setItem("user", JSON.stringify(user));
@@ -843,8 +932,9 @@ const LoginPage = () => {
                             Reset Password
                           </h3>
                           <p className="text-sm text-gray-500 mt-2">
-                            Enter your registered email or employee ID —
-                            we&apos;ll send you a reset link.
+                            {forgotStep === 1 && "Enter your registered email or employee ID to receive a verification OTP."}
+                            {forgotStep === 2 && "Enter the OTP sent to your registered email address."}
+                            {forgotStep === 3 && "Set your new password and confirm it below."}
                           </p>
                         </div>
 
@@ -852,17 +942,94 @@ const LoginPage = () => {
                           onSubmit={handleForgotSubmit}
                           className="space-y-4"
                         >
-                          <div className="relative group">
-                            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
-                            <input
-                              type="text"
-                              placeholder="Email or Employee ID"
-                              value={forgotEmail}
-                              onChange={(e) => setForgotEmail(e.target.value)}
-                              className="w-full pl-11 pr-3 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
-                              required
-                            />
-                          </div>
+                          {forgotStep === 1 && (
+                            <>
+                              <div className="relative group">
+                                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
+                                <input
+                                  type="text"
+                                  placeholder={isDeptUser ? "Departmental Email ID" : "Email or Employee ID"}
+                                  value={forgotEmail}
+                                  onChange={(e) => setForgotEmail(e.target.value)}
+                                  className="w-full pl-11 pr-3 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
+                                  required
+                                />
+                              </div>
+                              <div className="flex items-center space-x-2 mt-2 px-1">
+                                <input
+                                  type="checkbox"
+                                  id="isDeptUser"
+                                  checked={isDeptUser}
+                                  onChange={(e) => setIsDeptUser(e.target.checked)}
+                                  className="w-4 h-4 rounded border-stone-300 text-orange-500 focus:ring-orange-500/20"
+                                />
+                                <label htmlFor="isDeptUser" className="text-sm text-stone-600 select-none cursor-pointer font-medium hover:text-stone-800 transition-colors duration-150">
+                                  For departmental users?
+                                </label>
+                              </div>
+                            </>
+                          )}
+
+                          {forgotStep === 2 && (
+                            <div className="relative group">
+                              <Shield className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
+                              <input
+                                type="text"
+                                placeholder="6-digit OTP Code"
+                                value={forgotOtp}
+                                onChange={(e) => setForgotOtp(e.target.value)}
+                                className="w-full pl-11 pr-3 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
+                                required
+                                maxLength={6}
+                              />
+                            </div>
+                          )}
+
+                          {forgotStep === 3 && (
+                            <>
+                              <div className="bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-700 font-medium flex items-center justify-start gap-3">
+                                <span className="text-stone-500">Resetting for account:</span>
+                                <span className="text-stone-900 font-bold">{resolvedUserName || resolvedLoginId}</span>
+                              </div>
+                              <div className="relative group">
+                                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
+                                <input
+                                  type={showForgotNewPassword ? "text" : "password"}
+                                  placeholder="New Password"
+                                  value={forgotNewPassword}
+                                  onChange={(e) => setForgotNewPassword(e.target.value)}
+                                  className="w-full pl-11 pr-10 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
+                                  required
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 focus:outline-none"
+                                >
+                                  {showForgotNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                </button>
+                              </div>
+
+                              <div className="relative group">
+                                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
+                                <input
+                                  type={showForgotConfirmPassword ? "text" : "password"}
+                                  placeholder="Confirm New Password"
+                                  value={forgotConfirmPassword}
+                                  onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                                  className="w-full pl-11 pr-10 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
+                                  required
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowForgotConfirmPassword(!showForgotConfirmPassword)}
+                                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 focus:outline-none"
+                                >
+                                  {showForgotConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                </button>
+                              </div>
+                            </>
+                          )}
 
                           <button
                             type="submit"
@@ -871,18 +1038,44 @@ const LoginPage = () => {
                           >
                             {forgotLoading ? (
                               <RefreshCw className="h-5 w-5 animate-spin" />
+                            ) : forgotStep === 1 ? (
+                              "Send OTP"
+                            ) : forgotStep === 2 ? (
+                              "Verify OTP"
                             ) : (
-                              "Send Reset Link"
+                              "Reset Password"
                             )}
                           </button>
                           <div className="text-center flex flex-col gap-2.5 pt-2 border-t border-gray-100 md:border-none md:pt-0">
-                            <button
-                              type="button"
-                              onClick={() => setAuthMode("signin")}
-                              className="text-sm text-gray-600 hover:text-orange-600 hover:underline focus:outline-none"
-                            >
-                              ← Back to Sign In
-                            </button>
+                            {forgotStep === 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAuthMode("signin");
+                                }}
+                                className="text-sm text-gray-600 hover:text-orange-600 hover:underline focus:outline-none"
+                              >
+                                ← Back to Sign In
+                              </button>
+                            )}
+                            {forgotStep === 2 && (
+                              <button
+                                type="button"
+                                onClick={() => setForgotStep(1)}
+                                className="text-sm text-orange-600 hover:text-orange-700 font-semibold focus:outline-none"
+                              >
+                                ← Back to Email Entry
+                              </button>
+                            )}
+                            {forgotStep === 3 && (
+                              <button
+                                type="button"
+                                onClick={() => setForgotStep(2)}
+                                className="text-sm text-orange-600 hover:text-orange-700 font-semibold focus:outline-none"
+                              >
+                                ← Back to OTP Entry
+                              </button>
+                            )}
                             <p className="text-sm text-gray-500 md:hidden">
                               Don&apos;t have an account?{" "}
                               <button

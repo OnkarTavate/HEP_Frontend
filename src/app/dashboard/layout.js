@@ -31,12 +31,18 @@ import {
   Moon,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  EyeOff,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import axios from "axios";
+import { toast } from "sonner";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
+const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
+const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
 // Navigation items based on user role
 
 // Navigation items based on user role
@@ -92,6 +98,12 @@ export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const [user, setUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [modalLoading, setModalLoading] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Dark-mode state (persisted in localStorage). Tailwind v4's `dark:` variant
   // is configured in globals.css via `@custom-variant dark (&:is(.dark *))`,
@@ -151,10 +163,76 @@ export default function DashboardLayout({ children }) {
       }
 
       setUser(parsedUser);
+
+      // Check if user is agent and has not changed default password
+      if (parsedUser.isPasswordChanged === false) {
+        setShowPasswordChangeModal(true);
+      }
     } else {
       router.push("/");
     }
   }, [router]);
+
+  const handlePasswordChangeSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!newPassword || !confirmPassword) {
+      toast.warning("Please fill in all fields.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.warning("Passwords do not match.");
+      return;
+    }
+
+    setModalLoading(true);
+    try {
+      const token = localStorage.getItem("accessToken");
+      const isAgent = user?.role === "Applicant" || user?.role?.toLowerCase() === "user" || user?.role?.toLowerCase() === "agent";
+      const targetUrl = isAgent
+        ? `${AGENT_API}/agents/change-password`
+        : `${ADMIN_API}/user/change-password`;
+
+      const res = await axios.post(
+        targetUrl,
+        {
+          loginId: user?.username,
+          newPassword,
+          confirmPassword,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          validateStatus: (s) => s < 500,
+        }
+      );
+
+      if (res.status >= 200 && res.status < 300 && res.data?.success) {
+        toast.success("Password Updated Successfully", {
+          description: "Your default password has been successfully updated.",
+        });
+
+        // Update user in localStorage
+        const updatedUser = { ...user, isPasswordChanged: true };
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        setUser(updatedUser);
+
+        // Close modal and reset fields
+        setShowPasswordChangeModal(false);
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        toast.error(res.data?.message || "Failed to update password.");
+      }
+    } catch (err) {
+      console.error("Change password error:", err);
+      toast.error(err.response?.data?.message || "Server not reachable");
+    } finally {
+      setModalLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -459,10 +537,10 @@ export default function DashboardLayout({ children }) {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="cursor-pointer"
-          onClick={() => router.push("/forgot-password")}
+          onClick={() => setShowPasswordChangeModal(true)}
         >
           <Lock className="h-4 w-4 mr-2 text-slate-500" />
-          Forgot Password
+          Change Password
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -596,6 +674,110 @@ export default function DashboardLayout({ children }) {
           </main>
         </div>
       </div>
+
+      {/* Change Password Modal Overlay */}
+      {showPasswordChangeModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#1f232d] rounded-3xl p-6 sm:p-8 shadow-2xl border border-stone-200/50 dark:border-white/5 animate-in fade-in zoom-in-95 duration-200 relative">
+            <div className="text-center mb-6">
+              <span className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 mb-4 shadow-inner">
+                <Lock className="h-7 w-7" strokeWidth={2.5} />
+              </span>
+              <h3 className="text-2xl font-extrabold text-[#1f1f1f] dark:text-white tracking-tight">
+                {user?.isPasswordChanged === false ? "Mandatory Password Update" : "Update Password"}
+              </h3>
+              <p className="text-sm text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
+                {user?.isPasswordChanged === false
+                  ? "Welcome! Since this is your first login or your password has been reset, you must update your password to continue."
+                  : "Protect your account by setting a new strong password below."}
+              </p>
+            </div>
+
+            <div className="bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/5 rounded-2xl px-4 py-3 mb-4 text-sm text-stone-700 dark:text-stone-300 font-medium flex items-center justify-start gap-3">
+              <span className="text-stone-500 dark:text-stone-400">User Account:</span>
+              <span className="text-stone-900 dark:text-white font-bold">{user?.username}</span>
+            </div>
+
+            <form onSubmit={handlePasswordChangeSubmit} className="space-y-4">
+              <div className="relative group">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 dark:text-stone-500 group-focus-within:text-amber-500 transition-colors duration-200" />
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  placeholder="New Password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full pl-11 pr-10 py-3.5 text-base bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/5 focus:bg-white dark:focus:bg-[#1a1d27] text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 focus:border-amber-500 dark:focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 rounded-2xl focus:outline-none transition-all duration-200"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 focus:outline-none"
+                >
+                  {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+
+              <div className="relative group">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 dark:text-stone-500 group-focus-within:text-amber-500 transition-colors duration-200" />
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="Confirm New Password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full pl-11 pr-10 py-3.5 text-base bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/5 focus:bg-white dark:focus:bg-[#1a1d27] text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 focus:border-amber-500 dark:focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 rounded-2xl focus:outline-none transition-all duration-200"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 focus:outline-none"
+                >
+                  {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+
+              <div className="bg-amber-500/5 rounded-2xl p-4 border border-amber-500/10 space-y-1 text-xs text-amber-700 dark:text-amber-400">
+                <p className="font-bold mb-1">Password Requirements:</p>
+                <p>• Must be between 8 and 15 characters long.</p>
+                <p>• Must contain at least one uppercase & one lowercase letter.</p>
+                <p>• Must contain at least one number.</p>
+                <p>• Must contain at least one special character.</p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                {user?.isPasswordChanged !== false && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPasswordChangeModal(false);
+                      setNewPassword("");
+                      setConfirmPassword("");
+                    }}
+                    className="w-1/2 py-3.5 bg-stone-150 dark:bg-stone-850 hover:bg-stone-200 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-base font-bold tracking-wider uppercase rounded-2xl transition-all duration-200 focus:outline-none"
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={modalLoading}
+                  className={cn(
+                    "py-3.5 bg-amber-400 text-[#1f1f1f] text-base font-bold tracking-wider uppercase rounded-2xl hover:bg-amber-500 hover:shadow-amber-400/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] shadow-lg shadow-amber-400/20 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-400/20 disabled:opacity-75 disabled:pointer-events-none flex items-center justify-center",
+                    user?.isPasswordChanged !== false ? "w-1/2" : "w-full"
+                  )}
+                >
+                  {modalLoading ? (
+                    <RefreshCw className="h-5 w-5 animate-spin" />
+                  ) : (
+                    "Update Password"
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
