@@ -37,7 +37,7 @@ export async function listIntakes(filters = {}) {
     `${AGENT_API}/vendor-pass/list?${params.toString()}`,
     { headers: authHeaders() }
   );
-  return res.data?.data || [];
+  return res.data;
 }
 
 export async function resendLink(id) {

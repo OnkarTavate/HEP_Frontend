@@ -376,7 +376,7 @@ export default function TrafficLayout({ children }) {
   return (
     <div
       className={cn(
-        "min-h-screen w-screen overflow-hidden flex transition-colors duration-300",
+        "h-screen w-screen overflow-hidden flex transition-colors duration-300",
         "bg-slate-100 dark:bg-slate-950",
         darkMode && "dark",
       )}
@@ -433,16 +433,6 @@ export default function TrafficLayout({ children }) {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Search pill */}
-              <div className="hidden md:flex bg-white dark:bg-slate-800/40 px-4 py-2.5 rounded-full shadow-sm items-center gap-2 w-72 border border-slate-200/60 dark:border-white/5 focus-within:ring-4 focus-within:ring-[#ff6b00]/10 focus-within:border-[#ff6b00] transition-all duration-200">
-                <Search className="h-4 w-4 text-stone-400 dark:text-stone-500" />
-                <input
-                  type="text"
-                  placeholder="Search the console"
-                  className="outline-none bg-transparent w-full text-sm text-stone-700 dark:text-stone-200 placeholder:text-stone-400 dark:placeholder:text-stone-500"
-                />
-              </div>
-
               {/* Theme toggle */}
               <Button
                 onClick={toggleDarkMode}

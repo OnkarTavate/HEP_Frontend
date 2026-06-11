@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import PaginationBar from "@/components/ui/PaginationBar";
 import axios from "axios";
 import { toast } from "sonner";
 import Select from "react-select";
@@ -240,6 +241,24 @@ export default function PassRequestPage() {
   const [persons, setPersons] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [submittedPasses, setSubmittedPasses] = useState([]);
+
+  // Pagination States
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [paginationMeta, setPaginationMeta] = useState({ totalRecords: 0, totalPages: 1, currentPage: 1, pageSize: 20 });
+  const [globalCounts, setGlobalCounts] = useState({ total: 0, reverted: 0 });
+
+  // Search States
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [searchInput]);
 
   const [editingPersonIndex, setEditingPersonIndex] = useState(null);
   const [editingVehicleIndex, setEditingVehicleIndex] = useState(null);
@@ -656,7 +675,7 @@ export default function PassRequestPage() {
     }
   }, [personForm.nationality, masterData.nationalities]);
 
-  const fetchSubmittedPasses = async () => {
+  const fetchSubmittedPasses = useCallback(async () => {
     setLoadingPasses(true);
     try {
       const token = localStorage.getItem("accessToken");
@@ -673,11 +692,19 @@ export default function PassRequestPage() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
+          params: {
+            page: currentPage,
+            limit: pageSize,
+            status: activeTab === "reverted" ? "reverted" : undefined,
+            search: debouncedSearch || undefined,
+          },
         },
       );
 
       if (response.data && response.data.success) {
-        setSubmittedPasses(response.data.data);
+        setSubmittedPasses(response.data.data || []);
+        setPaginationMeta(response.data.pagination || {});
+        setGlobalCounts(response.data.counts || { total: 0, reverted: 0 });
       } else {
         setSubmittedPasses([]);
       }
@@ -690,13 +717,19 @@ export default function PassRequestPage() {
     } finally {
       setLoadingPasses(false);
     }
-  };
+  }, [currentPage, pageSize, activeTab, debouncedSearch]);
 
-  // Trigger fetch when "view" or "reverted" tab is selected
+  // Trigger fetch when "view" or "reverted" tab is selected or page changes
   useEffect(() => {
     if (activeTab === "view" || activeTab === "reverted") {
       fetchSubmittedPasses();
     }
+  }, [activeTab, currentPage, fetchSubmittedPasses]);
+
+  // Reset page to 1 and clear search when changing tabs
+  useEffect(() => {
+    setCurrentPage(1);
+    setSearchInput("");
   }, [activeTab]);
 
   const handlePrintQR = async (entity, type) => {
@@ -1998,9 +2031,9 @@ export default function PassRequestPage() {
           className={`px-8 py-4 text-base transition-all ${activeTab === "reverted" ? "font-bold text-amber-600 dark:text-amber-400 border-b-2 border-amber-600 dark:border-amber-400" : "font-semibold text-slate-500 dark:text-stone-400 hover:text-amber-600 dark:hover:text-amber-400"}`}
         >
           ⚠️ Reverted Applications
-          {submittedPasses.filter(p => p.status === 'REVERTED' || p.hasRevertedEntities).length > 0 && (
+          {globalCounts.reverted > 0 && (
             <span className="ml-2 px-2 py-0.5 text-xs font-bold bg-amber-100 text-amber-700 rounded-full">
-              {submittedPasses.filter(p => p.status === 'REVERTED' || p.hasRevertedEntities).length}
+              {globalCounts.reverted}
             </span>
           )}
         </button>
@@ -2546,6 +2579,32 @@ export default function PassRequestPage() {
               </button>
             </div>
 
+            <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                Showing {paginationMeta.totalRecords > 0 ? (paginationMeta.currentPage - 1) * paginationMeta.pageSize + 1 : 0}–
+                {Math.min(paginationMeta.currentPage * paginationMeta.pageSize, paginationMeta.totalRecords)} of {paginationMeta.totalRecords} records
+              </div>
+              <div className="relative w-full md:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                <input
+                  type="text"
+                  placeholder="Search Ref ID, Name, Reg No..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
+                  className="w-full pl-9 pr-10 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-orange-500"
+                />
+                {searchInput && (
+                  <button
+                    onClick={() => setSearchInput("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 transition-colors"
+                    title="Clear Search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-[#0a1e4d] text-white">
@@ -2676,6 +2735,22 @@ export default function PassRequestPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination for main submitted list */}
+            <div className="px-6 py-4 border-t border-slate-100">
+              <PaginationBar
+                currentPage={paginationMeta.currentPage || currentPage}
+                totalPages={paginationMeta.totalPages || 1}
+                totalRecords={paginationMeta.totalRecords || 0}
+                pageSize={paginationMeta.pageSize || pageSize}
+                onPageChange={(page) => setCurrentPage(page)}
+                onPageSizeChange={(limit) => {
+                  setPageSize(limit);
+                  setCurrentPage(1);
+                }}
+                loading={loadingPasses}
+              />
+            </div>
           </section>
         </div>
       )}
@@ -2696,6 +2771,32 @@ export default function PassRequestPage() {
                 <RefreshCw className={`h-4 w-4 ${loadingPasses ? "animate-spin" : ""}`} />
                 Refresh
               </button>
+            </div>
+
+            <div className="px-6 py-4 bg-amber-50/30 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="text-xs font-bold text-amber-900 uppercase tracking-widest">
+                Showing {paginationMeta.totalRecords > 0 ? (paginationMeta.currentPage - 1) * paginationMeta.pageSize + 1 : 0}–
+                {Math.min(paginationMeta.currentPage * paginationMeta.pageSize, paginationMeta.totalRecords)} of {paginationMeta.totalRecords} reverted records
+              </div>
+              <div className="relative w-full md:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                <input
+                  type="text"
+                  placeholder="Search Ref ID, Name, Reg No..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
+                  className="w-full pl-9 pr-10 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-amber-500"
+                />
+                {searchInput && (
+                  <button
+                    onClick={() => setSearchInput("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 transition-colors"
+                    title="Clear Search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -2797,6 +2898,22 @@ export default function PassRequestPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Pagination for reverted list */}
+            <div className="px-6 py-4 border-t border-slate-100">
+              <PaginationBar
+                currentPage={paginationMeta.currentPage || currentPage}
+                totalPages={paginationMeta.totalPages || 1}
+                totalRecords={paginationMeta.totalRecords || 0}
+                pageSize={paginationMeta.pageSize || pageSize}
+                onPageChange={(page) => setCurrentPage(page)}
+                onPageSizeChange={(limit) => {
+                  setPageSize(limit);
+                  setCurrentPage(1);
+                }}
+                loading={loadingPasses}
+              />
             </div>
           </section>
         </div>

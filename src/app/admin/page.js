@@ -29,6 +29,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import PaginationBar from "@/components/ui/PaginationBar";
 
 const BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API;
 const AUTH_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API
@@ -39,6 +40,11 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_LIMIT = 20;
+  const [paginationMeta, setPaginationMeta] = useState({ totalRecords: 0, totalPages: 1, currentPage: 1, pageSize: PAGE_LIMIT });
+  const [counts, setCounts] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
 
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [formOptions, setFormOptions] = useState({
@@ -81,10 +87,21 @@ export default function AdminDashboard() {
     [now],
   );
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (page = currentPage, query = searchQuery) => {
     try {
-      const response = await axios.get(`${BASE_URL}/user/agent-users`);
-      setRequests(response.data.data || response.data);
+      const response = await axios.get(`${BASE_URL}/user/agent-users`, {
+        params: {
+          page,
+          limit: PAGE_LIMIT,
+          search: query || undefined,
+        }
+      });
+      const data = response.data.data || [];
+      setRequests(data);
+      setPaginationMeta(response.data.pagination || { totalRecords: 0, totalPages: 1, currentPage: page, pageSize: PAGE_LIMIT });
+      if (response.data.counts) {
+        setCounts(response.data.counts);
+      }
     } catch (error) {
       console.error("Failed to fetch requests", error);
     } finally {
@@ -119,7 +136,7 @@ export default function AdminDashboard() {
       }
       const timer = setTimeout(() => {
         setUser(parsedUser);
-        fetchDashboardData();
+        fetchDashboardData(1, "");
         fetchFormOptions();
       }, 0);
       return () => clearTimeout(timer);
@@ -127,6 +144,20 @@ export default function AdminDashboard() {
       router.push("/");
     }
   }, [router]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchDashboardData(1, searchQuery);
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (currentPage !== 1) {
+      fetchDashboardData(currentPage, searchQuery);
+    }
+  }, [currentPage]);
 
   const validateForm = () => {
     const errors = {};
@@ -308,19 +339,13 @@ export default function AdminDashboard() {
       </div>
     );
 
-  const pendingCount = requests.filter(
-    (r) => r.status === "pending" || !r.status,
-  ).length;
-  const approvedCount = requests.filter((r) => r.status === "approved").length;
-  const rejectedCount = requests.filter((r) => r.status === "rejected").length;
+  const pendingCount = counts.pending;
+  const approvedCount = counts.approved;
+  const rejectedCount = counts.rejected;
+  const totalCount = counts.total;
 
-  const filteredData = requests.filter(
-    (req) =>
-      req.referenceNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      req.entityName?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredData = requests;
 
-  const totalCount = requests.length;
   const approvalProgress = totalCount
     ? Math.round((approvedCount / totalCount) * 100)
     : 0;
@@ -693,6 +718,17 @@ export default function AdminDashboard() {
                 <p className="text-sm font-medium">No records found.</p>
               </div>
             )}
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <PaginationBar
+              currentPage={paginationMeta.currentPage}
+              totalPages={paginationMeta.totalPages}
+              totalRecords={paginationMeta.totalRecords}
+              pageSize={paginationMeta.pageSize}
+              onPageChange={(page) => setCurrentPage(page)}
+              loading={loading}
+            />
           </div>
         </div>
       </div>

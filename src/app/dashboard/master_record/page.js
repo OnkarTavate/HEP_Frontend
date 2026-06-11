@@ -13,6 +13,7 @@ import {
   FileText,
 } from "lucide-react";
 import { toast } from "sonner";
+import PaginationBar from "@/components/ui/PaginationBar";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 
@@ -41,18 +42,36 @@ const maskAadhar = (aadhar) => {
 
 export default function MasterRecordsPage() {
   const [activeTab, setActiveTab] = useState("personnel");
+  const [searchVal, setSearchVal] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
 
   // Dynamic DB States
   const [personnel, setPersonnel] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [stats, setStats] = useState({ personCount: 0, vehicleCount: 0 });
+  const [paginationMeta, setPaginationMeta] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalRecords: 0,
+    pageSize: 20,
+  });
 
   // View Modal States
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [recordType, setRecordType] = useState(""); // 'personnel' or 'vehicle'
+
+  // Debounce search input
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setSearchQuery(searchVal);
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [searchVal]);
 
   // Fetch Master Directory from Backend
   const fetchMasterRecords = async () => {
@@ -71,52 +90,67 @@ export default function MasterRecordsPage() {
       const response = await axios.get(
         `${AGENT_API}/pass-request/my-master-records`,
         {
+          params: {
+            page: currentPage,
+            limit: pageSize,
+            search: searchQuery,
+            type: activeTab,
+          },
           headers: { Authorization: `Bearer ${token}` },
           withCredentials: true,
         },
       );
 
       if (response.data && response.data.success) {
-        const { persons, vehicles, personCount, vehicleCount } =
-          response.data.data;
+        const dataList = response.data.data || [];
+        const { personCount = 0, vehicleCount = 0 } = response.data.counts || {};
+        const pagination = response.data.pagination || {};
 
-        setPersonnel(
-          persons.map((p) => ({
-            ...p,
-            id: p.id,
-            name: p.name,
-            designation: p.designationName || "N/A",
-            aadhar: p.aadharNo,
-            phone: p.mobile,
-            dateAdded: new Date(p.createdAt).toLocaleDateString("en-IN", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            }),
-            // 🚀 FIX: Actually read the DB status rather than forcing it to true
-            isActive: p.isActive === false ? false : true,
-          })),
-        );
-
-        setVehicles(
-          vehicles.map((v) => ({
-            ...v,
-            id: v.id,
-            regNo: v.registrationNo,
-            type: v.vehicleTypeName || "N/A",
-            owner: v.referenceNo || "N/A",
-            fcExpiry: "N/A",
-            dateAdded: new Date(v.createdAt).toLocaleDateString("en-IN", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            }),
-            // 🚀 FIX: Actually read the DB status rather than forcing it to true
-            isActive: v.isActive === false ? false : true,
-          })),
-        );
+        if (activeTab === "personnel") {
+          setPersonnel(
+            dataList.map((p) => ({
+              ...p,
+              id: p.id,
+              name: p.name,
+              designation: p.designationName || "N/A",
+              aadhar: p.aadharNo,
+              phone: p.mobile,
+              dateAdded: new Date(p.createdAt).toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              }),
+              isActive: p.isActive === false ? false : true,
+            })),
+          );
+          setVehicles([]);
+        } else {
+          setVehicles(
+            dataList.map((v) => ({
+              ...v,
+              id: v.id,
+              regNo: v.registrationNo,
+              type: v.vehicleTypeName || "N/A",
+              owner: v.referenceNo || "N/A",
+              fcExpiry: "N/A",
+              dateAdded: new Date(v.createdAt).toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              }),
+              isActive: v.isActive === false ? false : true,
+            })),
+          );
+          setPersonnel([]);
+        }
 
         setStats({ personCount, vehicleCount });
+        setPaginationMeta({
+          currentPage: pagination.currentPage || 1,
+          totalPages: pagination.totalPages || 1,
+          totalRecords: pagination.totalRecords || 0,
+          pageSize: pagination.pageSize || 20,
+        });
       }
     } catch (error) {
       console.error("Failed to fetch master records", error);
@@ -132,7 +166,14 @@ export default function MasterRecordsPage() {
 
   useEffect(() => {
     fetchMasterRecords();
-  }, []);
+  }, [currentPage, pageSize, searchQuery, activeTab]);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setCurrentPage(1);
+    setSearchVal("");
+    setSearchQuery("");
+  };
 
   // --- 🚀 FIX: HANDLERS NOW CALL BACKEND TO PERSIST STATUS ---
   const togglePersonStatus = async (id, currentStatus) => {
@@ -218,15 +259,8 @@ export default function MasterRecordsPage() {
   };
 
   // --- Filter Logic ---
-  const filteredPersonnel = personnel.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.aadhar.includes(searchQuery),
-  );
-
-  const filteredVehicles = vehicles.filter((v) =>
-    v.regNo.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredPersonnel = personnel;
+  const filteredVehicles = vehicles;
 
   // 🚀 FIX: Secure Math Logic
   const totalFastFillRecords =
@@ -296,13 +330,13 @@ export default function MasterRecordsPage() {
       {/* Tabs */}
       <div className="flex border-b border-slate-300">
         <button
-          onClick={() => setActiveTab("personnel")}
+          onClick={() => handleTabChange("personnel")}
           className={`px-8 py-4 text-sm transition-all flex items-center gap-2 ${activeTab === "personnel" ? "font-bold text-[#0a1e4d] border-b-2 border-[#0a1e4d]" : "font-semibold text-slate-500 hover:text-[#0a1e4d]"}`}
         >
           <Users className="h-4 w-4" /> Personnel Directory
         </button>
         <button
-          onClick={() => setActiveTab("vehicle")}
+          onClick={() => handleTabChange("vehicle")}
           className={`px-8 py-4 text-sm transition-all flex items-center gap-2 ${activeTab === "vehicle" ? "font-bold text-[#0a1e4d] border-b-2 border-[#0a1e4d]" : "font-semibold text-slate-500 hover:text-[#0a1e4d]"}`}
         >
           <Truck className="h-4 w-4" /> Vehicle Fleet
@@ -318,8 +352,8 @@ export default function MasterRecordsPage() {
             <input
               type="text"
               placeholder={`Search ${activeTab === "personnel" ? "Aadhar No / Name" : "Registration No"}...`}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchVal}
+              onChange={(e) => setSearchVal(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all shadow-sm"
             />
           </div>
@@ -521,14 +555,19 @@ export default function MasterRecordsPage() {
           </div>
         )}
 
-        <div className="p-4 bg-slate-50 flex justify-between items-center">
-          <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">
-            Showing{" "}
-            {activeTab === "personnel"
-              ? filteredPersonnel.length
-              : filteredVehicles.length}{" "}
-            Records
-          </p>
+        <div className="p-4 bg-slate-50 flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-slate-200">
+          <PaginationBar
+            currentPage={paginationMeta.currentPage}
+            totalPages={paginationMeta.totalPages}
+            totalRecords={paginationMeta.totalRecords}
+            pageSize={paginationMeta.pageSize}
+            onPageChange={(page) => setCurrentPage(page)}
+            onPageSizeChange={(limit) => {
+              setPageSize(limit);
+              setCurrentPage(1);
+            }}
+            loading={loading}
+          />
         </div>
       </div>
 

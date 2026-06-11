@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import PaginationBar from "@/components/ui/PaginationBar";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -97,10 +98,17 @@ export default function TrafficPassesPage() {
   const [isViewMode, setIsViewMode] = useState(false);
   // Search and Sort States
   const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortBy, setSortBy] = useState("DATE_DESC");
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Pagination state
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [paginationMeta, setPaginationMeta] = useState({ totalRecords: 0, totalPages: 1, currentPage: 1, pageSize: 20 });
+  const [globalCounts, setGlobalCounts] = useState({ total: 0, pending: 0, processed: 0 });
 
   // Main Modal & Profile States
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -137,17 +145,37 @@ export default function TrafficPassesPage() {
     }
   }, [viewingDocUrl]);
 
-  const fetchPassRequests = async () => {
+  // Debounce search — reset to page 1 on new search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+      setCurrentPage(1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const fetchPassRequests = useCallback(async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem("accessToken");
       const response = await axios.get(
         `${AGENT_API}/pass-request/get-agent-pass-requests`,
-        { headers: { Authorization: `Bearer ${token}` } },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            page: currentPage,
+            limit: pageSize,
+            search: debouncedSearch || undefined,
+            status: activeTab || undefined,
+            sortOrder: sortBy === "DATE_ASC" ? "ASC" : "DESC",
+          },
+        },
       );
 
       if (response.data && response.data.success) {
-        console.log("API RESPONSE:", response.data.data); // ✅ ADD THIS
         setRequests(response.data.data || []);
+        setPaginationMeta(response.data.pagination || {});
+        setGlobalCounts(response.data.counts || { total: 0, pending: 0, processed: 0 });
       } else {
         setRequests([]);
       }
@@ -157,12 +185,11 @@ export default function TrafficPassesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, pageSize, debouncedSearch, activeTab, sortBy]);
 
   useEffect(() => {
     fetchPassRequests();
-    // fetchCompanyProfile();
-  }, []);
+  }, [fetchPassRequests]);
 
   // const fetchCompanyProfile = async () => {
   //   try {
@@ -463,96 +490,16 @@ export default function TrafficPassesPage() {
     setIsModalOpen(true);
   };
 
-  // --- FILTER & SORT LOGIC ---
-  const PENDING_STATUSES = ["SUBMITTED", "PENDING", "IN_REVIEW", "VENDOR_SUBMITTED"];
-  const PROCESSED_STATUSES = ["APPROVED", "REJECTED", "REVERTED", "PROCESSED", "COMPLETED"];
-
-  const pendingPasses = requests.filter((r) =>
-    PENDING_STATUSES.includes(r.status),
-  );
-
-  const processedPasses = requests.filter((r) =>
-    PROCESSED_STATUSES.includes(r.status),
-  );
-
-  const approvedCount = processedPasses.filter((r) =>
-    ["APPROVED", "PROCESSED", "COMPLETED"].includes(r.status),
-  ).length;
-
-  const rejectedCount = requests.filter((r) => r.status === "REJECTED").length;
-
-  let baseData = activeTab === "pending" ? pendingPasses : processedPasses;
-
-  if (activeTab === "processed" && cardFilter === "APPROVED") {
-    baseData = baseData.filter(
-      (r) => r.status === "APPROVED" || r.status === "PROCESSED",
-    );
-  } else if (activeTab === "processed" && cardFilter === "REJECTED") {
-    baseData = baseData.filter((r) => r.status === "REJECTED");
-  }
-
-  // LIVE REAL-TIME SEARCH FILTER
-  if (searchInput) {
-    const searchLower = searchInput.toLowerCase();
-
-    baseData = baseData.filter((req) => {
-      const computedRef = req.referenceNo
-        ? req.referenceNo.toLowerCase()
-        : `req-${req.id}`;
-      const rawId = req.id?.toString() || "";
-      const company = (req.entityName || "").toLowerCase();
-
-      if (
-        computedRef.includes(searchLower) ||
-        rawId.includes(searchLower) ||
-        company.includes(searchLower)
-      ) {
-        return true;
-      }
-
-      const hasMatchingPerson = req.persons?.some(
-        (p) =>
-          (p.name && p.name.toLowerCase().includes(searchLower)) ||
-          (p.aadharNo && p.aadharNo.toLowerCase().includes(searchLower)),
-      );
-
-      const hasMatchingVehicle = req.vehicles?.some(
-        (v) =>
-          v.registrationNo &&
-          v.registrationNo.toLowerCase().includes(searchLower),
-      );
-
-      return hasMatchingPerson || hasMatchingVehicle;
-    });
-  }
-
-  // Sorting
-  if (sortBy === "DATE_DESC") {
-    baseData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  } else if (sortBy === "DATE_ASC") {
-    baseData.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-  } else if (sortBy === "EXPIRY_SOON") {
-    baseData.sort((a, b) => {
-      const getEarliestExpiry = (req) => {
-        let min = Infinity;
-        [...(req.persons || []), ...(req.vehicles || [])].forEach((ent) => {
-          if (ent.dateTo) {
-            const d = new Date(ent.dateTo).getTime();
-            if (d < min) min = d;
-          }
-        });
-        return min;
-      };
-      return getEarliestExpiry(a) - getEarliestExpiry(b);
-    });
-  }
-
-  const filteredData = baseData;
+  // --- SERVER-SIDE PAGINATION: Data comes pre-filtered from the API ---
+  // Use globalCounts for stat cards (always the full DB counts)
+  // Use requests directly as filteredData (already paginated + filtered by server)
+  const filteredData = requests;
 
   const handleCardClick = (tab, filter) => {
     setActiveTab(tab);
     setCardFilter(filter);
     setSearchInput("");
+    setCurrentPage(1);
   };
 
   return (
@@ -567,7 +514,7 @@ export default function TrafficPassesPage() {
               <Users className="h-4 w-4 text-slate-600 dark:text-slate-300" strokeWidth={2.5} />
             </span>
           </div>
-          <p className="text-3xl font-extrabold text-[#0a1e4d] dark:text-stone-100 tabular-nums">{requests.length}</p>
+          <p className="text-3xl font-extrabold text-[#0a1e4d] dark:text-stone-100 tabular-nums">{globalCounts.total}</p>
         </div>
 
         {/* Pending */}
@@ -578,7 +525,7 @@ export default function TrafficPassesPage() {
               <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" strokeWidth={2.5} />
             </span>
           </div>
-          <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-300 tabular-nums">{pendingPasses.length}</p>
+          <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-300 tabular-nums">{globalCounts.pending}</p>
         </div>
 
         {/* Processed */}
@@ -589,7 +536,7 @@ export default function TrafficPassesPage() {
               <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
             </span>
           </div>
-          <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-300 tabular-nums">{processedPasses.length}</p>
+          <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-300 tabular-nums">{globalCounts.processed}</p>
         </div>
       </div>
 
@@ -616,8 +563,8 @@ export default function TrafficPassesPage() {
       {/* ── Tabs ── */}
       <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-0">
         {[
-          { id: "pending", label: "Pending Approvals", count: pendingPasses.length },
-          { id: "processed", label: "Processed Passes", count: processedPasses.length },
+          { id: "pending", label: "Pending Approvals", count: globalCounts.pending },
+          { id: "processed", label: "Processed Passes", count: globalCounts.processed },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -625,6 +572,7 @@ export default function TrafficPassesPage() {
               setActiveTab(tab.id);
               setCardFilter("ALL");
               setSearchInput("");
+              setCurrentPage(1);
             }}
             className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${
               activeTab === tab.id
@@ -671,6 +619,8 @@ export default function TrafficPassesPage() {
                 <option value="EXPIRY_SOON">Expiring Soon</option>
               </select>
             </div>
+
+
 
             <div className="relative w-full md:w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
@@ -779,6 +729,22 @@ export default function TrafficPassesPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* ── Pagination Bar ── */}
+        <div className="px-5 pb-4">
+          <PaginationBar
+            currentPage={paginationMeta.currentPage || currentPage}
+            totalPages={paginationMeta.totalPages || 1}
+            totalRecords={paginationMeta.totalRecords || 0}
+            pageSize={paginationMeta.pageSize || pageSize}
+            onPageChange={(page) => setCurrentPage(page)}
+            onPageSizeChange={(limit) => {
+              setPageSize(limit);
+              setCurrentPage(1);
+            }}
+            loading={loading}
+          />
         </div>
       </div>
 

@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import PaginationBar from "@/components/ui/PaginationBar";
 import { toast } from "sonner";
 import {
   createIntake,
@@ -543,9 +544,12 @@ function CreateIntakeForm({ user, onCreated }) {
    List view
    ────────────────────────────────────────────────────────────────────── */
 
-function ListView({ user, refreshKey, onCreatedJump }) {
+function ListView({ user, refreshKey }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_LIMIT = 20;
+  const [paginationMeta, setPaginationMeta] = useState({ totalRecords: 0, totalPages: 1, currentPage: 1, pageSize: PAGE_LIMIT });
   const [filters, setFilters] = useState({
     fromDate: "",
     toDate: "",
@@ -555,15 +559,18 @@ function ListView({ user, refreshKey, onCreatedJump }) {
   });
   const [busyId, setBusyId] = useState(null);
 
-  const load = async () => {
+  const load = async (page = currentPage) => {
     setLoading(true);
     try {
-      const data = await listIntakes({
+      const response = await listIntakes({
+        page,
+        limit: PAGE_LIMIT,
         fromDate: filters.fromDate || undefined,
         toDate: filters.toDate || undefined,
         companyName: filters.companyName || undefined,
       });
-      setRows(data);
+      setRows(response.data || []);
+      setPaginationMeta(response.pagination || { totalRecords: 0, totalPages: 1, currentPage: page, pageSize: PAGE_LIMIT });
     } catch (err) {
       toast.error(err.message || "Failed to load intakes");
     } finally {
@@ -572,9 +579,15 @@ function ListView({ user, refreshKey, onCreatedJump }) {
   };
 
   useEffect(() => {
-    load();
+    load(1);
+    setCurrentPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
+
+  useEffect(() => {
+    load(currentPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
 
   const copyLink = (row) => {
     const link = `${window.location.origin}/vendor_pass/${row.token}`;
@@ -665,7 +678,10 @@ function ListView({ user, refreshKey, onCreatedJump }) {
         <div className="flex items-end">
           <button
             type="button"
-            onClick={load}
+            onClick={() => {
+              setCurrentPage(1);
+              load(1);
+            }}
             className="h-9 w-full px-4 rounded-md text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 inline-flex items-center justify-center gap-2"
           >
             <Search className="h-4 w-4" />
@@ -801,6 +817,18 @@ function ListView({ user, refreshKey, onCreatedJump }) {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Pagination control */}
+      <div className="px-6 py-4 border-t border-slate-100 bg-slate-50">
+        <PaginationBar
+          currentPage={paginationMeta.currentPage || currentPage}
+          totalPages={paginationMeta.totalPages || 1}
+          totalRecords={paginationMeta.totalRecords || 0}
+          pageSize={paginationMeta.pageSize || PAGE_LIMIT}
+          onPageChange={(page) => setCurrentPage(page)}
+          loading={loading}
+        />
       </div>
     </div>
   );

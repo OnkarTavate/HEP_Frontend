@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import PaginationBar from "@/components/ui/PaginationBar";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -29,9 +30,29 @@ const AGENT_API =
 export default function TrafficCompanyApprovals() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Search state
+  const [searchVal, setSearchVal] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+
   const [activeTab, setActiveTab] = useState("pending");
   const [isViewMode, setIsViewMode] = useState(false);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [paginationMeta, setPaginationMeta] = useState({
+    totalRecords: 0,
+    totalPages: 1,
+    currentPage: 1,
+    pageSize: 20,
+  });
+  const [globalCounts, setGlobalCounts] = useState({
+    total: 0,
+    approved: 0,
+    rejected: 0,
+    pending: 0,
+  });
 
   // Modal States
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -44,30 +65,51 @@ export default function TrafficCompanyApprovals() {
     decision: null,
   });
 
+  // Debounce search input
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    const handler = setTimeout(() => {
+      setSearchQuery(searchVal);
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [searchVal]);
+
   useEffect(() => {
     if (viewingDocUrl) setIframeLoading(true);
   }, [viewingDocUrl]);
 
   // ── Data fetching — uses auth token + correct ADMIN_API ──────────────────
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem("accessToken");
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const response = await axios.get(`${ADMIN_API}/user/agent-users`, {
         headers,
+        params: {
+          page: currentPage,
+          limit: pageSize,
+          status: activeTab,
+          search: searchQuery || undefined,
+        },
       });
 
       if (response.data?.data) {
         setRequests(response.data.data);
-      } else if (Array.isArray(response.data)) {
-        setRequests(response.data);
+        setPaginationMeta(response.data.pagination || {
+          totalRecords: response.data.data.length,
+          totalPages: 1,
+          currentPage: 1,
+          pageSize: pageSize,
+        });
+        setGlobalCounts(response.data.counts || {
+          total: 0,
+          approved: 0,
+          rejected: 0,
+          pending: 0,
+        });
       } else {
         setRequests([]);
-        console.warn("Unexpected response shape:", response.data);
       }
     } catch (error) {
       console.error(
@@ -79,7 +121,11 @@ export default function TrafficCompanyApprovals() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, pageSize, activeTab, searchQuery]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   // ── Action helpers ────────────────────────────────────────────────────────
   const handleRevertClick = () => {
@@ -138,20 +184,9 @@ export default function TrafficCompanyApprovals() {
   };
 
   // ── Derived data ──────────────────────────────────────────────────────────
-  const pendingRequests = requests.filter(
-    (r) => r.status === "pending" || !r.status,
-  );
-  const processedRequests = requests.filter((r) =>
-    ["approved", "rejected", "reverted"].includes(r.status),
-  );
-
-  const displayedRequests = (
-    activeTab === "pending" ? pendingRequests : processedRequests
-  ).filter(
-    (req) =>
-      req.referenceNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      req.entityName?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const pendingCount = globalCounts.pending;
+  const processedCount = globalCounts.total - globalCounts.pending;
+  const displayedRequests = requests;
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (loading) {
@@ -209,7 +244,7 @@ export default function TrafficCompanyApprovals() {
             </span>
           </div>
           <p className="text-3xl font-extrabold text-slate-900 dark:text-stone-100 tabular-nums">
-            {requests.length}
+            {globalCounts.total}
           </p>
         </div>
 
@@ -227,7 +262,7 @@ export default function TrafficCompanyApprovals() {
             </span>
           </div>
           <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-300 tabular-nums">
-            {pendingRequests.length}
+            {pendingCount}
           </p>
         </div>
 
@@ -245,7 +280,7 @@ export default function TrafficCompanyApprovals() {
             </span>
           </div>
           <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-300 tabular-nums">
-            {processedRequests.length}
+            {processedCount}
           </p>
         </div>
       </div>
@@ -262,7 +297,10 @@ export default function TrafficCompanyApprovals() {
           </p>
         </div>
         <button
-          onClick={fetchDashboardData}
+          onClick={() => {
+            setCurrentPage(1);
+            fetchDashboardData();
+          }}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 dark:bg-amber-400 text-white dark:text-slate-900 text-sm font-bold shadow hover:opacity-90 active:scale-95 transition-all"
         >
           <RefreshCw className="h-4 w-4" strokeWidth={2.5} />
@@ -273,16 +311,19 @@ export default function TrafficCompanyApprovals() {
       {/* ── Tabs ── */}
       <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-0">
         {[
-          { id: "pending", label: "Pending", count: pendingRequests.length },
+          { id: "pending", label: "Pending", count: pendingCount },
           {
             id: "processed",
             label: "Processed",
-            count: processedRequests.length,
+            count: processedCount,
           },
         ].map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              setCurrentPage(1);
+            }}
             className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${
               activeTab === tab.id
                 ? "bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-900 shadow"
@@ -325,8 +366,8 @@ export default function TrafficCompanyApprovals() {
             <input
               type="text"
               placeholder="Search company or ref..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchVal}
+              onChange={(e) => setSearchVal(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-amber-400 dark:focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 transition"
             />
           </div>
@@ -421,6 +462,22 @@ export default function TrafficCompanyApprovals() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination bar */}
+        <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-700/50 bg-slate-50/20 dark:bg-slate-800/10">
+          <PaginationBar
+            currentPage={paginationMeta.currentPage || currentPage}
+            totalPages={paginationMeta.totalPages || 1}
+            totalRecords={paginationMeta.totalRecords || 0}
+            pageSize={paginationMeta.pageSize || pageSize}
+            onPageChange={(page) => setCurrentPage(page)}
+            onPageSizeChange={(limit) => {
+              setPageSize(limit);
+              setCurrentPage(1);
+            }}
+            loading={loading}
+          />
         </div>
       </div>
 
