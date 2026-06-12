@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   Ship,
   LayoutDashboard,
@@ -37,6 +37,7 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -310,6 +311,7 @@ export default function AdminLayout({ children }) {
   // Strictly Admin Navigation Items
   const navigationItems = [
     { name: isAdmin ? "Admin Console" : "Vendor Pass", href: consoleHref, icon: ShieldCheck },
+    ...(isAdmin ? [{ name: "User Accounts", href: "/admin/user-accounts", icon: Users }] : []),
     { name: "Pass Approvals", href: "/admin/pass-approvals", icon: FileText },
     { name: "Company Approvals", href: "/admin/companies", icon: Building2 },
     { name: "All Passes", href: "/admin/all-passes", icon: FileText },
@@ -572,6 +574,8 @@ export default function AdminLayout({ children }) {
             side="left"
             className="w-72 p-0 bg-slate-900 dark:bg-slate-950 border-slate-800 dark:border-white/5"
           >
+            <SheetTitle className="sr-only">Admin Navigation Sidebar</SheetTitle>
+            <SheetDescription className="sr-only">Access different modules of the admin panel</SheetDescription>
             {renderIconSidebar({
               onNavigate: () => setIsMobileMenuOpen(false),
               expanded: true,
