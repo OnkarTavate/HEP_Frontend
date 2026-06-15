@@ -115,6 +115,82 @@ export default function TrafficPassesPage() {
   const [companyProfile, setCompanyProfile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Active Locks State for Concurrency Control
+  const [activeLocks, setActiveLocks] = useState({ pass: [], "vendor-pass": [], company: [] });
+
+  const fetchActiveLocks = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      const response = await axios.get(`${AGENT_API}/locks/active`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data && response.data.success) {
+        setActiveLocks(response.data.data);
+      }
+    } catch (err) {
+      console.error("Error fetching active locks:", err);
+    }
+  }, []);
+
+  const acquireLock = async (passId, type) => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      const res = await axios.post(`${AGENT_API}/locks/acquire`, {
+        applicationId: passId,
+        type,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return { success: true, lock: res.data.lock };
+    } catch (error) {
+      const message = error.response?.data?.message || "Failed to acquire lock";
+      return { success: false, message };
+    }
+  };
+
+  const releaseLock = async (passId, type) => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      await axios.post(`${AGENT_API}/locks/release`, {
+        applicationId: passId,
+        type,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (error) {
+      console.error("Failed to release lock:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchActiveLocks();
+    const interval = setInterval(fetchActiveLocks, 2000); // every 2 seconds
+    return () => clearInterval(interval);
+  }, [fetchActiveLocks]);
+
+  useEffect(() => {
+    if (!isModalOpen || !selectedRequest || isViewMode) return;
+
+    const lockType = selectedRequest.originType === "VENDOR" ? "vendor-pass" : "pass";
+    const interval = setInterval(async () => {
+      const lockRes = await acquireLock(selectedRequest.id, lockType);
+      if (!lockRes.success) {
+        toast.error("Lock Lost", {
+          description: "This application lock has expired or was taken by another user.",
+        });
+        setIsModalOpen(false);
+      }
+    }, 10000); // refresh every 10 seconds
+
+    return () => {
+      clearInterval(interval);
+      releaseLock(selectedRequest.id, lockType).then(() => {
+        fetchActiveLocks();
+      });
+    };
+  }, [isModalOpen, selectedRequest, isViewMode]);
+
   // Entity Verification Modal States
   const [entityModal, setEntityModal] = useState({
     isOpen: false,
@@ -189,6 +265,8 @@ export default function TrafficPassesPage() {
 
   useEffect(() => {
     fetchPassRequests();
+    const interval = setInterval(fetchPassRequests, 5000); // Poll every 5 seconds
+    return () => clearInterval(interval);
   }, [fetchPassRequests]);
 
   // const fetchCompanyProfile = async () => {
@@ -443,7 +521,18 @@ export default function TrafficPassesPage() {
     }
   };
 
-  const openReviewModal = (pass, viewOnly = false) => {
+  const openReviewModal = async (pass, viewOnly = false) => {
+    if (!viewOnly) {
+      const lockType = pass.originType === "VENDOR" ? "vendor-pass" : "pass";
+      const lockRes = await acquireLock(pass.id, lockType);
+      if (!lockRes.success) {
+        toast.error("Application In-Use", {
+          description: lockRes.message,
+        });
+        return;
+      }
+    }
+
     setSelectedRequest(pass);
 
     if (!viewOnly) {
@@ -648,7 +737,10 @@ export default function TrafficPassesPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
-                {["Ref No", "Company Details", "Entities Included", "Applied On", "Status"].map((h) => (
+                {(activeTab === "processed"
+                  ? ["Ref No", "Company Details", "Entities Included", "Applied On", "Approved By", "Status"]
+                  : ["Ref No", "Company Details", "Entities Included", "Applied On", "Status"]
+                ).map((h) => (
                   <th
                     key={h}
                     className={`px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${
@@ -663,14 +755,14 @@ export default function TrafficPassesPage() {
             <tbody className="divide-y divide-slate-50 dark:divide-slate-700/30">
               {loading ? (
                 <tr>
-                  <td colSpan="5" className="py-16 text-center text-slate-500">
+                  <td colSpan={activeTab === "processed" ? 6 : 5} className="py-16 text-center text-slate-500">
                     <Loader2 className="h-10 w-10 mx-auto text-slate-300 mb-3 animate-spin" />
                     <p className="text-sm font-medium">Loading requests...</p>
                   </td>
                 </tr>
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="py-16 text-center text-slate-500">
+                  <td colSpan={activeTab === "processed" ? 6 : 5} className="py-16 text-center text-slate-500">
                     <Search className="h-10 w-10 mx-auto text-slate-200 mb-3" />
                     <p className="text-sm font-medium">
                       No records found for the current filter/search.
@@ -688,13 +780,21 @@ export default function TrafficPassesPage() {
                   const statusKey = (pass.status || "").toLowerCase();
                   const statusClass = statusColors[statusKey] || "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
                   
+                  const lockType = pass.originType === "VENDOR" ? "vendor-pass" : "pass";
+                  const lock = activeLocks[lockType]?.find(l => String(l.applicationId) === String(pass.id));
+                  const isLocked = !!lock;
+
+                  const rowClass = isLocked
+                    ? "bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group"
+                    : "hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group";
+
                   return (
                     <tr
                       key={pass.originType === "VENDOR" ? `vpr-${pass.id}` : pass.id}
                       onClick={() =>
                         openReviewModal(pass, activeTab === "processed")
                       }
-                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group"
+                      className={rowClass}
                     >
                       <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d] dark:text-stone-200 font-mono">
                         {pass.referenceNo || `REQ-${pass.id}`}
@@ -718,10 +818,22 @@ export default function TrafficPassesPage() {
                       <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
                         {new Date(pass.createdAt).toLocaleDateString()}
                       </td>
+                      {activeTab === "processed" && (
+                        <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                          {pass.approvedBy || "—"}
+                        </td>
+                      )}
                       <td className="px-6 py-4 text-center">
-                        <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}>
-                          {(pass.status || "PENDING").toUpperCase()}
-                        </span>
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}>
+                            {(pass.status || "PENDING").toUpperCase()}
+                          </span>
+                          {isLocked && (
+                            <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900 animate-pulse">
+                              IN-USE BY {lock.userName.toUpperCase()}
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

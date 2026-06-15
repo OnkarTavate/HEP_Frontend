@@ -57,6 +57,81 @@ export default function TrafficCompanyApprovals() {
   // Modal States
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [remarks, setRemarks] = useState("");
+
+  // Concurrency locking state
+  const [activeLocks, setActiveLocks] = useState({ pass: [], "vendor-pass": [], company: [] });
+
+  const fetchActiveLocks = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      const response = await axios.get(`${AGENT_API}/locks/active`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data && response.data.success) {
+        setActiveLocks(response.data.data);
+      }
+    } catch (err) {
+      console.error("Error fetching active locks:", err);
+    }
+  }, []);
+
+  const acquireLock = async (appId, type) => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      const res = await axios.post(`${AGENT_API}/locks/acquire`, {
+        applicationId: appId,
+        type,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return { success: true, lock: res.data.lock };
+    } catch (error) {
+      const message = error.response?.data?.message || "Failed to acquire lock";
+      return { success: false, message };
+    }
+  };
+
+  const releaseLock = async (appId, type) => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      await axios.post(`${AGENT_API}/locks/release`, {
+        applicationId: appId,
+        type,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (error) {
+      console.error("Failed to release lock:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchActiveLocks();
+    const interval = setInterval(fetchActiveLocks, 2000); // every 2 seconds
+    return () => clearInterval(interval);
+  }, [fetchActiveLocks]);
+
+  useEffect(() => {
+    if (!selectedRequest || isViewMode) return;
+
+    const interval = setInterval(async () => {
+      const lockRes = await acquireLock(selectedRequest.id, "company");
+      if (!lockRes.success) {
+        toast.error("Lock Lost", {
+          description: "This application lock has expired or was taken by another user.",
+        });
+        setSelectedRequest(null);
+      }
+    }, 10000); // refresh every 10 seconds
+
+    return () => {
+      clearInterval(interval);
+      releaseLock(selectedRequest.id, "company").then(() => {
+        fetchActiveLocks();
+      });
+    };
+  }, [selectedRequest, isViewMode]);
   const [viewingDocUrl, setViewingDocUrl] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [iframeLoading, setIframeLoading] = useState(true);
@@ -125,6 +200,8 @@ export default function TrafficCompanyApprovals() {
 
   useEffect(() => {
     fetchDashboardData();
+    const interval = setInterval(fetchDashboardData, 5000); // Poll every 5 seconds
+    return () => clearInterval(interval);
   }, [fetchDashboardData]);
 
   // ── Action helpers ────────────────────────────────────────────────────────
@@ -377,12 +454,10 @@ export default function TrafficCompanyApprovals() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
-                {[
-                  "Ref No",
-                  "Company Name",
-                  "Operator Type",
-                  activeTab === "pending" ? "Action" : "Status",
-                ].map((h) => (
+                {(activeTab === "processed"
+                  ? ["Ref No", "Company Name", "Operator Type", "Approved By", "Status"]
+                  : ["Ref No", "Company Name", "Operator Type", activeTab === "pending" ? "Action" : "Status"]
+                ).map((h) => (
                   <th
                     key={h}
                     className={`px-5 py-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${h === "Action" || h === "Status" ? "text-center" : ""}`}
@@ -396,7 +471,7 @@ export default function TrafficCompanyApprovals() {
               {displayedRequests.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="4"
+                    colSpan={activeTab === "processed" ? 5 : 4}
                     className="py-16 text-center text-slate-400 dark:text-slate-500"
                   >
                     <Building2 className="h-10 w-10 mx-auto text-slate-200 dark:text-slate-700 mb-3" />
@@ -416,15 +491,33 @@ export default function TrafficCompanyApprovals() {
                   const statusClass =
                     statusColors[req.status] ||
                     "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+                  
+                  const lock = activeLocks.company?.find(l => String(l.applicationId) === String(req.id));
+                  const isLocked = !!lock;
+
+                  const rowClass = isLocked
+                    ? "bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group"
+                    : "hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group";
+
                   return (
                     <tr
                       key={req.id}
-                      onClick={() => {
+                      onClick={async () => {
+                        const viewOnly = activeTab === "processed";
+                        if (!viewOnly) {
+                          const lockRes = await acquireLock(req.id, "company");
+                          if (!lockRes.success) {
+                            toast.error("Application In-Use", {
+                              description: lockRes.message,
+                            });
+                            return;
+                          }
+                        }
                         setSelectedRequest(req);
-                        setIsViewMode(activeTab === "processed");
+                        setIsViewMode(viewOnly);
                         setRemarks(req.rejectedReason || "");
                       }}
-                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group"
+                      className={rowClass}
                     >
                       <td className="px-5 py-4 text-sm font-bold text-slate-800 dark:text-stone-200 font-mono">
                         {req.referenceNumber || "—"}
@@ -449,12 +542,24 @@ export default function TrafficCompanyApprovals() {
                           {req.userTypeName || "Agent"}
                         </span>
                       </td>
+                      {activeTab === "processed" && (
+                        <td className="px-5 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                          {req.approvedBy || "—"}
+                        </td>
+                      )}
                       <td className="px-5 py-4 text-center">
-                        <span
-                          className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}
-                        >
-                          {(req.status || "PENDING").toUpperCase()}
-                        </span>
+                        <div className="flex flex-col items-center gap-1">
+                          <span
+                            className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}
+                          >
+                            {(req.status || "PENDING").toUpperCase()}
+                          </span>
+                          {isLocked && (
+                            <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900 animate-pulse">
+                              IN-USE BY {lock.userName.toUpperCase()}
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
