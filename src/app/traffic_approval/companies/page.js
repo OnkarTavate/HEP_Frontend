@@ -37,6 +37,7 @@ export default function TrafficCompanyApprovals() {
 
   const [activeTab, setActiveTab] = useState("pending");
   const [isViewMode, setIsViewMode] = useState(false);
+  const [processedByMe, setProcessedByMe] = useState(false);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -59,7 +60,7 @@ export default function TrafficCompanyApprovals() {
   const [remarks, setRemarks] = useState("");
 
   // Concurrency locking state
-  const [activeLocks, setActiveLocks] = useState({ pass: [], "vendor-pass": [], company: [] });
+  const [activeLocks, setActiveLocks] = useState({});
 
   const fetchActiveLocks = useCallback(async () => {
     try {
@@ -69,7 +70,10 @@ export default function TrafficCompanyApprovals() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.data && response.data.success) {
-        setActiveLocks(response.data.data);
+        const newLocks = response.data.data;
+        setActiveLocks((prev) =>
+          JSON.stringify(newLocks) === JSON.stringify(prev) ? prev : newLocks
+        );
       }
     } catch (err) {
       console.error("Error fetching active locks:", err);
@@ -108,7 +112,7 @@ export default function TrafficCompanyApprovals() {
 
   useEffect(() => {
     fetchActiveLocks();
-    const interval = setInterval(fetchActiveLocks, 2000); // every 2 seconds
+    const interval = setInterval(fetchActiveLocks, 900); // every 900ms (< 1s)
     return () => clearInterval(interval);
   }, [fetchActiveLocks]);
 
@@ -145,7 +149,7 @@ export default function TrafficCompanyApprovals() {
     const handler = setTimeout(() => {
       setSearchQuery(searchVal);
       setCurrentPage(1);
-    }, 400);
+    }, 500);
     return () => clearTimeout(handler);
   }, [searchVal]);
 
@@ -153,54 +157,63 @@ export default function TrafficCompanyApprovals() {
     if (viewingDocUrl) setIframeLoading(true);
   }, [viewingDocUrl]);
 
-  // ── Data fetching — uses auth token + correct ADMIN_API ──────────────────
-  const fetchDashboardData = useCallback(async () => {
-    setLoading(true);
+  // ── Data fetching ────────────────────────────────────────────────────────
+  const fetchDashboardData = useCallback(async (isPoll = false) => {
     try {
+      if (!isPoll) setLoading(true);
       const token = localStorage.getItem("accessToken");
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const response = await axios.get(`${ADMIN_API}/user/agent-users`, {
-        headers,
+        headers: { Authorization: `Bearer ${token}` },
         params: {
           page: currentPage,
           limit: pageSize,
           status: activeTab,
           search: searchQuery || undefined,
+          processedByMe: processedByMe ? "true" : undefined,
         },
       });
 
       if (response.data?.data) {
-        setRequests(response.data.data);
-        setPaginationMeta(response.data.pagination || {
+        const newRequests = response.data.data;
+        const newMeta = response.data.pagination || {
           totalRecords: response.data.data.length,
           totalPages: 1,
           currentPage: 1,
           pageSize: pageSize,
-        });
-        setGlobalCounts(response.data.counts || {
+        };
+        const newCounts = response.data.counts || {
           total: 0,
           approved: 0,
           rejected: 0,
           pending: 0,
-        });
+        };
+
+        setRequests((prev) =>
+          JSON.stringify(newRequests) === JSON.stringify(prev) ? prev : newRequests
+        );
+        setPaginationMeta((prev) =>
+          JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta
+        );
+        setGlobalCounts((prev) =>
+          JSON.stringify(newCounts) === JSON.stringify(prev) ? prev : newCounts
+        );
       } else {
-        setRequests([]);
+        setRequests((prev) => prev.length === 0 ? prev : []);
       }
     } catch (error) {
       console.error(
         "Failed to fetch company requests:",
         error.response || error.message,
       );
-      toast.error("Failed to load company data. Check backend connection.");
-      setRequests([]);
+      if (!isPoll) toast.error("Failed to load company data. Check backend connection.");
     } finally {
-      setLoading(false);
+      if (!isPoll) setLoading(false);
     }
-  }, [currentPage, pageSize, activeTab, searchQuery]);
+  }, [currentPage, pageSize, activeTab, searchQuery, processedByMe]);
 
   useEffect(() => {
-    fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 5000); // Poll every 5 seconds
+    fetchDashboardData(false);
+    const interval = setInterval(() => fetchDashboardData(true), 5000); // Poll every 5 seconds without showing loading spinner
     return () => clearInterval(interval);
   }, [fetchDashboardData]);
 
@@ -399,6 +412,7 @@ export default function TrafficCompanyApprovals() {
             key={tab.id}
             onClick={() => {
               setActiveTab(tab.id);
+              setProcessedByMe(false);
               setCurrentPage(1);
             }}
             className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${
@@ -438,15 +452,32 @@ export default function TrafficCompanyApprovals() {
               </>
             )}
           </h3>
-          <div className="relative w-full md:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-            <input
-              type="text"
-              placeholder="Search company or ref..."
-              value={searchVal}
-              onChange={(e) => setSearchVal(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-amber-400 dark:focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 transition"
-            />
+          <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 items-center">
+            {activeTab === "processed" && (
+              <label className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors select-none">
+                <input
+                  type="checkbox"
+                  id="processed-by-me-filter"
+                  checked={processedByMe}
+                  onChange={(e) => {
+                    setProcessedByMe(e.target.checked);
+                    setCurrentPage(1);
+                  }}
+                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 h-4 w-4 cursor-pointer"
+                />
+                <span>Processed By Me</span>
+              </label>
+            )}
+            <div className="relative w-full md:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+              <input
+                type="text"
+                placeholder="Search company or ref..."
+                value={searchVal}
+                onChange={(e) => setSearchVal(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-amber-400 dark:focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 transition"
+              />
+            </div>
           </div>
         </div>
 

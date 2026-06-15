@@ -89,12 +89,16 @@ export default function AdminDashboard() {
 
   const fetchDashboardData = async (page = currentPage, query = searchQuery) => {
     try {
+      const token = localStorage.getItem("accessToken");
       const response = await axios.get(`${BASE_URL}/user/agent-users`, {
         params: {
           page,
           limit: PAGE_LIMIT,
           search: query || undefined,
-        }
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
       const data = response.data.data || [];
       setRequests(data);

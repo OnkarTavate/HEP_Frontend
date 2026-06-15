@@ -100,6 +100,7 @@ export default function TrafficPassesPage() {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortBy, setSortBy] = useState("DATE_DESC");
+  const [processedByMe, setProcessedByMe] = useState(false);
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -116,7 +117,7 @@ export default function TrafficPassesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Active Locks State for Concurrency Control
-  const [activeLocks, setActiveLocks] = useState({ pass: [], "vendor-pass": [], company: [] });
+  const [activeLocks, setActiveLocks] = useState({});
 
   const fetchActiveLocks = useCallback(async () => {
     try {
@@ -126,7 +127,10 @@ export default function TrafficPassesPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.data && response.data.success) {
-        setActiveLocks(response.data.data);
+        const newLocks = response.data.data;
+        setActiveLocks((prev) =>
+          JSON.stringify(newLocks) === JSON.stringify(prev) ? prev : newLocks
+        );
       }
     } catch (err) {
       console.error("Error fetching active locks:", err);
@@ -165,7 +169,7 @@ export default function TrafficPassesPage() {
 
   useEffect(() => {
     fetchActiveLocks();
-    const interval = setInterval(fetchActiveLocks, 2000); // every 2 seconds
+    const interval = setInterval(fetchActiveLocks, 900); // every 900ms (< 1s)
     return () => clearInterval(interval);
   }, [fetchActiveLocks]);
 
@@ -194,8 +198,8 @@ export default function TrafficPassesPage() {
   // Entity Verification Modal States
   const [entityModal, setEntityModal] = useState({
     isOpen: false,
-    data: null,
     type: null,
+    record: null,
   });
 
   // Granular Entity Tracking
@@ -230,9 +234,9 @@ export default function TrafficPassesPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const fetchPassRequests = useCallback(async () => {
+  const fetchPassRequests = useCallback(async (isPoll = false) => {
     try {
-      setLoading(true);
+      if (!isPoll) setLoading(true);
       const token = localStorage.getItem("accessToken");
       const response = await axios.get(
         `${AGENT_API}/pass-request/get-agent-pass-requests`,
@@ -244,28 +248,39 @@ export default function TrafficPassesPage() {
             search: debouncedSearch || undefined,
             status: activeTab || undefined,
             sortOrder: sortBy === "DATE_ASC" ? "ASC" : "DESC",
+            processedByMe: processedByMe ? "true" : undefined,
           },
         },
       );
 
       if (response.data && response.data.success) {
-        setRequests(response.data.data || []);
-        setPaginationMeta(response.data.pagination || {});
-        setGlobalCounts(response.data.counts || { total: 0, pending: 0, processed: 0 });
+        const newRequests = response.data.data || [];
+        const newMeta = response.data.pagination || {};
+        const newCounts = response.data.counts || { total: 0, pending: 0, processed: 0 };
+
+        setRequests((prev) =>
+          JSON.stringify(newRequests) === JSON.stringify(prev) ? prev : newRequests
+        );
+        setPaginationMeta((prev) =>
+          JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta
+        );
+        setGlobalCounts((prev) =>
+          JSON.stringify(newCounts) === JSON.stringify(prev) ? prev : newCounts
+        );
       } else {
-        setRequests([]);
+        setRequests((prev) => prev.length === 0 ? prev : []);
       }
     } catch (error) {
       console.error("Failed to fetch requests", error);
-      toast.error("Failed to load pass requests.");
+      if (!isPoll) toast.error("Failed to load pass requests.");
     } finally {
-      setLoading(false);
+      if (!isPoll) setLoading(false);
     }
-  }, [currentPage, pageSize, debouncedSearch, activeTab, sortBy]);
+  }, [currentPage, pageSize, debouncedSearch, activeTab, sortBy, processedByMe]);
 
   useEffect(() => {
-    fetchPassRequests();
-    const interval = setInterval(fetchPassRequests, 5000); // Poll every 5 seconds
+    fetchPassRequests(false);
+    const interval = setInterval(() => fetchPassRequests(true), 5000); // Poll every 5 seconds without showing loading spinner
     return () => clearInterval(interval);
   }, [fetchPassRequests]);
 
@@ -661,6 +676,7 @@ export default function TrafficPassesPage() {
               setActiveTab(tab.id);
               setCardFilter("ALL");
               setSearchInput("");
+              setProcessedByMe(false);
               setCurrentPage(1);
             }}
             className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${
@@ -696,6 +712,22 @@ export default function TrafficPassesPage() {
           </h3>
 
           <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 items-center">
+            {activeTab === "processed" && (
+              <label className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors select-none">
+                <input
+                  type="checkbox"
+                  id="processed-by-me-filter"
+                  checked={processedByMe}
+                  onChange={(e) => {
+                    setProcessedByMe(e.target.checked);
+                    setCurrentPage(1);
+                  }}
+                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 h-4 w-4 cursor-pointer"
+                />
+                <span>Processed By Me</span>
+              </label>
+            )}
+
             <div className="relative w-full md:w-auto">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
               <select
