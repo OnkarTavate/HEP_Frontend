@@ -31,9 +31,20 @@ import {
   Edit3,
   Car,
   User,
+  Minimize,
+  Maximize,
+  Loader2,
+  XCircle,
 } from "lucide-react";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
+
+// --- URL Helper to reliably strip '/api' for static file fetching ---
+const getFileUrl = (path) => {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  return `${AGENT_API}${path.startsWith("/") ? "" : "/"}${path}`;
+};
 
 const getCurrentDateTime = () => {
   const now = new Date();
@@ -237,6 +248,31 @@ export default function PassRequestPage() {
   const [revertedPersons, setRevertedPersons] = useState([]);
   const [revertedVehicles, setRevertedVehicles] = useState([]);
   const [editingRevertedEntity, setEditingRevertedEntity] = useState(null); // { type: 'person'|'vehicle', index: number, data: object }
+
+  const [viewingDocUrl, setViewingDocUrl] = useState(null);
+  const [isImage, setIsImage] = useState(false);
+  const [iframeLoading, setIframeLoading] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (viewingDocUrl) {
+      setIframeLoading(true);
+    }
+  }, [viewingDocUrl]);
+
+  const handleViewDoc = (passRequestId, documentType, staticPath, entityIndex = 0, isVendorPass = false) => {
+    // Check if the file is an image based on its extension
+    const isImg = staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath);
+    setIsImage(!!isImg);
+
+    if (documentType === "authLetter" || documentType === "requisitionLetter") {
+      setViewingDocUrl(getFileUrl(staticPath));
+    } else {
+      setViewingDocUrl(
+        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${passRequestId}&documentType=${documentType}&entityIndex=${entityIndex}&isVendorPass=${isVendorPass}`,
+      );
+    }
+  };
 
   const [persons, setPersons] = useState([]);
   const [vehicles, setVehicles] = useState([]);
@@ -1795,8 +1831,25 @@ export default function PassRequestPage() {
         };
 
         // Only update local reverted persons state (no DB update yet)
+        // Preserve actual File objects for upload during resubmission
         const updatedPersons = [...revertedPersons];
-        updatedPersons[index] = { ...updateData, id, status: 'updated' };
+        updatedPersons[index] = {
+          ...updateData,
+          id,
+          status: 'updated',
+          // Carry File objects from personForm for resubmission
+          newPhoto: personForm.photo || null,
+          newAadhar: personForm.aadharFile || null,
+          newIdProof: personForm.idProofFile || null,
+          newDriverLicence: personForm.driverLicence || null,
+          newPoliceVerification: personForm.policeVerification || null,
+          newEmploymentProof: personForm.proofOfEmployment || null,
+          newChaLicence: personForm.copyOfLicence || null,
+          newPassport: personForm.passportDoc || null,
+          newRequisitionLetter: personForm.requisitionLetter || null,
+          newCdc: personForm.cdcDocument || null,
+          newDeclaration: personForm.declarationForm || null,
+        };
         setRevertedPersons(updatedPersons);
 
         // Close person form and reset
@@ -1834,8 +1887,21 @@ export default function PassRequestPage() {
         };
 
         // Only update local reverted vehicles state (no DB update yet)
+        // Preserve actual File objects for upload during resubmission
         const updatedVehicles = [...revertedVehicles];
-        updatedVehicles[index] = { ...updateData, id, status: 'updated' };
+        updatedVehicles[index] = {
+          ...updateData,
+          id,
+          status: 'updated',
+          // Carry File objects from vehicleForm for resubmission
+          newRc: vehicleForm.rcDocument || null,
+          newInsurance: vehicleForm.insuranceDocument || null,
+          newPermit: vehicleForm.permit || null,
+          newFitness: vehicleForm.fitnessCert || null,
+          newRequestLetter: vehicleForm.requestLetter || null,
+          newTax: vehicleForm.taxDoc || null,
+          newEmission: vehicleForm.emissionCert || null,
+        };
         setRevertedVehicles(updatedVehicles);
 
         // Close vehicle form and reset
@@ -1872,39 +1938,53 @@ export default function PassRequestPage() {
           };
           const passTypeEnum = passTypeMap[person.passType] || person.passType;
 
-          const updateData = {
-            id: person.id,
-            name: person.name,
-            mobile: person.mobile,
-            aadharNo: person.aadharNo,
-            designation: person.designation,
-            idProofType: person.idProofType,
-            hepTypeId: person.hepTypeId,
-            passType: passTypeEnum,
-            passPeriod: person.passPeriod,
-            dateFrom: person.dateFrom,
-            dateTo: person.dateTo,
-            amount: person.amount,
-            countryId: person.countryId,
-            // File names for reference
-            photoFileName: person.photoFileName,
-            aadharPDFFileName: person.aadharPDFFileName,
-            driverLicenseName: person.driverLicenseName,
-            requisitionLetterName: person.requisitionLetterName,
-            passportName: person.passportName,
-            policeVerificationName: person.policeVerificationName,
-            employmentProofName: person.employmentProofName,
-            chaLicenseName: person.chaLicenseName,
-            idProofFileName: person.idProofFileName,
-            cdcDocumentName: person.cdcDocumentName,
-            declarationFormName: person.declarationFormName,
-          };
+          const formData = new FormData();
 
-          console.log('Updating person:', person.id, updateData);
+          // Append text fields
+          formData.append('name', person.name || '');
+          formData.append('mobile', person.mobile || '');
+          formData.append('aadharNo', person.aadharNo || '');
+          formData.append('designation', person.designation || '');
+          formData.append('idProofType', person.idProofType || '');
+          formData.append('hepTypeId', person.hepTypeId || '');
+          formData.append('passType', passTypeEnum);
+          formData.append('passPeriod', person.passPeriod || '');
+          formData.append('dateFrom', person.dateFrom || '');
+          formData.append('dateTo', person.dateTo || '');
+          formData.append('amount', person.amount || '');
+          formData.append('countryId', person.countryId || '');
+
+          // File name references
+          formData.append('photoFileName', person.photoFileName || '');
+          formData.append('aadharPDFFileName', person.aadharPDFFileName || '');
+          formData.append('driverLicenseName', person.driverLicenseName || '');
+          formData.append('requisitionLetterName', person.requisitionLetterName || '');
+          formData.append('passportName', person.passportName || '');
+          formData.append('policeVerificationName', person.policeVerificationName || '');
+          formData.append('employmentProofName', person.employmentProofName || '');
+          formData.append('chaLicenseName', person.chaLicenseName || '');
+          formData.append('idProofFileName', person.idProofFileName || '');
+          formData.append('cdcDocumentName', person.cdcDocumentName || '');
+          formData.append('declarationFormName', person.declarationFormName || '');
+
+          // Append actual File objects if re-uploaded
+          if (person.newPhoto) formData.append('personPhoto', person.newPhoto);
+          if (person.newAadhar) formData.append('personAadhar', person.newAadhar);
+          if (person.newIdProof) formData.append('personIdProof', person.newIdProof);
+          if (person.newDriverLicence) formData.append('driverLicense', person.newDriverLicence);
+          if (person.newPoliceVerification) formData.append('policeVerification', person.newPoliceVerification);
+          if (person.newEmploymentProof) formData.append('employmentProof', person.newEmploymentProof);
+          if (person.newChaLicence) formData.append('chaLicenseCopy', person.newChaLicence);
+          if (person.newPassport) formData.append('passportDoc', person.newPassport);
+          if (person.newRequisitionLetter) formData.append('requisitionLetter', person.newRequisitionLetter);
+          if (person.newCdc) formData.append('cdcDocument', person.newCdc);
+          if (person.newDeclaration) formData.append('declarationForm', person.newDeclaration);
+
+          console.log('Updating person:', person.id);
           await axios.put(
             `${AGENT_API}/pass-request/update-pass-person/${person.id}`,
-            updateData,
-            { headers }
+            formData,
+            { headers: { ...headers, 'Content-Type': 'multipart/form-data' } }
           );
           console.log('Person updated successfully:', person.id);
         } catch (error) {
@@ -1923,33 +2003,43 @@ export default function PassRequestPage() {
           };
           const passTypeEnum = passTypeMap[vehicle.passType] || vehicle.passType;
 
-          const updateData = {
-            id: vehicle.id,
-            registrationNo: vehicle.registrationNo || vehicle.regNo,
-            vehicleTypeId: vehicle.vehicleTypeId,
-            fuelType: vehicle.fuelType,
-            insuranceExpiry: vehicle.insuranceExpiry,
-            rcValidity: vehicle.rcValidity,
-            passType: passTypeEnum,
-            passPeriod: vehicle.passPeriod,
-            dateFrom: vehicle.dateFrom,
-            dateTo: vehicle.dateTo,
-            amount: vehicle.amount,
-            // File names for reference
-            scannedCopyFileName: vehicle.scannedCopyFileName,
-            insuranceFileName: vehicle.insuranceFileName,
-            permitFileName: vehicle.permitFileName,
-            fitnessFileName: vehicle.fitnessFileName,
-            requestLetterName: vehicle.requestLetterName,
-            taxDocName: vehicle.taxDocName,
-            emissionCertName: vehicle.emissionCertName,
-          };
+          const formData = new FormData();
 
-          console.log('Updating vehicle:', vehicle.id, updateData);
+          // Append text fields
+          formData.append('registrationNo', vehicle.registrationNo || vehicle.regNo || '');
+          formData.append('vehicleTypeId', vehicle.vehicleTypeId || '');
+          formData.append('fuelType', vehicle.fuelType || '');
+          formData.append('insuranceExpiry', vehicle.insuranceExpiry || '');
+          formData.append('rcValidity', vehicle.rcValidity || '');
+          formData.append('passType', passTypeEnum);
+          formData.append('passPeriod', vehicle.passPeriod || '');
+          formData.append('dateFrom', vehicle.dateFrom || '');
+          formData.append('dateTo', vehicle.dateTo || '');
+          formData.append('amount', vehicle.amount || '');
+
+          // File name references
+          formData.append('scannedCopyFileName', vehicle.scannedCopyFileName || '');
+          formData.append('insuranceFileName', vehicle.insuranceFileName || '');
+          formData.append('permitFileName', vehicle.permitFileName || '');
+          formData.append('fitnessFileName', vehicle.fitnessFileName || '');
+          formData.append('requestLetterName', vehicle.requestLetterName || '');
+          formData.append('taxDocName', vehicle.taxDocName || '');
+          formData.append('emissionCertName', vehicle.emissionCertName || '');
+
+          // Append actual File objects if re-uploaded
+          if (vehicle.newRc) formData.append('vehicleRC', vehicle.newRc);
+          if (vehicle.newInsurance) formData.append('vehicleInsurance', vehicle.newInsurance);
+          if (vehicle.newPermit) formData.append('vehiclePermit', vehicle.newPermit);
+          if (vehicle.newFitness) formData.append('vehicleFitness', vehicle.newFitness);
+          if (vehicle.newRequestLetter) formData.append('vehicleRequestLetter', vehicle.newRequestLetter);
+          if (vehicle.newTax) formData.append('vehicleTax', vehicle.newTax);
+          if (vehicle.newEmission) formData.append('vehicleEmission', vehicle.newEmission);
+
+          console.log('Updating vehicle:', vehicle.id);
           await axios.put(
             `${AGENT_API}/pass-request/update-pass-vehicle/${vehicle.id}`,
-            updateData,
-            { headers }
+            formData,
+            { headers: { ...headers, 'Content-Type': 'multipart/form-data' } }
           );
           console.log('Vehicle updated successfully:', vehicle.id);
         } catch (error) {
@@ -1970,8 +2060,9 @@ export default function PassRequestPage() {
       toast.success('Pass resubmitted successfully!');
       closeRevertedEditModal();
 
-      // Refresh the reverted passes list
-      fetchSubmittedPasses();
+      // Reset pagination and switch to 'view' tab to show resubmitted pass
+      setCurrentPage(1);
+      setActiveTab("view");
 
     } catch (error) {
       console.error('Error resubmitting pass:', error);
@@ -3118,9 +3209,11 @@ export default function PassRequestPage() {
                           file={personForm.aadharFile}
                           existingFileName={personForm.existingAadharName}
                           onView={() =>
-                            window.open(
-                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=personAadhar`,
-                              "_blank",
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "personAadhar",
+                              personForm.existingAadharName,
+                              personForm.editIndex
                             )
                           }
                     
@@ -3310,9 +3403,11 @@ export default function PassRequestPage() {
                           file={personForm.passportDoc}
                           existingFileName={personForm.existingPassportName}
                           onView={() =>
-                            window.open(
-                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=passportDoc`,
-                              "_blank",
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "passportDoc",
+                              personForm.existingPassportName,
+                              personForm.editIndex
                             )
                           }
                           onChange={(e) =>
@@ -3685,9 +3780,11 @@ export default function PassRequestPage() {
                           file={personForm.cdcDocument}
                           existingFileName={personForm.existingCdcName}
                           onView={() =>
-                            window.open(
-                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=cdcDocument`,
-                              "_blank",
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "cdcDocument",
+                              personForm.existingCdcName,
+                              personForm.editIndex
                             )
                           }
                           onChange={(e) =>
@@ -3706,9 +3803,11 @@ export default function PassRequestPage() {
                           file={personForm.declarationForm}
                           existingFileName={personForm.existingDeclarationName}
                           onView={() =>
-                            window.open(
-                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=declarationForm`,
-                              "_blank",
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "declarationForm",
+                              personForm.existingDeclarationName,
+                              personForm.editIndex
                             )
                           }
                           onChange={(e) =>
@@ -3833,9 +3932,11 @@ export default function PassRequestPage() {
                       file={personForm.idProofFile}
                       existingFileName={personForm.existingIdProofName}
                       onView={() =>
-                        window.open(
-                          `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=personIdProof`,
-                          "_blank",
+                        handleViewDoc(
+                          personForm.existingPassRequestId,
+                          "personIdProof",
+                          personForm.existingIdProofName,
+                          personForm.editIndex
                         )
                       }
                       onChange={(e) =>
@@ -3992,9 +4093,11 @@ export default function PassRequestPage() {
                       file={personForm.driverLicence}
                       existingFileName={personForm.existingDlName}
                       onView={() =>
-                        window.open(
-                          `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=driverLicense`,
-                          "_blank",
+                        handleViewDoc(
+                          personForm.existingPassRequestId,
+                          "driverLicense",
+                          personForm.existingDlName,
+                          personForm.editIndex
                         )
                       }
                       onChange={(e) =>
@@ -4013,9 +4116,11 @@ export default function PassRequestPage() {
                         file={personForm.policeVerification}
                         existingFileName={personForm.existingPoliceName}
                         onView={() =>
-                          window.open(
-                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=policeVerification`,
-                            "_blank",
+                          handleViewDoc(
+                            personForm.existingPassRequestId,
+                            "policeVerification",
+                            personForm.existingPoliceName,
+                            personForm.editIndex
                           )
                         }
                         onChange={(e) =>
@@ -4033,9 +4138,11 @@ export default function PassRequestPage() {
                       file={personForm.passportDoc}
                       existingFileName={personForm.existingPassportName}
                       onView={() =>
-                        window.open(
-                          `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=passportDoc`,
-                          "_blank",
+                        handleViewDoc(
+                          personForm.existingPassRequestId,
+                          "passportDoc",
+                          personForm.existingPassportName,
+                          personForm.editIndex
                         )
                       }
                       onChange={(e) =>
@@ -4387,9 +4494,11 @@ export default function PassRequestPage() {
                     file={vehicleForm.rcDocument}
                     existingFileName={vehicleForm.existingRcName}
                     onView={() =>
-                      window.open(
-                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleRC`,
-                        "_blank",
+                      handleViewDoc(
+                        vehicleForm.existingPassRequestId,
+                        "vehicleRC",
+                        vehicleForm.existingRcName,
+                        vehicleForm.editIndex
                       )
                     }
                     onChange={(e) =>
@@ -4405,9 +4514,11 @@ export default function PassRequestPage() {
                     file={vehicleForm.insuranceDocument}
                     existingFileName={vehicleForm.existingInsName}
                     onView={() =>
-                      window.open(
-                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleInsurance`,
-                        "_blank",
+                      handleViewDoc(
+                        vehicleForm.existingPassRequestId,
+                        "vehicleInsurance",
+                        vehicleForm.existingInsName,
+                        vehicleForm.editIndex
                       )
                     }
                     onChange={(e) =>
@@ -4423,9 +4534,11 @@ export default function PassRequestPage() {
                     file={vehicleForm.permit}
                     existingFileName={vehicleForm.existingPermitName}
                     onView={() =>
-                      window.open(
-                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehiclePermit`,
-                        "_blank",
+                      handleViewDoc(
+                        vehicleForm.existingPassRequestId,
+                        "vehiclePermit",
+                        vehicleForm.existingPermitName,
+                        vehicleForm.editIndex
                       )
                     }
                     onChange={(e) =>
@@ -4441,9 +4554,11 @@ export default function PassRequestPage() {
                     file={vehicleForm.fitnessCert}
                     existingFileName={vehicleForm.existingFitnessName}
                     onView={() =>
-                      window.open(
-                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleFitness`,
-                        "_blank",
+                      handleViewDoc(
+                        vehicleForm.existingPassRequestId,
+                        "vehicleFitness",
+                        vehicleForm.existingFitnessName,
+                        vehicleForm.editIndex
                       )
                     }
                     onChange={(e) =>
@@ -4462,9 +4577,11 @@ export default function PassRequestPage() {
                           file={vehicleForm.requestLetter}
                           existingFileName={vehicleForm.existingReqName}
                           onView={() =>
-                            window.open(
-                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleRequestLetter`,
-                              "_blank",
+                            handleViewDoc(
+                              vehicleForm.existingPassRequestId,
+                              "vehicleRequestLetter",
+                              vehicleForm.existingReqName,
+                              vehicleForm.editIndex
                             )
                           }
                           onChange={(e) =>
@@ -4480,9 +4597,11 @@ export default function PassRequestPage() {
                           file={vehicleForm.taxDoc}
                           existingFileName={vehicleForm.existingTaxName}
                           onView={() =>
-                            window.open(
-                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleTax`,
-                              "_blank",
+                            handleViewDoc(
+                              vehicleForm.existingPassRequestId,
+                              "vehicleTax",
+                              vehicleForm.existingTaxName,
+                              vehicleForm.editIndex
                             )
                           }
                           onChange={(e) =>
@@ -4498,9 +4617,11 @@ export default function PassRequestPage() {
                           file={vehicleForm.emissionCert}
                           existingFileName={vehicleForm.existingEmissionName}
                           onView={() =>
-                            window.open(
-                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleEmission`,
-                              "_blank",
+                            handleViewDoc(
+                              vehicleForm.existingPassRequestId,
+                              "vehicleEmission",
+                              vehicleForm.existingEmissionName,
+                              vehicleForm.editIndex
                             )
                           }
                           onChange={(e) =>
@@ -5489,6 +5610,76 @@ export default function PassRequestPage() {
                 <Send className="h-4 w-4" />
                 Resubmit Pass
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document Viewer Modal Overlay */}
+      {viewingDocUrl && (
+        <div className="fixed inset-0 z-[150] bg-slate-900/85 backdrop-blur-sm flex items-center justify-center p-4 md:p-6 lg:p-10 animate-in fade-in duration-300">
+          <div
+            className={`bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${
+              isFullscreen ? "w-full h-full" : "w-full max-w-5xl h-[85vh]"
+            }`}
+          >
+            {/* Header */}
+            <div className="bg-slate-800 text-white px-6 py-4 flex items-center justify-between shrink-0">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <FileText className="h-5 w-5 text-orange-500" />
+                Document Viewer
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg transition-colors"
+                  title={isFullscreen ? "Exit Fullscreen" : "Maximize"}
+                >
+                  {isFullscreen ? (
+                    <Minimize className="h-5 w-5" />
+                  ) : (
+                    <Maximize className="h-5 w-5" />
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setViewingDocUrl(null);
+                    setIsFullscreen(false);
+                  }}
+                  className="bg-slate-700 hover:bg-red-500 p-2 rounded-lg transition-colors"
+                  title="Close Viewer"
+                >
+                  <XCircle className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Iframe / Image Container */}
+            <div className="flex-1 w-full bg-slate-100 relative flex items-center justify-center p-4">
+              {iframeLoading && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50">
+                  <Loader2 className="h-10 w-10 text-[#ff6b00] animate-spin mb-4" />
+                  <p className="text-slate-500 font-bold animate-pulse">
+                    Loading document...
+                  </p>
+                </div>
+              )}
+
+              {isImage ? (
+                <img
+                  src={viewingDocUrl}
+                  alt="Document Viewer"
+                  className="max-w-full max-h-full object-contain relative z-0 drop-shadow-lg rounded-md"
+                  onLoad={() => setIframeLoading(false)}
+                />
+              ) : (
+                <iframe
+                  src={viewingDocUrl}
+                  className="w-full h-full border-none relative z-0 bg-white"
+                  title="Document Viewer"
+                  onLoad={() => setIframeLoading(false)}
+                />
+              )}
             </div>
           </div>
         </div>

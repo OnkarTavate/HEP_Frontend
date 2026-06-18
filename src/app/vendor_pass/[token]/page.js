@@ -27,6 +27,9 @@ import {
   Loader2,
   FileText,
   ShieldCheck,
+  Maximize,
+  Minimize,
+  XCircle,
 } from "lucide-react";
 import {
   getPublicIntake,
@@ -233,9 +236,56 @@ export default function VendorPassPublicPage() {
   const params = useParams();
   const router = useRouter();
   const token = params?.token;
+  const [activeToken, setActiveToken] = useState(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      let t = token;
+      if (t) {
+        sessionStorage.setItem("vendor_pass_token", t);
+        setActiveToken(t);
+        window.history.replaceState(null, "", "/vendor_pass");
+      } else {
+        const stored = sessionStorage.getItem("vendor_pass_token");
+        if (stored) {
+          setActiveToken(stored);
+        }
+      }
+    }
+  }, [token]);
 
   // Intake (department-provided context)
   const [intake, setIntake] = useState(null);
+  const [viewingDocUrl, setViewingDocUrl] = useState(null);
+  const [isImage, setIsImage] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [docLoading, setDocLoading] = useState(false);
+
+  const handleViewDoc = async (passRequestId, documentType, staticPath, entityIndex = 0, isVendorPass = false) => {
+    let docUrl = "";
+    if (documentType === "workOrder") {
+      docUrl = `${AGENT_API}/vendor-pass/public/work-order/${passRequestId}`;
+    } else {
+      docUrl = `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${passRequestId}&documentType=${documentType}&entityIndex=${entityIndex}&isVendorPass=${isVendorPass ? "true" : "false"}`;
+    }
+
+    setDocLoading(true);
+    
+    let detectedIsImage = false;
+    try {
+      const response = await fetch(docUrl, { method: 'HEAD' });
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.startsWith('image/')) {
+        detectedIsImage = true;
+      }
+    } catch (err) {
+      console.error("Error fetching head:", err);
+      detectedIsImage = !!(staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath));
+    }
+
+    setIsImage(detectedIsImage);
+    setViewingDocUrl(docUrl);
+  };
   const [intakeLoading, setIntakeLoading] = useState(true);
   const [intakeError, setIntakeError] = useState("");
 
@@ -401,12 +451,12 @@ export default function VendorPassPublicPage() {
 
   // Fetch vendor intake by token; pre-fill general form from intake
   useEffect(() => {
-    if (!token) return;
+    if (!activeToken) return;
     let alive = true;
     (async () => {
       try {
         setIntakeLoading(true);
-        const data = await getPublicIntake(token);
+        const data = await getPublicIntake(activeToken);
         if (!alive) return;
         setIntake(data);
         setIntakeError("");
@@ -447,7 +497,7 @@ export default function VendorPassPublicPage() {
     return () => {
       alive = false;
     };
-  }, [token]);
+  }, [activeToken]);
 
   useEffect(() => {
     const fetchMasterData = async () => {
@@ -1188,7 +1238,7 @@ export default function VendorPassPublicPage() {
       });
 
       const response = await axios.post(
-        `${AGENT_API}/vendor-pass/public/${token}/submit`,
+        `${AGENT_API}/vendor-pass/public/${activeToken}/submit`,
         formData,
         { headers: { "Content-Type": "multipart/form-data" } }
       );
@@ -1202,7 +1252,7 @@ export default function VendorPassPublicPage() {
         setPersons([]);
         setVehicles([]);
         setAgreedToTerms(false);
-        router.push(`/vendor_pass/${token}/submitted`);
+        router.push(`/vendor_pass/${activeToken}/submitted`);
       } else {
         toast.error(response.data?.message || "Submission failed.");
       }
@@ -1456,7 +1506,7 @@ export default function VendorPassPublicPage() {
                           {intake?.workOrderFilePath && (
                             <button
                               type="button"
-                              onClick={() => window.open(`${AGENT_API}/vendor-pass/public/work-order/${intake.id}`, "_blank")}
+                              onClick={() => handleViewDoc(intake.id, "workOrder", intake.workOrderFileName)}
                               className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-white px-2 py-1 rounded shadow-sm border border-slate-200"
                             >
                               <Eye className="h-3 w-3" /> View
@@ -2030,9 +2080,12 @@ export default function VendorPassPublicPage() {
                           file={personForm.aadharFile}
                           existingFileName={personForm.existingAadharName}
                           onView={() =>
-                            window.open(
-                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=personAadhar&isVendorPass=true`,
-                              "_blank",
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "personAadhar",
+                              personForm.existingAadharName,
+                              personForm.editIndex || 0,
+                              true
                             )
                           }
                           onChange={(e) =>
@@ -2086,9 +2139,12 @@ export default function VendorPassPublicPage() {
                           file={personForm.passportDoc}
                           existingFileName={personForm.existingPassportName}
                           onView={() =>
-                            window.open(
-                              `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=passportDoc`,
-                              "_blank",
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "passportDoc",
+                              personForm.existingPassportName,
+                              personForm.editIndex || 0,
+                              true
                             )
                           }
                           onChange={(e) =>
@@ -2525,9 +2581,12 @@ export default function VendorPassPublicPage() {
                       file={personForm.idProofFile}
                       existingFileName={personForm.existingIdProofName}
                       onView={() =>
-                        window.open(
-                          `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=personIdProof`,
-                          "_blank",
+                        handleViewDoc(
+                          personForm.existingPassRequestId,
+                          "personIdProof",
+                          personForm.existingIdProofName,
+                          personForm.editIndex || 0,
+                          true
                         )
                       }
                       onChange={(e) =>
@@ -2577,9 +2636,12 @@ export default function VendorPassPublicPage() {
                     file={personForm.policeVerification}
                     existingFileName={personForm.existingPoliceName}
                     onView={() =>
-                      window.open(
-                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=policeVerification`,
-                        "_blank",
+                      handleViewDoc(
+                        personForm.existingPassRequestId,
+                        "policeVerification",
+                        personForm.existingPoliceName,
+                        personForm.editIndex || 0,
+                        true
                       )
                     }
                     onChange={(e) =>
@@ -2903,9 +2965,12 @@ export default function VendorPassPublicPage() {
                     file={vehicleForm.rcDocument}
                     existingFileName={vehicleForm.existingRcName}
                     onView={() =>
-                      window.open(
-                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleRC`,
-                        "_blank",
+                      handleViewDoc(
+                        vehicleForm.existingPassRequestId,
+                        "vehicleRC",
+                        vehicleForm.existingRcName,
+                        vehicleForm.editIndex || 0,
+                        true
                       )
                     }
                     onChange={(e) =>
@@ -2921,9 +2986,12 @@ export default function VendorPassPublicPage() {
                     file={vehicleForm.insuranceDocument}
                     existingFileName={vehicleForm.existingInsName}
                     onView={() =>
-                      window.open(
-                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleInsurance`,
-                        "_blank",
+                      handleViewDoc(
+                        vehicleForm.existingPassRequestId,
+                        "vehicleInsurance",
+                        vehicleForm.existingInsName,
+                        vehicleForm.editIndex || 0,
+                        true
                       )
                     }
                     onChange={(e) =>
@@ -2939,9 +3007,12 @@ export default function VendorPassPublicPage() {
                     file={vehicleForm.permit}
                     existingFileName={vehicleForm.existingPermitName}
                     onView={() =>
-                      window.open(
-                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehiclePermit`,
-                        "_blank",
+                      handleViewDoc(
+                        vehicleForm.existingPassRequestId,
+                        "vehiclePermit",
+                        vehicleForm.existingPermitName,
+                        vehicleForm.editIndex || 0,
+                        true
                       )
                     }
                     onChange={(e) =>
@@ -2957,9 +3028,12 @@ export default function VendorPassPublicPage() {
                     file={vehicleForm.fitnessCert}
                     existingFileName={vehicleForm.existingFitnessName}
                     onView={() =>
-                      window.open(
-                        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleFitness`,
-                        "_blank",
+                      handleViewDoc(
+                        vehicleForm.existingPassRequestId,
+                        "vehicleFitness",
+                        vehicleForm.existingFitnessName,
+                        vehicleForm.editIndex || 0,
+                        true
                       )
                     }
                     onChange={(e) =>
@@ -2978,9 +3052,12 @@ export default function VendorPassPublicPage() {
                         file={vehicleForm.taxDoc}
                         existingFileName={vehicleForm.existingTaxName}
                         onView={() =>
-                          window.open(
-                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleTax`,
-                            "_blank",
+                          handleViewDoc(
+                            vehicleForm.existingPassRequestId,
+                            "vehicleTax",
+                            vehicleForm.existingTaxName,
+                            vehicleForm.editIndex || 0,
+                            true
                           )
                         }
                         onChange={(e) =>
@@ -2996,9 +3073,12 @@ export default function VendorPassPublicPage() {
                         file={vehicleForm.emissionCert}
                         existingFileName={vehicleForm.existingEmissionName}
                         onView={() =>
-                          window.open(
-                            `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${vehicleForm.existingPassRequestId}&documentType=vehicleEmission`,
-                            "_blank",
+                          handleViewDoc(
+                            vehicleForm.existingPassRequestId,
+                            "vehicleEmission",
+                            vehicleForm.existingEmissionName,
+                            vehicleForm.editIndex || 0,
+                            true
                           )
                         }
                         onChange={(e) =>
@@ -3543,6 +3623,77 @@ export default function VendorPassPublicPage() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* PDF/IMAGE VIEWER OVERLAY */}
+      {/* ============================================================== */}
+      {viewingDocUrl && (
+        <div
+          className={`fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-all duration-300 ${isFullscreen ? "p-0" : "p-4 md:p-8"}`}
+        >
+          <div
+            className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${isFullscreen ? "max-w-full rounded-none border-none" : "max-w-6xl rounded-xl border border-slate-700"}`}
+          >
+            <div className="flex justify-between items-center px-4 py-3 bg-slate-800 text-white">
+              <h3 className="font-bold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-400" />
+                Document Viewer
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg transition-colors"
+                  title={isFullscreen ? "Exit Fullscreen" : "Maximize"}
+                >
+                  {isFullscreen ? (
+                    <Minimize className="h-5 w-5" />
+                  ) : (
+                    <Maximize className="h-5 w-5" />
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setViewingDocUrl(null);
+                    setIsFullscreen(false);
+                  }}
+                  className="bg-slate-700 hover:bg-red-500 p-2 rounded-lg transition-colors"
+                  title="Close Viewer"
+                >
+                  <XCircle className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Iframe / Image Container */}
+            <div className="flex-1 w-full bg-slate-100 relative flex items-center justify-center p-4">
+              {docLoading && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50">
+                  <Loader2 className="h-10 w-10 text-[#ff6b00] animate-spin mb-4" />
+                  <p className="text-slate-500 font-bold animate-pulse">
+                    Loading document...
+                  </p>
+                </div>
+              )}
+
+              {isImage ? (
+                <img
+                  src={viewingDocUrl}
+                  alt="Document Viewer"
+                  className="max-w-full max-h-full object-contain relative z-0 drop-shadow-lg rounded-md"
+                  onLoad={() => setDocLoading(false)}
+                />
+              ) : (
+                <iframe
+                  src={viewingDocUrl}
+                  className="w-full h-full border-none relative z-0 bg-white"
+                  title="Document Viewer"
+                  onLoad={() => setDocLoading(false)}
+                />
+              )}
             </div>
           </div>
         </div>
