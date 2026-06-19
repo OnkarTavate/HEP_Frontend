@@ -4008,7 +4008,7 @@ const vehicleOptions = [
                               : personForm.masterId
                                 ? `${AGENT_API}/pass-request/viewMasterDocument?masterId=${personForm.masterId}&entityType=person&documentType=personPhoto`
                                 : personForm.existingPassRequestId
-                                  ? : `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&entityType=person&entityId=${personForm.id}&documentType=personAadhar`
+                                  ? `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&entityType=person&entityId=${personForm.id}&documentType=personPhoto`
                                   : ""
                           }
                           alt="Profile"
