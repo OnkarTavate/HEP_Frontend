@@ -1313,7 +1313,7 @@ export default function TrafficPassesPage() {
                       />
                       <DetailItem
                         label="HEP Type"
-                        value={entityModal.data.hepTypeId}
+                        value={entityModal.data.hepType}
                       />
                       <DetailItem
                         label="Designation"
@@ -1387,7 +1387,7 @@ export default function TrafficPassesPage() {
                       />
                       <DetailItem
                         label="Vehicle Type"
-                        value={entityModal.data.vehicleTypeId}
+                        value={entityModal.data.vehicleTypeName}
                       />
                       {/* <DetailItem
                         label="RFID Card"
