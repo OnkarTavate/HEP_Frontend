@@ -1164,7 +1164,7 @@ export default function TrafficPassesPage() {
                               {v.registrationNo}
                             </td>
                             <td className="p-3 text-slate-600 text-xs font-medium">
-                              {v.vehicleTypeId} • {v.passType}
+                              {v.vehicleTypeName} • {v.passType}
                             </td>
                             <td className="p-3 text-right">
                               <div className="flex justify-end items-center gap-3">

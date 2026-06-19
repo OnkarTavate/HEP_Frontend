@@ -371,21 +371,38 @@ export default function PassRequestPage() {
   };
   const [personForm, setPersonForm] = useState(initialPersonForm);
 
-  const personOptions = [
-    { value: "", label: "-- Apply Fresh (Manual Entry) --" },
-    ...Object.values(masterPersonsDB).map((p) => ({
+  // const personOptions = [
+  //   { value: "", label: "-- Apply Fresh (Manual Entry) --" },
+  //   ...Object.values(masterPersonsDB).map((p) => ({
+  //     value: String(p.id),
+  //     label: `${p.name} - Aadhar: ${p.aadhar || ""}`,
+  //   })),
+  // ];
+  const selectedMasterPersonIds = persons
+  .filter((p) => p.masterId)
+  .map((p) => String(p.masterId));
+
+const personOptions = [
+  { value: "", label: "-- Apply Fresh (Manual Entry) --" },
+  ...Object.values(masterPersonsDB)
+    .filter(
+      (p) =>
+        !selectedMasterPersonIds.includes(String(p.id)) ||
+        String(personForm.masterId) === String(p.id) // allow current edit
+    )
+    .map((p) => ({
       value: String(p.id),
       label: `${p.name} - Aadhar: ${p.aadhar || ""}`,
     })),
-  ];
+];
 
-  const vehicleOptions = [
-    { value: "", label: "-- Apply Fresh (Manual Entry) --" },
-    ...Object.values(masterVehiclesDB).map((v) => ({
-      value: String(v.id),
-      label: `${v.registrationNo || v.regNo || ""}`,
-    })),
-  ];
+  // const vehicleOptions = [
+  //   { value: "", label: "-- Apply Fresh (Manual Entry) --" },
+  //   ...Object.values(masterVehiclesDB).map((v) => ({
+  //     value: String(v.id),
+  //     label: `${v.registrationNo || v.regNo || ""}`,
+  //   })),
+  // ];
 
   const initialVehicleForm = {
     masterId: "",
@@ -409,6 +426,23 @@ export default function PassRequestPage() {
     amount: 25.5,
   };
   const [vehicleForm, setVehicleForm] = useState(initialVehicleForm);
+  const selectedMasterVehicleIds = vehicles
+  .filter((v) => v.masterId)
+  .map((v) => String(v.masterId));
+
+const vehicleOptions = [
+  { value: "", label: "-- Apply Fresh (Manual Entry) --" },
+  ...Object.values(masterVehiclesDB)
+    .filter(
+      (v) =>
+        !selectedMasterVehicleIds.includes(String(v.id)) ||
+        String(vehicleForm.masterId) === String(v.id)
+    )
+    .map((v) => ({
+      value: String(v.id),
+      label: `${v.registrationNo || v.regNo || ""}`,
+    })),
+];
 
   // --- DYNAMIC & DB MAPPED MASTER DATA ---
   const [masterData, setMasterData] = useState({
@@ -546,8 +580,7 @@ export default function PassRequestPage() {
     fetchAgentProfile();
   }, []);
 
-  useEffect(() => {
-    const fetchMasterRecords = async () => {
+  const fetchMasterRecords = async () => {
       try {
         let token = localStorage.getItem("accessToken");
         if (!token) return;
@@ -578,6 +611,9 @@ export default function PassRequestPage() {
         console.error("Master records fetch failed", err);
       }
     };
+
+  useEffect(() => {
+    
 
     fetchMasterRecords();
   }, []);
@@ -860,13 +896,22 @@ export default function PassRequestPage() {
   const totals = calculateTotals();
 
   const handleMasterPersonSelect = (e) => {
-    const id = e.target.value;
+        const id = e.target.value;
+        const alreadySelected = persons.some(
+      (p) => String(p.masterId) === String(id)
+    );
+
+    if (alreadySelected) {
+      toast.error("This person is already added to the request.");
+      return;
+    }
     if (id && masterPersonsDB[id]) {
       const data = masterPersonsDB[id];
       if (data.isActive === false) {
         toast.error(
           `ERROR: ${data.name} is BLOCKED in the Master Directory. Pass cannot be issued.`,
         );
+        console.log("MASTER PERSON DATA", data);
         setPersonForm(initialPersonForm);
         return;
       }
@@ -902,11 +947,23 @@ export default function PassRequestPage() {
           : pTypeStr === "YEARLY" || pTypeStr === "ANNUAL"
             ? "3"
             : "1";
+        console.log("MASTER PERSON DATA837", JSON.stringify(data, null, 2)); 
+        const dateFromValue =
+          data.dateFrom
+            ? new Date(data.dateFrom).toISOString().slice(0,16)
+            : getCurrentDateTime();
 
-      setPersonForm({
+        const dateToValue = calculateDateTo(
+          dateFromValue,
+          data.passPeriod
+            ? String(data.passPeriod)
+            : "1",
+          passTypeVal
+        );     
+        setPersonForm({
         ...initialPersonForm,
         masterId: id,
-        existingPassRequestId: data.passRequestId, // Crucial for fetching old documents
+        existingPassRequestId: data.passRequestId || data.id, // Crucial for fetching old documents
         hepType: data.hepTypeId
           ? String(data.hepTypeId)
           : data.designationName === "Driver"
@@ -934,10 +991,12 @@ export default function PassRequestPage() {
         dateFrom: data.dateFrom
           ? new Date(data.dateFrom).toISOString().slice(0, 16)
           : getCurrentDateTime(),
+        dateTo: dateToValue,
 
         // Map Existing Files
         existingAadharName: data.aadharPDFFileName,
         existingPhotoName: data.photoFileName,
+        existingPhotoUrl: data.photoFilePath,
         existingIdProofName: data.idProofFileName,
         existingReqName: data.requisitionLetterName,
         existingDlName: data.driverLicenseName,
@@ -954,7 +1013,14 @@ export default function PassRequestPage() {
 
   const handleMasterVehicleSelect = (e) => {
     const id = e.target.value;
+    const alreadySelected = vehicles.some(
+      (v) => String(v.masterId) === String(id)
+    );
 
+    if (alreadySelected) {
+      toast.error("This vehicle is already added to the request.");
+      return;
+    }
     if (id && masterVehiclesDB[id]) {
       const data = masterVehiclesDB[id];
 
@@ -962,6 +1028,7 @@ export default function PassRequestPage() {
         toast.error(
           `ERROR: Vehicle ${data.registrationNo || data.regNo} is BLOCKED in the Master Directory.`,
         );
+        console.log("MASTER VEHICLE DATA898", data);
         setVehicleForm(initialVehicleForm);
         return;
       }
@@ -981,11 +1048,23 @@ export default function PassRequestPage() {
           : pTypeStr === "YEARLY" || pTypeStr === "ANNUAL"
             ? "3"
             : "1";
+      console.log("MASTER VEHICLE DATA918", JSON.stringify(data, null, 2));
+      const dateFromValue =
+        data.dateFrom
+          ? new Date(data.dateFrom).toISOString().slice(0,16)
+          : getCurrentDateTime();
 
+      const dateToValue = calculateDateTo(
+        dateFromValue,
+        data.passPeriod
+          ? String(data.passPeriod)
+          : "1",
+        passTypeVal
+      );
       setVehicleForm({
         ...initialVehicleForm,
         masterId: id,
-        existingPassRequestId: data.passRequestId,
+        existingPassRequestId: data.passRequestId || data.id, // For fetching old documents
         regNo: data.registrationNo || data.regNo || "",
         type: data.vehicleTypeId || data.type || "",
         cardNumber: data.rfidCardNumber || "",
@@ -1003,6 +1082,7 @@ export default function PassRequestPage() {
         dateFrom: data.dateFrom
           ? new Date(data.dateFrom).toISOString().slice(0, 16)
           : getCurrentDateTime(),
+        dateTo: dateToValue,
 
         // Map Existing Files
         existingRcName: data.scannedCopyFileName,
@@ -1427,7 +1507,10 @@ export default function PassRequestPage() {
       formData.append("payload", JSON.stringify(requestPayload));
       formData.append("authLetter", generalForm.authLetter);
       if (generalForm.requisitionLetter)
-        formData.append("requisitionLetter", generalForm.requisitionLetter);
+        formData.append("passRequisitionLetter", generalForm.requisitionLetter);
+      for (const pair of formData.entries()) {
+        console.log("FORMDATA =>", pair[0]);
+      }
 
       // =========================
       // FILES APPENDING
@@ -1477,7 +1560,7 @@ export default function PassRequestPage() {
 
       if (response.data) {
         toast.success("Request Submitted Successfully!");
-
+        await fetchMasterRecords();
         setSubmittedPasses([
           {
             passId: `REQ-${Math.floor(Math.random() * 10000)}`,
@@ -1516,6 +1599,7 @@ export default function PassRequestPage() {
     existingFileName,
     onView,
     fileType = "pdf",
+    disabled = false
   }) => (
     <div className="bg-white p-4 border border-slate-200 rounded-xl shadow-sm hover:border-orange-300 hover:shadow-md transition-all group flex flex-col justify-between h-full">
       <label className="text-xs font-bold text-slate-800 block mb-3">
@@ -1566,8 +1650,13 @@ export default function PassRequestPage() {
       <div className="relative mt-auto">
         <input
           type="file"
+          disabled={disabled}
           accept={fileType === "image" ? "image/*" : "application/pdf"}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          className={`absolute inset-0 w-full h-full opacity-0 z-10 ${
+            disabled
+              ? "cursor-not-allowed"
+              : "cursor-pointer"
+          }`}
           required={isRequired && !existingFileName && !file}
           onChange={(e) => {
             const file = e.target.files[0];
@@ -1584,10 +1673,13 @@ export default function PassRequestPage() {
           }}
         />
         <div
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${file
-              ? "border-orange-300 bg-orange-50"
-              : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
-            } transition-colors`}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
+            disabled
+              ? "bg-slate-100 border-slate-300 opacity-60"
+              : file
+                ? "border-orange-300 bg-orange-50"
+                : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
+          } transition-colors`}
         >
           <Upload
             className={`w-4 h-4 flex-shrink-0 ${file ? "text-orange-600" : "text-slate-400"}`}
@@ -1680,9 +1772,10 @@ export default function PassRequestPage() {
       
       // Map reverted person data to personForm structure
       // NOTE: personForm uses: country, designation, accessArea (not countryId, designationId, accessAreaId)
+      console.log("REVERTED ENTITY1657", entity);
       setPersonForm({
         id: entity.id,
-        masterId: entity.masterId || '',
+        masterId: entity.masterPersonId,
         name: entity.name || '',
         mobile: entity.mobile || '',
         email: entity.email || '',
@@ -1721,15 +1814,24 @@ export default function PassRequestPage() {
         declarationForm: null,
         // Existing file names for viewing
         existingPassRequestId: editingRevertedPass?.id,
+  
         existingPhotoName: entity.photoFileName,
+        existingPhotoPath: entity.photoFilePath,
+
         existingAadharName: entity.aadharPDFFileName,
+        existingAadharPath: entity.aadharPDFFilePath,
+
+        existingIdProofName: entity.idProofFileName,
+        existingIdProofPath: entity.idProofFilePath,
+
         existingDlName: entity.driverLicenseName,
+        existingDlPath: entity.driverLicensePath,
+
         existingReqName: entity.requisitionLetterName,
         existingPassportName: entity.passportName,
         existingPoliceName: entity.policeVerificationName,
         existingEmpName: entity.employmentProofName,
         existingChaName: entity.chaLicenseName,
-        existingIdProofName: entity.idProofFileName,
         existingCdcName: entity.cdcDocumentName,
         existingDeclarationName: entity.declarationFormName,
         isEditing: true,
@@ -1748,7 +1850,7 @@ export default function PassRequestPage() {
       const accessAreaEnum = entity.accessAreaId; // "OIL JETTY AND OTHER GATES" or "OTHER GATES ONLY"
       const accessAreaObj = masterData.accessAreas.find(a => (a.value || a.label || a.name || "").toUpperCase() === accessAreaEnum?.toUpperCase());
       const accessAreaId = accessAreaObj ? String(accessAreaObj.id || accessAreaObj.value) : '';
-      
+      console.log("REVERTED ENTITY1726", entity);
       // Map reverted vehicle data to vehicleForm structure
       setVehicleForm({
         id: entity.id,
@@ -2355,11 +2457,15 @@ export default function PassRequestPage() {
                         <div className="flex items-center gap-3">
                           {p.photo || p.existingPhotoName ? (
                             <img
-                              src={
-                                p.photo instanceof File
-                                  ? URL.createObjectURL(p.photo)
-                                  : `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${p.existingPassRequestId}&documentType=personPhoto`
-                              }
+                            
+              src={
+                p.photo instanceof File
+                  ? URL.createObjectURL(p.photo)
+                  : p.existingPhotoPath
+                    ? `${AGENT_API}/${p.existingPhotoPath}`
+                    : `${AGENT_API}/pass-request/viewMasterDocument?masterId=${p.masterId}&entityType=person&documentType=personPhoto`
+              }
+
                               alt="Profile"
                               className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-sm"
                             />
@@ -3148,64 +3254,12 @@ export default function PassRequestPage() {
                     <>
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700 uppercase">
-                          Aadhaar No. <span className="text-red-500">*</span>
-                        </label>
-                        {(() => {
-                          const hasVal = !!personForm.aadharNo.trim();
-                          const isValid = /^\d{12}$/.test(personForm.aadharNo);
-                          const hasError = !!personErrors.aadharNo;
-                          
-                          let customBorderClass = "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
-                          if (hasVal) {
-                            customBorderClass = (hasError || !isValid)
-                              ? "border-red-400 focus:ring-red-500/20 focus:border-red-400"
-                              : "border-emerald-500 focus:ring-emerald-500/20 focus:border-emerald-500";
-                          }
-                          
-                          return (
-                            <>
-                              <input
-                                type="text"
-                                value={personForm.aadharNo}
-                                onChange={(e) => {
-                                  const val = e.target.value
-                                    .replace(/\D/g, "")
-                                    .slice(0, 12);
-                                  setPersonForm({ ...personForm, aadharNo: val });
-                                  if (val.length === 12) {
-                                    validatePersonField("aadharNo", val);
-                                  }
-                                }}
-                                onBlur={(e) => validatePersonField("aadharNo", e.target.value)}
-                                className={`w-full h-10 border rounded-lg text-sm px-3 shadow-sm outline-none transition-all focus:ring-2 ${customBorderClass}`}
-                                placeholder="XXXX XXXX XXXX"
-                                maxLength={12}
-                                inputMode="numeric"
-                              />
-                              {hasVal && (
-                                <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all animate-in fade-in duration-200">
-                                  {(hasError || !isValid) ? (
-                                    <>
-                                      <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                      <span className="text-red-500">Aadhaar must be exactly 12 digits</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                                      <span className="text-emerald-600">Valid Aadhaar format</span>
-                                    </>
-                                  )}
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase">
                           Upload Aadhar <span className="text-red-500">*</span>
+                        
+
                         </label>
                         <FileUploadBox
+                          disabled={!!personForm.masterId}
                           file={personForm.aadharFile}
                           existingFileName={personForm.existingAadharName}
                           onView={() =>
@@ -3284,6 +3338,15 @@ export default function PassRequestPage() {
                           //   }
                           // }}
                           onChange={async (e) => {
+
+                            if (personForm.masterId) {
+                              toast.error(
+                                "Aadhaar document comes from Master Directory and cannot be changed."
+                              );
+                              return;
+                            }
+
+
                             const file =
                               e?.target?.files?.[0] ||
                               e?.files?.[0] ||
@@ -3361,6 +3424,65 @@ export default function PassRequestPage() {
                           }}
                         />
                       </div>
+
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          Aadhaar No. <span className="text-red-500">*</span>
+                        </label>
+                        {(() => {
+                          const hasVal = !!personForm.aadharNo.trim();
+                          const isValid = /^\d{12}$/.test(personForm.aadharNo);
+                          const hasError = !!personErrors.aadharNo;
+                          
+                          let customBorderClass = "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
+                          if (hasVal) {
+                            customBorderClass = (hasError || !isValid)
+                              ? "border-red-400 focus:ring-red-500/20 focus:border-red-400"
+                              : "border-emerald-500 focus:ring-emerald-500/20 focus:border-emerald-500";
+                          }
+                          
+                          return (
+                            <>
+                              <input
+                                type="text"
+                                value={personForm.aadharNo}
+                                readOnly={!!personForm.masterId}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                    .replace(/\D/g, "")
+                                    .slice(0, 12);
+                                  setPersonForm({ ...personForm, aadharNo: val });
+                                  if (val.length === 12) {
+                                    validatePersonField("aadharNo", val);
+                                  }
+                                }}
+                                onBlur={(e) => validatePersonField("aadharNo", e.target.value)}
+                                className={`w-full h-10 border rounded-lg text-sm px-3 shadow-sm outline-none transition-all focus:ring-2 ${customBorderClass}`}
+                                placeholder="XXXX XXXX XXXX"
+                                maxLength={12}
+                                inputMode="numeric"
+                              />
+                              {hasVal && (
+                                <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all animate-in fade-in duration-200">
+                                  {(hasError || !isValid) ? (
+                                    <>
+                                      <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                      <span className="text-red-500">Aadhaar must be exactly 12 digits</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                      <span className="text-emerald-600">Valid Aadhaar format</span>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                      
                     </>
                   )}
 
@@ -3883,7 +4005,11 @@ export default function PassRequestPage() {
                           src={
                             personForm.photo instanceof File
                               ? URL.createObjectURL(personForm.photo)
-                              : `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&documentType=personPhoto`
+                              : personForm.masterId
+                                ? `${AGENT_API}/pass-request/viewMasterDocument?masterId=${personForm.masterId}&entityType=person&documentType=personPhoto`
+                                : personForm.existingPassRequestId
+                                  ? : `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&entityType=person&entityId=${personForm.id}&documentType=personAadhar`
+                                  : ""
                           }
                           alt="Profile"
                           className="w-full h-full object-cover"
