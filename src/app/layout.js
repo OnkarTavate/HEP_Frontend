@@ -11,11 +11,9 @@ export default function RootLayout({ children }) {
     <html
       lang="en"
       className="h-full antialiased"
-      style={{ fontFamily: 'Arial, sans-serif' }}
     >
       <body
         className="min-h-full flex flex-col"
-        style={{ fontFamily: 'Arial, sans-serif' }}
         suppressHydrationWarning
       >
         {children}

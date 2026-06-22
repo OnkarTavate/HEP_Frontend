@@ -611,7 +611,10 @@ export default function TrafficPassesPage() {
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 lg:gap-4 shrink-0">
         {/* Total */}
-        <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-slate-200/60 dark:ring-white/5 shadow-lg flex flex-col gap-2">
+        <div
+          onClick={() => handleCardClick("pending", "ALL")}
+          className="bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2"
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Total Passes</span>
             <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800">
@@ -622,7 +625,10 @@ export default function TrafficPassesPage() {
         </div>
 
         {/* Pending */}
-        <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-amber-200/60 dark:ring-amber-500/10 shadow-lg flex flex-col gap-2">
+        <div
+          onClick={() => handleCardClick("pending", "ALL")}
+          className="bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2"
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">Pending</span>
             <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-50 dark:bg-amber-500/10">
@@ -633,7 +639,10 @@ export default function TrafficPassesPage() {
         </div>
 
         {/* Processed */}
-        <div className="col-span-2 sm:col-span-1 bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-emerald-200/60 dark:ring-emerald-500/10 shadow-lg flex flex-col gap-2">
+        <div
+          onClick={() => handleCardClick("processed", "ALL")}
+          className="col-span-2 sm:col-span-1 bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2"
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Processed</span>
             <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-emerald-50 dark:bg-emerald-500/10">

@@ -479,7 +479,7 @@ export default function AdminDashboard() {
       {/* ── Top Grid: Activity cards + Quick stats ────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-4 shrink-0">
         {/* Pass Activity — fully responsive grid layout */}
-        <div className="lg:col-span-2 bg-white dark:bg-[#1e293b] rounded-2xl sm:rounded-[28px] p-4 sm:p-5 lg:p-6 relative overflow-hidden ring-1 ring-slate-200/60 dark:ring-white/5 shadow-xl shadow-slate-100/50 dark:shadow-none">
+        <div className="lg:col-span-2 bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 lg:p-6 relative overflow-hidden border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:scale-[1.005] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out">
           <div aria-hidden className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-amber-300/40 dark:bg-amber-400/15 blur-3xl" />
           <h2 className="text-lg sm:text-xl lg:text-2xl font-extrabold text-slate-800 dark:text-stone-100 tracking-tight">
             Pass Activity
@@ -525,7 +525,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Right: Health stats panel */}
-        <div className="bg-slate-900 dark:bg-[#0b0f19] border border-slate-800 dark:border-white/5 text-white rounded-2xl sm:rounded-[28px] p-4 sm:p-5 lg:p-6 flex flex-col shadow-xl">
+        <div className="bg-slate-900 dark:bg-[#0b0f19] border border-slate-800 dark:border-white/5 text-white rounded-3xl p-4 sm:p-5 lg:p-6 flex flex-col shadow-[0_8px_30px_rgb(0,0,0,0.2)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)] hover:scale-[1.005] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.3)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.6)] transition-all duration-300 ease-in-out">
           <div className="flex justify-between items-center mb-3 sm:mb-4">
             <h2 className="text-lg sm:text-xl font-extrabold tracking-tight">Console Health</h2>
             <span className="inline-flex items-center gap-1 sm:gap-1.5 text-emerald-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-emerald-500/10 ring-1 ring-emerald-400/30 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
@@ -559,7 +559,7 @@ export default function AdminDashboard() {
       {/* ── Bottom Grid: stat-cards + records list ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4 pb-4">
         {/* Approval progress dial */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[28px] p-4 sm:p-5 lg:p-6 border border-slate-100 dark:border-slate-800/80 shadow-xl shadow-slate-100/50 dark:shadow-none hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 flex flex-col gap-3 sm:gap-4 min-h-[180px]">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 lg:p-6 border border-slate-100 dark:border-slate-800/80 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out flex flex-col gap-3 sm:gap-4 min-h-[180px]">
           <div>
             <h3 className="text-base sm:text-lg font-extrabold text-slate-800 dark:text-stone-100 tracking-tight">
               Approval Rate
@@ -599,7 +599,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Pending progress bar */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[28px] p-4 sm:p-5 lg:p-6 border border-slate-100 dark:border-slate-800/80 shadow-xl shadow-slate-100/50 dark:shadow-none hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 flex flex-col gap-3 min-h-[180px]">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 lg:p-6 border border-slate-100 dark:border-slate-800/80 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out flex flex-col gap-3 min-h-[180px]">
           <div className="flex justify-between items-start">
             <div>
               <h3 className="text-base sm:text-lg font-extrabold text-slate-800 dark:text-stone-100 flex items-center gap-1.5 tracking-tight">
@@ -640,7 +640,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Right column: records list — scrolls on all screen sizes */}
-        <div className="sm:col-span-2 lg:col-span-1 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[28px] p-4 sm:p-5 lg:p-6 border border-slate-100 dark:border-slate-800/80 shadow-xl shadow-slate-100/50 dark:shadow-none flex flex-col min-h-[350px] max-h-[500px] sm:max-h-[600px]">
+        <div className="sm:col-span-2 lg:col-span-1 bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 lg:p-6 border border-slate-100 dark:border-slate-800/80 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:scale-[1.005] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out flex flex-col min-h-[350px] max-h-[500px] sm:max-h-[600px]">
           <div className="flex items-center justify-between mb-3 sm:mb-4 gap-3 shrink-0">
             <h2 className="text-base sm:text-xl font-extrabold text-slate-800 dark:text-stone-100 flex items-center gap-2 tracking-tight">
               <span className="flex items-center justify-center h-7 w-7 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300 shrink-0">

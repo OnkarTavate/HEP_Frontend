@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
+const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:3002/api";
 
 // --- URL Helper to reliably strip '/api' for static file fetching ---
 const getFileUrl = (path) => {
@@ -104,7 +105,7 @@ const validateFile = (file, type) => {
     image: ["image/jpeg", "image/png", "image/jpg"],
   };
 
-  const maxSize = 2 * 1024 * 1024; // 2MB
+  const maxSize = 5 * 1024 * 1024; // 5MB
 
   if (!allowedTypes[type].includes(file.type)) {
     return type === "pdf"
@@ -113,7 +114,7 @@ const validateFile = (file, type) => {
   }
 
   if (file.size > maxSize) {
-    return "File size must be less than 2MB";
+    return "File size must be less than 5MB";
   }
 
   return null;
@@ -302,6 +303,42 @@ export default function PassRequestPage() {
   const [personErrors, setPersonErrors] = useState({});
   const [vehicleErrors, setVehicleErrors] = useState({});
 
+  // Blacklist check warnings (non-blocking — Traffic Approver makes final call)
+  const [blacklistWarnings, setBlacklistWarnings] = useState({});
+  const [companyBlacklisted, setCompanyBlacklisted] = useState(false);
+  const [companyBlacklistReason, setCompanyBlacklistReason] = useState("");
+  const [showBlacklistPopup, setShowBlacklistPopup] = useState(false);
+
+  const checkBlacklistStatus = async (entityType, identifier) => {
+    if (!identifier || !identifier.trim() || !ADMIN_API) return;
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      const res = await axios.get(
+        `${ADMIN_API}/blacklist/check?entity_type=${entityType}&identifier=${encodeURIComponent(identifier.trim().toUpperCase())}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.data.success && res.data.isBlacklisted) {
+        const entry = res.data.data[0];
+        setBlacklistWarnings((prev) => ({
+          ...prev,
+          [entityType + "_" + identifier.trim().toUpperCase()]: `⚠️ BLACKLISTED (${entry.reason_code || "Code 007"}) — ${entry.reason}`
+        }));
+        toast.warning(`${entityType === "VEHICLE" ? "Vehicle" : entityType === "DRIVER" ? "Driver" : "Person"} is currently BLACKLISTED at the Port!`, {
+          description: `Reason: ${entry.reason}. Pass request for this entity is blocked.`,
+          duration: 6000,
+        });
+      } else {
+        setBlacklistWarnings((prev) => {
+          const next = { ...prev };
+          delete next[entityType + "_" + identifier.trim().toUpperCase()];
+          return next;
+        });
+      }
+    } catch {
+      // Silently fail — do not block user if blacklist service is down
+    }
+  };
+
   const validatePersonField = (field, value, extra = {}) => {
     const err = getValidationError(field, value, extra);
     setPersonErrors((prev) => ({ ...prev, [field]: err }));
@@ -367,7 +404,7 @@ export default function PassRequestPage() {
     dateFrom: getCurrentDateTime(),
     dateTo: "",
     validUptoTime: "",
-    amount: 10.2,
+    amount: 10.3,
   };
   const [personForm, setPersonForm] = useState(initialPersonForm);
 
@@ -423,7 +460,7 @@ const personOptions = [
     passPeriod: "1",
     dateFrom: getCurrentDateTime(),
     dateTo: "",
-    amount: 25.5,
+    amount: 25.7,
   };
   const [vehicleForm, setVehicleForm] = useState(initialVehicleForm);
   const selectedMasterVehicleIds = vehicles
@@ -562,6 +599,13 @@ const vehicleOptions = [
             email: agentData.email || "N/A",
             mobile: agentData.mobileNo || "N/A",
           }));
+
+          // Set company blacklisting details if blacklisted
+          if (agentData.isBlacklisted) {
+            setCompanyBlacklisted(true);
+            setCompanyBlacklistReason(agentData.blacklistReason || "Company is blacklisted");
+            setShowBlacklistPopup(true);
+          }
         }
       } catch (error) {
         console.error("Failed to fetch agent profile:", error);
@@ -646,9 +690,14 @@ const vehicleOptions = [
       updatedPeriod = "1";
     }
 
-    let amt = 10.2;
-    if (String(personForm.passType) === "2") amt = 153.0;
-    if (String(personForm.passType) === "3") amt = 407.0;
+    let amt = 10.3;
+    if (String(personForm.passType) === "1") {
+      amt = 10.3 * parseInt(updatedPeriod || 1);
+    } else if (String(personForm.passType) === "2") {
+      amt = 154.0;
+    } else if (String(personForm.passType) === "3") {
+      amt = 410.0;
+    }
 
     const newDateTo = calculateDateTo(
       personForm.dateFrom,
@@ -676,9 +725,28 @@ const vehicleOptions = [
       updatedPeriod = "1";
     }
 
-    let amt = 25.5;
-    if (String(vehicleForm.passType) === "2") amt = 306.0;
-    if (String(vehicleForm.passType) === "3") amt = 2035.0;
+    const selectedTypeObj = masterData.vehicleTypes.find(t => String(t.id) === String(vehicleForm.type));
+    const typeName = selectedTypeObj ? String(selectedTypeObj.name).toUpperCase().trim() : "";
+    const isCargoEquipment = ["CRANE", "DOZERS", "DUMPERS", "EXCAVATORS", "FORKLIFT", "JCB EARTHMOVER", "MOBILE CRANE", "PAY LOADER", "POCLAIN"].includes(typeName);
+
+    let amt = 25.7;
+    if (isCargoEquipment) {
+      if (String(vehicleForm.passType) === "1") {
+        amt = 41.0 * parseInt(updatedPeriod || 1);
+      } else if (String(vehicleForm.passType) === "2") {
+        amt = 461.0;
+      } else if (String(vehicleForm.passType) === "3") {
+        amt = 3073.0;
+      }
+    } else {
+      if (String(vehicleForm.passType) === "1") {
+        amt = 25.7 * parseInt(updatedPeriod || 1);
+      } else if (String(vehicleForm.passType) === "2") {
+        amt = 308.0;
+      } else if (String(vehicleForm.passType) === "3") {
+        amt = 2049.0;
+      }
+    }
 
     const newDateTo = calculateDateTo(
       vehicleForm.dateFrom,
@@ -692,7 +760,7 @@ const vehicleOptions = [
       amount: amt,
       dateTo: newDateTo,
     }));
-  }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom]);
+  }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom, vehicleForm.type, masterData.vehicleTypes]);
 
   // Live running time: update dateFrom every 30s while person modal is open
   useEffect(() => {
@@ -1101,6 +1169,35 @@ const vehicleOptions = [
   };
 
   const handleAddPerson = () => {
+    // ---- Auto-fallback for Driver Licence if ID proof is DL ----
+    if (personForm.hepType === "1") {
+      if (!personForm.driverLicence && personForm.idProofFile) {
+        personForm.driverLicence = personForm.idProofFile;
+      }
+      if (!personForm.existingDlName && personForm.existingIdProofName) {
+        personForm.existingDlName = personForm.existingIdProofName;
+      }
+    }
+
+    // ---- Blacklist validation checks ----
+    const cleanAadhaar = personForm.aadharNo ? personForm.aadharNo.replace(/\s/g, "").toUpperCase() : "";
+    const cleanIdProof = personForm.idProofNumber ? personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase() : "";
+    const cleanTwoWheeler = (personForm.withTwoWheeler && personForm.vehicleNo) ? personForm.vehicleNo.replace(/[\s-]/g, "").toUpperCase() : "";
+
+    const aadharWarning = blacklistWarnings["PERSON_" + cleanAadhaar] || blacklistWarnings["DRIVER_" + cleanAadhaar];
+    const idProofWarning = blacklistWarnings["DRIVER_" + cleanIdProof] || blacklistWarnings["PERSON_" + cleanIdProof];
+    const twoWheelerWarning = cleanTwoWheeler ? blacklistWarnings["VEHICLE_" + cleanTwoWheeler] : null;
+
+    if (aadharWarning) {
+      return toast.error(`Cannot add/update person: Aadhaar Number is blacklisted! Reason: ${aadharWarning.replace("⚠️ BLACKLISTED ", "")}`);
+    }
+    if (idProofWarning) {
+      return toast.error(`Cannot add/update person: Driving License / ID Number is blacklisted! Reason: ${idProofWarning.replace("⚠️ BLACKLISTED ", "")}`);
+    }
+    if (twoWheelerWarning) {
+      return toast.error(`Cannot add/update person: Two Wheeler is blacklisted! Reason: ${twoWheelerWarning.replace("⚠️ BLACKLISTED ", "")}`);
+    }
+
     // ---- Full field validation before add ----
     const errors = {};
     if (!personForm.name.trim()) errors.name = "Full name is required";
@@ -1184,11 +1281,13 @@ const vehicleOptions = [
     )
       return toast.error("Driver Licence is mandatory for Drivers.");
 
+    // Passport doc is only required for Seafarers who selected "passport" as their ID type
     if (
       personForm.hepType === "3" &&
+      personForm.seafarerIdType === "passport" &&
       !(personForm.passportDoc || personForm.existingPassportName)
     )
-      return toast.error("Passport is mandatory for Seafarers.");
+      return toast.error("Please upload the Passport document for this Seafarer.");
 
     if (personForm.passType === "2" || personForm.passType === "3") {
       if (!(personForm.policeVerification || personForm.existingPoliceName)) {
@@ -1255,6 +1354,13 @@ const vehicleOptions = [
   };
 
   const handleAddVehicle = () => {
+    // ---- Blacklist blocking check ----
+    const cleanRegNo = vehicleForm.regNo ? vehicleForm.regNo.replace(/[\s-]/g, "").toUpperCase() : "";
+    const regNoWarning = blacklistWarnings["VEHICLE_" + cleanRegNo];
+    if (regNoWarning) {
+      return toast.error(`Cannot add/update vehicle: Registration Number is blacklisted! Reason: ${regNoWarning.replace("⚠️ BLACKLISTED ", "")}`);
+    }
+
     // ---- Full field validation before add ----
     const vErrors = {};
     if (!vehicleForm.regNo.trim())
@@ -1361,6 +1467,12 @@ const vehicleOptions = [
   };
 
   const handleSubmitRequest = async () => {
+    if (companyBlacklisted) {
+      return toast.error("Pass application blocked. Your company is blacklisted.", {
+        description: `Reason: ${companyBlacklistReason}`,
+        duration: 8000
+      });
+    }
     if (!generalForm.purpose)
       return toast.warning("Please select a Purpose of Visit.");
     if (!generalForm.authLetter)
@@ -1418,11 +1530,18 @@ const vehicleOptions = [
         if (!computedDateTo)
           throw new Error(`DateTo not calculated for person ${p.name}`);
 
+        // For Seafarers using passport as primary ID, store passportNo in aadharNo field
+        // (re-uses the primary-identifier DB column since no separate passportNo column exists)
+        const primaryIdNo =
+          p.hepType === "3" && p.seafarerIdType === "passport"
+            ? p.passportNo
+            : p.aadharNo;
+
         return {
           rateId: 1,
           hepTypeId: parseInt(p.hepType, 10) || 2,
           name: p.name,
-          aadharNo: p.aadharNo,
+          aadharNo: primaryIdNo,
           mobile: p.mobile,
           email: p.email,
           nationality: getEnumValue(
@@ -1443,8 +1562,12 @@ const vehicleOptions = [
           ),
           withTwoWheeler: p.withTwoWheeler,
           vehicleNo: p.vehicleNo,
-          idProofType: getEnumValue(masterData.idProofTypes, p.idProofType, ""),
-          idProofNumber: p.idProofNumber,
+          // Secondary ID proof — only relevant for non-seafarers
+          idProofType:
+            p.hepType !== "3"
+              ? getEnumValue(masterData.idProofTypes, p.idProofType, "")
+              : "",
+          idProofNumber: p.hepType !== "3" ? p.idProofNumber : "",
           passType: getEnumValue(masterData.passTypes, p.passType, "DAILY"),
           passPeriod: parseInt(p.passPeriod, 10) || 1,
           dateFrom: p.dateFrom,
@@ -1517,36 +1640,40 @@ const vehicleOptions = [
       // =========================
 
       // ===== CHANGE START =====
-      // Send files for every person (indexed)
+      // Send files for every person (indexed to prevent file shifting)
 
-      persons.forEach((p) => {
-        if (p.photo) formData.append("personPhoto", p.photo);
-        if (p.aadharFile) formData.append("personAadhar", p.aadharFile);
-        if (p.idProofFile) formData.append("personIdProof", p.idProofFile);
-        if (p.driverLicence) formData.append("driverLicense", p.driverLicence);
+      persons.forEach((p, idx) => {
+        if (p.photo) formData.append(`personPhoto_${idx}`, p.photo);
+        if (p.aadharFile) formData.append(`personAadhar_${idx}`, p.aadharFile);
+        if (p.idProofFile) formData.append(`personIdProof_${idx}`, p.idProofFile);
+        
+        // Auto-fallback if driverLicence is empty for a Driver
+        const dlFile = p.driverLicence || (p.hepType === "1" ? p.idProofFile : null);
+        if (dlFile) formData.append(`driverLicense_${idx}`, dlFile);
+        
         if (p.policeVerification)
-          formData.append("policeVerification", p.policeVerification);
+          formData.append(`policeVerification_${idx}`, p.policeVerification);
         if (p.proofOfEmployment)
-          formData.append("employmentProof", p.proofOfEmployment);
-        if (p.copyOfLicence) formData.append("chaLicenseCopy", p.copyOfLicence);
-        if (p.passportDoc) formData.append("passportDoc", p.passportDoc);
-        if (p.cdcDocument) formData.append("cdcDocument", p.cdcDocument);
+          formData.append(`employmentProof_${idx}`, p.proofOfEmployment);
+        if (p.copyOfLicence) formData.append(`chaLicenseCopy_${idx}`, p.copyOfLicence);
+        if (p.passportDoc) formData.append(`passportDoc_${idx}`, p.passportDoc);
+        if (p.cdcDocument) formData.append(`cdcDocument_${idx}`, p.cdcDocument);
         if (p.declarationForm)
-          formData.append("declarationForm", p.declarationForm);
+          formData.append(`declarationForm_${idx}`, p.declarationForm);
       });
 
       // Send files for every vehicle
 
-      vehicles.forEach((v) => {
-        if (v.rcDocument) formData.append("vehicleRC", v.rcDocument);
+      vehicles.forEach((v, idx) => {
+        if (v.rcDocument) formData.append(`vehicleRC_${idx}`, v.rcDocument);
         if (v.insuranceDocument)
-          formData.append("vehicleInsurance", v.insuranceDocument);
-        if (v.permit) formData.append("vehiclePermit", v.permit);
-        if (v.fitnessCert) formData.append("vehicleFitness", v.fitnessCert);
+          formData.append(`vehicleInsurance_${idx}`, v.insuranceDocument);
+        if (v.permit) formData.append(`vehiclePermit_${idx}`, v.permit);
+        if (v.fitnessCert) formData.append(`vehicleFitness_${idx}`, v.fitnessCert);
         if (v.requestLetter)
-          formData.append("vehicleRequestLetter", v.requestLetter);
-        if (v.taxDoc) formData.append("vehicleTax", v.taxDoc);
-        if (v.emissionCert) formData.append("vehicleEmission", v.emissionCert);
+          formData.append(`vehicleRequestLetter_${idx}`, v.requestLetter);
+        if (v.taxDoc) formData.append(`vehicleTax_${idx}`, v.taxDoc);
+        if (v.emissionCert) formData.append(`vehicleEmission_${idx}`, v.emissionCert);
       });
       // ===== CHANGE END =====
 
@@ -1752,24 +1879,24 @@ const vehicleOptions = [
     if (type === 'person') {
       // Set editing index so master directory dropdown is hidden and button shows "Update Person"
       setEditingPersonIndex('reverted');
-      
+
       // Map ENUM strings to numeric IDs using masterData
       const nationalityEnum = entity.nationality; // "INDIAN" or "FOREIGNER"
       const nationalityObj = masterData.nationalities.find(n => (n.value || n.label || n.name || "").toUpperCase() === nationalityEnum?.toUpperCase());
       const nationalityId = nationalityObj ? String(nationalityObj.id || nationalityObj.value) : (nationalityEnum === "INDIAN" ? "1" : "2");
-      
+
       const accessAreaEnum = entity.accessAreaId; // "OIL JETTY AND OTHER GATES" or "OTHER GATES ONLY"
       const accessAreaObj = masterData.accessAreas.find(a => (a.value || a.label || a.name || "").toUpperCase() === accessAreaEnum?.toUpperCase());
       const accessAreaId = accessAreaObj ? String(accessAreaObj.id || accessAreaObj.value) : '';
-      
+
       const idProofTypeEnum = entity.idProofType; // "PASSPORT", "PAN CARD", etc.
       const idProofTypeObj = masterData.idProofTypes.find(i => (i.value || i.label || i.name || "").toUpperCase() === idProofTypeEnum?.toUpperCase());
       const idProofTypeId = idProofTypeObj ? String(idProofTypeObj.id || idProofTypeObj.value) : idProofTypeEnum;
-      
+
       const passTypeEnum = entity.passType; // "DAILY", "MONTHLY", "YEARLY"
       const passTypeObj = masterData.passTypes.find(p => (p.value || p.label || p.name || "").toUpperCase() === passTypeEnum?.toUpperCase());
       const passTypeId = passTypeObj ? String(passTypeObj.id || passTypeObj.value) : passTypeEnum;
-      
+
       // Map reverted person data to personForm structure
       // NOTE: personForm uses: country, designation, accessArea (not countryId, designationId, accessAreaId)
       console.log("REVERTED ENTITY1657", entity);
@@ -1845,7 +1972,7 @@ const vehicleOptions = [
     } else if (type === 'vehicle') {
       // Set editing index so fleet dropdown is hidden and button shows "Update Vehicle"
       setEditingVehicleIndex('reverted');
-      
+
       // Map ENUM string to numeric ID using masterData
       const accessAreaEnum = entity.accessAreaId; // "OIL JETTY AND OTHER GATES" or "OTHER GATES ONLY"
       const accessAreaObj = masterData.accessAreas.find(a => (a.value || a.label || a.name || "").toUpperCase() === accessAreaEnum?.toUpperCase());
@@ -2214,7 +2341,12 @@ const vehicleOptions = [
 
       <div className="flex border-b border-slate-300 dark:border-white/10">
         <button
-          onClick={() => setActiveTab("apply")}
+          onClick={() => {
+            setActiveTab("apply");
+            if (companyBlacklisted) {
+              setShowBlacklistPopup(true);
+            }
+          }}
           className={`px-8 py-4 text-base transition-all ${activeTab === "apply" ? "font-bold text-[#0a1e4d] dark:text-white border-b-2 border-[#0a1e4d] dark:border-white" : "font-semibold text-slate-500 dark:text-stone-400 hover:text-[#0a1e4d] dark:hover:text-white"}`}
         >
           Apply New Pass
@@ -2240,6 +2372,23 @@ const vehicleOptions = [
 
       {activeTab === "apply" && (
         <div className="space-y-8 animate-in fade-in duration-300">
+          {companyBlacklisted && (
+            <div className="bg-gradient-to-br from-red-600 via-red-700 to-red-800 border border-red-500/30 text-white rounded-2xl p-5 flex items-start gap-4 animate-in slide-in-from-top-2 duration-300 shadow-lg shadow-red-950/20">
+              <div className="bg-white/10 text-white p-3 rounded-xl border border-white/20 shadow-inner shrink-0">
+                <AlertCircle className="h-6 w-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-base font-extrabold tracking-wide uppercase">Your Company is Blacklisted!</h4>
+                <p className="text-sm text-red-100 mt-1 leading-relaxed font-semibold">
+                  Pass requests and applications are disabled for your company.
+                </p>
+                <div className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 bg-black/20 hover:bg-black/35 rounded-xl border border-white/10 text-xs font-bold text-white transition-all">
+                  <span className="text-red-300 uppercase tracking-widest text-[10px]">Suspension Reason:</span>
+                  <span className="uppercase tracking-wide">{companyBlacklistReason}</span>
+                </div>
+              </div>
+            </div>
+          )}
           <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
               <h3 className="font-black text-[#0a1e4d] flex items-center gap-2 uppercase text-sm tracking-wider">
@@ -2542,7 +2691,8 @@ const vehicleOptions = [
             <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
               <button
                 onClick={openAddPersonModal}
-                className="bg-orange-600 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-orange-700 transition-all uppercase tracking-wider"
+                disabled={companyBlacklisted}
+                className="bg-orange-600 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-orange-700 disabled:cursor-not-allowed transition-all uppercase tracking-wider"
               >
                 Add Person
               </button>
@@ -2664,7 +2814,8 @@ const vehicleOptions = [
             <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
               <button
                 onClick={openAddVehicleModal}
-                className="bg-orange-600 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-orange-700 transition-all uppercase tracking-wider"
+                disabled={companyBlacklisted}
+                className="bg-orange-600 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-orange-700 disabled:bg-slate-350 disabled:text-slate-500 disabled:cursor-not-allowed transition-all uppercase tracking-wider"
               >
                 Add Vehicle
               </button>
@@ -2747,7 +2898,7 @@ const vehicleOptions = [
               </div>
               <button
                 onClick={handleSubmitRequest}
-                disabled={loading || !agreedToTerms}
+                disabled={loading || !agreedToTerms || companyBlacklisted}
                 className="w-full mt-6 h-14 bg-[#0a1e4d] hover:bg-[#1a2f64] disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-black text-lg shadow-xl shadow-[#0a1e4d]/20 flex items-center justify-center gap-3 transition-all uppercase tracking-widest"
               >
                 {loading ? "Processing..." : "Submit Request"}{" "}
@@ -2914,12 +3065,12 @@ const vehicleOptions = [
                           <td className="px-6 py-4 text-center border-r border-slate-100">
                             <span
                               className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${currentStatus === "SUBMITTED"
-                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                  : isApproved
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                    : currentStatus === "REJECTED"
-                                      ? "bg-red-50 text-red-700 border border-red-200"
-                                      : "bg-amber-50 text-amber-700 border border-amber-200"
+                                ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                : isApproved
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : currentStatus === "REJECTED"
+                                    ? "bg-red-50 text-red-700 border border-red-200"
+                                    : "bg-amber-50 text-amber-700 border border-amber-200"
                                 }`}
                             >
                               {currentStatus}
@@ -3233,8 +3384,8 @@ const vehicleOptions = [
                           }
                         }}
                         className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${personErrors.seafarerIdType
-                            ? "border-red-400 bg-red-50"
-                            : "border-slate-300 bg-white"
+                          ? "border-red-400 bg-red-50"
+                          : "border-slate-300 bg-white"
                           }`}
                       >
                         <option value="">-- Select ID Type --</option>
@@ -3270,7 +3421,7 @@ const vehicleOptions = [
                               personForm.editIndex
                             )
                           }
-                    
+
                           // onChange={async (e) => {
                           //   const file =
                           //     e?.target?.files?.[0] ||
@@ -3505,13 +3656,13 @@ const vehicleOptions = [
                             }
                           }}
                           className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${personErrors.passportNo
-                              ? "border-red-400 bg-red-50"
-                              : "border-slate-300 bg-white"
+                            ? "border-red-400 bg-red-50"
+                            : "border-slate-300 bg-white"
                             }`}
                           placeholder="A1234567"
                           maxLength={8}
                         />
-                        {personErrors.passportNo && (
+                         {personErrors.passportNo && (
                           <p className="text-xs text-red-500 mt-0.5 font-medium">
                             {personErrors.passportNo}
                           </p>
@@ -3574,8 +3725,8 @@ const vehicleOptions = [
                         type="tel"
                         value={personForm.mobile} // Fixed: Removed URL wrapper
                         className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${personErrors.mobile
-                            ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
-                            : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
+                          ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
+                          : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
                           }`}
                         placeholder="00000 00000"
                         maxLength={10}
@@ -3635,14 +3786,14 @@ const vehicleOptions = [
                       const hasVal = !!personForm.vehicleNo.trim();
                       const isTwoWheeler = personForm.withTwoWheeler;
                       const hasError = !!personErrors.vehicleNo;
-                      
+
                       let containerClass = "border-slate-300 focus-within:ring-2 focus-within:ring-orange-500/30 focus-within:border-orange-500";
                       if (isTwoWheeler && hasVal) {
                         containerClass = hasError
                           ? "border-red-400 focus-within:ring-2 focus-within:ring-red-500/20 focus-within:border-red-400"
                           : "border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500";
                       }
-                      
+
                       return (
                         <div className={`flex h-10 shadow-sm rounded-lg overflow-hidden border transition-all ${containerClass}`}>
                           <div className="border-r border-slate-300 flex items-center justify-center px-4 bg-slate-50">
@@ -3665,8 +3816,12 @@ const vehicleOptions = [
                             placeholder="Vehicle No (e.g. TN-01-AB-1234)"
                             className="w-full text-sm disabled:bg-slate-100 disabled:cursor-not-allowed px-3 outline-none uppercase font-bold text-[#0a1e4d]"
                             onBlur={(e) => {
-                              if (personForm.withTwoWheeler)
+                              if (personForm.withTwoWheeler) {
                                 validatePersonField("vehicleNo", e.target.value);
+                                if (/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(e.target.value)) {
+                                  checkBlacklistStatus("VEHICLE", e.target.value.replace(/[\s-]/g, ""));
+                                }
+                              }
                             }}
                             onChange={(e) => {
                               const val = e.target.value.toUpperCase().slice(0, 13);
@@ -3692,9 +3847,15 @@ const vehicleOptions = [
                         ) : (
                           <>
                             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                            <span className="text-emerald-600">Valid vehicle registration format</span>
+                            <span className="text-emerald-600">Valid Two Wheeler registration format</span>
                           </>
                         )}
+                      </div>
+                    )}
+                    {!personErrors.vehicleNo && blacklistWarnings["VEHICLE_" + personForm.vehicleNo.replace(/[\s-]/g, "").toUpperCase()] && (
+                      <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
+                        <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
+                        <span>PORT BLACKLISTED — {blacklistWarnings["VEHICLE_" + personForm.vehicleNo.replace(/[\s-]/g, "").toUpperCase()]?.replace("⚠️ BLACKLISTED ", "")}</span>
                       </div>
                     )}
                   </div>
@@ -3942,59 +4103,76 @@ const vehicleOptions = [
                       </div>
                     </div>
                   )}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      Type of Id proof
-                    </label>
-                    <select
-                      value={personForm.idProofType}
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          idProofType: e.target.value,
-                        })
-                      }
-                      className={inputClass}
-                      disabled={personForm.hepType === "1"}
-                    >
-                      <option value="">-- Select --</option>
-                      {masterData.idProofTypes.map((t) => (
-                        <option key={t.id || t.value} value={t.id || t.value}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      {idProofLabel}
-                    </label>
-                    <input
-                      type="text"
-                      value={personForm.idProofNumber}
-                      onChange={(e) => {
-                        const val = e.target.value.toUpperCase();
-                        setPersonForm({ ...personForm, idProofNumber: val });
-                        if (val)
-                          validatePersonField("idProofNumber", val, {
-                            idProofType: personForm.idProofType,
-                          });
-                      }}
-                      onBlur={(e) => {
-                        if (e.target.value)
-                          validatePersonField("idProofNumber", e.target.value, {
-                            idProofType: personForm.idProofType,
-                          });
-                      }}
-                      className={`${inputClass} ${personErrors.idProofNumber ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
-                      placeholder={idProofPlaceholder}
-                    />
-                    {personErrors.idProofNumber && (
-                      <p className="text-xs text-red-500 mt-0.5 font-medium">
-                        {personErrors.idProofNumber}
-                      </p>
-                    )}
-                  </div>
+                  {/* Secondary ID Proof — hidden for Seafarers who have their own dedicated ID flow above */}
+                  {personForm.hepType !== "3" && (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          Type of Id proof
+                        </label>
+                        <select
+                          value={personForm.idProofType}
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              idProofType: e.target.value,
+                            })
+                          }
+                          className={inputClass}
+                          disabled={personForm.hepType === "1"}
+                        >
+                          <option value="">-- Select --</option>
+                          {masterData.idProofTypes.map((t) => (
+                            <option key={t.id || t.value} value={t.id || t.value}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          {idProofLabel}
+                        </label>
+                        <input
+                          type="text"
+                          value={personForm.idProofNumber}
+                          onChange={(e) => {
+                            const val = e.target.value.toUpperCase();
+                            setPersonForm({ ...personForm, idProofNumber: val });
+                            if (val)
+                              validatePersonField("idProofNumber", val, {
+                                idProofType: personForm.idProofType,
+                              });
+                          }}
+                          onBlur={(e) => {
+                            if (e.target.value) {
+                              validatePersonField("idProofNumber", e.target.value, {
+                                idProofType: personForm.idProofType,
+                              });
+                              const valClean = e.target.value.replace(/[\s-]/g, "").toUpperCase();
+                              checkBlacklistStatus("DRIVER", valClean);
+                              checkBlacklistStatus("PERSON", valClean);
+                            }
+                          }}
+                          className={`${inputClass} ${personErrors.idProofNumber ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                          placeholder={idProofPlaceholder}
+                        />
+                        {personErrors.idProofNumber && (
+                          <p className="text-xs text-red-500 mt-0.5 font-medium">
+                            {personErrors.idProofNumber}
+                          </p>
+                        )}
+                        {!personErrors.idProofNumber && personForm.idProofNumber && (blacklistWarnings["DRIVER_" + personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase()] || blacklistWarnings["PERSON_" + personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase()]) && (
+                          <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
+                            <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
+                            <span>PORT BLACKLISTED — {(blacklistWarnings["DRIVER_" + personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase()] || blacklistWarnings["PERSON_" + personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase()])?.replace("⚠️ BLACKLISTED ", "")}</span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Photo upload — always shown */}
                   <div className="space-y-1.5 md:col-span-2 max-w-sm">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Upload Photo <span className="text-red-500">*</span>
@@ -4031,7 +4209,7 @@ const vehicleOptions = [
                     ) : (
                       <FileUploadBox
                         label="Photo"
-                        fileType="image" // 🔥 THIS IS THE KEY FIX
+                        fileType="image"
                         isRequired={true}
                         file={personForm.photo}
                         existingFileName={personForm.existingPhotoName}
@@ -4202,8 +4380,7 @@ const vehicleOptions = [
                 </table>
               </div>
 
-              {(personForm.hepType === "1" ||
-                personForm.hepType === "3" ||
+              {((personForm.hepType === "1" && personForm.idProofType !== "1") ||
                 String(personForm.passType) === "2" ||
                 String(personForm.passType) === "3") && (
               <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
@@ -4363,16 +4540,16 @@ const vehicleOptions = [
                     {(() => {
                       const hasVal = !!vehicleForm.regNo.trim();
                       const hasError = !!vehicleErrors.regNo;
-                      
+
                       let customBorderClass = "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
                       if (hasVal) {
                         customBorderClass = hasError
                           ? "border-red-400 focus:border-red-500 focus:ring-red-500/20"
                           : "border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/20";
                       }
-                      
+
                       const baseInputClass = "w-full h-10 rounded-lg text-sm px-3 shadow-sm bg-white outline-none transition-all border focus:ring-2";
-                      
+
                       return (
                         <>
                           <input
@@ -4383,9 +4560,12 @@ const vehicleOptions = [
                               setVehicleForm({ ...vehicleForm, regNo: val });
                               if (val.length >= 8) validateVehicleField("regNo", val);
                             }}
-                            onBlur={(e) =>
-                              validateVehicleField("regNo", e.target.value)
-                            }
+                            onBlur={(e) => {
+                              validateVehicleField("regNo", e.target.value);
+                              if (/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(e.target.value)) {
+                                checkBlacklistStatus("VEHICLE", e.target.value.replace(/[\s-]/g, ""));
+                              }
+                            }}
                             className={`${baseInputClass} ${customBorderClass} uppercase font-bold text-[#0a1e4d] tracking-wider`}
                             placeholder="TN-XX-XX-XXXX"
                             maxLength={13}
@@ -4403,6 +4583,12 @@ const vehicleOptions = [
                                   <span className="text-emerald-600">Valid vehicle registration format</span>
                                 </>
                               )}
+                            </div>
+                          )}
+                          {!hasError && blacklistWarnings["VEHICLE_" + vehicleForm.regNo.replace(/[\s-]/g, "")] && (
+                            <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
+                              <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
+                              <span>PORT BLACKLISTED — {blacklistWarnings["VEHICLE_" + vehicleForm.regNo.replace(/[\s-]/g, "")]?.replace("⚠️ BLACKLISTED ", "")}</span>
                             </div>
                           )}
                         </>
@@ -4899,9 +5085,9 @@ const vehicleOptions = [
                     </label>
                     <input
                       className={`w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold cursor-not-allowed ${(selectedPassDetails.status || "").toUpperCase() ===
-                          "APPROVED"
-                          ? "text-emerald-600"
-                          : "text-orange-600"
+                        "APPROVED"
+                        ? "text-emerald-600"
+                        : "text-orange-600"
                         }`}
                       readOnly
                       type="text"
@@ -5161,13 +5347,13 @@ const vehicleOptions = [
                         Person
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        10.20
+                        10.30
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        153.00
+                        154.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        407.00
+                        410.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right">
                         100.00
@@ -5184,13 +5370,13 @@ const vehicleOptions = [
                         Person
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        10.20
+                        10.30
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        153.00
+                        154.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        407.00
+                        410.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right">
                         100.00
@@ -5207,7 +5393,7 @@ const vehicleOptions = [
                         Person
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        10.20
+                        10.30
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
                         0.00
@@ -5236,13 +5422,13 @@ const vehicleOptions = [
                         Trucks, VAN
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        25.50
+                        25.70
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        306.00
+                        308.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        2035.00
+                        2049.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-400 text-right">
                         0.00
@@ -5260,13 +5446,13 @@ const vehicleOptions = [
                         Forklift, MOBILE CRANE, PAY LOADER, Poclain
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        40.70
+                        41.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        458.00
+                        461.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        3053.00
+                        3073.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-400 text-right">
                         0.00
@@ -5283,7 +5469,7 @@ const vehicleOptions = [
                         Person
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        10.20
+                        10.30
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
                         0.00
@@ -5306,7 +5492,7 @@ const vehicleOptions = [
                         Four wheeler
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        25.50
+                        25.70
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
                         0.00
@@ -5581,31 +5767,27 @@ const vehicleOptions = [
                     {revertedPersons.map((person, index) => (
                       <div
                         key={person.id}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          person.status === 'reverted'
-                            ? 'bg-white border-amber-300'
-                            : 'bg-green-50 border-green-300'
-                        }`}
+                        className={`p-4 rounded-xl border-2 transition-all ${person.status === 'reverted'
+                          ? 'bg-white border-amber-300'
+                          : 'bg-green-50 border-green-300'
+                          }`}
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              person.status === 'reverted' ? 'bg-amber-100' : 'bg-green-100'
-                            }`}>
-                              <User className={`h-5 w-5 ${
-                                person.status === 'reverted' ? 'text-amber-600' : 'text-green-600'
-                              }`} />
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${person.status === 'reverted' ? 'bg-amber-100' : 'bg-green-100'
+                              }`}>
+                              <User className={`h-5 w-5 ${person.status === 'reverted' ? 'text-amber-600' : 'text-green-600'
+                                }`} />
                             </div>
                             <div>
                               <p className="font-semibold text-slate-800">{person.name}</p>
                               <p className="text-xs text-slate-500">ID: {person.id}</p>
                             </div>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            person.status === 'reverted'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-green-100 text-green-700'
-                          }`}>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${person.status === 'reverted'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-green-100 text-green-700'
+                            }`}>
                             {person.status === 'reverted' ? 'Needs Update' : 'Updated'}
                           </span>
                         </div>
@@ -5645,31 +5827,27 @@ const vehicleOptions = [
                     {revertedVehicles.map((vehicle, index) => (
                       <div
                         key={vehicle.id}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          vehicle.status === 'reverted'
-                            ? 'bg-white border-amber-300'
-                            : 'bg-green-50 border-green-300'
-                        }`}
+                        className={`p-4 rounded-xl border-2 transition-all ${vehicle.status === 'reverted'
+                          ? 'bg-white border-amber-300'
+                          : 'bg-green-50 border-green-300'
+                          }`}
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              vehicle.status === 'reverted' ? 'bg-amber-100' : 'bg-green-100'
-                            }`}>
-                              <Car className={`h-5 w-5 ${
-                                vehicle.status === 'reverted' ? 'text-amber-600' : 'text-green-600'
-                              }`} />
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${vehicle.status === 'reverted' ? 'bg-amber-100' : 'bg-green-100'
+                              }`}>
+                              <Car className={`h-5 w-5 ${vehicle.status === 'reverted' ? 'text-amber-600' : 'text-green-600'
+                                }`} />
                             </div>
                             <div>
                               <p className="font-semibold text-slate-800">{vehicle.registrationNo || vehicle.regNo}</p>
                               <p className="text-xs text-slate-500">ID: {vehicle.id}</p>
                             </div>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            vehicle.status === 'reverted'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-green-100 text-green-700'
-                          }`}>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${vehicle.status === 'reverted'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-green-100 text-green-700'
+                            }`}>
                             {vehicle.status === 'reverted' ? 'Needs Update' : 'Updated'}
                           </span>
                         </div>
@@ -5700,16 +5878,16 @@ const vehicleOptions = [
 
               {/* All Updated Message */}
               {revertedPersons.every(p => p.status !== 'reverted') &&
-               revertedPersons.every(p => p.status === 'updated') &&
-               revertedVehicles.every(v => v.status === 'updated') && (
-                <div className="bg-green-50 border border-green-200 p-4 rounded-xl flex items-center gap-3 mb-6">
-                  <CheckCircle className="h-6 w-6 text-green-600" />
-                  <div>
-                    <p className="font-semibold text-green-800">All entities updated!</p>
-                    <p className="text-sm text-green-700">You can now resubmit your pass for approval.</p>
+                revertedPersons.every(p => p.status === 'updated') &&
+                revertedVehicles.every(v => v.status === 'updated') && (
+                  <div className="bg-green-50 border border-green-200 p-4 rounded-xl flex items-center gap-3 mb-6">
+                    <CheckCircle className="h-6 w-6 text-green-600" />
+                    <div>
+                      <p className="font-semibold text-green-800">All entities updated!</p>
+                      <p className="text-sm text-green-700">You can now resubmit your pass for approval.</p>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
 
             {/* Footer */}
@@ -5726,12 +5904,11 @@ const vehicleOptions = [
                   revertedPersons.some(p => p.status === 'reverted') ||
                   revertedVehicles.some(v => v.status === 'reverted')
                 }
-                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${
-                  revertedPersons.some(p => p.status === 'reverted') ||
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${revertedPersons.some(p => p.status === 'reverted') ||
                   revertedVehicles.some(v => v.status === 'reverted')
-                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                    : 'bg-amber-500 hover:bg-amber-600 text-white'
-                }`}
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                  : 'bg-amber-500 hover:bg-amber-600 text-white'
+                  }`}
               >
                 <Send className="h-4 w-4" />
                 Resubmit Pass
@@ -5806,6 +5983,83 @@ const vehicleOptions = [
                   onLoad={() => setIframeLoading(false)}
                 />
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* COMPANY BLACKLIST POPUP OVERLAY */}
+      {companyBlacklisted && showBlacklistPopup && activeTab === "apply" && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-900 border-2 border-red-500/20 dark:border-red-900/30 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+            {/* Top-right close button */}
+            <button
+              onClick={() => setShowBlacklistPopup(false)}
+              className="absolute right-4 top-4 text-slate-400 dark:text-stone-400 hover:text-slate-600 dark:hover:text-stone-200 bg-slate-100 dark:bg-slate-800 p-2 rounded-full transition-all duration-200"
+              aria-label="Close panel"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            {/* Glowing Icon Header */}
+            <div className="text-center mb-6">
+              <div className="relative inline-flex items-center justify-center w-20 h-20 rounded-full bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-500 mb-4 ring-8 ring-red-500/5">
+                <AlertCircle className="h-10 w-10 animate-bounce" />
+                <span className="absolute inset-0 rounded-full border-2 border-red-500/30 animate-ping opacity-75" />
+              </div>
+              <h3 className="text-2xl font-black text-slate-950 dark:text-white tracking-tight uppercase">
+                Access Restricted
+              </h3>
+              <p className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-widest mt-1">
+                Company Blacklisted
+              </p>
+            </div>
+
+            {/* Warning Message Card */}
+            <div className="bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/20 rounded-2xl p-5 space-y-4 mb-6">
+              <div className="flex justify-between items-center border-b border-red-100/50 dark:border-red-900/20 pb-3">
+                <span className="text-xs font-bold text-slate-400 dark:text-stone-500 uppercase">Suspended Entity</span>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-900/40">
+                  Suspended
+                </span>
+              </div>
+              
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-slate-400 dark:text-stone-500 uppercase tracking-wider">Company Name</p>
+                <p className="text-sm font-extrabold text-slate-900 dark:text-stone-100">
+                  {generalForm.companyName}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-slate-400 dark:text-stone-500 uppercase tracking-wider">Blacklist Reason</p>
+                <p className="text-sm font-semibold text-red-800 dark:text-red-400 leading-relaxed bg-red-50 dark:bg-red-950/20 p-3 rounded-xl border border-red-100/50 dark:border-red-900/10">
+                  {companyBlacklistReason}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-stone-400 text-center leading-relaxed mb-6 font-medium">
+              You are blocked from submitting new harbor entry passes. To restore access, please contact the Traffic Department or request reinstatement through the ATM Portal once compliance terms are met.
+            </p>
+
+            {/* Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => {
+                  setShowBlacklistPopup(false);
+                  setActiveTab("view");
+                }}
+                className="w-full sm:w-1/2 py-3 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white text-xs font-bold tracking-wider uppercase rounded-2xl transition duration-200 hover:-translate-y-0.5 active:translate-y-0 shadow-lg shadow-slate-950/10 hover:shadow-slate-950/20 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <FileText className="h-4 w-4" /> View History
+              </button>
+              <button
+                onClick={() => setShowBlacklistPopup(false)}
+                className="w-full sm:w-1/2 py-3 bg-gradient-to-r from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 text-white text-xs font-bold tracking-wider uppercase rounded-2xl transition duration-200 hover:-translate-y-0.5 active:translate-y-0 shadow-lg shadow-red-600/20 hover:shadow-red-600/30 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                Ok
+              </button>
             </div>
           </div>
         </div>

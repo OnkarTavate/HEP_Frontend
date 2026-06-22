@@ -376,7 +376,7 @@ export default function VendorPassPublicPage() {
     dateFrom: getCurrentDateTime(),
     dateTo: "",
     validUptoTime: "",
-    amount: 10.2,
+    amount: 10.3,
   };
   const [personForm, setPersonForm] = useState(initialPersonForm);
 
@@ -415,7 +415,7 @@ export default function VendorPassPublicPage() {
     passPeriod: "1",
     dateFrom: getCurrentDateTime(),
     dateTo: "",
-    amount: 25.5,
+    amount: 25.7,
   };
   const [vehicleForm, setVehicleForm] = useState(initialVehicleForm);
 
@@ -580,9 +580,14 @@ export default function VendorPassPublicPage() {
       updatedPeriod = "1";
     }
 
-    let amt = 10.2;
-    if (String(personForm.passType) === "2") amt = 153.0;
-    if (String(personForm.passType) === "3") amt = 407.0;
+    let amt = 10.3;
+    if (String(personForm.passType) === "1") {
+      amt = 10.3 * parseInt(updatedPeriod || 1);
+    } else if (String(personForm.passType) === "2") {
+      amt = 154.0;
+    } else if (String(personForm.passType) === "3") {
+      amt = 410.0;
+    }
 
     const newDateTo = calculateDateTo(
       personForm.dateFrom,
@@ -640,9 +645,28 @@ export default function VendorPassPublicPage() {
       updatedPeriod = "1";
     }
 
-    let amt = 25.5;
-    if (String(vehicleForm.passType) === "2") amt = 306.0;
-    if (String(vehicleForm.passType) === "3") amt = 2035.0;
+    const selectedTypeObj = masterData.vehicleTypes.find(t => String(t.id) === String(vehicleForm.type));
+    const typeName = selectedTypeObj ? String(selectedTypeObj.name).toUpperCase().trim() : "";
+    const isCargoEquipment = ["CRANE", "DOZERS", "DUMPERS", "EXCAVATORS", "FORKLIFT", "JCB EARTHMOVER", "MOBILE CRANE", "PAY LOADER", "POCLAIN"].includes(typeName);
+
+    let amt = 25.7;
+    if (isCargoEquipment) {
+      if (String(vehicleForm.passType) === "1") {
+        amt = 41.0 * parseInt(updatedPeriod || 1);
+      } else if (String(vehicleForm.passType) === "2") {
+        amt = 461.0;
+      } else if (String(vehicleForm.passType) === "3") {
+        amt = 3073.0;
+      }
+    } else {
+      if (String(vehicleForm.passType) === "1") {
+        amt = 25.7 * parseInt(updatedPeriod || 1);
+      } else if (String(vehicleForm.passType) === "2") {
+        amt = 308.0;
+      } else if (String(vehicleForm.passType) === "3") {
+        amt = 2049.0;
+      }
+    }
 
     const newDateTo = calculateDateTo(
       vehicleForm.dateFrom,
@@ -656,7 +680,7 @@ export default function VendorPassPublicPage() {
       amount: amt,
       dateTo: newDateTo,
     }));
-  }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom]);
+  }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom, vehicleForm.type, masterData.vehicleTypes]);
 
   useEffect(() => {
     const selectedNationality = getLabelById(
@@ -3274,13 +3298,13 @@ export default function VendorPassPublicPage() {
                         Person
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        10.20
+                        10.30
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        153.00
+                        154.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        407.00
+                        410.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right">
                         100.00
@@ -3297,13 +3321,13 @@ export default function VendorPassPublicPage() {
                         Person
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        10.20
+                        10.30
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        153.00
+                        154.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        407.00
+                        410.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right">
                         100.00
@@ -3320,7 +3344,7 @@ export default function VendorPassPublicPage() {
                         Person
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        10.20
+                        10.30
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
                         0.00
@@ -3349,13 +3373,13 @@ export default function VendorPassPublicPage() {
                         Trucks, VAN
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        25.50
+                        25.70
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        306.00
+                        308.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        2035.00
+                        2049.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-400 text-right">
                         0.00
@@ -3373,13 +3397,13 @@ export default function VendorPassPublicPage() {
                         Forklift, MOBILE CRANE, PAY LOADER, Poclain
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        40.70
+                        41.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        458.00
+                        461.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        3053.00
+                        3073.00
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-400 text-right">
                         0.00
@@ -3396,7 +3420,7 @@ export default function VendorPassPublicPage() {
                         Person
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        10.20
+                        10.30
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
                         0.00
@@ -3419,7 +3443,7 @@ export default function VendorPassPublicPage() {
                         Four wheeler
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        25.50
+                        25.70
                       </td>
                       <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
                         0.00

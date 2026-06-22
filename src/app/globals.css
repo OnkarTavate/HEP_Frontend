@@ -25,6 +25,8 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 } */
 
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
 @import "tailwindcss";
 
 @import "tw-animate-css";
@@ -115,8 +117,8 @@ body {
 }
 
 @theme inline {
-  /* Font configs - Set Arial as default */
-  --font-sans: Arial, sans-serif;
+  /* Font configs - Set Plus Jakarta Sans as default */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'Courier New', monospace;
 
   /* Map Standard Tailwind colors to our Saffron variables */
@@ -181,15 +183,15 @@ body {
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
   }
   body {
     @apply bg-background text-foreground;
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     font-size: 1rem; /* inherits root size — scales globally with html */
   }
   html {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     /* Normal browser default — every rem-based size in the app
        (Tailwind text-*, headings, etc.) is calibrated against this. */
     font-size: 16px;
@@ -197,67 +199,67 @@ body {
 
   /* Form controls use rem so they track the html root size. */
   input, textarea, select, button {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     font-size: 1rem;
   }
 
   label {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     font-size: 1rem;
   }
   
   h1 {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     font-size: 2.5rem;
     font-weight: bold;
   }
   
   h2 {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     font-size: 2rem;
     font-weight: bold;
   }
   
   h3 {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     font-size: 1.75rem;
     font-weight: bold;
   }
   
   h4 {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     font-size: 1.5rem;
     font-weight: bold;
   }
   
   h5 {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     font-size: 1.25rem;
     font-weight: bold;
   }
   
   h6 {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     font-size: 1.125rem;
     font-weight: bold;
   }
   
   p {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     font-size: 1rem;
   }
 
   span, div {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
   }
 
   table {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     font-size: 1.2rem;
   }
 
   th, td {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-sans);
     font-size: 1rem;
   }
 }

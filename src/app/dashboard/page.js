@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useMemo, memo } from "react";
 import { useRouter } from "next/navigation";
+import axios from "axios";
+import { toast } from "sonner";
 import {
   Wallet,
   CheckCircle,
@@ -30,7 +32,11 @@ import {
   CloudDrizzle,
   Wind,
   Droplets,
+  AlertCircle,
+  X,
 } from "lucide-react";
+
+const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 
 import {
   Card,
@@ -191,31 +197,37 @@ const cardShell =
   "ring-1 ring-stone-200/70 dark:ring-white/[0.06] " +
   "shadow-[0_1px_3px_rgba(15,23,42,0.04),0_18px_40px_-20px_rgba(15,23,42,0.20)] " +
   "dark:shadow-[0_1px_3px_rgba(0,0,0,0.55),0_30px_60px_-24px_rgba(0,0,0,0.70)] " +
-  "hover:shadow-[0_4px_10px_rgba(15,23,42,0.06),0_28px_56px_-20px_rgba(15,23,42,0.28)] " +
-  "dark:hover:shadow-[0_4px_10px_rgba(0,0,0,0.65),0_36px_72px_-24px_rgba(0,0,0,0.85)] " +
-  "transition-all duration-300";
+  "hover:-translate-y-1 hover:scale-[1.01] " +
+  "hover:shadow-[0_4px_12px_rgba(15,23,42,0.06),0_28px_56px_-20px_rgba(15,23,42,0.28)] " +
+  "dark:hover:shadow-[0_4px_12px_rgba(0,0,0,0.65),0_36px_72px_-24px_rgba(0,0,0,0.85)] " +
+  "transition-all duration-300 ease-in-out";
 
 const cardShellPrimary =
   "rounded-3xl border-0 overflow-hidden relative text-white " +
   "bg-gradient-to-br from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] " +
   "ring-1 ring-amber-400/15 " +
   "shadow-[0_2px_6px_rgba(245,158,11,0.10),0_24px_56px_-20px_rgba(245,158,11,0.30)] " +
-  "hover:shadow-[0_4px_12px_rgba(245,158,11,0.16),0_36px_72px_-20px_rgba(245,158,11,0.42)] " +
-  "transition-all duration-300";
+  "hover:-translate-y-1 hover:scale-[1.01] " +
+  "hover:shadow-[0_4px_15px_rgba(245,158,11,0.16),0_36px_72px_-20px_rgba(245,158,11,0.42)] " +
+  "transition-all duration-300 ease-in-out";
 
 const cardShellAlertRed =
   "rounded-3xl border-0 bg-white dark:bg-[#1f232d] overflow-hidden " +
   "ring-1 ring-red-200 dark:ring-red-500/30 " +
   "shadow-[0_1px_3px_rgba(244,63,94,0.06),0_18px_40px_-20px_rgba(244,63,94,0.22)] " +
   "dark:shadow-[0_1px_3px_rgba(0,0,0,0.55),0_28px_60px_-24px_rgba(244,63,94,0.30)] " +
-  "transition-all duration-300";
+  "hover:-translate-y-1 hover:scale-[1.01] " +
+  "hover:shadow-[0_4px_15px_rgba(244,63,94,0.12),0_28px_60px_-20px_rgba(244,63,94,0.3)] " +
+  "transition-all duration-300 ease-in-out";
 
 const cardShellAlertAmber =
   "rounded-3xl border-0 bg-white dark:bg-[#1f232d] overflow-hidden " +
   "ring-1 ring-amber-200 dark:ring-amber-400/30 " +
   "shadow-[0_1px_3px_rgba(245,158,11,0.06),0_18px_40px_-20px_rgba(245,158,11,0.22)] " +
   "dark:shadow-[0_1px_3px_rgba(0,0,0,0.55),0_28px_60px_-24px_rgba(245,158,11,0.30)] " +
-  "transition-all duration-300";
+  "hover:-translate-y-1 hover:scale-[1.01] " +
+  "hover:shadow-[0_4px_15px_rgba(245,158,11,0.12),0_28px_60px_-20px_rgba(245,158,11,0.3)] " +
+  "transition-all duration-300 ease-in-out";
 
 // ---------------------------------------------------------------------------
 // Sub-components (memoised — they receive only primitives / stable refs,
@@ -1002,6 +1014,13 @@ export default function DashboardPage() {
   const [user, setUser] = useState(null);
   const [now, setNow] = useState(() => new Date());
 
+  const [profileData, setProfileData] = useState(null);
+  const [isBlacklisted, setIsBlacklisted] = useState(false);
+  const [blacklistReason, setBlacklistReason] = useState("");
+  const [showBlacklistPopup, setShowBlacklistPopup] = useState(false);
+  const [blacklistedVehicles, setBlacklistedVehicles] = useState([]);
+  const [showVehicleWarningPopup, setShowVehicleWarningPopup] = useState(false);
+
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) setUser(JSON.parse(storedUser));
@@ -1012,6 +1031,35 @@ export default function DashboardPage() {
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  // Fetch real company blacklist status
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      try {
+        const response = await axios.get(`${AGENT_API}/agents/profile`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (response.data?.success && response.data?.data) {
+          const data = response.data.data;
+          setProfileData(data);
+          if (data.isBlacklisted) {
+            setIsBlacklisted(true);
+            setBlacklistReason(data.blacklistReason || "Suspended due to port violations.");
+            setShowBlacklistPopup(true);
+          }
+          if (data.blacklistedVehicles && data.blacklistedVehicles.length > 0) {
+            setBlacklistedVehicles(data.blacklistedVehicles);
+            setShowVehicleWarningPopup(true);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch agent profile:", error);
+      }
+    };
+    fetchProfile();
   }, []);
 
   const username = useMemo(
@@ -1062,7 +1110,14 @@ export default function DashboardPage() {
             Last 30 Days
           </Button>
           <Button
-            onClick={() => router.push("/dashboard/pass_request")}
+            onClick={() => {
+              if (isBlacklisted) {
+                setShowBlacklistPopup(true);
+                toast.error("Blocked: Your company is blacklisted and cannot apply for passes.");
+              } else {
+                router.push("/dashboard/pass_request");
+              }
+            }}
             className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl h-11 px-6 font-bold shadow-lg shadow-orange-500/30"
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -1104,9 +1159,9 @@ export default function DashboardPage() {
       </div>
 
       {/* 4 ─ Compliance alerts */}
-      {(mockUserStatus.isBlacklisted || mockUserStatus.hasPenalties) && (
+      {(isBlacklisted || mockUserStatus.hasPenalties) && (
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          {mockUserStatus.isBlacklisted && (
+          {isBlacklisted && (
             <Card className={cardShellAlertRed + " lg:col-span-2"}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
@@ -1131,12 +1186,12 @@ export default function DashboardPage() {
               <CardContent className="space-y-3">
                 <div className="bg-red-50 dark:bg-red-500/10 p-3 rounded-2xl ring-1 ring-red-200/60 dark:ring-red-500/20">
                   <p className="text-red-700 dark:text-red-300 text-sm md:text-base leading-relaxed line-clamp-2">
-                    {mockUserStatus.blacklistReason}
+                    {blacklistReason || "Suspended due to port violations."}
                   </p>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-red-600/80 dark:text-red-300/80 font-medium">
-                    Date: {formatDate(mockUserStatus.blacklistDate)}
+                    Date: {formatDate(profileData?.blacklistDate || mockUserStatus.blacklistDate)}
                   </span>
                   <Button
                     size="sm"
@@ -1333,6 +1388,136 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
       </div>
+
+      {/* COMPANY BLACKLIST POPUP OVERLAY */}
+      {showBlacklistPopup && (
+        <div className="fixed inset-0 bg-[#0f172a]/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#1e293b] rounded-3xl max-w-lg w-full p-6 md:p-8 relative shadow-2xl border border-red-500/30 overflow-hidden transform transition-all duration-300 scale-100 flex flex-col items-center text-center">
+            {/* Red alert gradient glow background */}
+            <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full bg-red-500/10 blur-3xl" />
+            <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full bg-orange-500/10 blur-3xl" />
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => setShowBlacklistPopup(false)}
+              className="absolute top-4 right-4 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-1.5 rounded-full hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Glowing Red Icon */}
+            <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400 ring-4 ring-red-50 dark:ring-red-500/5 mb-4 shrink-0 shadow-lg shadow-red-500/20">
+              <Ban className="h-8 w-8 animate-pulse" />
+            </div>
+
+            {/* Title */}
+            <h2 className="text-2xl md:text-3xl font-extrabold text-stone-900 dark:text-white leading-tight mb-2 tracking-tight">
+              Company Access Blocked
+            </h2>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-500/20 text-xs font-bold uppercase tracking-wider mb-4">
+              <AlertCircle className="h-3.5 w-3.5" /> Suspended Status
+            </div>
+
+            {/* Reason Description */}
+            <p className="text-sm md:text-base text-stone-600 dark:text-stone-300 leading-relaxed max-w-md mb-6">
+              Your company profile (<span className="font-bold text-stone-900 dark:text-white">{username}</span>) has been blacklisted from Chennai Port. Pass requests and entries are currently restricted.
+            </p>
+
+            <div className="w-full bg-stone-50 dark:bg-stone-900/50 rounded-2xl p-4 border border-stone-200/60 dark:border-white/5 text-left mb-6">
+              <p className="text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-widest mb-1.5">Official Reason</p>
+              <p className="text-sm font-semibold text-stone-700 dark:text-stone-200 leading-relaxed">
+                {blacklistReason || "Reason not specified. Please contact administration."}
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-3 w-full">
+              <Button 
+                onClick={() => setShowBlacklistPopup(false)}
+                className="flex-1 rounded-2xl h-12 bg-stone-900 hover:bg-stone-800 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100 text-white font-bold transition-all shadow-lg"
+              >
+                Close Alert
+              </Button>
+              <Button 
+                variant="outline"
+                className="flex-1 rounded-2xl h-12 border-stone-200 dark:border-white/10 text-stone-700 dark:text-stone-200 font-bold hover:bg-stone-50 dark:hover:bg-white/5"
+                onClick={() => window.open("mailto:support@chennaiport.gov.in")}
+              >
+                Contact Support
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* COMPANY VEHICLE BLACKLIST POPUP OVERLAY */}
+      {showVehicleWarningPopup && (
+        <div className="fixed inset-0 bg-[#0f172a]/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#1e293b] rounded-3xl max-w-lg w-full p-6 md:p-8 relative shadow-2xl border border-amber-500/30 overflow-hidden transform transition-all duration-300 scale-100 flex flex-col items-center text-center">
+            {/* Amber alert gradient glow background */}
+            <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full bg-amber-500/10 blur-3xl" />
+            <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full bg-orange-500/10 blur-3xl" />
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => setShowVehicleWarningPopup(false)}
+              className="absolute top-4 right-4 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-1.5 rounded-full hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Glowing Amber Icon */}
+            <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 ring-4 ring-amber-50 dark:ring-amber-500/5 mb-4 shrink-0 shadow-lg shadow-amber-500/20">
+              <Truck className="h-8 w-8 animate-pulse" />
+            </div>
+
+            {/* Title */}
+            <h2 className="text-2xl md:text-3xl font-extrabold text-stone-900 dark:text-white leading-tight mb-2 tracking-tight">
+              Company Vehicle Blacklisted
+            </h2>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/20 text-xs font-bold uppercase tracking-wider mb-4">
+              <AlertCircle className="h-3.5 w-3.5" strokeWidth={2.5} /> Vehicle Suspensions
+            </div>
+
+            {/* Description */}
+            <p className="text-sm md:text-base text-stone-600 dark:text-stone-300 leading-relaxed max-w-md mb-6">
+              The following vehicle(s) registered under your company profile have been blacklisted and will be excluded from new pass requests. You can still apply for person-only passes.
+            </p>
+
+            <div className="w-full max-h-48 overflow-y-auto space-y-3 mb-6 pr-1 [scrollbar-width:thin] [scrollbar-color:theme(colors.slate.200)_transparent]">
+              {blacklistedVehicles.map((veh, i) => (
+                <div key={i} className="bg-stone-50 dark:bg-stone-900/50 rounded-2xl p-4 border border-stone-200/60 dark:border-white/5 text-left">
+                  <div className="flex items-center justify-between border-b border-stone-200/60 dark:border-white/5 pb-2 mb-2">
+                    <span className="text-sm font-extrabold text-stone-850 dark:text-stone-105 font-mono">{veh.identifier}</span>
+                    <span className="text-[10px] font-bold text-red-650 bg-red-50 dark:bg-red-500/10 px-2 py-0.5 rounded border border-red-200/50 uppercase tracking-wide">{veh.status}</span>
+                  </div>
+                  <p className="text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-widest mb-1">Reason</p>
+                  <p className="text-xs font-semibold text-stone-700 dark:text-stone-200 leading-normal">
+                    {veh.reason || "Suspended due to traffic violation."}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-3 w-full">
+              <Button 
+                onClick={() => setShowVehicleWarningPopup(false)}
+                className="flex-1 rounded-2xl h-12 bg-amber-600 hover:bg-amber-700 text-white font-bold transition-all shadow-lg"
+              >
+                Close Alert
+              </Button>
+              <Button 
+                variant="outline"
+                className="flex-1 rounded-2xl h-12 border-stone-200 dark:border-white/10 text-stone-700 dark:text-stone-200 font-bold hover:bg-stone-50 dark:hover:bg-white/5"
+                onClick={() => window.open("mailto:support@chennaiport.gov.in")}
+              >
+                Contact Support
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
