@@ -53,7 +53,7 @@ const FIELD_VALIDATORS = {
   panNumber: (v) => /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v.toUpperCase()),
   tanNumber: (v) =>
     v === "" || /^[A-Z]{4}[0-9]{5}[A-Z]{1}$/.test(v.toUpperCase()),
-  addressLine: (v) => v.trim().length >= 5,
+  addressLine: (v) => v.trim().length >= 10,
 };
 
 const getFieldError = (field, value) => {
@@ -77,10 +77,6 @@ const getFieldError = (field, value) => {
       return FIELD_VALIDATORS.licenseNumber(value)
         ? null
         : "License number must be at least 2 characters";
-    case "licenseValidityDate":
-      return FIELD_VALIDATORS.licenseValidityDate(value)
-        ? null
-        : "License has expired or date is invalid. Please enter a valid future date.";
     case "firstName":
       return FIELD_VALIDATORS.firstName(value)
         ? null
@@ -108,7 +104,7 @@ const getFieldError = (field, value) => {
     case "addressLine":
       return FIELD_VALIDATORS.addressLine(value)
         ? null
-        : "Please enter a valid address (at least 5 characters)";
+        : "Please enter a valid address (at least 10 characters)";
     default:
       return null;
   }
@@ -221,6 +217,156 @@ export default function RegisterPage() {
     contactMobile: "",
     contactEmail: "",
   });
+
+  // --- Address information states ---
+  const [countries, setCountries] = useState([]);
+  const [states, setStates] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [selectedCountryId, setSelectedCountryId] = useState("");
+  const [selectedStateId, setSelectedStateId] = useState("");
+  const [selectedCountryName, setSelectedCountryName] = useState("");
+  const [selectedStateName, setSelectedStateName] = useState("");
+  const [selectedCityName, setSelectedCityName] = useState("");
+  const [loadingStates, setLoadingStates] = useState(false);
+  const [loadingCities, setLoadingCities] = useState(false);
+
+  const fetchCountries = async () => {
+    try {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_AGENT_API}/pass-request/get-countries`);
+      if (res.data && res.data.success) {
+        const countriesList = res.data.data || [];
+        setCountries(countriesList);
+        
+        // If in new mode (not edit mode) and we haven't selected a country, default to "India"
+        if (!editRef && !selectedCountryName) {
+          const indiaObj = countriesList.find(c => c.name.toLowerCase() === "india");
+          if (indiaObj) {
+            setSelectedCountryName(indiaObj.name);
+            setSelectedCountryId(indiaObj.id);
+            // Fetch states for India
+            fetchStates(indiaObj.id);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching countries:", error);
+    }
+  };
+
+  const fetchStates = async (countryId) => {
+    setLoadingStates(true);
+    try {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_AGENT_API}/pass-request/get-states`, {
+        params: { countryId }
+      });
+      if (res.data && res.data.success) {
+        const statesList = res.data.data || [];
+        setStates(statesList);
+        
+        // If in new mode (not edit mode) and we haven't selected a state yet, default to "Tamil Nadu"
+        if (!editRef && !selectedStateName) {
+          const tnObj = statesList.find(s => s.name.toLowerCase() === "tamil nadu");
+          if (tnObj) {
+            setSelectedStateName(tnObj.name);
+            setSelectedStateId(tnObj.id);
+            fetchCities(tnObj.id);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching states:", error);
+    } finally {
+      setLoadingStates(false);
+    }
+  };
+
+  const fetchCities = async (stateId) => {
+    setLoadingCities(true);
+    try {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_AGENT_API}/pass-request/get-cities`, {
+        params: { stateId }
+      });
+      if (res.data && res.data.success) {
+        setCities(res.data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching cities:", error);
+    } finally {
+      setLoadingCities(false);
+    }
+  };
+
+  const handleCountryChange = (countryName) => {
+    setSelectedCountryName(countryName);
+    setSelectedStateName("");
+    setSelectedCityName("");
+    setStates([]);
+    setCities([]);
+    
+    const countryObj = countries.find(c => c.name === countryName);
+    if (countryObj) {
+      setSelectedCountryId(countryObj.id);
+      fetchStates(countryObj.id);
+    } else {
+      setSelectedCountryId("");
+    }
+  };
+
+  const handleStateChange = (stateName) => {
+    setSelectedStateName(stateName);
+    setSelectedCityName("");
+    setCities([]);
+    
+    const stateObj = states.find(s => s.name === stateName);
+    if (stateObj) {
+      setSelectedStateId(stateObj.id);
+      fetchCities(stateObj.id);
+    } else {
+      setSelectedStateId("");
+    }
+  };
+
+  useEffect(() => {
+    const loadCountryDetails = async () => {
+      if (!existingData || countries.length === 0) return;
+      
+      const countryObj = countries.find(c => c.name === existingData.country);
+      if (countryObj) {
+        setSelectedCountryId(countryObj.id);
+        setSelectedCountryName(countryObj.name);
+        setLoadingStates(true);
+        try {
+          const stateRes = await axios.get(`${process.env.NEXT_PUBLIC_AGENT_API}/pass-request/get-states`, {
+            params: { countryId: countryObj.id }
+          });
+          if (stateRes.data && stateRes.data.success) {
+            const statesList = stateRes.data.data || [];
+            setStates(statesList);
+            
+            const stateObj = statesList.find(s => s.name === existingData.state);
+            if (stateObj) {
+              setSelectedStateId(stateObj.id);
+              setSelectedStateName(stateObj.name);
+              setLoadingCities(true);
+              const cityRes = await axios.get(`${process.env.NEXT_PUBLIC_AGENT_API}/pass-request/get-cities`, {
+                params: { stateId: stateObj.id }
+              });
+              if (cityRes.data && cityRes.data.success) {
+                setCities(cityRes.data.data || []);
+                setSelectedCityName(existingData.city || "");
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error loading states/cities in edit mode:", err);
+        } finally {
+          setLoadingStates(false);
+          setLoadingCities(false);
+        }
+      }
+    };
+    loadCountryDetails();
+  }, [existingData, countries]);
 
   const rafRef = useRef(null);
 
@@ -362,6 +508,7 @@ export default function RegisterPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchInitialData();
+    fetchCountries();
   }, []);
 
   // Legacy validateFile kept for backward compat (now only used as a passthrough)
@@ -610,557 +757,578 @@ export default function RegisterPage() {
         onMouseMove={handleMouseMove}
         className="min-h-screen relative bg-zinc-950 overflow-x-hidden flex flex-col"
       >
-      <div
-        className="fixed inset-0 z-0 bg-cover bg-center transition-transform duration-500 ease-out pointer-events-none"
-        style={{
-          backgroundImage: "url('/port-bg.jpg')",
-          transform: `scale(1.1) translate(${-mousePos.x}px, ${-mousePos.y}px)`,
-          filter: "brightness(0.4)",
-        }}
-      />
+        <div
+          className="fixed inset-0 z-0 bg-cover bg-center transition-transform duration-500 ease-out pointer-events-none"
+          style={{
+            backgroundImage: "url('/port-bg.jpg')",
+            transform: `scale(1.1) translate(${-mousePos.x}px, ${-mousePos.y}px)`,
+            filter: "brightness(0.4)",
+          }}
+        />
 
-      <div className="relative z-10 flex-grow w-full">
-        <nav className="w-full max-w-6xl mx-auto px-6 py-6 flex justify-between items-center animate-in fade-in duration-700">
-          <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/20">
-            <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Ship className="h-6 w-6 text-white" />
+        <div className="relative z-10 flex-grow w-full">
+          <nav className="w-full max-w-6xl mx-auto px-6 py-6 flex justify-between items-center animate-in fade-in duration-700">
+            <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/20">
+              <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Ship className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-white leading-none">
+                  APACS
+                </h1>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-white leading-none">
-                APACS
-              </h1>
-            </div>
-          </div>
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-white hover:text-orange-400 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 font-medium bg-white/10 px-4 py-2 rounded-xl backdrop-blur-md border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/20"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Login
-          </Link>
-        </nav>
+            <Link
+              href="/"
+              className="flex items-center gap-2 text-white hover:text-orange-400 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 font-medium bg-white/10 px-4 py-2 rounded-xl backdrop-blur-md border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/20"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Login
+            </Link>
+          </nav>
 
-        <main className="max-w-5xl mx-auto px-4 pb-20 pt-4 animate-in slide-in-from-bottom-8 duration-700">
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
-            {!isSubmitted ? (
-              <div className="p-4 sm:p-8 md:p-12">
-                <div className="mb-10 text-center max-w-2xl mx-auto">
-                  <h2 className="text-4xl font-bold text-slate-900 mb-3">
-                    User Registration
-                  </h2>
-                  <p className="text-slate-500">
-                    Register your organization to access the Harbor Entry Permit
-                    System.
-                  </p>
-                </div>
-
-                {isFetchingOldData && (
-                  <div className="flex flex-col items-center justify-center py-20">
-                    <Loader2 className="h-12 w-12 text-orange-600 animate-spin mb-4" />
-                    <p className="text-slate-600 font-bold">
-                      Loading your previous application...
+          <main className="max-w-5xl mx-auto px-4 pb-20 pt-4 animate-in slide-in-from-bottom-8 duration-700">
+            <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
+              {!isSubmitted ? (
+                <div className="p-4 sm:p-8 md:p-12">
+                  <div className="mb-10 text-center max-w-2xl mx-auto">
+                    <h2 className="text-4xl font-bold text-slate-900 mb-3">
+                      User Registration
+                    </h2>
+                    <p className="text-slate-500">
+                      Register your organization to access the Harbor Entry Permit
+                      System.
                     </p>
                   </div>
-                )}
 
-                {/* The Form - Only render if not fetching old data */}
-                {!isFetchingOldData && (
-                  <form
-                    key={existingData ? "edit-mode" : "new-mode"}
-                    onSubmit={handleSubmit}
-                    className="space-y-10"
-                  >
-                    {" "}
-                    {/* REVERT REASON BANNER */}
-                    {isEditMode && existingData?.rejectedReason && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6 flex gap-4 items-start shadow-sm">
-                        <ShieldCheck className="h-6 w-6 text-amber-600 shrink-0" />
-                        <div>
-                          <h4 className="text-amber-900 font-bold text-sm uppercase tracking-wider mb-1">
-                            Application Reverted - Action Required
-                          </h4>
-                          <p className="text-amber-700 text-sm">
-                            {existingData.rejectedReason}
-                          </p>
+                  {isFetchingOldData && (
+                    <div className="flex flex-col items-center justify-center py-20">
+                      <Loader2 className="h-12 w-12 text-orange-600 animate-spin mb-4" />
+                      <p className="text-slate-600 font-bold">
+                        Loading your previous application...
+                      </p>
+                    </div>
+                  )}
+
+                  {/* The Form - Only render if not fetching old data */}
+                  {!isFetchingOldData && (
+                    <form
+                      key={existingData ? "edit-mode" : "new-mode"}
+                      onSubmit={handleSubmit}
+                      className="space-y-10"
+                    >
+                      {" "}
+                      {/* REVERT REASON BANNER */}
+                      {isEditMode && existingData?.rejectedReason && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6 flex gap-4 items-start shadow-sm">
+                          <ShieldCheck className="h-6 w-6 text-amber-600 shrink-0" />
+                          <div>
+                            <h4 className="text-amber-900 font-bold text-sm uppercase tracking-wider mb-1">
+                              Application Reverted - Action Required
+                            </h4>
+                            <p className="text-amber-700 text-sm">
+                              {existingData.rejectedReason}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {/* ── GENERAL INFORMATION ── */}
-                    <div className="bg-orange-50/30 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-orange-100/50">
-                      <SectionHeader
-                        icon={Building2}
-                        title="General Information"
-                      />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* User Type */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            User Type <span className="text-red-500">*</span>
-                          </label>
-                          <select
-                            name="userType"
-                            value={selectedUserTypeId}
-                            onChange={(e) =>
-                              setSelectedUserTypeId(e.target.value)
-                            }
-                            className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
-                            required
-                          >
-                            <option value="">-- Select User Type --</option>
-                            {userTypes.map((type) => (
-                              <option key={type.id} value={type.id}>
-                                {type.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                      )}
+                      {/* ── GENERAL INFORMATION ── */}
+                      <div className="bg-orange-50/30 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-orange-100/50">
+                        <SectionHeader
+                          icon={Building2}
+                          title="General Information"
+                        />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* User Type */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              User Type <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              name="userType"
+                              value={selectedUserTypeId}
+                              onChange={(e) =>
+                                setSelectedUserTypeId(e.target.value)
+                              }
+                              className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
+                              required
+                            >
+                              <option value="">-- Select User Type --</option>
+                              {userTypes.map((type) => (
+                                <option key={type.id} value={type.id}>
+                                  {type.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                        {/* Mobile No. */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            Mobile No. <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            name="mobileNo"
-                            type="text"
-                            value={fieldValues.mobileNo}
-                            inputMode="numeric"
-                            maxLength={10}
-                            title="Enter 10 digit mobile number"
-                            placeholder="Enter 10-digit mobile number"
-                            className={inputCls("mobileNo")}
-                            onChange={(e) => {
-                              const val = e.target.value
-                                .replace(/\D/g, "")
-                                .slice(0, 10);
-                              handleFieldChange("mobileNo", val);
-                            }}
-                            onBlur={(e) =>
-                              validateField("mobileNo", e.target.value)
-                            }
-                            required
-                          />
-                          <FieldError field="mobileNo" />
-                        </div>
+                          {/* Mobile No. */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              Mobile No. <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              name="mobileNo"
+                              type="text"
+                              value={fieldValues.mobileNo}
+                              inputMode="numeric"
+                              maxLength={10}
+                              title="Enter 10 digit mobile number"
+                              placeholder="Enter 10-digit mobile number"
+                              className={inputCls("mobileNo")}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                  .replace(/\D/g, "")
+                                  .slice(0, 10);
+                                handleFieldChange("mobileNo", val);
+                              }}
+                              onBlur={(e) =>
+                                validateField("mobileNo", e.target.value)
+                              }
+                              required
+                            />
+                            <FieldError field="mobileNo" />
+                          </div>
 
-                        {/* Entity Name */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            Name of the Firm{" "}
-                            <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            name="entityName"
-                            type="text"
-                            value={fieldValues.entityName}
-                            placeholder="Enter organization name"
-                            className={inputCls("entityName")}
-                            onChange={(e) =>
-                              handleFieldChange("entityName", e.target.value.toUpperCase())
-                            }
-                            onBlur={(e) =>
-                              validateField("entityName", e.target.value)
-                            }
-                            required
-                          />
-                          <FieldError field="entityName" />
-                        </div>
+                          {/* Entity Name */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              Name of the Firm{" "}
+                              <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              name="entityName"
+                              type="text"
+                              value={fieldValues.entityName}
+                              placeholder="Enter organization name"
+                              className={inputCls("entityName")}
+                              onChange={(e) =>
+                                handleFieldChange("entityName", e.target.value.toUpperCase())
+                              }
+                              onBlur={(e) =>
+                                validateField("entityName", e.target.value)
+                              }
+                              required
+                            />
+                            <FieldError field="entityName" />
+                          </div>
 
-                        {/* License Number */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            License Number{" "}
-                            <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            name="licenseNumber"
-                            type="text"
-                            value={fieldValues.licenseNumber}
-                            placeholder="Enter license number"
-                            className={inputCls("licenseNumber")}
-                            onChange={(e) =>
-                              handleFieldChange("licenseNumber", e.target.value.toUpperCase())
-                            }
-                            onBlur={(e) =>
-                              validateField("licenseNumber", e.target.value)
-                            }
-                            required
-                          />
-                          <FieldError field="licenseNumber" />
-                        </div>
+                          {/* License Number */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              License Number{" "}
+                              <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              name="licenseNumber"
+                              type="text"
+                              value={fieldValues.licenseNumber}
+                              placeholder="Enter license number"
+                              className={inputCls("licenseNumber")}
+                              onChange={(e) =>
+                                handleFieldChange("licenseNumber", e.target.value.toUpperCase())
+                              }
+                              onBlur={(e) =>
+                                validateField("licenseNumber", e.target.value)
+                              }
+                              required
+                            />
+                            <FieldError field="licenseNumber" />
+                          </div>
 
-                        {/* License Validity Date */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            License Validity Date{" "}
-                            <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            name="licenseValidityDate"
-                            type="date"
-                            value={fieldValues.licenseValidityDate}
-                            className={inputCls("licenseValidityDate")}
-                            onChange={(e) =>
-                              handleFieldChange("licenseValidityDate", e.target.value)
-                            }
-                            onBlur={(e) =>
-                              validateField("licenseValidityDate", e.target.value)
-                            }
-                            required
-                          />
-                          <FieldError field="licenseValidityDate" />
-                          {fieldValues.licenseValidityDate && (() => {
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-                            const selected = new Date(fieldValues.licenseValidityDate);
-                            return selected < today ? (
-                              <p className="text-xs text-red-600 font-semibold mt-1 flex items-center gap-1 bg-red-50 px-2 py-1 rounded border border-red-200">
-                                ⚠️ This license has expired. Your request may be reverted if the validity date does not match the submitted document.
-                              </p>
-                            ) : null;
-                          })()}
-                        </div>
+                          {/* License Validity Date */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              License Validity Date{" "}
+                              <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              name="licenseValidityDate"
+                              type="date"
+                              value={fieldValues.licenseValidityDate}
+                              className={inputCls("licenseValidityDate")}
+                              onChange={(e) =>
+                                handleFieldChange("licenseValidityDate", e.target.value)
+                              }
+                              onBlur={(e) =>
+                                validateField("licenseValidityDate", e.target.value)
+                              }
+                              required
+                            />
+                            <FieldError field="licenseValidityDate" />
+                            {fieldValues.licenseValidityDate && (() => {
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+                              const selected = new Date(fieldValues.licenseValidityDate);
+                              return selected < today ? (
+                                <p className="text-xs text-red-600 font-semibold mt-1 flex items-center gap-1 bg-red-50 px-2 py-1 rounded border border-red-200">
+                                  ⚠️ This license has expired. Your request may be reverted if the validity date does not match the submitted document.
+                                </p>
+                              ) : null;
+                            })()}
+                          </div>
 
-                        {/* Entity Email */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            Entity Email <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            name="email"
-                            type="email"
-                            value={fieldValues.email}
-                            placeholder="official@example.com"
-                            className={inputCls("email")}
-                            onChange={(e) =>
-                              handleFieldChange("email", e.target.value)
-                            }
-                            onBlur={(e) =>
-                              validateField("email", e.target.value)
-                            }
-                            required
-                          />
-                          <FieldError field="email" />
-                        </div>
+                          {/* Entity Email */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              Entity Email <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              name="email"
+                              type="email"
+                              value={fieldValues.email}
+                              placeholder="official@example.com"
+                              className={inputCls("email")}
+                              onChange={(e) =>
+                                handleFieldChange("email", e.target.value)
+                              }
+                              onBlur={(e) =>
+                                validateField("email", e.target.value)
+                              }
+                              required
+                            />
+                            <FieldError field="email" />
+                          </div>
 
 
-                        {/* Requisition Letter Upload */}
-                        <div className="md:col-span-1 space-y-1.5 mt-2">
-                          <label className="text-xs font-semibold text-orange-700 uppercase tracking-wider ml-1 bg-orange-100 px-3 py-1 rounded-full">
-                            Requisition Letter <span className="text-red-500">*</span>
-                          </label>
+                          {/* Requisition Letter Upload */}
+                          <div className="md:col-span-1 space-y-1.5 mt-2">
+                            <label className="text-xs font-semibold text-orange-700 uppercase tracking-wider ml-1 bg-orange-100 px-3 py-1 rounded-full">
+                              Requisition Letter <span className="text-red-500">*</span>
+                            </label>
 
-                          <div className="flex flex-col gap-2 w-full mt-3">
-                            {/* Top Row: Status & View Action */}
-                            {isEditMode && existingData?.requisitionLetter && (
-                              <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-lg w-full">
-                                <div className="flex items-center gap-2 px-1">
-                                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                                  <span className="text-xs font-bold text-slate-600">
-                                    PREVIOUSLY UPLOADED
-                                  </span>
+                            <div className="flex flex-col gap-2 w-full mt-3">
+                              {/* Top Row: Status & View Action */}
+                              {isEditMode && existingData?.requisitionLetter && (
+                                <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-lg w-full">
+                                  <div className="flex items-center gap-2 px-1">
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                    <span className="text-xs font-bold text-slate-600">
+                                      PREVIOUSLY UPLOADED
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      setIframeLoading(true);
+                                      setViewingDocUrl(
+                                        `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=requisitionLetter`,
+                                      );
+                                    }}
+                                    className="flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors shadow-sm border border-blue-200/50"
+                                  >
+                                    <Eye className="h-4 w-4" /> View Document
+                                  </button>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    setIframeLoading(true);
-                                    setViewingDocUrl(
-                                      `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=requisitionLetter`,
-                                    );
-                                  }}
-                                  className="flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors shadow-sm border border-blue-200/50"
-                                >
-                                  <Eye className="h-4 w-4" /> View Document
-                                </button>
-                              </div>
-                            )}
+                              )}
 
-                            {/* File Input */}
-                            <label
-                              className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-4 py-6 rounded-xl text-sm font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-2 w-full text-center ${fileErrors["requisitionLetterFileInput"]
+                              {/* File Input */}
+                              <label
+                                className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-4 py-6 rounded-xl text-sm font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-2 w-full text-center ${fileErrors["requisitionLetterFileInput"]
                                   ? "border-red-400 bg-red-50"
                                   : isEditMode && existingData?.requisitionLetter
                                     ? "border-orange-300 text-orange-700"
                                     : "border-slate-300 text-slate-600 border-dashed border-2"
-                                }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <UploadCloud className="h-6 w-6" />
-                                {isEditMode && existingData?.requisitionLetter
-                                  ? "Replace File"
-                                  : "Click to upload or drag and drop"}
-                              </div>
-                              <span className="text-[11px] font-normal text-slate-400">
-                                PDF only · Max 1 MB
-                              </span>
-
-                              {requisitionLetterFileName && (
-                                <span className="text-emerald-600 text-xs truncate max-w-sm mt-1 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
-                                  {requisitionLetterFileName}
-                                </span>
-                              )}
-
-                              <input
-                                id="requisitionLetterFileInput"
-                                name="requisitionLetter"
-                                type="file"
-                                accept="application/pdf"
-                                className="hidden"
-                                required={!isEditMode}
-                                onChange={(e) => {
-                                  const file = e.target.files[0];
-                                  handleFileChange(
-                                    "requisitionLetterFileInput",
-                                    file,
-                                    (name) => setRequisitionLetterFileName(name),
-                                  );
-                                }}
-                              />
-                            </label>
-                            <FileError fileKey="requisitionLetterFileInput" />
-                          </div>
-                        </div>
-
-                        {/* Work Order Upload */}
-                        <div className="md:col-span-1 space-y-1.5 mt-2">
-                          <label className="text-xs font-semibold text-orange-700 uppercase tracking-wider ml-1 bg-orange-100 px-3 py-1 rounded-full">
-                            Work Order <span className="text-red-500">*</span>
-                          </label>
-
-                          <div className="flex flex-col gap-2 w-full mt-3">
-                            {/* Top Row: Status & View Action */}
-                            {isEditMode && existingData?.workOrder && (
-                              <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-lg w-full">
-                                <div className="flex items-center gap-2 px-1">
-                                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                                  <span className="text-xs font-bold text-slate-600">
-                                    PREVIOUSLY UPLOADED
-                                  </span>
+                                  }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <UploadCloud className="h-6 w-6" />
+                                  {isEditMode && existingData?.requisitionLetter
+                                    ? "Replace File"
+                                    : "Click to upload or drag and drop"}
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    setIframeLoading(true);
-                                    setViewingDocUrl(
-                                      `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=workOrder`,
+                                <span className="text-[11px] font-normal text-slate-400">
+                                  PDF only · Max 1 MB
+                                </span>
+
+                                {requisitionLetterFileName && (
+                                  <span className="text-emerald-600 text-xs truncate max-w-sm mt-1 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
+                                    {requisitionLetterFileName}
+                                  </span>
+                                )}
+
+                                <input
+                                  id="requisitionLetterFileInput"
+                                  name="requisitionLetter"
+                                  type="file"
+                                  accept="application/pdf"
+                                  className="hidden"
+                                  required={!isEditMode}
+                                  onChange={(e) => {
+                                    const file = e.target.files[0];
+                                    handleFileChange(
+                                      "requisitionLetterFileInput",
+                                      file,
+                                      (name) => setRequisitionLetterFileName(name),
                                     );
                                   }}
-                                  className="flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors shadow-sm border border-blue-200/50"
-                                >
-                                  <Eye className="h-4 w-4" /> View Document
-                                </button>
-                              </div>
-                            )}
+                                />
+                              </label>
+                              <FileError fileKey="requisitionLetterFileInput" />
+                            </div>
+                          </div>
 
-                            {/* File Input */}
-                            <label
-                              className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-4 py-6 rounded-xl text-sm font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-2 w-full text-center ${fileErrors["workOrderFileInput"]
+                          {/* Work Order Upload */}
+                          <div className="md:col-span-1 space-y-1.5 mt-2">
+                            <label className="text-xs font-semibold text-orange-700 uppercase tracking-wider ml-1 bg-orange-100 px-3 py-1 rounded-full">
+                              Work Order <span className="text-red-500">*</span>
+                            </label>
+
+                            <div className="flex flex-col gap-2 w-full mt-3">
+                              {/* Top Row: Status & View Action */}
+                              {isEditMode && existingData?.workOrder && (
+                                <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-lg w-full">
+                                  <div className="flex items-center gap-2 px-1">
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                    <span className="text-xs font-bold text-slate-600">
+                                      PREVIOUSLY UPLOADED
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      setIframeLoading(true);
+                                      setViewingDocUrl(
+                                        `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=workOrder`,
+                                      );
+                                    }}
+                                    className="flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors shadow-sm border border-blue-200/50"
+                                  >
+                                    <Eye className="h-4 w-4" /> View Document
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* File Input */}
+                              <label
+                                className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-4 py-6 rounded-xl text-sm font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-2 w-full text-center ${fileErrors["workOrderFileInput"]
                                   ? "border-red-400 bg-red-50"
                                   : isEditMode && existingData?.workOrder
                                     ? "border-orange-300 text-orange-700"
                                     : "border-slate-300 text-slate-600 border-dashed border-2"
-                                }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <UploadCloud className="h-6 w-6" />
-                                {isEditMode && existingData?.workOrder
-                                  ? "Replace File"
-                                  : "Click to upload or drag and drop"}
-                              </div>
-                              <span className="text-[11px] font-normal text-slate-400">
-                                PDF only · Max 1 MB
-                              </span>
-
-                              {workOrderFileName && (
-                                <span className="text-emerald-600 text-xs truncate max-w-sm mt-1 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
-                                  {workOrderFileName}
+                                  }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <UploadCloud className="h-6 w-6" />
+                                  {isEditMode && existingData?.workOrder
+                                    ? "Replace File"
+                                    : "Click to upload or drag and drop"}
+                                </div>
+                                <span className="text-[11px] font-normal text-slate-400">
+                                  PDF only · Max 1 MB
                                 </span>
-                              )}
 
-                              <input
-                                id="workOrderFileInput"
-                                name="workOrder"
-                                type="file"
-                                accept="application/pdf"
-                                className="hidden"
-                                required={!isEditMode}
-                                onChange={(e) => {
-                                  const file = e.target.files[0];
-                                  handleFileChange(
-                                    "workOrderFileInput",
-                                    file,
-                                    (name) => setWorkOrderFileName(name),
-                                  );
-                                }}
-                              />
-                            </label>
-                            <FileError fileKey="workOrderFileInput" />
+                                {workOrderFileName && (
+                                  <span className="text-emerald-600 text-xs truncate max-w-sm mt-1 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
+                                    {workOrderFileName}
+                                  </span>
+                                )}
+
+                                <input
+                                  id="workOrderFileInput"
+                                  name="workOrder"
+                                  type="file"
+                                  accept="application/pdf"
+                                  className="hidden"
+                                  required={!isEditMode}
+                                  onChange={(e) => {
+                                    const file = e.target.files[0];
+                                    handleFileChange(
+                                      "workOrderFileInput",
+                                      file,
+                                      (name) => setWorkOrderFileName(name),
+                                    );
+                                  }}
+                                />
+                              </label>
+                              <FileError fileKey="workOrderFileInput" />
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                    {/* ── ADDRESS INFORMATION ── */}
-                    <div className="bg-orange-50/30 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-orange-100/50">
-                      <SectionHeader
-                        icon={MapPin}
-                        title="Address Information"
-                      />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="md:col-span-2 space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            Full Address <span className="text-red-500">*</span>
-                          </label>
-                          <textarea
-                            name="addressLine"
-                            rows="2"
-                            value={fieldValues.addressLine}
-                            placeholder="Enter complete address"
-                            className={`w-full p-4 bg-stone-50 border focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl transition-all duration-200 focus:outline-none ${fieldErrors.addressLine
+                      {/* ── ADDRESS INFORMATION ── */}
+                      <div className="bg-orange-50/30 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-orange-100/50">
+                        <SectionHeader
+                          icon={MapPin}
+                          title="Address Information"
+                        />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="md:col-span-2 space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              Full Address <span className="text-red-500">*</span>
+                            </label>
+                            <textarea
+                              name="addressLine"
+                              rows="2"
+                              value={fieldValues.addressLine}
+                              placeholder="Enter complete address"
+                              className={`w-full p-4 bg-stone-50 border focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl transition-all duration-200 focus:outline-none ${fieldErrors.addressLine
                                 ? "border-red-400 focus:ring-red-500/20 focus:border-red-500 bg-red-50"
                                 : "border-stone-200"
-                              }`}
-                            onChange={(e) =>
-                              handleFieldChange("addressLine", e.target.value)
-                            }
-                            onBlur={(e) =>
-                              validateField("addressLine", e.target.value)
-                            }
-                            required
-                          ></textarea>
-                          <FieldError field="addressLine" />
-                        </div>
+                                }`}
+                              onChange={(e) =>
+                                handleFieldChange("addressLine", e.target.value)
+                              }
+                              onBlur={(e) =>
+                                validateField("addressLine", e.target.value)
+                              }
+                              required
+                            ></textarea>
+                            <FieldError field="addressLine" />
+                          </div>
 
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            City <span className="text-red-500">*</span>
-                          </label>
-                          <select
-                            name="city"
-                            defaultValue={existingData?.city || ""}
-                            className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
-                            required
-                          >
-                            <option value="">-- Select --</option>
-                            <option value="Chennai">Chennai</option>
-                            <option value="Other">Other</option>
-                          </select>
-                        </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              Country <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              name="country"
+                              value={selectedCountryName}
+                              onChange={(e) => handleCountryChange(e.target.value)}
+                              className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
+                              required
+                            >
+                              <option value="">-- Select Country --</option>
+                              {countries.map((c) => (
+                                <option key={c.id} value={c.name}>
+                                  {c.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            State <span className="text-red-500">*</span>
-                          </label>
-                          <select
-                            name="state"
-                            defaultValue={existingData?.state || ""}
-                            className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
-                            required
-                          >
-                            <option value="">-- Select --</option>
-                            <option value="Tamil Nadu">Tamil Nadu</option>
-                          </select>
-                        </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              State <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              name="state"
+                              value={selectedStateName}
+                              onChange={(e) => handleStateChange(e.target.value)}
+                              disabled={!!(loadingStates || !selectedCountryId)}
+                              className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer disabled:opacity-50"
+                              required
+                            >
+                              <option value="">
+                                {loadingStates ? "Loading States..." : "-- Select State --"}
+                              </option>
+                              {states.map((s) => (
+                                <option key={s.id} value={s.name}>
+                                  {s.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            Pin Code <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            name="pincode"
-                            type="text"
-                            value={fieldValues.pincode}
-                            inputMode="numeric"
-                            maxLength={6}
-                            title="Enter 6 digit PIN code"
-                            placeholder="6-digit PIN code"
-                            className={inputCls("pincode")}
-                            onChange={(e) => {
-                              const val = e.target.value
-                                .replace(/\D/g, "")
-                                .slice(0, 6);
-                              handleFieldChange("pincode", val);
-                            }}
-                            onBlur={(e) =>
-                              validateField("pincode", e.target.value)
-                            }
-                            required
-                          />
-                          <FieldError field="pincode" />
-                        </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              City <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              name="city"
+                              value={selectedCityName}
+                              onChange={(e) => setSelectedCityName(e.target.value)}
+                              disabled={!!(loadingCities || !selectedStateId)}
+                              className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer disabled:opacity-50"
+                              required
+                            >
+                              <option value="">
+                                {loadingCities ? "Loading Cities..." : "-- Select City --"}
+                              </option>
+                              {cities.map((ct) => (
+                                <option key={ct.id} value={ct.name}>
+                                  {ct.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            Country <span className="text-red-500">*</span>
-                          </label>
-                          <select
-                            name="country"
-                            defaultValue={existingData?.country || "India"}
-                            className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
-                            required
-                          >
-                            <option value="India">India</option>
-                          </select>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              Pin Code <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              name="pincode"
+                              type="text"
+                              value={fieldValues.pincode}
+                              inputMode="numeric"
+                              maxLength={6}
+                              title="Enter 6 digit PIN code"
+                              placeholder="6-digit PIN code"
+                              className={inputCls("pincode")}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                  .replace(/\D/g, "")
+                                  .slice(0, 6);
+                                handleFieldChange("pincode", val);
+                              }}
+                              onBlur={(e) =>
+                                validateField("pincode", e.target.value)
+                              }
+                              required
+                            />
+                            <FieldError field="pincode" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    {/* ── IDENTIFICATION INFORMATION ── */}
-                    <div className="bg-orange-50/30 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-orange-100/50">
-                      <SectionHeader
-                        icon={FileText}
-                        title="Identification Information"
-                      />
-                      <table className="w-full text-left border-collapse min-w-0 md:min-w-[600px] md:table block">
-                        <thead className="hidden md:table-header-group">
-                          <tr className="border-b-2 border-orange-100">
-                            <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-24">
-                              Type
-                            </th>
-                            <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                              Identification No.
-                            </th>
-                            <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-1/3">
-                              ID Copy (PDF only)
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 md:table-row-group block space-y-6 md:space-y-0 md:divide-y">
-                          {identificationTypes.map((idType) => (
-                            <tr
-                              key={idType.label}
-                              className="hover:bg-white/50 transition-colors md:table-row flex flex-col gap-4 bg-white md:bg-transparent p-5 md:p-0 rounded-2xl md:rounded-none border border-stone-200/60 md:border-none shadow-sm md:shadow-none"
-                            >
-                              {/* COLUMN 1: Label */}
-                              <td className="text-sm font-bold text-slate-800 md:table-cell block md:py-4 md:px-2 py-0 px-0 w-full">
-                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1 md:hidden">
-                                  Type
-                                </span>
-                                {idType.label}{" "}
-                                {idType.req && (
-                                  <span className="text-red-500">*</span>
-                                )}
-                              </td>
+                      {/* ── IDENTIFICATION INFORMATION ── */}
+                      <div className="bg-orange-50/30 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-orange-100/50">
+                        <SectionHeader
+                          icon={FileText}
+                          title="Identification Information"
+                        />
+                        <table className="w-full text-left border-collapse min-w-0 md:min-w-[600px] md:table md:table-fixed block">
+                          <thead className="hidden md:table-header-group">
+                            <tr className="border-b-2 border-orange-100">
+                              <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-[15%]">
+                                Type
+                              </th>
+                              <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-[45%]">
+                                Identification No.
+                              </th>
+                              <th className="py-3 px-2 text-xs font-bold text-slate-500 uppercase tracking-wider w-[40%]">
+                                ID Copy (PDF only)
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 md:table-row-group block space-y-6 md:space-y-0 md:divide-y">
+                            {identificationTypes.map((idType) => (
+                              <tr
+                                key={idType.label}
+                                className="hover:bg-white/50 transition-colors md:table-row flex flex-col gap-4 bg-white md:bg-transparent p-5 md:p-0 rounded-2xl md:rounded-none border border-stone-200/60 md:border-none shadow-sm md:shadow-none"
+                              >
+                                {/* COLUMN 1: Label */}
+                                <td className="text-sm font-bold text-slate-800 md:table-cell block md:py-4 md:px-2 py-0 px-0 w-full">
+                                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1 md:hidden">
+                                    Type
+                                  </span>
+                                  {idType.label}{" "}
+                                  {idType.req && (
+                                    <span className="text-red-500">*</span>
+                                  )}
+                                </td>
 
-                              {/* COLUMN 2: Identification Number */}
-                              <td className="md:table-cell block md:py-4 md:px-2 py-0 px-0 w-full">
-                                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1 md:hidden">
-                                  Identification No.
-                                </label>
-                                <input
-                                  name={idType.numName}
-                                  type="text"
-                                  value={fieldValues[idType.numName] ?? ""}
-                                  placeholder={
-                                    idType.label === "GST"
-                                      ? "22AAAAA0000A1Z5"
-                                      : idType.label === "PAN"
-                                        ? "ABCDE1234F"
-                                        : idType.label === "TAN"
-                                          ? "AAAA12345A (optional)"
-                                          : ""
-                                  }
-                                  className={`w-full h-11 px-3 bg-stone-50 border focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl transition-all duration-200 uppercase font-mono tracking-wider ${fieldErrors[idType.numName]
+                                {/* COLUMN 2: Identification Number */}
+                                <td className="md:table-cell block md:py-4 md:px-2 py-0 px-0 w-full">
+                                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1 md:hidden">
+                                    Identification No.
+                                  </label>
+                                  <input
+                                    name={idType.numName}
+                                    type="text"
+                                    value={fieldValues[idType.numName] ?? ""}
+                                    placeholder={
+                                      idType.label === "GST"
+                                        ? "22AAAAA0000A1Z5"
+                                        : idType.label === "PAN"
+                                          ? "ABCDE1234F"
+                                          : idType.label === "TAN"
+                                            ? "AAAA12345A (optional)"
+                                            : ""
+                                    }
+                                    className={`w-full h-11 px-3 bg-stone-50 border focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl transition-all duration-200 uppercase font-mono tracking-wider ${fieldErrors[idType.numName]
                                       ? "border-red-400 focus:ring-red-500/20 focus:border-red-500 bg-red-50"
                                       : existingData?.rejectedReason
                                         ?.toLowerCase()
@@ -1169,478 +1337,478 @@ export default function RegisterPage() {
                                         )
                                         ? "border-red-400 bg-red-50"
                                         : "border-stone-200"
-                                    }`}
-                                  onChange={(e) => {
-                                    const val = e.target.value.toUpperCase();
-                                    handleFieldChange(idType.numName, val);
-                                  }}
-                                  onBlur={(e) =>
-                                    validateField(
-                                      idType.numName,
-                                      e.target.value,
-                                    )
-                                  }
-                                  required={idType.req}
-                                />
-                                {fieldErrors[idType.numName] && (
-                                  <p className="text-xs text-red-500 font-medium mt-1 flex items-center gap-1">
-                                    <XCircle className="h-3.5 w-3.5 shrink-0" />
-                                    {fieldErrors[idType.numName]}
-                                  </p>
-                                )}
-                              </td>
+                                      }`}
+                                    onChange={(e) => {
+                                      const val = e.target.value.toUpperCase();
+                                      handleFieldChange(idType.numName, val);
+                                    }}
+                                    onBlur={(e) =>
+                                      validateField(
+                                        idType.numName,
+                                        e.target.value,
+                                      )
+                                    }
+                                    required={idType.req}
+                                  />
+                                  {fieldErrors[idType.numName] && (
+                                    <p className="text-xs text-red-500 font-medium mt-1 flex items-center gap-1">
+                                      <XCircle className="h-3.5 w-3.5 shrink-0" />
+                                      {fieldErrors[idType.numName]}
+                                    </p>
+                                  )}
+                                </td>
 
-                              {/* COLUMN 3: ID Copy (File Input & Badge) */}
-                              <td className="align-middle md:w-1/3 md:table-cell block md:py-4 md:px-2 py-0 px-0 w-full">
-                                <div className="flex flex-col gap-2">
-                                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block md:hidden">
-                                    ID Copy (PDF only)
-                                  </label>
-                                  {/* Top Row: Status & View Action */}
-                                  {isEditMode &&
-                                    existingData?.[idType.fileName] && (
-                                      <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2 rounded-lg w-full">
-                                        <div className="flex items-center gap-1.5 px-1">
-                                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                                          <span className="text-[10px] font-bold text-slate-600">
-                                            UPLOADED
-                                          </span>
+                                {/* COLUMN 3: ID Copy (File Input & Badge) */}
+                                <td className="align-middle md:w-[40%] md:table-cell block md:py-4 md:px-2 py-0 px-0 w-full">
+                                  <div className="flex flex-col gap-2">
+                                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block md:hidden">
+                                      ID Copy (PDF only)
+                                    </label>
+                                    {/* Top Row: Status & View Action */}
+                                    {isEditMode &&
+                                      existingData?.[idType.fileName] && (
+                                        <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2 rounded-lg w-full">
+                                          <div className="flex items-center gap-1.5 px-1">
+                                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                            <span className="text-[10px] font-bold text-slate-600">
+                                              UPLOADED
+                                            </span>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              setIframeLoading(true);
+                                              setViewingDocUrl(
+                                                `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=${idType.docType}`,
+                                              );
+                                            }}
+                                            className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-2.5 py-1.5 rounded transition-colors shadow-sm border border-blue-200/50"
+                                          >
+                                            <Eye className="h-3 w-3" /> View Document
+                                          </button>
                                         </div>
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            setIframeLoading(true);
-                                            setViewingDocUrl(
-                                              `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=${idType.docType}`,
-                                            );
-                                          }}
-                                          className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-2.5 py-1.5 rounded transition-colors shadow-sm border border-blue-200/50"
-                                        >
-                                          <Eye className="h-3 w-3" /> View Document
-                                        </button>
-                                      </div>
-                                    )}
+                                      )}
 
-                                  {/* UNIFIED CUSTOM UPLOAD BUTTON */}
-                                  <label
-                                    className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-3 py-3 rounded-xl text-xs font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-1 w-full text-center ${fileErrors[idType.fileId]
+                                    {/* UNIFIED CUSTOM UPLOAD BUTTON */}
+                                    <label
+                                      className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-3 py-3 rounded-xl text-xs font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-1 w-full text-center ${fileErrors[idType.fileId]
                                         ? "border-red-400 bg-red-50"
                                         : isEditMode &&
                                           existingData?.[idType.fileName]
                                           ? "border-orange-300 text-orange-700"
                                           : "border-slate-300 text-slate-600 border-dashed border-2"
-                                      }`}
-                                  >
-                                    <div className="flex items-center gap-1.5">
-                                      <UploadCloud className="h-4.5 w-4.5" />
-                                      {isEditMode &&
-                                        existingData?.[idType.fileName]
-                                        ? "Replace File"
-                                        : "Upload PDF"}
-                                    </div>
-                                    <span className="text-[10px] font-normal text-slate-400">
-                                      PDF only · Max 1 MB
-                                    </span>
-
-                                    {/* Display selected filename */}
-                                    {tableFiles[idType.fileName] && (
-                                      <span className="text-emerald-600 truncate max-w-xs mt-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                                        {tableFiles[idType.fileName]}
+                                        }`}
+                                    >
+                                      <div className="flex items-center gap-1.5">
+                                        <UploadCloud className="h-4.5 w-4.5" />
+                                        {isEditMode &&
+                                          existingData?.[idType.fileName]
+                                          ? "Replace File"
+                                          : "Upload PDF"}
+                                      </div>
+                                      <span className="text-[10px] font-normal text-slate-400">
+                                        PDF only · Max 1 MB
                                       </span>
-                                    )}
 
-                                    <input
-                                      id={idType.fileId}
-                                      name={idType.fileName}
-                                      type="file"
-                                      accept="application/pdf"
-                                      className="hidden"
-                                      onChange={(e) => {
-                                        const file = e.target.files[0];
-                                        handleFileChange(
-                                          idType.fileId,
-                                          file,
-                                          (name) => {
-                                            if (name) {
-                                              setTableFiles((prev) => ({
-                                                ...prev,
-                                                [idType.fileName]: name,
-                                              }));
-                                            } else {
-                                              setTableFiles((prev) => ({
-                                                ...prev,
-                                                [idType.fileName]: "",
-                                              }));
-                                            }
-                                          },
-                                        );
-                                      }}
-                                      required={idType.req && !isEditMode}
-                                    />
-                                  </label>
-                                  <FileError fileKey={idType.fileId} />
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <div className="mt-6 pt-4 border-t border-orange-100">
-                        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                          General Remark (Optional)
-                        </label>
-                        <input
-                          name="remark"
-                          type="text"
-                          className="mt-1 w-full h-11 px-3 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
-                          placeholder="Notes about your documentation"
+                                      {/* Display selected filename */}
+                                      {tableFiles[idType.fileName] && (
+                                        <span className="text-emerald-600 truncate max-w-xs mt-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                                          {tableFiles[idType.fileName]}
+                                        </span>
+                                      )}
+
+                                      <input
+                                        id={idType.fileId}
+                                        name={idType.fileName}
+                                        type="file"
+                                        accept="application/pdf"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                          const file = e.target.files[0];
+                                          handleFileChange(
+                                            idType.fileId,
+                                            file,
+                                            (name) => {
+                                              if (name) {
+                                                setTableFiles((prev) => ({
+                                                  ...prev,
+                                                  [idType.fileName]: name,
+                                                }));
+                                              } else {
+                                                setTableFiles((prev) => ({
+                                                  ...prev,
+                                                  [idType.fileName]: "",
+                                                }));
+                                              }
+                                            },
+                                          );
+                                        }}
+                                        required={idType.req && !isEditMode}
+                                      />
+                                    </label>
+                                    <FileError fileKey={idType.fileId} />
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div className="mt-6 pt-4 border-t border-orange-100">
+                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                            General Remark (Optional)
+                          </label>
+                          <input
+                            name="remark"
+                            type="text"
+                            className="mt-1 w-full h-11 px-3 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
+                            placeholder="Notes about your documentation"
+                          />
+                        </div>
+                      </div>
+                      {/* ── CONTACT INFORMATION ── */}
+                      <div className="bg-orange-50/30 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-orange-100/50">
+                        <SectionHeader
+                          icon={Contact2}
+                          title="Contact Information"
                         />
-                      </div>
-                    </div>
-                    {/* ── CONTACT INFORMATION ── */}
-                    <div className="bg-orange-50/30 p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-orange-100/50">
-                      <SectionHeader
-                        icon={Contact2}
-                        title="Contact Information"
-                      />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Title */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            Title <span className="text-red-500">*</span>
-                          </label>
-                          <select
-                            name="title"
-                            defaultValue={existingData?.title || "Mr."}
-                            className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
-                            required
-                          >
-                            <option value="Mr.">Mr.</option>
-                            <option value="Ms.">Ms.</option>
-                            <option value="Mrs.">Mrs.</option>
-                          </select>
-                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Title */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              Title <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              name="title"
+                              defaultValue={existingData?.title || "Mr."}
+                              className="w-full h-12 px-4 bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl transition-all duration-200 focus:outline-none cursor-pointer"
+                              required
+                            >
+                              <option value="Mr.">Mr.</option>
+                              <option value="Ms.">Ms.</option>
+                              <option value="Mrs.">Mrs.</option>
+                            </select>
+                          </div>
 
-                        {/* Contact Mobile */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            Mobile Number{" "}
-                            <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            name="contactMobile"
-                            type="text"
-                            value={fieldValues.contactMobile}
-                            inputMode="numeric"
-                            maxLength={10}
-                            placeholder="10-digit mobile number"
-                            className={inputCls("contactMobile")}
-                            onChange={(e) => {
-                              const val = e.target.value
-                                .replace(/\D/g, "")
-                                .slice(0, 10);
-                              handleFieldChange("contactMobile", val);
-                            }}
-                            onBlur={(e) =>
-                              validateField("contactMobile", e.target.value)
-                            }
-                            required
-                          />
-                          <FieldError field="contactMobile" />
-                        </div>
-
-                        {/* First Name */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            First Name <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            name="firstName"
-                            type="text"
-                            value={fieldValues.firstName}
-                            placeholder="First name"
-                            className={inputCls("firstName")}
-                            onChange={(e) =>
-                              handleFieldChange("firstName", e.target.value)
-                            }
-                            onBlur={(e) =>
-                              validateField("firstName", e.target.value)
-                            }
-                            required
-                          />
-                          <FieldError field="firstName" />
-                        </div>
-
-                        {/* Last Name */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            Last Name <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            name="lastName"
-                            type="text"
-                            value={fieldValues.lastName}
-                            placeholder="Last name"
-                            className={inputCls("lastName")}
-                            onChange={(e) =>
-                              handleFieldChange("lastName", e.target.value)
-                            }
-                            onBlur={(e) =>
-                              validateField("lastName", e.target.value)
-                            }
-                            required
-                          />
-                          <FieldError field="lastName" />
-                        </div>
-
-                        {/* Contact Email */}
-                        <div className="md:col-span-2 space-y-1.5">
-                          <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                            Contact Email{" "}
-                            <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            name="contactEmail"
-                            type="email"
-                            value={fieldValues.contactEmail}
-                            placeholder="official@example.com"
-                            className={inputCls("contactEmail")}
-                            onChange={(e) =>
-                              handleFieldChange("contactEmail", e.target.value)
-                            }
-                            onBlur={(e) =>
-                              validateField("contactEmail", e.target.value)
-                            }
-                            required
-                          />
-                          <FieldError field="contactEmail" />
-                        </div>
-                      </div>
-                    </div>
-                    {/* Terms and Submit */}
-                    <div className="space-y-8 pt-4">
-                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                        <div className="flex items-start gap-4">
-                          <div className="pt-1">
+                          {/* Contact Mobile */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              Mobile Number{" "}
+                              <span className="text-red-500">*</span>
+                            </label>
                             <input
-                              name="termsAccepted"
-                              type="checkbox"
-                              id="terms"
-                              className="w-5 h-5 text-orange-600 border-slate-300 rounded focus:ring-orange-500 cursor-pointer"
+                              name="contactMobile"
+                              type="text"
+                              value={fieldValues.contactMobile}
+                              inputMode="numeric"
+                              maxLength={10}
+                              placeholder="10-digit mobile number"
+                              className={inputCls("contactMobile")}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                  .replace(/\D/g, "")
+                                  .slice(0, 10);
+                                handleFieldChange("contactMobile", val);
+                              }}
+                              onBlur={(e) =>
+                                validateField("contactMobile", e.target.value)
+                              }
                               required
                             />
+                            <FieldError field="contactMobile" />
                           </div>
-                          <label
-                            htmlFor="terms"
-                            className="text-sm text-slate-600 cursor-pointer leading-relaxed"
-                          >
-                            <span className="font-bold text-slate-900">
-                              I Read and Accept Terms & Conditions.
-                            </span>{" "}
-                            I/We hereby certify that the above permits are
-                            required only for our official purpose. We hold
-                            responsibility for all activities of the mentioned
-                            persons/vehicles inside the port. I/We declare that
-                            Chennai Port Authority will not be held responsible
-                            for any untoward incidents.
-                          </label>
+
+                          {/* First Name */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              First Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              name="firstName"
+                              type="text"
+                              value={fieldValues.firstName}
+                              placeholder="First name"
+                              className={inputCls("firstName")}
+                              onChange={(e) =>
+                                handleFieldChange("firstName", e.target.value)
+                              }
+                              onBlur={(e) =>
+                                validateField("firstName", e.target.value)
+                              }
+                              required
+                            />
+                            <FieldError field="firstName" />
+                          </div>
+
+                          {/* Last Name */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              Last Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              name="lastName"
+                              type="text"
+                              value={fieldValues.lastName}
+                              placeholder="Last name"
+                              className={inputCls("lastName")}
+                              onChange={(e) =>
+                                handleFieldChange("lastName", e.target.value)
+                              }
+                              onBlur={(e) =>
+                                validateField("lastName", e.target.value)
+                              }
+                              required
+                            />
+                            <FieldError field="lastName" />
+                          </div>
+
+                          {/* Contact Email */}
+                          <div className="md:col-span-2 space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                              Contact Email{" "}
+                              <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              name="contactEmail"
+                              type="email"
+                              value={fieldValues.contactEmail}
+                              placeholder="official@example.com"
+                              className={inputCls("contactEmail")}
+                              onChange={(e) =>
+                                handleFieldChange("contactEmail", e.target.value)
+                              }
+                              onBlur={(e) =>
+                                validateField("contactEmail", e.target.value)
+                              }
+                              required
+                            />
+                            <FieldError field="contactEmail" />
+                          </div>
                         </div>
                       </div>
+                      {/* Terms and Submit */}
+                      <div className="space-y-8 pt-4">
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                          <div className="flex items-start gap-4">
+                            <div className="pt-1">
+                              <input
+                                name="termsAccepted"
+                                type="checkbox"
+                                id="terms"
+                                className="w-5 h-5 text-orange-600 border-slate-300 rounded focus:ring-orange-500 cursor-pointer"
+                                required
+                              />
+                            </div>
+                            <label
+                              htmlFor="terms"
+                              className="text-sm text-slate-600 cursor-pointer leading-relaxed"
+                            >
+                              <span className="font-bold text-slate-900">
+                                I Read and Accept Terms & Conditions.
+                              </span>{" "}
+                              I/We hereby certify that the above permits are
+                              required only for our official purpose. We hold
+                              responsibility for all activities of the mentioned
+                              persons/vehicles inside the port. I/We declare that
+                              Chennai Port Authority will not be held responsible
+                              for any untoward incidents.
+                            </label>
+                          </div>
+                        </div>
 
-                      <div className="flex flex-col items-center gap-6">
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="flex gap-2">
-                            {/* <div
+                        <div className="flex flex-col items-center gap-6">
+                          <div className="flex flex-col items-center gap-2">
+                            <div className="flex gap-2">
+                              {/* <div
                               className="flex items-center justify-center bg-white border border-slate-300 rounded-xl h-14 overflow-hidden w-40 shadow-sm"
                               dangerouslySetInnerHTML={{ __html: captchaSvg }}
                             /> */}
-                            <div className="flex items-center justify-center bg-white border border-orange-200 rounded-xl h-14 w-40 shadow-sm text-xl font-bold tracking-widest text-blue-700">
-                              {captchaQuestion || "Loading..."}
+                              <div className="flex items-center justify-center bg-white border border-orange-200 rounded-xl h-14 w-40 shadow-sm text-xl font-bold tracking-widest text-blue-700">
+                                {captchaQuestion || "Loading..."}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={fetchInitialData}
+                                className="p-4 bg-white border border-stone-200 rounded-xl hover:bg-stone-50 active:scale-95 transition-all duration-200 shadow-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10"
+                              >
+                                <RefreshCw className="h-5 w-5 text-stone-500" />
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={fetchInitialData}
-                              className="p-4 bg-white border border-stone-200 rounded-xl hover:bg-stone-50 active:scale-95 transition-all duration-200 shadow-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10"
-                            >
-                              <RefreshCw className="h-5 w-5 text-stone-500" />
-                            </button>
-                          </div>
-                          <input
-                            name="captchaInput"
-                            type="text"
-                            value={captchaInput}
-                            onChange={(e) => {
-                              setCaptchaInput(e.target.value);
-                              if (e.target.value.trim()) setCaptchaError(""); // clear error as user types
-                            }}
-                            onBlur={() => {
-                              if (!captchaInput.trim())
-                                setCaptchaError(
-                                  "Please enter the security code",
-                                );
-                            }}
-                            placeholder="Enter Security Code"
-                            className={`w-full text-center h-12 bg-stone-50 border focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl tracking-widest font-bold shadow-sm transition-all duration-200 focus:outline-none ${captchaError
+                            <input
+                              name="captchaInput"
+                              type="text"
+                              value={captchaInput}
+                              onChange={(e) => {
+                                setCaptchaInput(e.target.value);
+                                if (e.target.value.trim()) setCaptchaError(""); // clear error as user types
+                              }}
+                              onBlur={() => {
+                                if (!captchaInput.trim())
+                                  setCaptchaError(
+                                    "Please enter the security code",
+                                  );
+                              }}
+                              placeholder="Enter Security Code"
+                              className={`w-full text-center h-12 bg-stone-50 border focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl tracking-widest font-bold shadow-sm transition-all duration-200 focus:outline-none ${captchaError
                                 ? "border-red-400 focus:ring-red-500/20 focus:border-red-500 bg-red-50"
                                 : "border-stone-200"
-                              }`}
-                            required
-                          />
-                          {captchaError && (
-                            <p className="text-xs text-red-500 font-medium flex items-center gap-1">
-                              <XCircle className="h-3.5 w-3.5 shrink-0" />
-                              {captchaError}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row gap-4 w-full justify-center items-center">
-                          <Link
-                            href="/"
-                            className="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-4 px-10 rounded-2xl shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 text-lg w-full sm:w-auto justify-center focus:outline-none focus:ring-4 focus:ring-slate-500/20 border border-slate-200"
-                          >
-                            <ArrowLeft className="h-5 w-5" />
-                            Back to Login
-                          </Link>
-
-                          <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className={`gradient-orange hover:opacity-90 text-white font-bold py-4 px-16 rounded-2xl shadow-lg shadow-orange-600/25 hover:shadow-orange-600/35 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 text-lg flex items-center gap-2 w-full sm:w-auto justify-center focus:outline-none focus:ring-4 focus:ring-orange-500/20 ${isSubmitting ? "opacity-70 cursor-not-allowed pointer-events-none" : ""
-                              }`}
-                          >
-                            {isSubmitting ? (
-                              <>
-                                <Loader2 className="h-6 w-6 animate-spin" />
-                                Submitting...
-                              </>
-                            ) : (
-                              <>
-                                <ShieldCheck className="h-6 w-6" />
-                                Submit Registration
-                              </>
+                                }`}
+                              required
+                            />
+                            {captchaError && (
+                              <p className="text-xs text-red-500 font-medium flex items-center gap-1">
+                                <XCircle className="h-3.5 w-3.5 shrink-0" />
+                                {captchaError}
+                              </p>
                             )}
-                          </button>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row gap-4 w-full justify-center items-center">
+                            <Link
+                              href="/"
+                              className="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-4 px-10 rounded-2xl shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 text-lg w-full sm:w-auto justify-center focus:outline-none focus:ring-4 focus:ring-slate-500/20 border border-slate-200"
+                            >
+                              <ArrowLeft className="h-5 w-5" />
+                              Back to Login
+                            </Link>
+
+                            <button
+                              type="submit"
+                              disabled={isSubmitting}
+                              className={`gradient-orange hover:opacity-90 text-white font-bold py-4 px-16 rounded-2xl shadow-lg shadow-orange-600/25 hover:shadow-orange-600/35 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 text-lg flex items-center gap-2 w-full sm:w-auto justify-center focus:outline-none focus:ring-4 focus:ring-orange-500/20 ${isSubmitting ? "opacity-70 cursor-not-allowed pointer-events-none" : ""
+                                }`}
+                            >
+                              {isSubmitting ? (
+                                <>
+                                  <Loader2 className="h-6 w-6 animate-spin" />
+                                  Submitting...
+                                </>
+                              ) : (
+                                <>
+                                  <ShieldCheck className="h-6 w-6" />
+                                  Submit Registration
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </form>
-                )}
-              </div>
-            ) : (
-              <div className="p-12 md:p-24 text-center animate-in zoom-in-95 duration-500">
-                <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner border-4 border-emerald-50">
-                  <CheckCircle2 className="h-12 w-12 text-emerald-600" />
+                    </form>
+                  )}
                 </div>
-                <h2 className="text-4xl font-extrabold text-slate-900 mb-4">
-                  Registration Submitted!
-                </h2>
+              ) : (
+                <div className="p-12 md:p-24 text-center animate-in zoom-in-95 duration-500">
+                  <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner border-4 border-emerald-50">
+                    <CheckCircle2 className="h-12 w-12 text-emerald-600" />
+                  </div>
+                  <h2 className="text-4xl font-extrabold text-slate-900 mb-4">
+                    Registration Submitted!
+                  </h2>
 
-                <div className="bg-gradient-to-br from-orange-50 to-white border border-orange-100 rounded-2xl p-8 my-10 inline-block shadow-sm">
-                  <p className="text-sm text-orange-600 font-bold mb-2 uppercase tracking-widest">
-                    Your Request Reference Number
-                  </p>
-                  <p className="text-5xl font-black text-slate-800 tracking-widest font-mono">
-                    {referenceNo}
-                  </p>
-                </div>
-
-                <div className="space-y-4 text-slate-600 max-w-lg mx-auto text-lg mb-12">
-                  <p>
-                    Your registration request has been submitted for competent
-                    authority approval.
-                  </p>
-                  <p>
-                    Upon approval, your{" "}
-                    <strong className="text-slate-900">
-                      Login ID & Password
-                    </strong>{" "}
-                    will be generated and sent to your registered email address.
-                  </p>
-                </div>
-
-                <Link
-                  href="/"
-                  className="inline-flex items-center gap-2 bg-slate-900 hover:bg-orange-600 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] text-white font-bold py-4 px-10 rounded-xl shadow-lg transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-slate-500/20"
-                >
-                  Return to Login
-                </Link>
-              </div>
-            )}
-          </div>
-        </main>
-        {/* 🚀 PDF VIEWER OVERLAY 🚀 */}
-        {viewingDocUrl && (
-          <div
-            className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-all duration-300 ${isFullscreen ? "p-0" : "p-4 md:p-8"
-              }`}
-          >
-            <div
-              className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 animate-in zoom-in-95 duration-200 ${isFullscreen
-                  ? "max-w-full rounded-none border-none"
-                  : "max-w-6xl rounded-xl border border-slate-700"
-                }`}
-            >
-              {/* Viewer Header */}
-              <div className="flex justify-between items-center px-4 py-3 bg-slate-800 text-white">
-                <h3 className="font-bold flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-blue-400" />
-                  Document Viewer
-                </h3>
-
-                {/* Action Buttons */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setIsFullscreen(!isFullscreen)}
-                    className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg transition-colors"
-                    title={isFullscreen ? "Exit Fullscreen" : "Maximize"}
-                  >
-                    {isFullscreen ? (
-                      <Minimize className="h-5 w-5" />
-                    ) : (
-                      <Maximize className="h-5 w-5" />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setViewingDocUrl(null);
-                      setIsFullscreen(false);
-                    }}
-                    className="bg-slate-700 hover:bg-red-500 p-2 rounded-lg transition-colors"
-                    title="Close Viewer"
-                  >
-                    <XCircle className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Iframe Container */}
-              <div className="flex-1 w-full bg-slate-100 relative">
-                {iframeLoading && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50">
-                    <Loader2 className="h-10 w-10 text-[#ff6b00] animate-spin mb-4" />
-                    <p className="text-slate-500 font-bold animate-pulse">
-                      Fetching secure document...
+                  <div className="bg-gradient-to-br from-orange-50 to-white border border-orange-100 rounded-2xl p-8 my-10 inline-block shadow-sm">
+                    <p className="text-sm text-orange-600 font-bold mb-2 uppercase tracking-widest">
+                      Your Request Reference Number
+                    </p>
+                    <p className="text-5xl font-black text-slate-800 tracking-widest font-mono">
+                      {referenceNo}
                     </p>
                   </div>
-                )}
 
-                <iframe
-                  src={viewingDocUrl}
-                  className="w-full h-full border-none relative z-0"
-                  title="Document Viewer"
-                  onLoad={() => setIframeLoading(false)}
-                />
+                  <div className="space-y-4 text-slate-600 max-w-lg mx-auto text-lg mb-12">
+                    <p>
+                      Your registration request has been submitted for competent
+                      authority approval.
+                    </p>
+                    <p>
+                      Upon approval, your{" "}
+                      <strong className="text-slate-900">
+                        Login ID & Password
+                      </strong>{" "}
+                      will be generated and sent to your registered email address.
+                    </p>
+                  </div>
+
+                  <Link
+                    href="/"
+                    className="inline-flex items-center gap-2 bg-slate-900 hover:bg-orange-600 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] text-white font-bold py-4 px-10 rounded-xl shadow-lg transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-slate-500/20"
+                  >
+                    Return to Login
+                  </Link>
+                </div>
+              )}
+            </div>
+          </main>
+          {/* 🚀 PDF VIEWER OVERLAY 🚀 */}
+          {viewingDocUrl && (
+            <div
+              className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-all duration-300 ${isFullscreen ? "p-0" : "p-4 md:p-8"
+                }`}
+            >
+              <div
+                className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 animate-in zoom-in-95 duration-200 ${isFullscreen
+                  ? "max-w-full rounded-none border-none"
+                  : "max-w-6xl rounded-xl border border-slate-700"
+                  }`}
+              >
+                {/* Viewer Header */}
+                <div className="flex justify-between items-center px-4 py-3 bg-slate-800 text-white">
+                  <h3 className="font-bold flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-blue-400" />
+                    Document Viewer
+                  </h3>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsFullscreen(!isFullscreen)}
+                      className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg transition-colors"
+                      title={isFullscreen ? "Exit Fullscreen" : "Maximize"}
+                    >
+                      {isFullscreen ? (
+                        <Minimize className="h-5 w-5" />
+                      ) : (
+                        <Maximize className="h-5 w-5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setViewingDocUrl(null);
+                        setIsFullscreen(false);
+                      }}
+                      className="bg-slate-700 hover:bg-red-500 p-2 rounded-lg transition-colors"
+                      title="Close Viewer"
+                    >
+                      <XCircle className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Iframe Container */}
+                <div className="flex-1 w-full bg-slate-100 relative">
+                  {iframeLoading && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50">
+                      <Loader2 className="h-10 w-10 text-[#ff6b00] animate-spin mb-4" />
+                      <p className="text-slate-500 font-bold animate-pulse">
+                        Fetching secure document...
+                      </p>
+                    </div>
+                  )}
+
+                  <iframe
+                    src={viewingDocUrl}
+                    className="w-full h-full border-none relative z-0"
+                    title="Document Viewer"
+                    onLoad={() => setIframeLoading(false)}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        )}
-        <footer className="text-center py-6 text-zinc-500 text-xs font-bold uppercase tracking-widest">
-          © 2026 - Chennai Port Authority
-        </footer>
+          )}
+          <footer className="text-center py-6 text-zinc-500 text-xs font-bold uppercase tracking-widest">
+            © 2026 - Chennai Port Authority
+          </footer>
+        </div>
       </div>
-    </div>
     </ErrorContext.Provider>
   );
 }
