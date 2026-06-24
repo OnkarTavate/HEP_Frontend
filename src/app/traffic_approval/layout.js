@@ -32,6 +32,7 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -152,6 +153,7 @@ export default function TrafficLayout({ children }) {
     { name: "Company Approvals", href: "/traffic_approval/companies", icon: Building2 },
     { name: "Unblacklist Approvals", href: "/traffic_approval/unblacklist", icon: ShieldBan },
     { name: "Blacklist Management", href: "/traffic_approval/blacklist", icon: ShieldBan },
+    { name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users },
   ];
 
   const SidebarContent = ({ onNavigate, expanded = sidebarExpanded, showCollapseToggle = true }) => (

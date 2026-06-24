@@ -35,7 +35,7 @@ import {
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
-const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
+const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 
 // --- URL Helper to reliably strip '/api' for static file fetching ---
 const getFileUrl = (path) => {
@@ -247,7 +247,7 @@ export default function TrafficPassesPage() {
             limit: pageSize,
             search: debouncedSearch || undefined,
             status: activeTab || undefined,
-            sortOrder: sortBy === "DATE_ASC" ? "ASC" : "DESC",
+            sortOrder: sortBy === "DATE_ASC" ? "ASC" : sortBy === "EXPIRY_SOON" ? "EXPIRY_SOON" : "DESC",
             processedByMe: processedByMe ? "true" : undefined,
           },
         },

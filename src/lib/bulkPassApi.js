@@ -1,0 +1,281 @@
+import axios from "axios";
+
+const AGENT_API =
+  process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
+
+const ADMIN_API =
+  process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
+
+// Origin of user_service (without the /api suffix) — used to build URLs for
+// statically-served uploaded files (photos, vehicle docs, work orders).
+export const FILE_BASE = AGENT_API.replace(/\/api\/?$/, "");
+
+// Build an absolute URL for a stored upload path like "uploads/bulk_pass/32/x.jpg".
+// Returns "" for empty input and passes through already-absolute http(s) URLs.
+export function fileUrl(p) {
+  if (!p) return "";
+  if (/^https?:\/\//i.test(p)) return p;
+  return `${FILE_BASE}/${String(p).replace(/^\/+/, "")}`;
+}
+
+const authHeaders = () => {
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+// ── Lookup data ──────────────────────────────────────────────────────────────
+
+export async function getBulkVisitorTypes() {
+  const res = await axios.get(`${AGENT_API}/bulk-pass/visitor-types`, {
+    headers: authHeaders(),
+  });
+  return res.data?.data || [];
+}
+
+// ── Department User (protected) ──────────────────────────────────────────────
+
+export async function createBulkIntake(formData) {
+  const res = await axios.post(`${AGENT_API}/bulk-pass/intake`, formData, {
+    headers: { ...authHeaders(), "Content-Type": "multipart/form-data" },
+  });
+  return res.data?.data;
+}
+
+export async function listBulkBatches(filters = {}) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") params.append(k, v);
+  });
+  const res = await axios.get(
+    `${AGENT_API}/bulk-pass/list?${params.toString()}`,
+    { headers: authHeaders() }
+  );
+  return res.data?.data || [];
+}
+
+export async function getBulkBatchDetail(id) {
+  const res = await axios.get(`${AGENT_API}/bulk-pass/${id}`, {
+    headers: authHeaders(),
+  });
+  // Backend returns { batch, persons, uploads, statusLog } — flatten into one object
+  // so pages can access batch fields directly alongside persons/uploads/statusLogs
+  const raw = res.data?.data;
+  if (!raw) return null;
+  return {
+    ...raw.batch,
+    persons: raw.persons || [],
+    uploads: raw.uploads || [],
+    statusLogs: raw.statusLog || raw.statusLogs || [],
+  };
+}
+
+export async function updateBulkBatch(id, data) {
+  // PUT route reads req.body as JSON — do NOT send multipart/form-data here
+  const res = await axios.put(`${AGENT_API}/bulk-pass/${id}`, data, {
+    headers: authHeaders(),
+  });
+  return res.data?.data;
+}
+
+export async function forwardToApproval(id) {
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/${id}/forward`,
+    {},
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
+export async function returnToApplicant(id, remarks) {
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/${id}/return`,
+    { returnReason: remarks },
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
+export async function resubmitBatch(id) {
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/${id}/resubmit`,
+    {},
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
+export async function resendInvitation(id) {
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/${id}/resend-invitation`,
+    {},
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
+export async function downloadBulkPdf(id) {
+  const res = await axios.get(`${AGENT_API}/bulk-pass/${id}/pdf`, {
+    headers: authHeaders(),
+    responseType: "blob",
+  });
+  // If the server returned JSON (error), the blob will contain JSON text
+  // Parse it so callers can read err.response.data.message
+  const contentType = res.headers["content-type"] || "";
+  if (!contentType.includes("application/pdf")) {
+    const text = await res.data.text();
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { parsed = { message: text }; }
+    const err = new Error(parsed.message || "PDF not available");
+    err.response = { data: parsed, status: res.status };
+    throw err;
+  }
+  return res.data;
+}
+
+// ── Public (applicant) routes — no auth header ───────────────────────────────
+
+// Real-time blacklist check for the public upload form (no auth required)
+export async function checkBulkPassBlacklist(entityType, identifier) {
+  const res = await axios.get(
+    `${AGENT_API}/bulk-pass/public/blacklist-check?entity_type=${encodeURIComponent(entityType)}&identifier=${encodeURIComponent(identifier)}`
+  );
+  return res.data; // { success, isBlacklisted, data }
+}
+
+export async function getPublicBatch(token) {
+  const res = await axios.get(`${AGENT_API}/bulk-pass/public/${token}`);
+  return res.data?.data;
+}
+
+// Public scan view — opened when anyone scans the bulk pass QR (no auth).
+export async function getBulkPassScan(id, vehicle) {
+  const qs = vehicle ? `?vehicle=${encodeURIComponent(vehicle)}` : "";
+  const res = await axios.get(`${AGENT_API}/bulk-pass/scan/${id}${qs}`);
+  return res.data?.data;
+}
+
+export async function uploadExcelFiles(token, files) {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("files", file));
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/public/${token}/upload`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return res.data?.data;
+}
+
+export async function parsePreview(token, filePaths) {
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/public/${token}/preview`,
+    { filePaths }
+  );
+  return res.data?.data;
+}
+
+export async function submitBulkBatch(token) {
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/public/${token}/submit`,
+    {}
+  );
+  return res.data;
+}
+
+export async function downloadTemplate() {
+  const res = await axios.get(`${AGENT_API}/bulk-pass/template`, {
+    responseType: "blob",
+  });
+  return res.data;
+}
+
+export async function downloadErrorReport(token, filePaths) {
+  const params = new URLSearchParams();
+  if (Array.isArray(filePaths)) {
+    filePaths.forEach((p) => params.append("filePaths", p));
+  }
+  const res = await axios.get(
+    `${AGENT_API}/bulk-pass/public/${token}/error-report?${params.toString()}`,
+    { responseType: "blob" }
+  );
+  return res.data;
+}
+
+// ── New Excel-only + photo flow ───────────────────────────────────────────
+
+export async function parseExcelOnly(token, filePaths, fileNames) {
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/public/${token}/parse-excel`,
+    { filePaths, fileNames }
+  );
+  return res.data?.data;
+}
+
+export async function uploadZipPhotos(token, zipFile, onProgress) {
+  const formData = new FormData();
+  formData.append("zipFile", zipFile);
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/public/${token}/upload-zip`,
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: onProgress,
+    }
+  );
+  return res.data?.data;
+}
+
+export async function submitRowsDirectly(token, rows, formData) {
+  // If formData is provided (vehicles with docs), send as multipart
+  if (formData) {
+    const res = await axios.post(
+      `${AGENT_API}/bulk-pass/public/${token}/submit-rows`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
+    return res.data;
+  }
+  // Persons only — JSON
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/public/${token}/submit-rows`,
+    { rows }
+  );
+  return res.data;
+}
+
+// ── Traffic Officer (approval-admin-service) ─────────────────────────────────
+
+export async function getApprovalQueue() {
+  const res = await axios.get(`${ADMIN_API}/bulk-pass/queue`, {
+    headers: { ...authHeaders(), "Cache-Control": "no-cache" },
+    params: { _t: Date.now() }, // cache-buster: always fetch a fresh queue
+  });
+  return res.data?.data || [];
+}
+
+export async function approveBulkBatch(id) {
+  const res = await axios.post(
+    `${ADMIN_API}/bulk-pass/${id}/approve`,
+    {},
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
+export async function rejectBulkBatch(id, rejectionReason) {
+  const res = await axios.post(
+    `${ADMIN_API}/bulk-pass/${id}/reject`,
+    { rejectionReason },
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
+export async function returnBulkBatchByTraffic(id, returnReason) {
+  const res = await axios.post(
+    `${ADMIN_API}/bulk-pass/${id}/return`,
+    { returnReason },
+    { headers: authHeaders() }
+  );
+  return res.data;
+}

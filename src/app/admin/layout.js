@@ -315,6 +315,7 @@ export default function AdminLayout({ children }) {
     { name: "Pass Approvals", href: "/admin/pass-approvals", icon: FileText },
     { name: "Company Approvals", href: "/admin/companies", icon: Building2 },
     { name: "All Passes", href: "/admin/all-passes", icon: FileText },
+    { name: "Bulk Pass", href: "/admin/bulk_pass", icon: Users },
   ];
 
   const SidebarContent = () => (

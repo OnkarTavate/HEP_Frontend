@@ -11,6 +11,11 @@ const nextConfig = {
         source: "/api/:path*",
         destination: "http://localhost:5001/api/:path*",
       },
+      {
+        // Proxy backend upload files (photos, PDFs stored by user_service)
+        source: "/uploads/:path*",
+        destination: "http://localhost:5001/uploads/:path*",
+      },
     ];
   },
 

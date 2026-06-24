@@ -1,0 +1,1027 @@
+"use client";
+
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useParams } from "next/navigation";
+import {
+  Download,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  RefreshCw,
+  Send,
+  X,
+  Loader2,
+  ImageIcon,
+  Car,
+  Users,
+  Building2,
+  Calendar,
+  FileText,
+  Info,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import { toast } from "sonner";
+import {
+  getPublicBatch,
+  uploadExcelFiles,
+  parsePreview,
+  submitBulkBatch,
+  downloadTemplate,
+  downloadErrorReport,
+} from "@/lib/bulkPassApi";
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const MAX_FILES = 5;
+const MAX_FILE_SIZE_MB = 15;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const ACCEPTED_EXTS = [".xlsx", ".xls"];
+const ACCEPTED_MIME = [
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+];
+
+// ── Shared styles ─────────────────────────────────────────────────────────────
+
+const cardShell =
+  "rounded-3xl border-0 bg-white " +
+  "ring-1 ring-stone-200/70 " +
+  "shadow-[0_1px_3px_rgba(15,23,42,0.04),0_18px_40px_-20px_rgba(15,23,42,0.20)] " +
+  "transition-all duration-300";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const fmt = new Intl.DateTimeFormat("en-IN", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
+
+const fmtDate = (v) => {
+  if (!v) return "—";
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? v : fmt.format(d);
+};
+
+const visitorTypeLabel = (v) => {
+  if (!v) return "—";
+  return v
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+function fileSizeStr(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function validateFileExt(file) {
+  const name = file.name.toLowerCase();
+  const hasExt = ACCEPTED_EXTS.some((e) => name.endsWith(e));
+  const hasMime = ACCEPTED_MIME.includes(file.type) || file.type === "";
+  return hasExt && (hasMime || name.endsWith(".xls") || name.endsWith(".xlsx"));
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function SectionHeading({ icon, title }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-5">
+      <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-100 text-amber-600">
+        {icon}
+      </span>
+      <h3 className="text-base font-bold text-stone-800">{title}</h3>
+    </div>
+  );
+}
+
+function ReadField({ label, value, mono, highlight }) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">
+        {label}
+      </p>
+      <p
+        className={`text-sm font-semibold text-stone-800 ${mono ? "font-mono" : ""} ${highlight ? "text-amber-700" : ""}`}
+      >
+        {value || "—"}
+      </p>
+    </div>
+  );
+}
+
+function StatusChip({ status }) {
+  const isValid = status === "valid";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
+        isValid
+          ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
+          : "bg-red-100 text-red-700 border border-red-300"
+      }`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${isValid ? "bg-emerald-500" : "bg-red-500"}`}
+      />
+      {isValid ? "Valid" : "Invalid"}
+    </span>
+  );
+}
+
+function PhotoCell({ src, name }) {
+  const [err, setErr] = useState(false);
+  if (!src || err) {
+    return (
+      <div className="h-9 w-9 rounded-lg bg-stone-100 flex items-center justify-center text-stone-300">
+        <ImageIcon className="h-4 w-4" />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={name || "photo"}
+      onError={() => setErr(true)}
+      className="h-9 w-9 rounded-lg object-cover bg-stone-100"
+    />
+  );
+}
+
+// ── Invalid link / expired screens ────────────────────────────────────────────
+
+function ErrorScreen({ type }) {
+  const isInvalid = type === "invalid";
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-stone-50 to-amber-50/30 flex items-center justify-center px-4">
+      <div className={`${cardShell} p-8 max-w-md w-full text-center`}>
+        <div
+          className={`flex h-14 w-14 items-center justify-center rounded-2xl mx-auto mb-4 ${
+            isInvalid
+              ? "bg-red-100 text-red-500"
+              : "bg-orange-100 text-orange-500"
+          }`}
+        >
+          {isInvalid ? (
+            <XCircle className="h-7 w-7" />
+          ) : (
+            <AlertCircle className="h-7 w-7" />
+          )}
+        </div>
+        <h2 className="text-lg font-bold text-stone-900 mb-2">
+          {isInvalid ? "Invalid Link" : "Link Expired or Inactive"}
+        </h2>
+        <p className="text-sm text-stone-500">
+          {isInvalid
+            ? "This upload link does not exist. Please contact the department that sent you this link."
+            : "This upload link is no longer active. It may have been deactivated after submission or is under review. Please contact the issuing department for assistance."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Intake info card ──────────────────────────────────────────────────────────
+
+function IntakeCard({ batch }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className={cardShell}>
+      {/* Header strip */}
+      <div className="px-6 pt-6 pb-4 border-b border-stone-100">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-1">
+              Bulk Pass Request
+            </p>
+            <h2 className="text-2xl font-black text-stone-900 font-mono">
+              {batch.refNo || "—"}
+            </h2>
+            <p className="text-sm text-stone-500 mt-1">{batch.companyName}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">
+              Valid Until
+            </p>
+            <p className="text-sm font-bold text-stone-800">
+              {fmtDate(batch.validityUpto)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Core fields always visible */}
+      <div className="px-6 py-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+        <ReadField label="Department" value={batch.departmentName || batch.department} />
+        <ReadField label="Visitor Type" value={visitorTypeLabel(batch.visitorType)} />
+        <ReadField
+          label="No. of Persons"
+          value={batch.noOfPersons != null ? String(batch.noOfPersons) : null}
+        />
+        <ReadField
+          label="No. of Vehicles"
+          value={batch.noOfVehicles != null ? String(batch.noOfVehicles) : null}
+        />
+        <ReadField label="Pass Type" value={batch.passType} />
+        <ReadField label="Payment Mode" value={batch.paymentMode} />
+      </div>
+
+      {/* Expandable details */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-center gap-1.5 px-6 py-3 border-t border-stone-100 text-xs font-semibold text-stone-500 hover:text-amber-600 hover:bg-amber-50/50 transition"
+      >
+        {expanded ? (
+          <>
+            <ChevronUp className="h-3.5 w-3.5" /> Show less
+          </>
+        ) : (
+          <>
+            <ChevronDown className="h-3.5 w-3.5" /> Show more details
+          </>
+        )}
+      </button>
+
+      {expanded && (
+        <div className="px-6 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 border-t border-stone-100 pt-5">
+          <ReadField label="Applicant Email" value={batch.applicantEmail} />
+          <ReadField
+            label="Applicant Mobile"
+            value={batch.applicantMobile ? `+91 ${batch.applicantMobile}` : null}
+          />
+          {batch.refDocNo && (
+            <ReadField label="Ref. Doc No." value={batch.refDocNo} />
+          )}
+          {batch.purposeOfVisit && (
+            <div className="sm:col-span-2">
+              <ReadField label="Purpose of Visit" value={batch.purposeOfVisit} />
+            </div>
+          )}
+          {batch.remarks && (
+            <div className="sm:col-span-2">
+              <ReadField label="Remarks" value={batch.remarks} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── File upload zone ──────────────────────────────────────────────────────────
+
+function UploadZone({ files, onFilesChange, uploading }) {
+  const inputRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+
+  const addFiles = useCallback(
+    (incoming) => {
+      const valid = [];
+      for (const f of incoming) {
+        if (!validateFileExt(f)) {
+          toast.error(`"${f.name}" is not a valid Excel file (.xlsx / .xls).`);
+          continue;
+        }
+        if (f.size > MAX_FILE_SIZE_BYTES) {
+          toast.error(`"${f.name}" exceeds ${MAX_FILE_SIZE_MB} MB limit.`);
+          continue;
+        }
+        if (files.length + valid.length >= MAX_FILES) {
+          toast.error(`Maximum ${MAX_FILES} files allowed per upload.`);
+          break;
+        }
+        // Prevent duplicates by name
+        if (files.some((ef) => ef.name === f.name)) {
+          toast.warning(`"${f.name}" is already added.`);
+          continue;
+        }
+        valid.push(f);
+      }
+      if (valid.length) onFilesChange([...files, ...valid]);
+    },
+    [files, onFilesChange]
+  );
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    addFiles(Array.from(e.dataTransfer.files));
+  };
+
+  const handleInputChange = (e) => {
+    addFiles(Array.from(e.target.files));
+    // Reset so same file can be re-added after removal
+    e.target.value = "";
+  };
+
+  const removeFile = (idx) => {
+    onFilesChange(files.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Drop zone */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+        onClick={() => !uploading && inputRef.current?.click()}
+        className={`relative flex flex-col items-center justify-center gap-3 px-6 py-10 rounded-2xl border-2 border-dashed cursor-pointer transition select-none ${
+          dragging
+            ? "border-amber-400 bg-amber-50"
+            : uploading
+            ? "border-stone-200 bg-stone-50 cursor-not-allowed opacity-60"
+            : "border-stone-200 bg-stone-50 hover:border-amber-400 hover:bg-amber-50/50"
+        }`}
+      >
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+          <Upload className="h-6 w-6" />
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-bold text-stone-700">
+            Drag & drop Excel files here
+          </p>
+          <p className="text-xs text-stone-400 mt-1">
+            or click to browse — .xlsx / .xls, max {MAX_FILE_SIZE_MB} MB each,
+            up to {MAX_FILES} files
+          </p>
+        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept=".xlsx,.xls"
+          className="hidden"
+          onChange={handleInputChange}
+          disabled={uploading}
+        />
+      </div>
+
+      {/* Selected file list */}
+      {files.length > 0 && (
+        <ul className="space-y-2">
+          {files.map((f, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-stone-50 ring-1 ring-stone-100"
+            >
+              <FileSpreadsheet className="h-5 w-5 text-emerald-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-stone-800 truncate">
+                  {f.name}
+                </p>
+                <p className="text-xs text-stone-400">{fileSizeStr(f.size)}</p>
+              </div>
+              {!uploading && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); removeFile(i); }}
+                  className="shrink-0 text-stone-400 hover:text-red-500 transition"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ── Preview table ─────────────────────────────────────────────────────────────
+
+function PreviewTable({ rows, token, filePaths, onReupload }) {
+  const [downloading, setDownloading] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  const invalidRows = rows.filter((r) => r.validationStatus === "invalid");
+  const errorCount = invalidRows.length;
+  const displayRows = showAll ? rows : rows.slice(0, 50);
+
+  const handleDownloadErrorReport = async () => {
+    if (!filePaths?.length) return;
+    setDownloading(true);
+    try {
+      const blob = await downloadErrorReport(token, filePaths);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `error_report_${token.slice(0, 8)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message || "Failed to download error report."
+      );
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Summary bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-stone-100 text-stone-700">
+            <FileText className="h-3.5 w-3.5" />
+            {rows.length} total rows
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {rows.length - errorCount} valid
+          </span>
+          {errorCount > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+              <XCircle className="h-3.5 w-3.5" />
+              {errorCount} error{errorCount !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {errorCount > 0 && (
+            <button
+              onClick={handleDownloadErrorReport}
+              disabled={downloading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold text-red-700 bg-red-100 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              {downloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              Download Error Report
+            </button>
+          )}
+          <button
+            onClick={onReupload}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold text-stone-600 bg-stone-100 hover:bg-stone-200 transition"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Re-upload
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto rounded-2xl ring-1 ring-stone-100">
+        <table className="w-full min-w-[900px] text-sm">
+          <thead>
+            <tr className="bg-stone-50/80 border-b border-stone-100">
+              {[
+                "File Source",
+                "Row #",
+                "Photo",
+                "Name",
+                "Aadhaar",
+                "DOB",
+                "Mobile",
+                "Status",
+                "Error",
+              ].map((h) => (
+                <th
+                  key={h}
+                  className="px-3 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-stone-400 whitespace-nowrap"
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {displayRows.map((row, idx) => (
+              <tr
+                key={idx}
+                className={`border-b border-stone-50 last:border-b-0 transition-colors ${
+                  row.validationStatus === "invalid"
+                    ? "bg-red-50/60 hover:bg-red-50"
+                    : "hover:bg-stone-50/50"
+                }`}
+              >
+                <td className="px-3 py-2.5">
+                  <span className="text-xs text-stone-500 truncate block max-w-[140px]" title={row.fileName}>
+                    {row.fileName || "—"}
+                  </span>
+                </td>
+                <td className="px-3 py-2.5 tabular-nums text-xs text-stone-400">
+                  {row.rowNumber ?? idx + 1}
+                </td>
+                <td className="px-3 py-2.5">
+                  <PhotoCell src={row.photoThumbnail || row.photo} name={row.name} />
+                </td>
+                <td className="px-3 py-2.5 font-semibold text-stone-800 whitespace-nowrap">
+                  {row.name || "—"}
+                </td>
+                <td className="px-3 py-2.5 font-mono text-xs text-stone-600 whitespace-nowrap">
+                  {row.aadhaarNumber
+                    ? `XXXX XXXX ${String(row.aadhaarNumber).slice(-4)}`
+                    : row.aadhaar
+                    ? `XXXX XXXX ${String(row.aadhaar).slice(-4)}`
+                    : "—"}
+                </td>
+                <td className="px-3 py-2.5 text-xs text-stone-600 whitespace-nowrap">
+                  {row.dateOfBirth || row.dob || "—"}
+                </td>
+                <td className="px-3 py-2.5 font-mono text-xs text-stone-600">
+                  {row.mobileNumber || row.mobile || "—"}
+                </td>
+                <td className="px-3 py-2.5">
+                  <StatusChip status={row.validationStatus} />
+                </td>
+                <td className="px-3 py-2.5">
+                  {row.errorMessage ? (
+                    <span className="text-xs text-red-600 font-medium leading-snug">
+                      {row.errorMessage}
+                    </span>
+                  ) : (
+                    <span className="text-stone-300 text-xs">—</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Show more */}
+      {rows.length > 50 && !showAll && (
+        <button
+          onClick={() => setShowAll(true)}
+          className="w-full py-2.5 text-xs font-semibold text-stone-500 hover:text-amber-600 transition"
+        >
+          Show all {rows.length} rows…
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Confirmation screen ───────────────────────────────────────────────────────
+
+function ConfirmationScreen({ refNo }) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-stone-50 to-amber-50/30 flex items-center justify-center px-4">
+      <div className={`${cardShell} p-10 max-w-md w-full text-center`}>
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-500 mx-auto mb-5">
+          <CheckCircle2 className="h-8 w-8" />
+        </div>
+        <h2 className="text-xl font-black text-stone-900 mb-2">
+          Submitted Successfully
+        </h2>
+        {refNo && (
+          <p className="text-sm font-mono font-bold text-amber-700 mb-3">
+            {refNo}
+          </p>
+        )}
+        <p className="text-sm text-stone-500 leading-relaxed">
+          Your visitor data has been submitted and is now with the department
+          for review. You will receive an email once the batch is processed.
+        </p>
+        <div className="mt-6 px-5 py-4 rounded-2xl bg-amber-50 ring-1 ring-amber-200 text-left">
+          <div className="flex gap-2">
+            <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-700 leading-relaxed">
+              This upload link is now inactive. No further changes can be made.
+              Contact the issuing department if corrections are needed.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+export default function BulkPassPublicPage() {
+  const params = useParams();
+  const token = params?.token;
+
+  // Batch loading
+  const [batch, setBatch] = useState(null);
+  const [loadingBatch, setLoadingBatch] = useState(true);
+  const [batchError, setBatchError] = useState(null); // "invalid" | "expired" | null
+
+  // Upload phase
+  const [files, setFiles] = useState([]);
+  const [uploading, setUploading] = useState(false);
+
+  // Preview phase
+  const [uploadedFilePaths, setUploadedFilePaths] = useState(null); // server paths returned after upload
+  const [previewRows, setPreviewRows] = useState(null);
+  const [previewing, setPreviewing] = useState(false);
+
+  // Submit phase
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  // Template download
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+
+  // ── Load batch on mount ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!token) return;
+    let alive = true;
+    (async () => {
+      try {
+        setLoadingBatch(true);
+        const data = await getPublicBatch(token);
+        if (!alive) return;
+        setBatch(data);
+      } catch (err) {
+        if (!alive) return;
+        const status = err?.response?.status;
+        const msg = err?.response?.data?.message || "";
+        if (status === 404 || msg.toLowerCase().includes("invalid")) {
+          setBatchError("invalid");
+        } else if (
+          status === 403 ||
+          msg.toLowerCase().includes("expired") ||
+          msg.toLowerCase().includes("inactive")
+        ) {
+          setBatchError("expired");
+        } else {
+          setBatchError("expired"); // default to expired for unknown errors
+        }
+      } finally {
+        if (alive) setLoadingBatch(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [token]);
+
+  // ── Actions ──────────────────────────────────────────────────────────────
+
+  const handleDownloadTemplate = async () => {
+    setDownloadingTemplate(true);
+    try {
+      const blob = await downloadTemplate();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "bulk_pass_template.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message || "Failed to download template."
+      );
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
+  const handleUploadAndPreview = async () => {
+    if (!files.length) {
+      toast.error("Please select at least one Excel file.");
+      return;
+    }
+
+    // Step 1: upload files
+    setUploading(true);
+    let paths;
+    try {
+      const uploadResult = await uploadExcelFiles(token, files);
+      // uploadResult is an array of { originalName, filePath, size } objects
+      // Extract the server-side filePath strings for the preview call
+      if (Array.isArray(uploadResult)) {
+        paths = uploadResult.map((r) =>
+          typeof r === "string" ? r : r.filePath || r.path || r
+        );
+      } else {
+        paths = uploadResult?.filePaths || uploadResult?.paths || [];
+      }
+      setUploadedFilePaths(paths);
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "File upload failed. Please try again."
+      );
+      setUploading(false);
+      return;
+    }
+    setUploading(false);
+
+    // Step 2: parse & preview
+    setPreviewing(true);
+    try {
+      const result = await parsePreview(token, paths);
+      const rows = result?.rows || result || [];
+      setPreviewRows(rows);
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to parse files. Please check your Excel format."
+      );
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  const handleReupload = () => {
+    setPreviewRows(null);
+    setUploadedFilePaths(null);
+    setFiles([]);
+  };
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      await submitBulkBatch(token);
+      setSubmitted(true);
+      toast.success("Batch submitted successfully.");
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Submission failed. Please try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ── Derived state ────────────────────────────────────────────────────────
+
+  const canSubmit =
+    previewRows !== null &&
+    previewRows.length > 0 &&
+    previewRows.every((r) => r.validationStatus === "valid");
+
+  const errorCount = previewRows
+    ? previewRows.filter((r) => r.validationStatus === "invalid").length
+    : 0;
+
+  const isProcessing = uploading || previewing;
+
+  // ── Render guards ─────────────────────────────────────────────────────────
+
+  if (submitted) {
+    return <ConfirmationScreen refNo={batch?.refNo} />;
+  }
+
+  if (loadingBatch) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-stone-50 to-amber-50/30 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 rounded-full border-4 border-amber-400 border-t-transparent animate-spin" />
+          <p className="text-sm text-stone-500">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (batchError === "invalid") return <ErrorScreen type="invalid" />;
+  if (batchError === "expired") return <ErrorScreen type="expired" />;
+
+  // ── Main render ───────────────────────────────────────────────────────────
+
+  return (
+    <div
+      className="min-h-screen bg-gradient-to-br from-stone-50 to-amber-50/30"
+      style={{ fontFamily: "'Montserrat', sans-serif" }}
+    >
+      {/* Nav strip */}
+      <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-stone-200/70 px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-400 text-white font-black text-sm">
+            H
+          </div>
+          <div>
+            <p className="text-xs font-bold text-stone-800 leading-none">
+              HEP Automation
+            </p>
+            <p className="text-[10px] text-stone-400 leading-none mt-0.5">
+              Chennai Port Authority
+            </p>
+          </div>
+        </div>
+        {batch?.refNo && (
+          <span className="text-xs font-mono font-bold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-full">
+            {batch.refNo}
+          </span>
+        )}
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col gap-6">
+        {/* ── Intake info ── */}
+        <IntakeCard batch={batch} />
+
+        {/* ── Step 1: Download template ── */}
+        <div className={cardShell}>
+          <div className="p-6">
+            <SectionHeading
+              icon={<FileSpreadsheet className="h-4 w-4" />}
+              title="Step 1 — Download Template"
+            />
+            <p className="text-sm text-stone-500 mb-4 leading-relaxed">
+              Download the official Excel template. Fill in all visitor details
+              and embed passport-size photos in the designated photo column
+              before uploading.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleDownloadTemplate}
+                disabled={downloadingTemplate}
+                className="inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-[#1f1f1f] font-bold text-sm shadow-sm transition"
+              >
+                {downloadingTemplate ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                Download Template (.xlsx)
+              </button>
+            </div>
+            <div className="mt-4 px-4 py-3 rounded-2xl bg-stone-50 ring-1 ring-stone-100">
+              <p className="text-xs font-semibold text-stone-600 mb-2">
+                Required columns:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  "Name",
+                  "Aadhaar Number",
+                  "Date of Birth",
+                  "Mobile Number",
+                  "Photo (embedded)",
+                ].map((col) => (
+                  <span
+                    key={col}
+                    className="inline-block px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs font-semibold"
+                  >
+                    {col}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Photo requirements */}
+            <div className="mt-3 px-4 py-3 rounded-2xl bg-blue-50 ring-1 ring-blue-100">
+              <p className="text-xs font-bold text-blue-700 mb-2 flex items-center gap-1.5">
+                <ImageIcon className="h-3.5 w-3.5" />
+                Photo requirements (embedded in Photo column):
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 text-xs text-blue-700">
+                <span>• Format: JPEG or PNG</span>
+                <span>• Max size: 500 KB</span>
+                <span>• Min dimensions: 200 × 200 px</span>
+                <span>• Max dimensions: 600 × 600 px</span>
+                <span className="sm:col-span-2">• Aspect ratio: between 0.8 : 1 and 1.25 : 1 (near-square / passport-style)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Step 2: Upload & preview (or show preview if already parsed) ── */}
+        <div className={cardShell}>
+          <div className="p-6">
+            {previewRows === null ? (
+              <>
+                <SectionHeading
+                  icon={<Upload className="h-4 w-4" />}
+                  title="Step 2 — Upload Excel Files"
+                />
+                <p className="text-sm text-stone-500 mb-5 leading-relaxed">
+                  Upload up to {MAX_FILES} completed Excel files (
+                  {MAX_FILE_SIZE_MB} MB each). All files will be parsed and
+                  validated together.
+                </p>
+
+                <UploadZone
+                  files={files}
+                  onFilesChange={setFiles}
+                  uploading={isProcessing}
+                />
+
+                <div className="mt-5 flex justify-end">
+                  <button
+                    onClick={handleUploadAndPreview}
+                    disabled={!files.length || isProcessing}
+                    className="inline-flex items-center gap-2.5 px-7 py-3 rounded-2xl bg-amber-400 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-[#1f1f1f] font-bold text-sm shadow-sm transition"
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Uploading…
+                      </>
+                    ) : previewing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Parsing…
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="h-4 w-4" />
+                        Parse &amp; Preview
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <SectionHeading
+                  icon={<FileText className="h-4 w-4" />}
+                  title="Step 2 — Preview &amp; Validate"
+                />
+
+                <PreviewTable
+                  rows={previewRows}
+                  token={token}
+                  filePaths={uploadedFilePaths}
+                  onReupload={handleReupload}
+                />
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ── Step 3: Submit ── */}
+        {previewRows !== null && (
+          <div className={cardShell}>
+            <div className="p-6">
+              <SectionHeading
+                icon={<Send className="h-4 w-4" />}
+                title="Step 3 — Submit"
+              />
+
+              {!canSubmit && errorCount > 0 ? (
+                <div className="flex items-start gap-3 px-5 py-4 rounded-2xl bg-red-50 ring-1 ring-red-200 mb-4">
+                  <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-red-700">
+                      {errorCount} row{errorCount !== 1 ? "s" : ""} with errors
+                    </p>
+                    <p className="text-xs text-red-600 mt-0.5">
+                      Fix all errors before submitting. Download the error
+                      report, correct the Excel files, and re-upload.
+                    </p>
+                  </div>
+                </div>
+              ) : previewRows.length === 0 ? (
+                <div className="flex items-start gap-3 px-5 py-4 rounded-2xl bg-orange-50 ring-1 ring-orange-200 mb-4">
+                  <AlertCircle className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
+                  <p className="text-sm text-orange-700">
+                    No rows were parsed from the uploaded files. Please check
+                    your Excel and re-upload.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-start gap-3 px-5 py-4 rounded-2xl bg-emerald-50 ring-1 ring-emerald-200 mb-4">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                  <p className="text-sm font-semibold text-emerald-700">
+                    All {previewRows.length} rows are valid. Ready to submit.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-wrap justify-end gap-3">
+                <button
+                  onClick={handleReupload}
+                  disabled={submitting}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-semibold text-stone-600 bg-stone-100 hover:bg-stone-200 disabled:opacity-50 transition"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Re-upload
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit || submitting}
+                  className="inline-flex items-center gap-2.5 px-8 py-3 rounded-2xl bg-amber-400 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-[#1f1f1f] font-bold text-sm shadow-sm transition"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Submitting…
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Submit Batch
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <p className="text-center text-xs text-stone-400 pb-4">
+          Chennai Port Authority · HEP Automation System · Secure Upload Portal
+        </p>
+      </div>
+    </div>
+  );
+}

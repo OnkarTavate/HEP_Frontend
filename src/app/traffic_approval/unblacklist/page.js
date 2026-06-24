@@ -44,7 +44,7 @@ const IndianRupee = ({ className, ...props }) => (
   </svg>
 );
 
-const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
+const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 
 /* ─────────── Entity type config ─────────── */
 const ENTITY_TYPES = [

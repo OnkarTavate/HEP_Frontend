@@ -35,6 +35,7 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import axios from "axios";
@@ -45,26 +46,59 @@ const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
 
-const getNavigationItems = (role) => {
-  const baseItems = [{ name: "Dashboard", href: "/dashboard", icon: LayoutDashboard }];
+// Navigation items based on user role
+const getNavigationItems = (role, departmentName) => {
+  const baseItems = [
+    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  ];
   const applicantItems = [
     ...baseItems,
     { name: "Apply Pass", href: "/dashboard/pass_request", icon: FileText },
     { name: "Master Record", href: "/dashboard/master_record", icon: Database },
     { name: "Blacklist & Penalties", href: "/dashboard/blacklist_penalties", icon: ShieldAlert },
   ];
+
+
+  // Traffic department gets the approver view
+  const isTrafficDept = departmentName?.toLowerCase() === "traffic";
+
   const roleItems = {
     user: applicantItems,
     Applicant: applicantItems,
+
+    Approval: isTrafficDept
+      ? [
+          ...baseItems,
+          {
+            name: "Traffic Approval",
+            href: "/dashboard/approval_admin",
+            icon: Truck,
+          },
+          { name: "Gate Log", href: "/dashboard/gate-log", icon: FileText },
+          { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
+        ]
+      : [
+          ...baseItems,
+          {
+            name: "Pass Approval",
+            href: "/dashboard/pass-approval",
+            icon: CheckSquare,
+          },
+          { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
+          { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
+        ],
+
     "Pass Officer": [
       ...baseItems,
       { name: "Pass Approval", href: "/dashboard/pass-approval", icon: CheckSquare },
       { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
+      { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
     ],
     "Traffic Officer": [
       ...baseItems,
       { name: "Traffic Approval", href: "/dashboard/approval_admin", icon: Truck },
       { name: "Gate Log", href: "/dashboard/gate-log", icon: FileText },
+      { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
     ],
     Admin: [...baseItems, { name: "All Passes", href: "/dashboard/all-passes", icon: FileText }],
     "Super Admin": [...baseItems, { name: "All Passes", href: "/dashboard/all-passes", icon: FileText }],
@@ -250,7 +284,7 @@ export default function DashboardLayout({ children }) {
     );
   }
 
-  const navigationItems = getNavigationItems(user.role);
+  const navigationItems = getNavigationItems(user.role, user.departmentName);
 
   const SidebarContent = ({ onNavigate, expanded = sidebarExpanded, showCollapseToggle = true }) => (
     <div className="h-full flex flex-col justify-between py-8 bg-[#0a0a0a] dark:bg-black border-r border-black/20 dark:border-white/5 text-white overflow-hidden">
