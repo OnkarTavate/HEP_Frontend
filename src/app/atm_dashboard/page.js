@@ -178,14 +178,8 @@ export default function ATMBlacklistPage() {
   const [detailEntry, setDetailEntry] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // Payment Checkout Modal
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState("GATEWAY");
-  const [paymentRemarks, setPaymentRemarks] = useState("");
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
-  const [cardName, setCardName] = useState("");
+  // NOTE: Payment checkout has been removed from ATM portal.
+  // Penalty payments must be made by the company via the Company Dashboard.
 
   // Action states
   const [actionLoading, setActionLoading] = useState(false);
@@ -251,45 +245,145 @@ export default function ATMBlacklistPage() {
     fetchStats();
   }, [fetchEntries, fetchStats]);
 
-  /* ── Geotagging simulation ── */
+  /* ── High-Accuracy GPS Geotagging ── */
+  const [gpsLoading, setGpsLoading] = useState(false);
+
   const captureGeotag = () => {
-    setGeotagStatus("Fetching GPS coordinates...");
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude.toFixed(6);
-          const lon = position.coords.longitude.toFixed(6);
-          const acc = position.coords.accuracy.toFixed(1);
-          setCreateForm((prev) => ({
-            ...prev,
-            geotag_latitude: lat,
-            geotag_longitude: lon,
-            geotag_accuracy: acc,
-          }));
-          setGeotagStatus(`Tagged: Lat ${lat}, Lon ${lon} (±${acc}m)`);
-          toast.success("Geotag captured successfully!");
-        },
-        (error) => {
-          console.warn("GPS access denied, using Port default location:", error.message);
-          // Default Port coordinate: Chennai Port
-          const lat = "13.082700";
-          const lon = "80.270700";
-          const acc = "15.00";
-          setCreateForm((prev) => ({
-            ...prev,
-            geotag_latitude: lat,
-            geotag_longitude: lon,
-            geotag_accuracy: acc,
-          }));
-          setGeotagStatus(`Default Port GPS: Lat ${lat}, Lon ${lon}`);
-          toast.info("Using Chennai Port default GPS tag.");
-        },
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
-    } else {
-      setGeotagStatus("Geolocation not supported");
-      toast.warning("Browser does not support GPS Geotagging.");
+    if (!navigator.geolocation) {
+      setGeotagStatus("Geolocation not supported by this browser");
+      toast.error("GPS not available. Please use a modern browser.");
+      return;
     }
+
+    setGpsLoading(true);
+    setGeotagStatus("Acquiring GPS signal...");
+
+    let bestPosition = null;
+    let watchId = null;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 6;
+    const ACCURACY_THRESHOLD = 30; // Accept ≤ 30 metres as "good"
+
+    const applyPosition = (pos) => {
+      const lat = pos.coords.latitude.toFixed(7);
+      const lon = pos.coords.longitude.toFixed(7);
+      const acc = pos.coords.accuracy.toFixed(1);
+      setCreateForm((prev) => ({
+        ...prev,
+        geotag_latitude: lat,
+        geotag_longitude: lon,
+        geotag_accuracy: acc,
+      }));
+      const quality =
+        pos.coords.accuracy <= 10
+          ? "Excellent"
+          : pos.coords.accuracy <= 30
+          ? "Good"
+          : pos.coords.accuracy <= 80
+          ? "Fair"
+          : "Poor";
+      setGeotagStatus(
+        `✅ Tagged (${quality}) · Lat ${lat}, Lon ${lon} · ±${acc}m`
+      );
+    };
+
+    const stopWatch = () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      setGpsLoading(false);
+    };
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        attempts++;
+        const acc = position.coords.accuracy;
+
+        // Always track the best (most accurate) reading so far
+        if (!bestPosition || acc < bestPosition.coords.accuracy) {
+          bestPosition = position;
+          const lat = position.coords.latitude.toFixed(7);
+          const lon = position.coords.longitude.toFixed(7);
+          setGeotagStatus(
+            `Improving accuracy... ±${acc.toFixed(1)}m (attempt ${attempts}/${MAX_ATTEMPTS})`
+          );
+          // Update form with best-so-far so user sees progress
+          setCreateForm((prev) => ({
+            ...prev,
+            geotag_latitude: lat,
+            geotag_longitude: lon,
+            geotag_accuracy: acc.toFixed(1),
+          }));
+        }
+
+        // Accept once accuracy is good enough OR we've tried enough times
+        if (acc <= ACCURACY_THRESHOLD || attempts >= MAX_ATTEMPTS) {
+          stopWatch();
+          applyPosition(bestPosition);
+          if (acc <= ACCURACY_THRESHOLD) {
+            toast.success(`GPS tagged at ±${bestPosition.coords.accuracy.toFixed(1)}m accuracy!`);
+          } else {
+            toast.info(
+              `GPS tagged with ±${bestPosition.coords.accuracy.toFixed(1)}m accuracy (best available).`
+            );
+          }
+        }
+      },
+      (error) => {
+        stopWatch();
+        let reason = "Permission denied";
+        if (error.code === 2) reason = "GPS signal unavailable";
+        if (error.code === 3) reason = "Location request timed out";
+        console.warn("GPS error:", reason, error.message);
+
+        if (bestPosition) {
+          // Use the best reading collected before error
+          applyPosition(bestPosition);
+          toast.info(
+            `GPS tagged at ±${bestPosition.coords.accuracy.toFixed(1)}m (signal lost — best reading used).`
+          );
+        } else {
+          // No reading at all — fall back to Chennai Port HQ coordinates
+          const lat = "13.0827360";
+          const lon = "80.2707040";
+          const acc = "50.0";
+          setCreateForm((prev) => ({
+            ...prev,
+            geotag_latitude: lat,
+            geotag_longitude: lon,
+            geotag_accuracy: acc,
+          }));
+          setGeotagStatus(
+            `⚠️ Default Port Location · Lat ${lat}, Lon ${lon} · ±${acc}m (${reason})`
+          );
+          toast.warning(
+            `Could not get your GPS (${reason}). Chennai Port HQ coordinates used as default.`
+          );
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,       // 15 seconds per attempt
+        maximumAge: 0,        // Always get a fresh fix, never use cached
+      }
+    );
+
+    // Hard stop after 20 seconds total regardless
+    setTimeout(() => {
+      if (watchId !== null) {
+        stopWatch();
+        if (bestPosition) {
+          applyPosition(bestPosition);
+          toast.info(
+            `GPS tagged at ±${bestPosition.coords.accuracy.toFixed(1)}m (time limit reached — best reading used).`
+          );
+        } else {
+          setGeotagStatus("GPS timed out — retag recommended");
+          toast.warning("GPS acquisition timed out. Click 'Get GPS Tag' again.");
+        }
+      }
+    }, 20000);
   };
 
   /* ── Auto-calculate penalty based on Reason Code & Entity Type ── */
@@ -453,56 +547,7 @@ export default function ATMBlacklistPage() {
     }
   };
 
-  /* ── E2E checkout execution ── */
-  const executePayment = async () => {
-    if (!cardName.trim() || !cardNumber.trim()) {
-      toast.warning("Please enter cardholder name and card number to proceed.");
-      return;
-    }
-    if (cardNumber.replace(/\s/g, "").length < 16) {
-      toast.warning("Please enter a valid 16-digit card number.");
-      return;
-    }
-    if (!cardExpiry.trim() || cardExpiry.length < 5) {
-      toast.warning("Please enter a valid card expiry (MM/YY).");
-      return;
-    }
-    if (!cardCvv.trim() || cardCvv.length < 3) {
-      toast.warning("Please enter a valid 3-digit CVV.");
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      const txnId = `TXN-W${Date.now()}`;
-      const res = await axios.patch(
-        `${ADMIN_API}/blacklist/${detailEntry.id}/pay-penalty`,
-        {
-          remarks: paymentRemarks || `Penalty paid successfully via GATEWAY`,
-          payment_method: "GATEWAY",
-          transaction_id: txnId,
-        },
-        { headers: getAuthHeaders() }
-      );
-
-      if (res.data.success) {
-        toast.success("Penalty payment completed successfully!");
-        setDetailEntry(res.data.data);
-        setIsCheckoutOpen(false);
-        setPaymentRemarks("");
-        setCardNumber("");
-        setCardExpiry("");
-        setCardCvv("");
-        setCardName("");
-        fetchEntries();
-        fetchStats();
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to complete payment");
-    } finally {
-      setActionLoading(false);
-    }
-  };
+  /* executePayment removed — payment is company's responsibility only */
 
   const handleSubmitCompliance = async () => {
     if (!complianceNotes.trim()) {
@@ -1239,32 +1284,87 @@ export default function ATMBlacklistPage() {
                 />
               </div>
 
-              {/* Geotagging GPS Widget */}
+              {/* Geotagging GPS Widget — High Accuracy */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Geotag Coordinates</label>
                   <button
                     type="button"
                     onClick={captureGeotag}
-                    className="text-xs font-bold text-red-700 flex items-center gap-1.5 bg-red-50/80 hover:bg-red-100/80 px-3 py-1.5 rounded-xl border border-red-200/50 transition-all duration-200 active:scale-95 shadow-sm"
+                    disabled={gpsLoading}
+                    className={`text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95 shadow-sm ${
+                      gpsLoading
+                        ? "bg-amber-50 border-amber-200 text-amber-700 cursor-wait"
+                        : createForm.geotag_latitude
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                        : "bg-red-50/80 border-red-200/50 text-red-700 hover:bg-red-100/80"
+                    }`}
                   >
-                    <MapPin className="h-3.5 w-3.5 animate-bounce" /> Get GPS Tag
+                    {gpsLoading ? (
+                      <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Acquiring GPS...</>
+                    ) : createForm.geotag_latitude ? (
+                      <><MapPin className="h-3.5 w-3.5" /> Re-tag GPS</>
+                    ) : (
+                      <><MapPin className="h-3.5 w-3.5 animate-bounce" /> Get GPS Tag</>
+                    )}
                   </button>
                 </div>
-                <div className={`p-4 rounded-xl border transition-all duration-300 flex items-center gap-3 ${
-                  createForm.geotag_latitude 
-                    ? "bg-emerald-50/30 border-emerald-200 text-emerald-800" 
-                    : "bg-slate-50/50 border-slate-200 text-slate-600"
+
+                {/* GPS Status Display */}
+                <div className={`p-3.5 rounded-xl border transition-all duration-300 ${
+                  gpsLoading
+                    ? "bg-amber-50/50 border-amber-200"
+                    : createForm.geotag_latitude
+                    ? "bg-emerald-50/30 border-emerald-200"
+                    : "bg-slate-50/50 border-slate-200"
                 }`}>
-                  {createForm.geotag_latitude ? (
-                    <span className="relative flex h-3 w-3 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                    </span>
-                  ) : (
-                    <Globe className="h-4 w-4 text-slate-400 shrink-0" />
-                  )}
-                  <span className="text-xs font-bold leading-normal truncate">{geotagStatus}</span>
+                  <div className="flex items-start gap-2.5">
+                    {gpsLoading ? (
+                      <div className="mt-0.5 shrink-0">
+                        <RefreshCw className="h-4 w-4 text-amber-500 animate-spin" />
+                      </div>
+                    ) : createForm.geotag_latitude ? (
+                      <span className="relative flex h-3 w-3 mt-0.5 shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+                      </span>
+                    ) : (
+                      <Globe className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-bold leading-relaxed block break-all text-slate-700">{geotagStatus}</span>
+                      {createForm.geotag_latitude && (
+                        <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                          <div className="bg-white/80 rounded-lg border border-slate-100 px-2 py-1 text-center">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Latitude</p>
+                            <p className="text-[11px] font-black text-[#0a1e4d] font-mono">{createForm.geotag_latitude}</p>
+                          </div>
+                          <div className="bg-white/80 rounded-lg border border-slate-100 px-2 py-1 text-center">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Longitude</p>
+                            <p className="text-[11px] font-black text-[#0a1e4d] font-mono">{createForm.geotag_longitude}</p>
+                          </div>
+                          <div className={`rounded-lg border px-2 py-1 text-center ${
+                            parseFloat(createForm.geotag_accuracy) <= 10
+                              ? "bg-emerald-50 border-emerald-200"
+                              : parseFloat(createForm.geotag_accuracy) <= 30
+                              ? "bg-green-50 border-green-200"
+                              : parseFloat(createForm.geotag_accuracy) <= 80
+                              ? "bg-amber-50 border-amber-200"
+                              : "bg-red-50 border-red-200"
+                          }`}>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Accuracy</p>
+                            <p className={`text-[11px] font-black font-mono ${
+                              parseFloat(createForm.geotag_accuracy) <= 30
+                                ? "text-emerald-700"
+                                : parseFloat(createForm.geotag_accuracy) <= 80
+                                ? "text-amber-700"
+                                : "text-red-700"
+                            }`}>±{createForm.geotag_accuracy}m</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1488,24 +1588,22 @@ export default function ATMBlacklistPage() {
                 {/* ── Action Panels (context-dependent) ── */}
                 {detailEntry.status === "BLACKLISTED" && (
                   <div className="space-y-3">
-                    {/* Step 1: Pay Penalty (if applicable) */}
+                    {/* Step 1: Penalty notice (ATM cannot pay — company must pay via Company Portal) */}
                     {detailEntry.has_penalty && detailEntry.penalty_status === "PENDING" && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
-                        <div className="flex items-center justify-between text-amber-800 font-bold text-sm">
-                          <span className="flex items-center gap-2">
-                            <Banknote className="h-5 w-5" />
-                            Step 1: Pay Penalty
-                          </span>
-                          <span className="text-xs bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">Required</span>
+                      <div className="bg-orange-50 border border-orange-300 rounded-xl p-4 space-y-2">
+                        <div className="flex items-center gap-2 text-orange-800 font-bold text-sm">
+                          <Banknote className="h-5 w-5" />
+                          <span>Penalty Outstanding — ₹{parseFloat(detailEntry.penalty_amount).toLocaleString("en-IN")}</span>
                         </div>
-                        <p className="text-xs text-amber-700">Please clear the penalty of ₹{parseFloat(detailEntry.penalty_amount).toLocaleString("en-IN")} via Wallet or Payment Gateway.</p>
-                        <button
-                          onClick={() => setIsCheckoutOpen(true)}
-                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg transition-all active:scale-[0.99] flex items-center justify-center gap-2 shadow"
-                        >
-                          <CreditCard className="h-4 w-4" />
-                          Proceed to Checkout
-                        </button>
+                        <p className="text-xs text-orange-700 leading-relaxed">
+                          This penalty must be paid by the <strong>registered company / agent</strong> through
+                          their <strong>Company Dashboard → Blacklist &amp; Penalties</strong> section.
+                          ATM officers are not authorized to process penalty payments.
+                        </p>
+                        <div className="flex items-center gap-2 bg-orange-100 border border-orange-200 rounded-lg px-3 py-2">
+                          <Clock className="h-4 w-4 text-orange-600 shrink-0" />
+                          <span className="text-[11px] font-semibold text-orange-700">Waiting for company to clear the penalty before unblacklisting can proceed.</span>
+                        </div>
                       </div>
                     )}
 
@@ -1714,10 +1812,8 @@ export default function ATMBlacklistPage() {
         </div>
       )}
 
-      {/* ════════════════════════════════════════════ */}
-      {/* MOCK PAYMENT CHECKOUT GATEWAY               */}
-      {/* ════════════════════════════════════════════ */}
-      {isCheckoutOpen && (
+      {/* Payment checkout removed from ATM portal — handled by Company Dashboard */}
+      {false && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-3xl shadow-2xl border border-white/20 overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Header */}

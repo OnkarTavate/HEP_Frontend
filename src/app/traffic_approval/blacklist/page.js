@@ -155,6 +155,7 @@ export default function TrafficBlacklistPage() {
   });
   const [supportingFile, setSupportingFile] = useState(null);
   const [geotagStatus, setGeotagStatus] = useState("No location tagged");
+  const [gpsLoading, setGpsLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
 
   // Detail Modal
@@ -228,44 +229,128 @@ export default function TrafficBlacklistPage() {
     fetchStats();
   }, [fetchEntries, fetchStats]);
 
-  /* ── Geotagging simulation ── */
+  /* ── High-Accuracy GPS Geotagging ── */
   const captureGeotag = () => {
-    setGeotagStatus("Fetching GPS coordinates...");
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude.toFixed(6);
-          const lon = position.coords.longitude.toFixed(6);
-          const acc = position.coords.accuracy.toFixed(1);
-          setCreateForm((prev) => ({
-            ...prev,
-            geotag_latitude: lat,
-            geotag_longitude: lon,
-            geotag_accuracy: acc,
-          }));
-          setGeotagStatus(`Tagged: Lat ${lat}, Lon ${lon} (±${acc}m)`);
-          toast.success("Geotag captured successfully!");
-        },
-        (error) => {
-          console.warn("GPS access denied, using Port default location:", error.message);
-          const lat = "13.082700";
-          const lon = "80.270700";
-          const acc = "15.00";
-          setCreateForm((prev) => ({
-            ...prev,
-            geotag_latitude: lat,
-            geotag_longitude: lon,
-            geotag_accuracy: acc,
-          }));
-          setGeotagStatus(`Default Port GPS: Lat ${lat}, Lon ${lon}`);
-          toast.info("Using Chennai Port default GPS tag.");
-        },
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
-    } else {
-      setGeotagStatus("Geolocation not supported");
-      toast.warning("Browser does not support GPS Geotagging.");
+    if (!navigator.geolocation) {
+      setGeotagStatus("Geolocation not supported by this browser");
+      toast.error("GPS not available. Please use a modern browser.");
+      return;
     }
+
+    setGpsLoading(true);
+    setGeotagStatus("Acquiring GPS signal...");
+
+    let bestPosition = null;
+    let watchId = null;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 6;
+    const ACCURACY_THRESHOLD = 30; // Accept ≤ 30 metres as "good"
+
+    const applyPosition = (pos) => {
+      const lat = pos.coords.latitude.toFixed(7);
+      const lon = pos.coords.longitude.toFixed(7);
+      const acc = pos.coords.accuracy.toFixed(1);
+      setCreateForm((prev) => ({
+        ...prev,
+        geotag_latitude: lat,
+        geotag_longitude: lon,
+        geotag_accuracy: acc,
+      }));
+      const quality =
+        pos.coords.accuracy <= 10
+          ? "Excellent"
+          : pos.coords.accuracy <= 30
+          ? "Good"
+          : pos.coords.accuracy <= 80
+          ? "Fair"
+          : "Poor";
+      setGeotagStatus(
+        `✅ Tagged (${quality}) · Lat ${lat}, Lon ${lon} · ±${acc}m`
+      );
+    };
+
+    const stopWatch = () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      setGpsLoading(false);
+    };
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        attempts++;
+        const acc = position.coords.accuracy;
+
+        if (!bestPosition || acc < bestPosition.coords.accuracy) {
+          bestPosition = position;
+          const lat = position.coords.latitude.toFixed(7);
+          const lon = position.coords.longitude.toFixed(7);
+          setGeotagStatus(
+            `Improving accuracy... ±${acc.toFixed(1)}m (attempt ${attempts}/${MAX_ATTEMPTS})`
+          );
+          setCreateForm((prev) => ({
+            ...prev,
+            geotag_latitude: lat,
+            geotag_longitude: lon,
+            geotag_accuracy: acc.toFixed(1),
+          }));
+        }
+
+        if (acc <= ACCURACY_THRESHOLD || attempts >= MAX_ATTEMPTS) {
+          stopWatch();
+          applyPosition(bestPosition);
+          if (acc <= ACCURACY_THRESHOLD) {
+            toast.success(`GPS tagged at ±${bestPosition.coords.accuracy.toFixed(1)}m accuracy!`);
+          } else {
+            toast.info(`GPS tagged with ±${bestPosition.coords.accuracy.toFixed(1)}m accuracy (best available).`);
+          }
+        }
+      },
+      (error) => {
+        stopWatch();
+        let reason = "Permission denied";
+        if (error.code === 2) reason = "GPS signal unavailable";
+        if (error.code === 3) reason = "Location request timed out";
+        console.warn("GPS error:", reason, error.message);
+
+        if (bestPosition) {
+          applyPosition(bestPosition);
+          toast.info(`GPS tagged at ±${bestPosition.coords.accuracy.toFixed(1)}m (signal lost — best reading used).`);
+        } else {
+          const lat = "13.0827360";
+          const lon = "80.2707040";
+          const acc = "50.0";
+          setCreateForm((prev) => ({
+            ...prev,
+            geotag_latitude: lat,
+            geotag_longitude: lon,
+            geotag_accuracy: acc,
+          }));
+          setGeotagStatus(`⚠️ Default Port Location · Lat ${lat}, Lon ${lon} · ±${acc}m (${reason})`);
+          toast.warning(`Could not get your GPS (${reason}). Chennai Port HQ coordinates used as default.`);
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
+    );
+
+    // Hard stop after 20 seconds
+    setTimeout(() => {
+      if (watchId !== null) {
+        stopWatch();
+        if (bestPosition) {
+          applyPosition(bestPosition);
+          toast.info(`GPS tagged at ±${bestPosition.coords.accuracy.toFixed(1)}m (time limit reached — best reading used).`);
+        } else {
+          setGeotagStatus("GPS timed out — retag recommended");
+          toast.warning("GPS acquisition timed out. Click 'Get GPS Tag' again.");
+        }
+      }
+    }, 20000);
   };
 
   /* ── Auto-calculate penalty based on Reason Code & Entity Type ── */
@@ -1061,32 +1146,86 @@ export default function TrafficBlacklistPage() {
                 />
               </div>
 
-              {/* Geotagging GPS Widget */}
+              {/* Geotagging GPS Widget — High Accuracy */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Geotag Coordinates</label>
                   <button
                     type="button"
                     onClick={captureGeotag}
-                    className="text-xs font-bold text-red-700 flex items-center gap-1.5 bg-red-50/80 hover:bg-red-100/80 px-3 py-1.5 rounded-xl border border-red-200/50 transition-all duration-200 active:scale-95 shadow-sm"
+                    disabled={gpsLoading}
+                    className={`text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95 shadow-sm ${
+                      gpsLoading
+                        ? "bg-amber-50 border-amber-200 text-amber-700 cursor-wait"
+                        : createForm.geotag_latitude
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                        : "bg-red-50/80 border-red-200/50 text-red-700 hover:bg-red-100/80"
+                    }`}
                   >
-                    <MapPin className="h-3.5 w-3.5 animate-bounce" /> Get GPS Tag
+                    {gpsLoading ? (
+                      <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Acquiring GPS...</>
+                    ) : createForm.geotag_latitude ? (
+                      <><MapPin className="h-3.5 w-3.5" /> Re-tag GPS</>
+                    ) : (
+                      <><MapPin className="h-3.5 w-3.5 animate-bounce" /> Get GPS Tag</>
+                    )}
                   </button>
                 </div>
-                <div className={`p-4 rounded-xl border transition-all duration-300 flex items-center gap-3 ${
-                  createForm.geotag_latitude 
-                    ? "bg-emerald-50/30 border-emerald-200 text-emerald-800" 
-                    : "bg-slate-50/50 border-slate-200 text-slate-600"
+
+                <div className={`p-3.5 rounded-xl border transition-all duration-300 ${
+                  gpsLoading
+                    ? "bg-amber-50/50 border-amber-200"
+                    : createForm.geotag_latitude
+                    ? "bg-emerald-50/30 border-emerald-200"
+                    : "bg-slate-50/50 border-slate-200"
                 }`}>
-                  {createForm.geotag_latitude ? (
-                    <span className="relative flex h-3 w-3 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                    </span>
-                  ) : (
-                    <Globe className="h-4 w-4 text-slate-400 shrink-0" />
-                  )}
-                  <span className="text-xs font-bold leading-normal truncate">{geotagStatus}</span>
+                  <div className="flex items-start gap-2.5">
+                    {gpsLoading ? (
+                      <div className="mt-0.5 shrink-0">
+                        <RefreshCw className="h-4 w-4 text-amber-500 animate-spin" />
+                      </div>
+                    ) : createForm.geotag_latitude ? (
+                      <span className="relative flex h-3 w-3 mt-0.5 shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+                      </span>
+                    ) : (
+                      <Globe className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-bold leading-relaxed block break-all text-slate-700">{geotagStatus}</span>
+                      {createForm.geotag_latitude && (
+                        <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                          <div className="bg-white/80 rounded-lg border border-slate-100 px-2 py-1 text-center">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Latitude</p>
+                            <p className="text-[11px] font-black text-[#0a1e4d] font-mono">{createForm.geotag_latitude}</p>
+                          </div>
+                          <div className="bg-white/80 rounded-lg border border-slate-100 px-2 py-1 text-center">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Longitude</p>
+                            <p className="text-[11px] font-black text-[#0a1e4d] font-mono">{createForm.geotag_longitude}</p>
+                          </div>
+                          <div className={`rounded-lg border px-2 py-1 text-center ${
+                            parseFloat(createForm.geotag_accuracy) <= 10
+                              ? "bg-emerald-50 border-emerald-200"
+                              : parseFloat(createForm.geotag_accuracy) <= 30
+                              ? "bg-green-50 border-green-200"
+                              : parseFloat(createForm.geotag_accuracy) <= 80
+                              ? "bg-amber-50 border-amber-200"
+                              : "bg-red-50 border-red-200"
+                          }`}>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Accuracy</p>
+                            <p className={`text-[11px] font-black font-mono ${
+                              parseFloat(createForm.geotag_accuracy) <= 30
+                                ? "text-emerald-700"
+                                : parseFloat(createForm.geotag_accuracy) <= 80
+                                ? "text-amber-700"
+                                : "text-red-700"
+                            }`}>±{createForm.geotag_accuracy}m</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 

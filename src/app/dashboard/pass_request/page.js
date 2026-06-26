@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import PaginationBar from "@/components/ui/PaginationBar";
 import axios from "axios";
 import { toast } from "sonner";
@@ -35,10 +35,13 @@ import {
   Maximize,
   Loader2,
   XCircle,
+  Calendar,
+  Filter,
+  Clock,
 } from "lucide-react";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
-const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:3002/api";
+const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 
 // --- URL Helper to reliably strip '/api' for static file fetching ---
 const getFileUrl = (path) => {
@@ -289,6 +292,16 @@ export default function PassRequestPage() {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
+  // ── View-tab analytics & filters (client-side over ALL of the agent's passes) ──
+  const [allViewPasses, setAllViewPasses] = useState([]);
+  const [allViewLoading, setAllViewLoading] = useState(false);
+  const [viewDateFilter, setViewDateFilter] = useState("all"); // all | today | 7days | 30days | month | custom
+  const [viewStatusFilter, setViewStatusFilter] = useState("ALL");
+  const [viewCustomFrom, setViewCustomFrom] = useState("");
+  const [viewCustomTo, setViewCustomTo] = useState("");
+  const [viewPage, setViewPage] = useState(1);
+  const [viewPageSize, setViewPageSize] = useState(10);
+
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(searchInput);
@@ -310,11 +323,16 @@ export default function PassRequestPage() {
   const [showBlacklistPopup, setShowBlacklistPopup] = useState(false);
 
   const checkBlacklistStatus = async (entityType, identifier) => {
-    if (!identifier || !identifier.trim() || !ADMIN_API) return;
+    // Resolve the admin API base locally so this never depends on the
+    // module-scoped const closure (avoids "ADMIN_API is not defined" runtime
+    // ReferenceError seen with stale/HMR client bundles).
+    const adminApi =
+      process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
+    if (!identifier || !identifier.trim() || !adminApi) return;
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
       const res = await axios.get(
-        `${ADMIN_API}/blacklist/check?entity_type=${entityType}&identifier=${encodeURIComponent(identifier.trim().toUpperCase())}`,
+        `${adminApi}/blacklist/check?entity_type=${entityType}&identifier=${encodeURIComponent(identifier.trim().toUpperCase())}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (res.data.success && res.data.isBlacklisted) {
@@ -859,12 +877,145 @@ const vehicleOptions = [
     }
   }, [currentPage, pageSize, activeTab, debouncedSearch]);
 
+  // Loads ALL of the agent's passes (paginated, 100/page) so the View tab can
+  // show accurate per-status counts and apply date/status filters client-side.
+  const fetchAllViewPasses = useCallback(async () => {
+    setAllViewLoading(true);
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        setAllViewLoading(false);
+        return;
+      }
+      const headers = { Authorization: `Bearer ${token}` };
+      const first = await axios.get(`${AGENT_API}/pass-request/my-pass-requests`, {
+        headers,
+        params: { page: 1, limit: 100 },
+      });
+      if (!first.data?.success) {
+        setAllViewPasses([]);
+        setAllViewLoading(false);
+        return;
+      }
+      let all = first.data.data || [];
+      const totalPages = first.data.pagination?.totalPages || 1;
+      if (totalPages > 1) {
+        const reqs = [];
+        for (let p = 2; p <= totalPages; p++) {
+          reqs.push(
+            axios.get(`${AGENT_API}/pass-request/my-pass-requests`, {
+              headers,
+              params: { page: p, limit: 100 },
+            }),
+          );
+        }
+        const rest = await Promise.allSettled(reqs);
+        rest.forEach((r) => {
+          if (r.status === "fulfilled" && r.value.data?.success) all = all.concat(r.value.data.data || []);
+        });
+      }
+      setAllViewPasses(all);
+      // Keep the reverted-tab badge accurate even while on the view tab
+      if (first.data.counts) setGlobalCounts(first.data.counts);
+    } catch (error) {
+      console.error("Error fetching all pass requests:", error);
+      setAllViewPasses([]);
+    } finally {
+      setAllViewLoading(false);
+    }
+  }, []);
+
   // Trigger fetch when "view" or "reverted" tab is selected or page changes
   useEffect(() => {
-    if (activeTab === "view" || activeTab === "reverted") {
+    if (activeTab === "reverted") {
       fetchSubmittedPasses();
     }
   }, [activeTab, currentPage, fetchSubmittedPasses]);
+
+  // View tab → load everything once for counts + client-side filtering
+  useEffect(() => {
+    if (activeTab === "view") {
+      fetchAllViewPasses();
+    }
+  }, [activeTab, fetchAllViewPasses]);
+
+  // Reset the client page whenever a filter/search changes
+  useEffect(() => {
+    setViewPage(1);
+  }, [viewStatusFilter, viewDateFilter, viewCustomFrom, viewCustomTo, debouncedSearch, allViewPasses.length]);
+
+  // Per-status counts over ALL passes (the "number system")
+  const viewCounts = useMemo(() => {
+    const c = { total: allViewPasses.length, submitted: 0, underReview: 0, completed: 0, reverted: 0, rejected: 0, draft: 0, thisMonth: 0 };
+    const now = new Date();
+    allViewPasses.forEach((p) => {
+      const s = String(p.status || "").toUpperCase();
+      if (s === "SUBMITTED") c.submitted++;
+      else if (s === "UNDER_REVIEW") c.underReview++;
+      else if (s === "COMPLETED" || s === "APPROVED" || s === "ISSUED") c.completed++;
+      else if (s === "REVERTED") c.reverted++;
+      else if (s === "REJECTED") c.rejected++;
+      else if (s === "DRAFT") c.draft++;
+      const d = new Date(p.createdAt || p.submittedAt);
+      if (!Number.isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) c.thisMonth++;
+    });
+    return c;
+  }, [allViewPasses]);
+
+  // Client-side filtered list (status + date range + search)
+  const filteredViewPasses = useMemo(() => {
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const q = (debouncedSearch || "").trim().toLowerCase();
+
+    return allViewPasses.filter((p) => {
+      // Status
+      if (viewStatusFilter !== "ALL") {
+        const s = String(p.status || "").toUpperCase();
+        if (viewStatusFilter === "COMPLETED") {
+          if (!(s === "COMPLETED" || s === "APPROVED" || s === "ISSUED")) return false;
+        } else if (s !== viewStatusFilter) return false;
+      }
+      // Date
+      if (viewDateFilter !== "all") {
+        const d = new Date(p.createdAt || p.submittedAt);
+        if (Number.isNaN(d.getTime())) return false;
+        if (viewDateFilter === "today") {
+          if (d < startToday) return false;
+        } else if (viewDateFilter === "7days") {
+          if (d < new Date(startToday.getTime() - 6 * 864e5)) return false;
+        } else if (viewDateFilter === "30days") {
+          if (d < new Date(startToday.getTime() - 29 * 864e5)) return false;
+        } else if (viewDateFilter === "month") {
+          if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) return false;
+        } else if (viewDateFilter === "custom") {
+          if (viewCustomFrom) {
+            const f = new Date(viewCustomFrom);
+            f.setHours(0, 0, 0, 0);
+            if (d < f) return false;
+          }
+          if (viewCustomTo) {
+            const t = new Date(viewCustomTo);
+            t.setHours(23, 59, 59, 999);
+            if (d > t) return false;
+          }
+        }
+      }
+      // Search
+      if (q) {
+        const inRef = String(p.referenceNo || "").toLowerCase().includes(q);
+        const inPerson = (p.persons || []).some(
+          (pp) => String(pp.name || "").toLowerCase().includes(q) || String(pp.aadharNo || "").toLowerCase().includes(q),
+        );
+        const inVeh = (p.vehicles || []).some((vv) => String(vv.registrationNo || "").toLowerCase().includes(q));
+        if (!inRef && !inPerson && !inVeh) return false;
+      }
+      return true;
+    });
+  }, [allViewPasses, viewStatusFilter, viewDateFilter, viewCustomFrom, viewCustomTo, debouncedSearch]);
+
+  const viewTotalPages = Math.max(1, Math.ceil(filteredViewPasses.length / viewPageSize));
+  const viewPageSlice = filteredViewPasses.slice((viewPage - 1) * viewPageSize, (viewPage - 1) * viewPageSize + viewPageSize);
 
   // Reset page to 1 and clear search when changing tabs
   useEffect(() => {
@@ -2919,18 +3070,118 @@ const vehicleOptions = [
                 Requests
               </h3>
               <button
-                onClick={fetchSubmittedPasses}
-                disabled={loadingPasses}
+                onClick={fetchAllViewPasses}
+                disabled={allViewLoading}
                 className="bg-white text-[#0a1e4d] px-4 py-2 rounded-lg border border-slate-200 text-xs font-bold hover:bg-slate-50 disabled:opacity-50 transition-colors flex items-center gap-2 shadow-sm"
               >
-                {loadingPasses ? "Refreshing..." : "Refresh List"}
+                <RefreshCw className={`h-4 w-4 ${allViewLoading ? "animate-spin" : ""}`} />
+                {allViewLoading ? "Refreshing..." : "Refresh List"}
               </button>
+            </div>
+
+            {/* ── Number system: per-status count cards (click to filter) ── */}
+            <div className="px-6 pt-5 pb-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {[
+                { key: "ALL", label: "Total", value: viewCounts.total, icon: FileText, color: "text-[#0a1e4d]", ring: "ring-[#0a1e4d]/30", bg: "bg-[#0a1e4d]/5" },
+                { key: "SUBMITTED", label: "Submitted", value: viewCounts.submitted, icon: Send, color: "text-blue-600", ring: "ring-blue-300", bg: "bg-blue-50" },
+                { key: "UNDER_REVIEW", label: "Under Review", value: viewCounts.underReview, icon: Clock, color: "text-amber-600", ring: "ring-amber-300", bg: "bg-amber-50" },
+                { key: "COMPLETED", label: "Completed", value: viewCounts.completed, icon: CheckCircle, color: "text-emerald-600", ring: "ring-emerald-300", bg: "bg-emerald-50" },
+                { key: "REVERTED", label: "Reverted", value: viewCounts.reverted, icon: RefreshCw, color: "text-orange-600", ring: "ring-orange-300", bg: "bg-orange-50" },
+                { key: "REJECTED", label: "Rejected", value: viewCounts.rejected, icon: XCircle, color: "text-red-600", ring: "ring-red-300", bg: "bg-red-50" },
+              ].map((c) => {
+                const active = viewStatusFilter === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    onClick={() => setViewStatusFilter(active && c.key !== "ALL" ? "ALL" : c.key)}
+                    title={`Filter by ${c.label}`}
+                    className={`text-left rounded-xl p-3 ring-1 transition-all active:scale-[0.98] ${active ? `${c.bg} ${c.ring} shadow-sm` : "bg-white ring-slate-200 hover:bg-slate-50 hover:ring-slate-300"}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${active ? c.color : "text-slate-500"}`}>{c.label}</span>
+                      <c.icon className={`h-3.5 w-3.5 ${c.color}`} />
+                    </div>
+                    <p className={`mt-1 text-2xl font-black tabular-nums ${active ? c.color : "text-[#0a1e4d]"}`}>
+                      {allViewLoading ? "…" : c.value}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Date / period filter toolbar ── */}
+            <div className="px-6 py-3 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0">
+                <Filter className="h-3.5 w-3.5" /> Filter by date
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { k: "all", l: "All Time" },
+                  { k: "today", l: "Today" },
+                  { k: "7days", l: "Last 7 Days" },
+                  { k: "30days", l: "Last 30 Days" },
+                  { k: "month", l: "This Month" },
+                  { k: "custom", l: "Custom" },
+                ].map((o) => (
+                  <button
+                    key={o.k}
+                    onClick={() => setViewDateFilter(o.k)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewDateFilter === o.k ? "bg-[#0a1e4d] text-white shadow" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                  >
+                    {o.l}
+                  </button>
+                ))}
+              </div>
+
+              {viewDateFilter === "custom" && (
+                <div className="flex items-center gap-2 lg:ml-2">
+                  <div className="relative">
+                    <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="date"
+                      value={viewCustomFrom}
+                      max={viewCustomTo || undefined}
+                      onChange={(e) => setViewCustomFrom(e.target.value)}
+                      className="pl-8 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+                  <span className="text-slate-400 text-xs">to</span>
+                  <div className="relative">
+                    <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="date"
+                      value={viewCustomTo}
+                      min={viewCustomFrom || undefined}
+                      onChange={(e) => setViewCustomTo(e.target.value)}
+                      className="pl-8 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {(viewDateFilter !== "all" || viewStatusFilter !== "ALL" || debouncedSearch) && (
+                <button
+                  onClick={() => {
+                    setViewDateFilter("all");
+                    setViewStatusFilter("ALL");
+                    setViewCustomFrom("");
+                    setViewCustomTo("");
+                    setSearchInput("");
+                  }}
+                  className="lg:ml-auto inline-flex items-center gap-1 text-xs font-bold text-red-500 hover:text-red-600"
+                >
+                  <X className="h-3.5 w-3.5" /> Clear Filters
+                </button>
+              )}
             </div>
 
             <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                Showing {paginationMeta.totalRecords > 0 ? (paginationMeta.currentPage - 1) * paginationMeta.pageSize + 1 : 0}–
-                {Math.min(paginationMeta.currentPage * paginationMeta.pageSize, paginationMeta.totalRecords)} of {paginationMeta.totalRecords} records
+                Showing {filteredViewPasses.length > 0 ? (viewPage - 1) * viewPageSize + 1 : 0}–
+                {Math.min(viewPage * viewPageSize, filteredViewPasses.length)} of {filteredViewPasses.length} records
+                {filteredViewPasses.length !== viewCounts.total && (
+                  <span className="ml-2 text-orange-500 normal-case tracking-normal">(filtered from {viewCounts.total})</span>
+                )}
               </div>
               <div className="relative w-full md:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
@@ -2957,6 +3208,9 @@ const vehicleOptions = [
               <table className="w-full text-left border-collapse">
                 <thead className="bg-[#0a1e4d] text-white">
                   <tr>
+                    <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider text-center w-16">
+                      S.No.
+                    </th>
                     <th className="px-6 py-4 text-[10px] font-bold border-r border-white/10 uppercase tracking-wider">
                       Request ID
                     </th>
@@ -2975,7 +3229,7 @@ const vehicleOptions = [
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {loadingPasses ? (
+                  {allViewLoading ? (
                     <tr>
                       <td
                         colSpan="6"
@@ -2988,17 +3242,19 @@ const vehicleOptions = [
                         </div>
                       </td>
                     </tr>
-                  ) : submittedPasses.length === 0 ? (
+                  ) : viewPageSlice.length === 0 ? (
                     <tr>
                       <td
                         colSpan="6"
                         className="p-12 text-center text-sm font-medium text-slate-400 italic"
                       >
-                        No pass requests found in the database.
+                        {viewCounts.total === 0
+                          ? "No pass requests found in the database."
+                          : "No pass requests match the current filters."}
                       </td>
                     </tr>
                   ) : (
-                    submittedPasses.map((pass, idx) => {
+                    viewPageSlice.map((pass, idx) => {
                       // Robust DB mapping handling camelCase, snake_case, and flat text from PostgreSQL
                       const passIdStr = pass.referenceNo
                         ? pass.referenceNo
@@ -3042,6 +3298,9 @@ const vehicleOptions = [
                           onClick={() => setSelectedPassDetails(pass)}
                           className="hover:bg-blue-50/50 transition-colors cursor-pointer"
                         >
+                          <td className="px-6 py-4 text-sm font-bold text-slate-400 text-center border-r border-slate-100 tabular-nums">
+                            {(viewPage - 1) * viewPageSize + idx + 1}
+                          </td>
                           <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d] border-r border-slate-100">
                             {passIdStr}
                           </td>
@@ -3087,16 +3346,16 @@ const vehicleOptions = [
             {/* Pagination for main submitted list */}
             <div className="px-6 py-4 border-t border-slate-100">
               <PaginationBar
-                currentPage={paginationMeta.currentPage || currentPage}
-                totalPages={paginationMeta.totalPages || 1}
-                totalRecords={paginationMeta.totalRecords || 0}
-                pageSize={paginationMeta.pageSize || pageSize}
-                onPageChange={(page) => setCurrentPage(page)}
+                currentPage={viewPage}
+                totalPages={viewTotalPages}
+                totalRecords={filteredViewPasses.length}
+                pageSize={viewPageSize}
+                onPageChange={(page) => setViewPage(page)}
                 onPageSizeChange={(limit) => {
-                  setPageSize(limit);
-                  setCurrentPage(1);
+                  setViewPageSize(limit);
+                  setViewPage(1);
                 }}
-                loading={loadingPasses}
+                loading={allViewLoading}
               />
             </div>
           </section>

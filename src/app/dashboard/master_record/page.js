@@ -399,7 +399,7 @@ export default function MasterRecordsPage() {
                 ) : (
                   filteredPersonnel.map((p, index) => (
                     <tr
-                      key={p.id ? `p-${p.id}-${index}` : `p-idx-${index}`}
+                      key={`p-${p.id || 'no-id'}-${index}`}
                       onClick={() => handleRowClick(p, "personnel")}
                       className={`cursor-pointer hover:bg-orange-50/50 transition-colors ${!p.isActive ? "bg-red-50/30 opacity-70" : ""}`}
                     >
@@ -497,7 +497,7 @@ export default function MasterRecordsPage() {
                 ) : (
                   filteredVehicles.map((v, index) => (
                     <tr
-                      key={v.id ? `v-${v.id}-${index}` : `v-idx-${index}`}
+                      key={`v-${v.id || 'no-id'}-${index}`}
                       onClick={() => handleRowClick(v, "vehicle")}
                       className={`cursor-pointer hover:bg-orange-50/50 transition-colors ${!v.isActive ? "bg-red-50/30 opacity-70" : ""}`}
                     >

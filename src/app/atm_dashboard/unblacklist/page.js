@@ -44,7 +44,7 @@ const IndianRupee = ({ className, ...props }) => (
   </svg>
 );
 
-const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
+const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
 
 /* ─────────── Entity type config ─────────── */
 const ENTITY_TYPES = [
@@ -132,7 +132,7 @@ export default function UnblacklistApprovalsPage() {
     try {
       const res = await axios.patch(
         `${ADMIN_API}/blacklist/${detailEntry.id}/approve-unblacklist`,
-        { remarks: "Approved by Traffic Department" },
+        { remarks: "Approved by ATM Pass Section" },
         { headers: getAuthHeaders() }
       );
       if (res.data.success) {
@@ -174,6 +174,35 @@ export default function UnblacklistApprovalsPage() {
     }
   };
 
+  const getComplianceActionText = () => {
+    if (!detailEntry) return "";
+    switch (detailEntry.scenario) {
+      case "OVER SPEEDING":
+      case "DANGEROUS DRIVING":
+        return "Attend mandatory safety briefing & sign safe driving pledge.";
+      case "NO HELMET":
+        return "Procure and commit to wearing proper PPE (helmet).";
+      case "WRONG WAY DRIVING":
+        return "Submit route compliance undertaking.";
+      case "PARKED IN NO PARKING ZONE":
+        return "Pay penalty & park only in designated yards.";
+      case "SMOKING IN PORT PREMISES":
+        return "Sign declaration complying with Port Anti-Smoking policy.";
+      case "NO LICENSE / EXPIRED LICENSE":
+        return "Submit copy of active valid Driving License.";
+      case "NO VALID PASS / EXPIRED PASS":
+        return "Apply for valid port access permit.";
+      case "MISBEHAVIOUR WITH PORT SECURITY / PORT OFFICIALS":
+        return "Submit formal letter of apology countersigned by employer.";
+      case "DAMAGE TO PORT PROPERTY":
+        return "Pay assessed repair/replacement cost & submit undertaking.";
+      case "THEFT / MALPRACTICE":
+        return "Clearance report from port police department.";
+      default:
+        return "Comply with standard port regulations and clear any outstanding fine.";
+    }
+  };
+
   const getEntityConfig = (type) =>
     ENTITY_TYPES.find((t) => t.value === type) || ENTITY_TYPES[0];
 
@@ -183,11 +212,11 @@ export default function UnblacklistApprovalsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl ring-1 ring-slate-200/50 shadow-md">
         <div>
           <h2 className="text-xl sm:text-2xl font-extrabold text-[#0a1e4d] tracking-tight flex items-center gap-2">
-            <ShieldBan className="h-6 w-6 text-[#ff6b00]" strokeWidth={2.5} />
+            <ShieldBan className="h-6 w-6 text-red-650" strokeWidth={2.5} />
             Unblacklist Approvals
           </h2>
           <p className="text-sm text-slate-500 mt-0.5">
-            Review and approve/reject unblacklist requests from ATM
+            Review and approve/reject unblacklist requests from users/companies
           </p>
         </div>
         <button
@@ -237,7 +266,7 @@ export default function UnblacklistApprovalsPage() {
               placeholder="Search by ID, Name..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
-              className="w-full pl-10 pr-10 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-[#ff6b00]"
+              className="w-full pl-10 pr-10 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-red-500"
             />
             {searchInput && (
               <button onClick={() => setSearchInput("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500">
@@ -329,7 +358,7 @@ export default function UnblacklistApprovalsPage() {
         <div className="md:hidden divide-y divide-slate-150 bg-white">
           {loading ? (
             <div className="py-12 text-center text-slate-500">
-              <Loader2 className="h-8 w-8 mx-auto text-slate-350 mb-3 animate-spin" />
+              <Loader2 className="h-8 w-8 mx-auto text-slate-355 mb-3 animate-spin" />
               <p className="text-sm font-semibold">Loading...</p>
             </div>
           ) : entries.length === 0 ? (
@@ -390,7 +419,7 @@ export default function UnblacklistApprovalsPage() {
                       </div>
                       <div className="text-right">
                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Requested On</span>
-                        <span className="font-bold text-slate-650 block mt-0.5">
+                        <span className="font-bold text-slate-655 block mt-0.5">
                           {new Date(entry.blacklisted_at || entry.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                         </span>
                       </div>
@@ -403,9 +432,7 @@ export default function UnblacklistApprovalsPage() {
         </div>
       </div>
 
-      {/* ════════════════════════════════════════════ */}
-      {/* DETAIL + APPROVAL MODAL                      */}
-      {/* ════════════════════════════════════════════ */}
+      {/* ── DETAIL + APPROVAL MODAL ── */}
       {isDetailOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-white/95 backdrop-blur-xl w-full max-w-2xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
@@ -504,7 +531,7 @@ export default function UnblacklistApprovalsPage() {
                         const action = log.action;
                         let IconComp = CircleDot;
                         let iconColor = "text-slate-550";
-                        let bgBorderClass = "bg-slate-50 border-slate-300";
+                        let bgBorderClass = "bg-slate-55 border-slate-300";
 
                         if (action.includes("BLACKLISTED") && !action.includes("UN")) {
                           IconComp = ShieldBan;
@@ -550,7 +577,7 @@ export default function UnblacklistApprovalsPage() {
                                 {log.performed_by_name || "System"} • {new Date(log.createdAt).toLocaleString("en-IN")}
                               </p>
                               {log.remarks && (
-                                <p className="text-xs text-slate-600 mt-1 bg-slate-50 p-2 rounded-xl border border-slate-100/80 leading-relaxed">{log.remarks}</p>
+                                <p className="text-xs text-slate-650 mt-1 bg-slate-50 p-2 rounded-xl border border-slate-100/80 leading-relaxed">{log.remarks}</p>
                               )}
                             </div>
                           </div>
@@ -575,7 +602,7 @@ export default function UnblacklistApprovalsPage() {
                         value={rejectRemarks}
                         onChange={(e) => setRejectRemarks(e.target.value)}
                         placeholder="Provide reason if rejecting this request..."
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-[#ff6b00] resize-none"
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-500 resize-none"
                       />
                     </div>
 

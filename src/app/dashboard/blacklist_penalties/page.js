@@ -53,6 +53,13 @@ export default function BlacklistPenaltiesPage() {
   const [paymentMethod, setPaymentMethod] = useState("wallet"); // 'wallet' or 'gateway'
   const [paymentProcessing, setPaymentProcessing] = useState(false);
 
+  // Gateway simulator states
+  const [cardName, setCardName] = useState("");
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
+  const [paymentRemarks, setPaymentRemarks] = useState("");
+
   // Unblock Request Modal States
   const [unblockModalOpen, setUnblockModalOpen] = useState(false);
   const [unblockRemarks, setUnblockRemarks] = useState("");
@@ -89,20 +96,49 @@ export default function BlacklistPenaltiesPage() {
   const openPaymentModal = (entry) => {
     setSelectedEntry(entry);
     setPaymentMethod("wallet");
+    setCardName("");
+    setCardNumber("");
+    setCardExpiry("");
+    setCardCvv("");
+    setPaymentRemarks("");
     setPaymentModalOpen(true);
   };
 
   const handleProcessPayment = async () => {
     if (!selectedEntry) return;
+
+    // Validate card details when gateway is selected
+    if (paymentMethod === "gateway") {
+      if (!cardName.trim()) {
+        toast.warning("Please enter the cardholder name.");
+        return;
+      }
+      if (cardNumber.replace(/\s/g, "").length < 16) {
+        toast.warning("Please enter a valid 16-digit card number.");
+        return;
+      }
+      if (!cardExpiry.trim() || cardExpiry.length < 5) {
+        toast.warning("Please enter a valid card expiry in MM/YY format.");
+        return;
+      }
+      if (!cardCvv.trim() || cardCvv.length < 3) {
+        toast.warning("Please enter a valid 3-digit CVV.");
+        return;
+      }
+    }
+
     setPaymentProcessing(true);
     try {
-      const remarks = `Paid via ${paymentMethod === "wallet" ? "Agent Wallet" : "Payment Gateway"}`;
+      const txnId = `TXN-${paymentMethod === "gateway" ? "GW" : "WL"}-${Date.now()}`;
+      const remarks =
+        paymentRemarks.trim() ||
+        `Paid via ${paymentMethod === "wallet" ? "Agent Wallet" : "Payment Gateway"}`;
       const res = await axios.patch(
-        `${ADMIN_API}/blacklist/${selectedEntry.id}/pay-penalty`,
+      `${ADMIN_API}/blacklist/${selectedEntry.id}/pay-penalty`,
         {
           remarks,
           payment_method: paymentMethod.toUpperCase(),
-          transaction_id: `TXN-${Date.now()}`,
+          transaction_id: txnId,
         },
         { headers: getAuthHeaders() }
       );
@@ -110,6 +146,11 @@ export default function BlacklistPenaltiesPage() {
       if (res.data.success) {
         toast.success("Penalty paid successfully!");
         setPaymentModalOpen(false);
+        setCardName("");
+        setCardNumber("");
+        setCardExpiry("");
+        setCardCvv("");
+        setPaymentRemarks("");
         fetchEntries();
       }
     } catch (err) {
@@ -153,11 +194,11 @@ export default function BlacklistPenaltiesPage() {
 
   // Filter entries
   const companyBlacklistEntry = entries.find(
-    (e) => e.entity_type === "COMPANY" && e.status !== "UNBLACKLISTED"
+    (e) => e.entity_type === "COMPANY" && ["BLACKLISTED", "UNBLACKLIST_REQUESTED", "PENDING_BLACKLIST"].includes(e.status)
   );
 
-  const activeViolations = entries.filter((e) => e.status !== "UNBLACKLISTED");
-  const historicalViolations = entries.filter((e) => e.status === "UNBLACKLISTED");
+  const activeViolations = entries.filter((e) => ["BLACKLISTED", "UNBLACKLIST_REQUESTED", "PENDING_BLACKLIST"].includes(e.status));
+  const historicalViolations = entries.filter((e) => ["UNBLACKLISTED", "REJECTED"].includes(e.status));
 
   const visibleEntries = activeTab === "active" ? activeViolations : historicalViolations;
 
@@ -375,6 +416,10 @@ export default function BlacklistPenaltiesPage() {
                               ? "bg-red-50 text-red-700 border-red-200"
                               : entry.status === "UNBLACKLIST_REQUESTED"
                               ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : entry.status === "PENDING_BLACKLIST"
+                              ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : entry.status === "REJECTED"
+                              ? "bg-rose-50 text-rose-700 border-rose-200"
                               : "bg-emerald-50 text-emerald-700 border-emerald-200"
                           }`}
                         >
@@ -384,6 +429,10 @@ export default function BlacklistPenaltiesPage() {
                                 ? "bg-red-500"
                                 : entry.status === "UNBLACKLIST_REQUESTED"
                                 ? "bg-amber-500"
+                                : entry.status === "PENDING_BLACKLIST"
+                                ? "bg-blue-500"
+                                : entry.status === "REJECTED"
+                                ? "bg-rose-500"
                                 : "bg-emerald-500"
                             }`}
                           />
@@ -391,6 +440,10 @@ export default function BlacklistPenaltiesPage() {
                             ? "Suspended"
                             : entry.status === "UNBLACKLIST_REQUESTED"
                             ? "Appeal Pending"
+                            : entry.status === "PENDING_BLACKLIST"
+                            ? "Pending Review"
+                            : entry.status === "REJECTED"
+                            ? "Rejected"
                             : "Reinstated"}
                         </span>
                       </td>
@@ -414,10 +467,12 @@ export default function BlacklistPenaltiesPage() {
                               <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
                               Appeal Release
                             </button>
-                          ) : (
+                          ) : entry.status === "UNBLACKLIST_REQUESTED" ? (
                             <span className="text-xs text-slate-400 font-semibold italic flex items-center justify-center gap-1">
                               <Clock className="h-3.5 w-3.5" /> Appeal Pending
                             </span>
+                          ) : (
+                            <span className="text-xs text-slate-400 font-semibold italic">No Actions</span>
                           )}
                         </td>
                       )}
@@ -492,6 +547,65 @@ export default function BlacklistPenaltiesPage() {
                   </button>
                 </div>
               </div>
+
+              {/* Payment Gateway Card Simulator */}
+              {paymentMethod === "gateway" && (
+                <div className="space-y-2.5 border border-slate-200 bg-gradient-to-b from-slate-50 to-white rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="h-6 w-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-sm" />
+                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">Secure Card Payment Simulator</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Cardholder Name"
+                    value={cardName}
+                    onChange={(e) => setCardName(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-[#0a1e4d]/20 focus:border-[#0a1e4d] outline-none transition-all"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Card Number (e.g. 4111 1111 1111 1111)"
+                    value={cardNumber}
+                    onChange={(e) =>
+                      setCardNumber(
+                        e.target.value
+                          .replace(/\D/g, "")
+                          .replace(/(\d{4})/g, "$1 ")
+                          .trim()
+                          .substring(0, 19)
+                      )
+                    }
+                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-mono tracking-wider focus:ring-2 focus:ring-[#0a1e4d]/20 focus:border-[#0a1e4d] outline-none transition-all"
+                  />
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <input
+                      type="text"
+                      placeholder="MM/YY"
+                      value={cardExpiry}
+                      onChange={(e) => setCardExpiry(e.target.value.substring(0, 5))}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-[#0a1e4d]/20 focus:border-[#0a1e4d] outline-none transition-all"
+                    />
+                    <input
+                      type="password"
+                      placeholder="CVV"
+                      value={cardCvv}
+                      onChange={(e) => setCardCvv(e.target.value.substring(0, 3))}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-[#0a1e4d]/20 focus:border-[#0a1e4d] outline-none transition-all"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Payment Remarks (optional)"
+                    value={paymentRemarks}
+                    onChange={(e) => setPaymentRemarks(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-[#0a1e4d]/20 focus:border-[#0a1e4d] outline-none transition-all"
+                  />
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] font-semibold text-slate-400">256-bit SSL encryption · All data simulated · No real transaction</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2 shrink-0">
@@ -506,15 +620,25 @@ export default function BlacklistPenaltiesPage() {
                 type="button"
                 disabled={paymentProcessing}
                 onClick={handleProcessPayment}
-                className="px-5 py-2.5 bg-[#0a1e4d] hover:bg-[#0a1e4d]/90 text-white font-bold rounded-xl transition-colors text-xs flex items-center gap-1.5 shadow-md shadow-blue-900/10"
+                className={`px-5 py-2.5 font-bold rounded-xl transition-all text-xs flex items-center gap-1.5 shadow-md text-white ${
+                  paymentMethod === "gateway"
+                    ? "bg-gradient-to-r from-slate-900 to-[#0a1e4d] hover:from-slate-800 hover:to-[#0a1e4d]/90 shadow-slate-900/10"
+                    : "bg-[#0a1e4d] hover:bg-[#0a1e4d]/90 shadow-blue-900/10"
+                }`}
               >
                 {paymentProcessing ? (
                   <>
                     <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                     Processing...
                   </>
+                ) : paymentMethod === "gateway" ? (
+                  <>
+                    <CreditCard className="h-3.5 w-3.5" />
+                    Authorize ₹{parseFloat(selectedEntry.penalty_amount).toLocaleString("en-IN")}
+                  </>
                 ) : (
                   <>
+                    <Wallet className="h-3.5 w-3.5" />
                     Pay ₹{parseFloat(selectedEntry.penalty_amount).toLocaleString("en-IN")}
                   </>
                 )}
