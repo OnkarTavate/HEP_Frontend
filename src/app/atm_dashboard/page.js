@@ -148,8 +148,8 @@ export default function ATMBlacklistPage() {
     return null;
   });
 
-  const canApproveBlacklist = 
-    currentUser?.role?.toLowerCase() === "atm" || 
+  const canApproveBlacklist =
+    currentUser?.role?.toLowerCase() === "atm" ||
     currentUser?.username?.toLowerCase() === "atm";
 
   // Create Modal & Form
@@ -178,6 +178,9 @@ export default function ATMBlacklistPage() {
   const [detailEntry, setDetailEntry] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  // In-page image preview (lightbox) — avoids opening evidence photos in a new tab
+  const [imagePreview, setImagePreview] = useState(null);
+
   // NOTE: Payment checkout has been removed from ATM portal.
   // Penalty payments must be made by the company via the Company Dashboard.
 
@@ -185,6 +188,7 @@ export default function ATMBlacklistPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [complianceNotes, setComplianceNotes] = useState("");
   const [actionRemarks, setActionRemarks] = useState("");
+  const [directRemarks, setDirectRemarks] = useState("");
 
   const getAuthHeaders = () => ({
     Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
@@ -278,10 +282,10 @@ export default function ATMBlacklistPage() {
         pos.coords.accuracy <= 10
           ? "Excellent"
           : pos.coords.accuracy <= 30
-          ? "Good"
-          : pos.coords.accuracy <= 80
-          ? "Fair"
-          : "Poor";
+            ? "Good"
+            : pos.coords.accuracy <= 80
+              ? "Fair"
+              : "Poor";
       setGeotagStatus(
         `✅ Tagged (${quality}) · Lat ${lat}, Lon ${lon} · ±${acc}m`
       );
@@ -474,6 +478,10 @@ export default function ATMBlacklistPage() {
       toast.warning("Please enter a valid penalty amount");
       return;
     }
+    if (createForm.has_penalty && parseFloat(createForm.penalty_amount) >= 9999999999) {
+      toast.warning("Penalty amount exceeds maximum allowed limit (₹9,999,999,999)");
+      return;
+    }
 
     setCreateLoading(true);
     try {
@@ -651,17 +659,22 @@ export default function ATMBlacklistPage() {
 
   /* ── Direct release unblocking (ATM Privilege) ── */
   const handleDirectUnblock = async () => {
+    if (!directRemarks.trim()) {
+      toast.warning("Please provide a justification / remarks for the direct release");
+      return;
+    }
     setActionLoading(true);
     try {
       const res = await axios.patch(
         `${ADMIN_API}/blacklist/${detailEntry.id}/direct-unblock`,
-        { remarks: actionRemarks || "Directly unblocked & reinstated by ATM" },
+        { remarks: directRemarks.trim() },
         { headers: getAuthHeaders() }
       );
       if (res.data.success) {
         toast.success("Entity directly unblocked and released!");
         setDetailEntry(res.data.data);
-        setActionRemarks("");
+        setDirectRemarks("");
+        setIsDetailOpen(false);
         fetchEntries();
         fetchStats();
       }
@@ -839,16 +852,14 @@ export default function ATMBlacklistPage() {
           <button
             key={tab.id}
             onClick={() => { setActiveTab(tab.id); setSearchInput(""); setEntityFilter(""); }}
-            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all whitespace-nowrap ${
-              activeTab === tab.id
-                ? "bg-slate-800 text-white shadow"
-                : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-            }`}
+            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all whitespace-nowrap ${activeTab === tab.id
+              ? "bg-slate-800 text-white shadow"
+              : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+              }`}
           >
             {tab.label}
-            <span className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
-              activeTab === tab.id ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
-            }`}>
+            <span className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${activeTab === tab.id ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
+              }`}>
               {tab.count}
             </span>
           </button>
@@ -1121,12 +1132,11 @@ export default function ATMBlacklistPage() {
                       type="button"
                       disabled={type.disabled}
                       onClick={() => handleEntityTypeChange(type.value)}
-                      className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 text-xs font-medium transition-all gap-1.5 ${
-                        type.disabled ? "opacity-40 cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300" :
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 text-xs font-medium transition-all gap-1.5 ${type.disabled ? "opacity-40 cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300" :
                         createForm.entity_type === type.value
                           ? "border-red-500 bg-red-50 text-red-700 font-bold"
                           : "border-slate-200 bg-white text-slate-650 hover:border-slate-350"
-                      }`}
+                        }`}
                     >
                       <type.icon className="h-5 w-5 shrink-0" />
                       <span className="text-[10px] tracking-tight">{type.label}</span>
@@ -1157,7 +1167,7 @@ export default function ATMBlacklistPage() {
                 {(() => {
                   const type = createForm.entity_type;
                   const hasValue = !!createForm.identifier.trim();
-                  
+
                   let isValid = true;
                   let helperText = "";
                   let formatText = "";
@@ -1181,8 +1191,8 @@ export default function ATMBlacklistPage() {
 
                   let borderClass = "border-slate-200 focus:border-red-400 focus:ring-red-500/10";
                   if (hasValue) {
-                    borderClass = isValid 
-                      ? "border-emerald-500 focus:border-emerald-600 focus:ring-emerald-500/10" 
+                    borderClass = isValid
+                      ? "border-emerald-500 focus:border-emerald-600 focus:ring-emerald-500/10"
                       : "border-red-500 focus:border-red-600 focus:ring-red-500/10";
                   }
 
@@ -1292,13 +1302,12 @@ export default function ATMBlacklistPage() {
                     type="button"
                     onClick={captureGeotag}
                     disabled={gpsLoading}
-                    className={`text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95 shadow-sm ${
-                      gpsLoading
-                        ? "bg-amber-50 border-amber-200 text-amber-700 cursor-wait"
-                        : createForm.geotag_latitude
+                    className={`text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95 shadow-sm ${gpsLoading
+                      ? "bg-amber-50 border-amber-200 text-amber-700 cursor-wait"
+                      : createForm.geotag_latitude
                         ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
                         : "bg-red-50/80 border-red-200/50 text-red-700 hover:bg-red-100/80"
-                    }`}
+                      }`}
                   >
                     {gpsLoading ? (
                       <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Acquiring GPS...</>
@@ -1311,13 +1320,12 @@ export default function ATMBlacklistPage() {
                 </div>
 
                 {/* GPS Status Display */}
-                <div className={`p-3.5 rounded-xl border transition-all duration-300 ${
-                  gpsLoading
-                    ? "bg-amber-50/50 border-amber-200"
-                    : createForm.geotag_latitude
+                <div className={`p-3.5 rounded-xl border transition-all duration-300 ${gpsLoading
+                  ? "bg-amber-50/50 border-amber-200"
+                  : createForm.geotag_latitude
                     ? "bg-emerald-50/30 border-emerald-200"
                     : "bg-slate-50/50 border-slate-200"
-                }`}>
+                  }`}>
                   <div className="flex items-start gap-2.5">
                     {gpsLoading ? (
                       <div className="mt-0.5 shrink-0">
@@ -1343,23 +1351,21 @@ export default function ATMBlacklistPage() {
                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Longitude</p>
                             <p className="text-[11px] font-black text-[#0a1e4d] font-mono">{createForm.geotag_longitude}</p>
                           </div>
-                          <div className={`rounded-lg border px-2 py-1 text-center ${
-                            parseFloat(createForm.geotag_accuracy) <= 10
-                              ? "bg-emerald-50 border-emerald-200"
-                              : parseFloat(createForm.geotag_accuracy) <= 30
+                          <div className={`rounded-lg border px-2 py-1 text-center ${parseFloat(createForm.geotag_accuracy) <= 10
+                            ? "bg-emerald-50 border-emerald-200"
+                            : parseFloat(createForm.geotag_accuracy) <= 30
                               ? "bg-green-50 border-green-200"
                               : parseFloat(createForm.geotag_accuracy) <= 80
-                              ? "bg-amber-50 border-amber-200"
-                              : "bg-red-50 border-red-200"
-                          }`}>
+                                ? "bg-amber-50 border-amber-200"
+                                : "bg-red-50 border-red-200"
+                            }`}>
                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Accuracy</p>
-                            <p className={`text-[11px] font-black font-mono ${
-                              parseFloat(createForm.geotag_accuracy) <= 30
-                                ? "text-emerald-700"
-                                : parseFloat(createForm.geotag_accuracy) <= 80
+                            <p className={`text-[11px] font-black font-mono ${parseFloat(createForm.geotag_accuracy) <= 30
+                              ? "text-emerald-700"
+                              : parseFloat(createForm.geotag_accuracy) <= 80
                                 ? "text-amber-700"
                                 : "text-red-700"
-                            }`}>±{createForm.geotag_accuracy}m</p>
+                              }`}>±{createForm.geotag_accuracy}m</p>
                           </div>
                         </div>
                       )}
@@ -1557,14 +1563,13 @@ export default function ATMBlacklistPage() {
                   {detailEntry.supporting_document_path && (
                     <div className="col-span-2">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Supporting Photo/Evidence</p>
-                      <a
-                        href={`${ADMIN_API.replace("/api", "")}/${detailEntry.supporting_document_path}`}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => setImagePreview(`${ADMIN_API.replace("/api", "")}/${detailEntry.supporting_document_path}`)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-xs font-bold text-red-700 hover:bg-red-100 mt-1"
                       >
                         <Camera className="h-4 w-4" /> View Geotagged Photo
-                      </a>
+                      </button>
                     </div>
                   )}
                   <div className="col-span-2">
@@ -1588,6 +1593,49 @@ export default function ATMBlacklistPage() {
                 {/* ── Action Panels (context-dependent) ── */}
                 {detailEntry.status === "BLACKLISTED" && (
                   <div className="space-y-3">
+                    {/* ATM DIRECT UNBLOCK — per spec: "ATM Pass Section can unblock with or without penalty" */}
+                    {canApproveBlacklist && (
+                      <div className="bg-gradient-to-br from-red-50 to-rose-50 border-2 border-red-300 rounded-xl p-5 space-y-4 shadow-sm">
+                        <div className="flex items-center gap-2 text-red-800 font-bold text-sm">
+                          <ShieldCheck className="h-5 w-5 text-red-600" />
+                          ATM Pass Section — Direct Release Authority
+                        </div>
+                        <p className="text-xs text-red-700 leading-relaxed">
+                          As the <strong>ATM Pass Section</strong>, you have the authority to directly unblock and release this entity <strong>with or without penalty settlement</strong>. Provide justification below and click to release immediately.
+                        </p>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Release Justification / Remarks <span className="text-red-500">*</span>
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={directRemarks}
+                            onChange={(e) => setDirectRemarks(e.target.value)}
+                            placeholder="State reason for direct release (e.g., 'Senior Traffic Dept authorized', 'Penalty waived by authority', 'Compliance verified')"
+                            className="w-full px-3 py-2.5 bg-white border border-red-200 rounded-xl text-sm focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500/10 resize-none font-medium text-slate-800"
+                            required
+                          />
+                        </div>
+                        <button
+                          onClick={handleDirectUnblock}
+                          disabled={actionLoading}
+                          className="w-full py-3 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-700 hover:to-rose-800 text-white text-xs font-bold tracking-wider uppercase rounded-xl transition-all shadow-lg shadow-red-500/20 active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2"
+                        >
+                          {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                          Direct Release & Unblock Entity
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Divider if both ATM panel and standard workflow are shown */}
+                    {canApproveBlacklist && (
+                      <div className="flex items-center gap-3 py-2">
+                        <div className="flex-1 h-px bg-slate-200"></div>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Or use standard workflow below</span>
+                        <div className="flex-1 h-px bg-slate-200"></div>
+                      </div>
+                    )}
+
                     {/* Step 1: Penalty notice (ATM cannot pay — company must pay via Company Portal) */}
                     {detailEntry.has_penalty && detailEntry.penalty_status === "PENDING" && (
                       <div className="bg-orange-50 border border-orange-300 rounded-xl p-4 space-y-2">
@@ -1808,6 +1856,49 @@ export default function ATMBlacklistPage() {
                 )}
               </div>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════ */}
+      {/* IMAGE PREVIEW LIGHTBOX (in-page, no new tab)  */}
+      {/* ════════════════════════════════════════════ */}
+      {imagePreview && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          onClick={() => setImagePreview(null)}
+        >
+          <div
+            className="relative max-w-3xl w-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-white/90 bg-white/10 px-3 py-1.5 rounded-lg">
+                <Camera className="h-4 w-4" /> Geotagged Evidence Photo
+              </span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={imagePreview}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-white/90 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-all"
+                >
+                  <Download className="h-4 w-4" /> Open Full Size
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setImagePreview(null)}
+                  className="text-white/80 hover:text-white active:scale-90 transition-all bg-white/10 p-1.5 rounded-lg"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <img
+              src={imagePreview}
+              alt="Geotagged evidence"
+              className="w-full h-auto max-h-[80vh] object-contain rounded-2xl border border-white/20 shadow-2xl bg-white"
+            />
           </div>
         </div>
       )}

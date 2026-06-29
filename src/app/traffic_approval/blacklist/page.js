@@ -163,6 +163,9 @@ export default function TrafficBlacklistPage() {
   const [detailEntry, setDetailEntry] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  // In-page image lightbox — avoids opening evidence photos in a new tab
+  const [imagePreview, setImagePreview] = useState(null);
+
   // Action states
   const [reinstatementJustification, setReinstatementJustification] = useState("");
   const [actionRemarks, setActionRemarks] = useState("");
@@ -260,10 +263,10 @@ export default function TrafficBlacklistPage() {
         pos.coords.accuracy <= 10
           ? "Excellent"
           : pos.coords.accuracy <= 30
-          ? "Good"
-          : pos.coords.accuracy <= 80
-          ? "Fair"
-          : "Poor";
+            ? "Good"
+            : pos.coords.accuracy <= 80
+              ? "Fair"
+              : "Poor";
       setGeotagStatus(
         `✅ Tagged (${quality}) · Lat ${lat}, Lon ${lon} · ±${acc}m`
       );
@@ -425,7 +428,7 @@ export default function TrafficBlacklistPage() {
       return;
     }
     if (!validateOfficer(createForm.authorizing_officer)) {
-      toast.warning("Authorizing Officer name must be 3-50 characters long and contain only letters, spaces, and dots");
+      toast.warning("Authorizdczdzing Officer name must be 3-50 characters long and contain only letters, spaces, and dots");
       return;
     }
     if (createForm.reason_code === "001") {
@@ -703,17 +706,15 @@ export default function TrafficBlacklistPage() {
           <button
             key={tab.id}
             onClick={() => { setActiveTab(tab.id); setSearchInput(""); setEntityFilter(""); }}
-            className={`relative px-6 py-3 text-sm font-bold rounded-t-xl transition-all whitespace-nowrap ${
-              activeTab === tab.id
-                ? "bg-[#0a1e4d] text-white shadow"
-                : "text-slate-500 hover:text-[#0a1e4d] hover:bg-slate-100"
-            }`}
+            className={`relative px-6 py-3 text-sm font-bold rounded-t-xl transition-all whitespace-nowrap ${activeTab === tab.id
+              ? "bg-[#0a1e4d] text-white shadow"
+              : "text-slate-500 hover:text-[#0a1e4d] hover:bg-slate-100"
+              }`}
           >
             {tab.label}
             {tab.count !== undefined && (
-              <span className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
-                activeTab === tab.id ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
-              }`}>
+              <span className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${activeTab === tab.id ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
+                }`}>
                 {tab.count}
               </span>
             )}
@@ -983,11 +984,10 @@ export default function TrafficBlacklistPage() {
                         key={t.value}
                         type="button"
                         onClick={() => handleEntityTypeChange(t.value)}
-                        className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all gap-1.5 ${
-                          isSelected
-                            ? "border-red-600 bg-red-50/20 text-red-700 font-bold"
-                            : "border-slate-200 bg-white text-slate-500 hover:border-slate-350"
-                        }`}
+                        className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all gap-1.5 ${isSelected
+                          ? "border-red-600 bg-red-50/20 text-red-700 font-bold"
+                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-350"
+                          }`}
                       >
                         <IconComp className="h-5 w-5" />
                         <span className="text-[10px] tracking-tight">{t.label}</span>
@@ -1019,7 +1019,7 @@ export default function TrafficBlacklistPage() {
                 {(() => {
                   const type = createForm.entity_type;
                   const hasValue = !!createForm.identifier.trim();
-                  
+
                   let isValid = true;
                   let helperText = "";
                   let formatText = "";
@@ -1043,8 +1043,8 @@ export default function TrafficBlacklistPage() {
 
                   let borderClass = "border-slate-200 focus:border-red-400 focus:ring-red-500/10";
                   if (hasValue) {
-                    borderClass = isValid 
-                      ? "border-emerald-500 focus:border-emerald-600 focus:ring-emerald-500/10" 
+                    borderClass = isValid
+                      ? "border-emerald-500 focus:border-emerald-600 focus:ring-emerald-500/10"
                       : "border-red-500 focus:border-red-600 focus:ring-red-500/10";
                   }
 
@@ -1136,12 +1136,18 @@ export default function TrafficBlacklistPage() {
 
               {/* Authorizing Officer */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Authorizing Officer</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Authorizing Officer
+                  <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-full normal-case tracking-normal">
+                    🔒 Auto-filled · Read-only
+                  </span>
+                </label>
                 <input
                   type="text"
                   value={createForm.authorizing_officer}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, authorizing_officer: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 focus:outline-none transition-all"
+                  readOnly
+                  tabIndex={-1}
+                  className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500 cursor-not-allowed select-none outline-none"
                   required
                 />
               </div>
@@ -1154,13 +1160,12 @@ export default function TrafficBlacklistPage() {
                     type="button"
                     onClick={captureGeotag}
                     disabled={gpsLoading}
-                    className={`text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95 shadow-sm ${
-                      gpsLoading
-                        ? "bg-amber-50 border-amber-200 text-amber-700 cursor-wait"
-                        : createForm.geotag_latitude
+                    className={`text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95 shadow-sm ${gpsLoading
+                      ? "bg-amber-50 border-amber-200 text-amber-700 cursor-wait"
+                      : createForm.geotag_latitude
                         ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
                         : "bg-red-50/80 border-red-200/50 text-red-700 hover:bg-red-100/80"
-                    }`}
+                      }`}
                   >
                     {gpsLoading ? (
                       <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Acquiring GPS...</>
@@ -1172,13 +1177,12 @@ export default function TrafficBlacklistPage() {
                   </button>
                 </div>
 
-                <div className={`p-3.5 rounded-xl border transition-all duration-300 ${
-                  gpsLoading
-                    ? "bg-amber-50/50 border-amber-200"
-                    : createForm.geotag_latitude
+                <div className={`p-3.5 rounded-xl border transition-all duration-300 ${gpsLoading
+                  ? "bg-amber-50/50 border-amber-200"
+                  : createForm.geotag_latitude
                     ? "bg-emerald-50/30 border-emerald-200"
                     : "bg-slate-50/50 border-slate-200"
-                }`}>
+                  }`}>
                   <div className="flex items-start gap-2.5">
                     {gpsLoading ? (
                       <div className="mt-0.5 shrink-0">
@@ -1204,23 +1208,21 @@ export default function TrafficBlacklistPage() {
                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Longitude</p>
                             <p className="text-[11px] font-black text-[#0a1e4d] font-mono">{createForm.geotag_longitude}</p>
                           </div>
-                          <div className={`rounded-lg border px-2 py-1 text-center ${
-                            parseFloat(createForm.geotag_accuracy) <= 10
-                              ? "bg-emerald-50 border-emerald-200"
-                              : parseFloat(createForm.geotag_accuracy) <= 30
+                          <div className={`rounded-lg border px-2 py-1 text-center ${parseFloat(createForm.geotag_accuracy) <= 10
+                            ? "bg-emerald-50 border-emerald-200"
+                            : parseFloat(createForm.geotag_accuracy) <= 30
                               ? "bg-green-50 border-green-200"
                               : parseFloat(createForm.geotag_accuracy) <= 80
-                              ? "bg-amber-50 border-amber-200"
-                              : "bg-red-50 border-red-200"
-                          }`}>
+                                ? "bg-amber-50 border-amber-200"
+                                : "bg-red-50 border-red-200"
+                            }`}>
                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Accuracy</p>
-                            <p className={`text-[11px] font-black font-mono ${
-                              parseFloat(createForm.geotag_accuracy) <= 30
-                                ? "text-emerald-700"
-                                : parseFloat(createForm.geotag_accuracy) <= 80
+                            <p className={`text-[11px] font-black font-mono ${parseFloat(createForm.geotag_accuracy) <= 30
+                              ? "text-emerald-700"
+                              : parseFloat(createForm.geotag_accuracy) <= 80
                                 ? "text-amber-700"
                                 : "text-red-700"
-                            }`}>±{createForm.geotag_accuracy}m</p>
+                              }`}>±{createForm.geotag_accuracy}m</p>
                           </div>
                         </div>
                       )}
@@ -1405,22 +1407,43 @@ export default function TrafficBlacklistPage() {
                     )}
                   </div>
                   {detailEntry.geotag_latitude && (
-                    <div className="col-span-2 flex items-center gap-1 text-xs text-slate-600 font-semibold bg-slate-200/50 p-2 rounded border border-slate-200">
-                      <MapPin className="h-4 w-4 text-red-500 shrink-0" />
-                      <span>Evidence Geotag: Lat {detailEntry.geotag_latitude}, Lon {detailEntry.geotag_longitude} (±{detailEntry.geotag_accuracy}m)</span>
+                    <div className="col-span-2">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Evidence Geotag Location</p>
+                      <a
+                        href={`https://www.google.com/maps?q=${detailEntry.geotag_latitude},${detailEntry.geotag_longitude}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="group flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-400 rounded-xl px-3 py-2.5 transition-all"
+                      >
+                        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-blue-200 shadow-sm group-hover:shadow-md transition-all shrink-0">
+                          <MapPin className="h-4 w-4 text-red-500" />
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-blue-800">Open in Google Maps ↗</p>
+                          <p className="text-[10px] text-blue-600 font-mono truncate">
+                            {detailEntry.geotag_latitude}, {detailEntry.geotag_longitude}
+                            {detailEntry.geotag_accuracy ? ` · ±${detailEntry.geotag_accuracy}m` : ""}
+                          </p>
+                        </div>
+                      </a>
                     </div>
                   )}
                   {detailEntry.supporting_document_path && (
                     <div className="col-span-2">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Supporting Document / Evidence</p>
-                      <a
-                        href={`${ADMIN_API.replace("/api", "")}/${detailEntry.supporting_document_path}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-xs font-bold text-red-700 hover:bg-red-100 mt-1"
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Supporting Document / Evidence</p>
+                      <button
+                        type="button"
+                        onClick={() => setImagePreview(`${ADMIN_API.replace("/api", "")}/${detailEntry.supporting_document_path}`)}
+                        className="group flex items-center gap-3 w-full bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-300 rounded-xl px-3 py-2.5 transition-all text-left"
                       >
-                        <Camera className="h-4 w-4" /> View Supporting Doc/Photo
-                      </a>
+                        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-slate-200 group-hover:border-red-200 shadow-sm shrink-0 transition-all">
+                          <Camera className="h-4 w-4 text-red-500" />
+                        </span>
+                        <div>
+                          <p className="text-xs font-bold text-slate-700 group-hover:text-red-700 transition-colors">View Supporting Photo / Document</p>
+                          <p className="text-[10px] text-slate-400">Click to preview in-page</p>
+                        </div>
+                      </button>
                     </div>
                   )}
                   <div className="col-span-2">
@@ -1555,6 +1578,66 @@ export default function TrafficBlacklistPage() {
                 )}
               </div>
             ) : null}
+          </div>
+        </div>
+      )}
+      {/* IMAGE LIGHTBOX — in-page evidence photo preview */}
+      {imagePreview && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200 p-4"
+          onClick={() => setImagePreview(null)}
+        >
+          <div
+            className="relative max-w-3xl w-full animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header bar */}
+            <div className="flex items-center justify-between bg-slate-900/90 rounded-t-2xl px-4 py-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Camera className="h-4 w-4 text-red-400" />
+                <span className="text-sm font-bold text-white">Supporting Evidence Photo</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={imagePreview}
+                  download
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-lg transition-all"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Download className="h-3.5 w-3.5" /> Download
+                </a>
+                <button
+                  onClick={() => setImagePreview(null)}
+                  className="flex items-center justify-center w-8 h-8 bg-white/10 hover:bg-red-500/80 text-white rounded-lg transition-all"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            {/* Image */}
+            <div className="bg-slate-800 rounded-b-2xl overflow-hidden flex items-center justify-center min-h-[200px] max-h-[75vh]">
+              <img
+                src={imagePreview}
+                alt="Evidence document"
+                className="max-w-full max-h-[75vh] object-contain"
+                onError={(e) => {
+                  e.target.style.display = "none";
+                  e.target.nextSibling.style.display = "flex";
+                }}
+              />
+              <div className="hidden flex-col items-center gap-3 py-12 text-slate-400">
+                <FileText className="h-10 w-10" />
+                <p className="text-sm font-medium">Cannot preview this file type</p>
+                <a
+                  href={imagePreview}
+                  download
+                  className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-all"
+                >
+                  Download File
+                </a>
+              </div>
+            </div>
+            <p className="text-center text-xs text-white/40 mt-2">Click outside to close</p>
           </div>
         </div>
       )}

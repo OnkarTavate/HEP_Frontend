@@ -153,7 +153,7 @@ export default function TrafficLayout({ children }) {
     { name: "Pass Approvals", href: "/traffic_approval", icon: FileText },
     { name: "Company Approvals", href: "/traffic_approval/companies", icon: Building2 },
     { name: "Blacklist Management", href: "/traffic_approval/blacklist", icon: ShieldBan },
-    { name: "Unblacklist Approvals", href: "/traffic_approval/unblacklist", icon: ShieldCheck },
+    // { name: "Unblacklist Approvals", href: "/traffic_approval/unblacklist", icon: ShieldCheck },
     { name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users },
   ];
 

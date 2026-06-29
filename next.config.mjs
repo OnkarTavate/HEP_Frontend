@@ -2,6 +2,14 @@
 const nextConfig = {
   allowedDevOrigins: ['10.184.3.133', '14.139.180.41'],
 
+  webpack: (config) => {
+    // pdfjs-dist includes a Node-only code path that requires 'canvas'.
+    // In the browser bundle this module is never actually used, so we
+    // tell webpack to resolve it to an empty module.
+    config.resolve.alias.canvas = false;
+    return config;
+  },
+
   // Enable gzip/brotli compression on all responses
   compress: true,
 
