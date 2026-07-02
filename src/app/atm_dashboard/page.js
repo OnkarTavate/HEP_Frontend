@@ -97,8 +97,9 @@ const PENALTY_STATUS_CONFIG = {
 };
 
 const validateVehicleRegNo = (val) => {
+  // Only accept compact no-separator format: TN01AB1234 (2 letters + 1-2 digits + 1-3 letters + 4 digits)
   const clean = val.replace(/\s/g, "");
-  const regex = /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i;
+  const regex = /^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$/i;
   return regex.test(clean);
 };
 
@@ -437,7 +438,7 @@ export default function ATMBlacklistPage() {
       return;
     }
     if (createForm.entity_type === "VEHICLE" && !validateVehicleRegNo(createForm.identifier)) {
-      toast.warning("Please enter a valid Vehicle Registration Number (e.g. TN-01-AB-1234)");
+      toast.warning("Please enter a valid Vehicle Registration Number (e.g. TN01AB1234)");
       return;
     }
     if (createForm.entity_type === "PERSON" && !validateAadhar(createForm.identifier)) {
@@ -1173,8 +1174,8 @@ export default function ATMBlacklistPage() {
                   let formatText = "";
                   if (type === "VEHICLE") {
                     isValid = validateVehicleRegNo(createForm.identifier);
-                    formatText = "Format: TN-01-AB-1234 or TN01AB1234";
-                    helperText = isValid ? "Valid Vehicle Registration format" : "Invalid Vehicle Registration format";
+                    formatText = "Format: TN01AB1234 (no dashes or spaces)";
+                    helperText = isValid ? "Valid Vehicle Registration Number" : "Invalid format — use TN01AB1234 (no dashes/spaces)";
                   } else if (type === "PERSON") {
                     isValid = validateAadhar(createForm.identifier);
                     formatText = "Format: 12-digit Aadhaar Number";

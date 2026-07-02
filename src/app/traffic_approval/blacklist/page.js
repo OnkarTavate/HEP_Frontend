@@ -92,8 +92,9 @@ const PENALTY_STATUS_CONFIG = {
 };
 
 const validateVehicleRegNo = (val) => {
+  // Only accept compact no-separator format: TN01AB1234 (2 letters + 1-2 digits + 1-3 letters + 4 digits)
   const clean = val.replace(/\s/g, "");
-  const regex = /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i;
+  const regex = /^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$/i;
   return regex.test(clean);
 };
 
@@ -404,7 +405,7 @@ export default function TrafficBlacklistPage() {
       return;
     }
     if (createForm.entity_type === "VEHICLE" && !validateVehicleRegNo(createForm.identifier)) {
-      toast.warning("Please enter a valid Vehicle Registration Number (e.g. TN-01-AB-1234)");
+      toast.warning("Please enter a valid Vehicle Registration Number (e.g. TN01AB1234)");
       return;
     }
     if (createForm.entity_type === "PERSON" && !validateAadhar(createForm.identifier)) {
@@ -428,7 +429,7 @@ export default function TrafficBlacklistPage() {
       return;
     }
     if (!validateOfficer(createForm.authorizing_officer)) {
-      toast.warning("Authorizdczdzing Officer name must be 3-50 characters long and contain only letters, spaces, and dots");
+      toast.warning("Authorizing Officer name must be 3–50 characters and contain only letters, spaces, and dots");
       return;
     }
     if (createForm.reason_code === "001") {
@@ -442,7 +443,11 @@ export default function TrafficBlacklistPage() {
       }
     }
     if (createForm.has_penalty && (!createForm.penalty_amount || parseFloat(createForm.penalty_amount) <= 0)) {
-      toast.warning("Please enter a valid penalty amount");
+      toast.warning("Please enter a valid penalty amount greater than ₹0");
+      return;
+    }
+    if (createForm.has_penalty && parseFloat(createForm.penalty_amount) >= 9999999999) {
+      toast.warning("Penalty amount exceeds the maximum allowed limit (₹9,999,999,999)");
       return;
     }
 
@@ -612,54 +617,95 @@ export default function TrafficBlacklistPage() {
   /* ── Export reports (CSV / MD) ── */
   const exportReport = (format) => {
     if (entries.length === 0) {
-      toast.warning("No records to export.");
+      toast.warning("No records to export. Please wait for data to load.");
       return;
     }
 
-    const timestamp = new Date().toISOString().split("T")[0];
-    const reportType = activeTab === "pending" ? "pending_blacklist_requests" : activeTab === "active" ? "active_blacklist" : "reinstated_history";
-    const filename = `${reportType}_report_${timestamp}.${format}`;
+    try {
+      const timestamp = new Date().toISOString().split("T")[0];
+      const reportType =
+        activeTab === "pending"
+          ? "pending_blacklist_requests"
+          : activeTab === "active"
+            ? "active_blacklist"
+            : "reinstated_history";
+      const filename = `${reportType}_report_${timestamp}.${format}`;
 
-    let fileContent = "";
+      // Helper: properly escape a value for CSV (RFC 4180)
+      const escapeCSV = (val) => {
+        const str = val === null || val === undefined ? "" : String(val);
+        // Always wrap in quotes; escape internal quotes by doubling them
+        return `"${str.replace(/"/g, '""')}"`;
+      };
 
-    if (format === "csv") {
-      const headers = ["ID", "Type", "Identifier", "Name", "Reason", "Reason Code", "Penalty", "Penalty Status", "Status", "Date"];
-      const rows = entries.map((e) => [
-        e.id,
-        e.entity_type,
-        e.identifier,
-        e.entity_name || "—",
-        e.reason.replace(/"/g, '""'),
-        e.reason_code || "N/A",
-        e.has_penalty ? e.penalty_amount : 0,
-        e.penalty_status,
-        e.status,
-        new Date(e.blacklisted_at || e.createdAt).toLocaleDateString("en-IN"),
-      ]);
+      let fileContent = "";
 
-      fileContent = [headers.join(","), ...rows.map((r) => r.map((cell) => `"${cell}"`).join(","))].join("\n");
-    } else if (format === "md") {
-      const title = reportType.replace(/_/g, " ").toUpperCase();
-      fileContent = `# Port Access Control - ${title} Report (${timestamp})\n\n`;
-      fileContent += `| ID | Type | Identifier | Name | Reason | Reason Code | Penalty (₹) | Penalty Status | Status | Date |\n`;
-      fileContent += `|---|---|---|---|---|---|---|---|---|---|\n`;
+      if (format === "csv") {
+        // UTF-8 BOM so Excel opens the file correctly without garbling ₹ / Indian chars
+        const BOM = "\uFEFF";
+        const headers = [
+          "ID", "Type", "Identifier", "Name", "Reason",
+          "Reason Code", "Penalty (INR)", "Penalty Status", "Status", "Date",
+        ];
+        const rows = entries.map((e) => [
+          e.id,
+          e.entity_type,
+          e.identifier,
+          e.entity_name || "",
+          e.reason,
+          e.reason_code || "N/A",
+          e.has_penalty ? parseFloat(e.penalty_amount || 0).toFixed(2) : "0.00",
+          e.penalty_status || "NOT_APPLICABLE",
+          e.status,
+          new Date(e.blacklisted_at || e.createdAt).toLocaleDateString("en-IN"),
+        ]);
 
-      entries.forEach((e) => {
-        const name = e.entity_name || "—";
-        const amt = e.has_penalty ? parseFloat(e.penalty_amount).toLocaleString("en-IN") : "0";
-        const dateStr = new Date(e.blacklisted_at || e.createdAt).toLocaleDateString("en-IN");
-        fileContent += `| ${e.id} | ${e.entity_type} | **${e.identifier}** | ${name} | ${e.reason} | ${e.reason_code || "N/A"} | ${amt} | ${e.penalty_status} | ${e.status} | ${dateStr} |\n`;
-      });
+        fileContent =
+          BOM +
+          [headers.map(escapeCSV).join(","), ...rows.map((r) => r.map(escapeCSV).join(","))].join("\r\n");
+      } else if (format === "md") {
+        const title = reportType.replace(/_/g, " ").toUpperCase();
+        fileContent = `# Port Access Control — ${title} Report (${timestamp})\n\n`;
+        fileContent += `Generated: ${new Date().toLocaleString("en-IN")}  \n`;
+        fileContent += `Records: ${entries.length}\n\n`;
+        fileContent += `| ID | Type | Identifier | Name | Reason | Reason Code | Penalty (₹) | Penalty Status | Status | Date |\n`;
+        fileContent += `|---|---|---|---|---|---|---|---|---|---|\n`;
+
+        entries.forEach((e) => {
+          const name = (e.entity_name || "—").replace(/\|/g, "\\|");
+          const reason = (e.reason || "").replace(/\|/g, "\\|").replace(/\n/g, " ");
+          const amt = e.has_penalty
+            ? parseFloat(e.penalty_amount || 0).toLocaleString("en-IN")
+            : "0";
+          const dateStr = new Date(e.blacklisted_at || e.createdAt).toLocaleDateString("en-IN");
+          fileContent += `| ${e.id} | ${e.entity_type} | **${e.identifier}** | ${name} | ${reason} | ${e.reason_code || "N/A"} | ${amt} | ${e.penalty_status || "N/A"} | ${e.status} | ${dateStr} |\n`;
+        });
+      }
+
+      const mimeType =
+        format === "csv"
+          ? "text/csv;charset=utf-8;"
+          : "text/markdown;charset=utf-8;";
+
+      const blob = new Blob([fileContent], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      // Clean up — slight delay ensures the download fires before revoke
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 200);
+
+      toast.success(`Exported ${format.toUpperCase()} · ${entries.length} records · ${filename}`);
+    } catch (err) {
+      console.error("Export failed:", err);
+      toast.error("Export failed. Please try again.");
     }
-
-    const blob = new Blob([fileContent], { type: format === "csv" ? "text/csv;charset=utf-8;" : "text/markdown;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success(`Exported ${format.toUpperCase()} successfully: ${filename}`);
   };
 
   const getEntityConfig = (type) =>
@@ -825,6 +871,7 @@ export default function TrafficBlacklistPage() {
                       key={entry.id}
                       onClick={() => openDetail(entry.id)}
                       className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                      data-id={entry.id}
                     >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2">
@@ -895,6 +942,9 @@ export default function TrafficBlacklistPage() {
                   key={entry.id}
                   onClick={() => openDetail(entry.id)}
                   className="p-4 space-y-3 hover:bg-slate-50/50 active:bg-slate-50 transition-colors cursor-pointer text-left"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(ev) => ev.key === "Enter" && openDetail(entry.id)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
@@ -1025,8 +1075,8 @@ export default function TrafficBlacklistPage() {
                   let formatText = "";
                   if (type === "VEHICLE") {
                     isValid = validateVehicleRegNo(createForm.identifier);
-                    formatText = "Format: TN-01-AB-1234 or TN01AB1234";
-                    helperText = isValid ? "Valid Vehicle Registration format" : "Invalid Vehicle Registration format";
+                    formatText = "Format: TN01AB1234 (no dashes or spaces)";
+                    helperText = isValid ? "Valid Vehicle Registration Number" : "Invalid format — use TN01AB1234 (no dashes/spaces)";
                   } else if (type === "PERSON") {
                     isValid = validateAadhar(createForm.identifier);
                     formatText = "Format: 12-digit Aadhaar Number";

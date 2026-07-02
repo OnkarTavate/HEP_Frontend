@@ -175,7 +175,23 @@ const StatCard = memo(function StatCard({
   const isPrimary = accent === "primary";
   return (
     <Card className={isPrimary ? cardShellPrimary : cardShell}>
-      <CardHeader className="pb-3">
+      {isPrimary && (
+        <svg
+          aria-hidden
+          viewBox="0 0 400 240"
+          preserveAspectRatio="xMidYMid meet"
+          className="pointer-events-none absolute bottom-0 right-0 h-32 w-3/4 text-white/25"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="11"
+          strokeLinecap="round"
+        >
+          <path d="M150,70 q22,-22 44,0 t44,0 t44,0 t44,0" />
+          <path d="M150,120 q22,-22 44,0 t44,0 t44,0 t44,0" />
+          <path d="M150,170 q22,-22 44,0 t44,0 t44,0 t44,0" />
+        </svg>
+      )}
+      <CardHeader className="pb-3 relative">
         <div className="flex items-center justify-between">
           <div
             className={
@@ -201,7 +217,7 @@ const StatCard = memo(function StatCard({
           )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="relative">
         <p
           className={
             isPrimary
@@ -1216,8 +1232,8 @@ export default function DashboardPage() {
             icon={CheckCircle}
             label="Active Passes"
             value={statsLoading ? "—" : apiStats.activePasses}
+            accent="primary"
             badge={apiStats.totalEntities > 0 ? `${Math.round((apiStats.activePasses / apiStats.totalEntities) * 100)}%` : null}
-            progress={apiStats.totalEntities > 0 ? Math.round((apiStats.activePasses / apiStats.totalEntities) * 100) : 0}
           />
           <StatCard
             icon={Clock}
