@@ -488,8 +488,8 @@ const LoginPage = () => {
         const role = (data.role || "").toLowerCase();
         const deptId = data.departmentId; // numeric — comes from JWT/login response
 
-        const TRAFFIC_DEPT_IDS  = [9, 10, 11, 12, 13, 14, 15];
-        const MARINE_DEPT_ID    = 7;
+        const TRAFFIC_DEPT_IDS = [9, 10, 11, 12, 13, 14, 15];
+        const MARINE_DEPT_ID = 7;
         // Civil, Mechanical, Finance, General Admin → vendor pass only (no dedicated portal)
         const VENDOR_ONLY_DEPT_IDS = [3, 4, 5, 6];
 
@@ -585,12 +585,12 @@ const LoginPage = () => {
         <div className="w-full mx-auto grid lg:grid-cols-[5fr_6fr] gap-6 lg:gap-10 items-center">
           {/* Left Section - Branding */}
           <div className="hidden lg:block space-y-8 animate-in fade-in duration-700">
-            <div className="inline-flex items-center gap-4 bg-white/15 backdrop-blur-xl p-6 rounded-3xl shadow-lg ring-1 ring-white/20">
-              <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-900/40">
-                <Ship className="h-9 w-9 text-white" strokeWidth={2.5} />
+            <div className="inline-flex items-center gap-4 bg-white/10 backdrop-blur-xl p-5 rounded-3xl shadow-xl ring-1 ring-white/20">
+              <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center shadow-lg shadow-orange-950/20 p-2 shrink-0 ring-4 ring-orange-500/20">
+                <img src="/chennaiport.jpg" alt="Chennai Port Logo" className="w-full h-full object-contain rounded-full" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold text-white leading-none drop-shadow-lg chennai-port-glow">
+                <h1 className="text-4xl font-extrabold text-white leading-none drop-shadow-md chennai-port-glow tracking-tight">
                   Chennai Port
                 </h1>
                 <style jsx>{`
@@ -601,9 +601,9 @@ const LoginPage = () => {
                     }
                     50% {
                       text-shadow:
-                        0 0 6px rgba(96, 165, 250, 0.55),
-                        0 0 14px rgba(59, 130, 246, 0.45),
-                        0 0 28px rgba(37, 99, 235, 0.35);
+                        0 0 6px rgba(251, 146, 60, 0.55),
+                        0 0 14px rgba(249, 115, 22, 0.45),
+                        0 0 28px rgba(234, 88, 12, 0.35);
                     }
                   }
                   .chennai-port-glow {
@@ -616,14 +616,14 @@ const LoginPage = () => {
                     }
                   }
                 `}</style>
-                <p className="text-lg font-medium text-orange-300 mt-1">
-                  Authority
-                </p>
+                <div className="inline-block bg-gradient-to-r from-orange-500/20 to-amber-500/20 text-orange-300 font-semibold uppercase tracking-wider text-xs border border-orange-500/30 px-3 py-1 rounded-full mt-2.5 shadow-sm">
+                  Port Authority
+                </div>
               </div>
             </div>
 
             <div className="space-y-6">
-              <h2 className="text-4xl xl:text-5xl font-bold leading-tight text-white drop-shadow-[0_4px_20px_rgba(0,0,0,0.5)] min-h-[7rem] xl:min-h-[8.5rem]">
+              <h2 className="text-4xl xl:text-5xl font-black leading-tight text-white drop-shadow-[0_4px_20px_rgba(0,0,0,0.5)] min-h-[7rem] xl:min-h-[8.5rem] tracking-tight">
                 {(() => {
                   const newlineIdx = HEADLINE_FULL.indexOf("\n");
                   const firstPart = typedHeadline.slice(
@@ -645,11 +645,11 @@ const LoginPage = () => {
                       {!onFirstLine && (
                         <>
                           <br />
-                          <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-300 to-amber-200">
+                          <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-400 via-amber-300 to-orange-400 bg-[length:200%_auto] animate-pulse">
                             {secondPart}
                           </span>
                           {!isDone && (
-                            <span className="inline-block w-[2px] h-[0.9em] align-[-0.1em] ml-1 bg-orange-300 animate-pulse" />
+                            <span className="inline-block w-[2px] h-[0.9em] align-[-0.1em] ml-1 bg-orange-400 animate-pulse" />
                           )}
                         </>
                       )}
@@ -657,10 +657,8 @@ const LoginPage = () => {
                   );
                 })()}
               </h2>
-              <p className="text-base xl:text-lg text-stone-100/90 leading-relaxed max-w-xl drop-shadow">
-                A centralized digital system for controlling and monitoring
-                personnel, vehicle, and cargo movement through automated gate
-                pass management at Chennai Port.
+              <p className="text-base xl:text-lg text-stone-200/90 leading-relaxed max-w-xl drop-shadow font-medium">
+                A next-generation digital logistics gateway streamlining access control, commercial fleet movement, and gate-pass security verification at Chennai Port.
               </p>
             </div>
 
@@ -670,30 +668,32 @@ const LoginPage = () => {
                 {
                   icon: Shield,
                   title: "Secure Access",
-                  desc: "Security protocols",
+                  desc: "Encrypted digital passes & instant validation",
                 },
                 {
                   icon: TrendingUp,
-                  title: "Real-Time",
-                  desc: "Instant processing",
+                  title: "Real-Time Data",
+                  desc: "Live traffic monitoring & automated gates",
                 },
                 {
                   icon: Clock,
-                  title: "24/7 Support",
-                  desc: "Always available",
+                  title: "24/7 Operations",
+                  desc: "High-performance uptime & active support",
                 },
               ].map((item, i) => (
                 <div
                   key={i}
-                  className="bg-white/10 backdrop-blur-xl p-5 rounded-2xl ring-1 ring-white/20 hover:bg-white/15 hover:scale-105 transition-all cursor-default"
+                  className="bg-white/5 backdrop-blur-xl p-5 rounded-2xl ring-1 ring-white/10 hover:bg-white/10 hover:ring-white/20 hover:scale-[1.03] hover:shadow-xl hover:shadow-black/10 transition-all duration-300 cursor-default flex flex-col justify-between"
                 >
-                  <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center mb-3 shadow-lg shadow-orange-900/40">
-                    <item.icon className="h-6 w-6 text-white" />
+                  <div>
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center mb-3.5 shadow-lg shadow-orange-950/40">
+                      <item.icon className="h-6 w-6 text-white" />
+                    </div>
+                    <p className="font-bold text-white text-sm tracking-wide">
+                      {item.title}
+                    </p>
                   </div>
-                  <p className="font-semibold text-white text-sm">
-                    {item.title}
-                  </p>
-                  <p className="text-xs text-stone-200/80 mt-1">{item.desc}</p>
+                  <p className="text-xs text-stone-300/80 mt-2 leading-relaxed">{item.desc}</p>
                 </div>
               ))}
             </div>
@@ -715,8 +715,8 @@ const LoginPage = () => {
                   <div className="h-full flex flex-col justify-center px-6 md:px-8 lg:px-10 py-8 max-w-md mx-auto w-full">
                     {/* Mobile/Tablet Header (Hidden on Desktop lg) */}
                     <div className="flex items-center gap-3 mb-6 lg:hidden justify-center bg-stone-50 border border-stone-100 p-3 rounded-2xl">
-                      <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center shadow-md shadow-orange-900/20">
-                        <Ship className="h-5 w-5 text-white" strokeWidth={2.5} />
+                      <div className="w-18 h-18 bg-white rounded-full flex items-center justify-center shadow-md p-2 shrink-0 border border-stone-200">
+                        <img src="/chennaiport.jpg" alt="Chennai Port Logo" className="w-full h-full object-contain rounded-full" />
                       </div>
                       <div className="text-left">
                         <div className="text-lg font-bold text-gray-900 leading-none">

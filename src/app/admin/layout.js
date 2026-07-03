@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
@@ -38,6 +38,14 @@ import {
   EyeOff,
   RefreshCw,
   Users,
+  KeyRound,
+  ChevronDown,
+  User,
+  Briefcase,
+  X,
+  BadgeCheck,
+  CheckCheck,
+  Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -496,56 +504,137 @@ export default function AdminLayout({ children }) {
     </div>
   );
 
-  // Reusable user/name card — rendered in the top-right of the header.
-  const renderUserNameCard = () => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-3 rounded-2xl px-3 py-2 bg-black/90 hover:bg-black text-white dark:bg-white/5 dark:hover:bg-white/10 dark:border dark:border-white/10 shadow-md transition focus:outline-none">
-          <Avatar className="h-11 w-11 ring-2 ring-amber-400/60 shrink-0">
-            <AvatarFallback className="bg-gradient-to-br from-amber-400 to-orange-500 text-black text-base font-extrabold">
-              {user?.username?.charAt(0)?.toUpperCase() || "A"}
-            </AvatarFallback>
-          </Avatar>
-          <span className="hidden sm:flex flex-col text-left leading-tight min-w-0 pr-1">
-            <span className="text-sm font-extrabold truncate max-w-[160px]">
-              {user?.username ? user.username.split("@")[0] : "Admin"}
-            </span>
-            <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold truncate">
-              {user?.role}
-            </span>
+  // ─── User Profile Panel (replaces old UserNameCard) ────────────────────────
+  function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) {
+    const [open, setOpen] = useState(false);
+    const panelRef = useRef(null);
+    const [copiedField, setCopiedField] = useState(null);
+
+    useEffect(() => {
+      if (!open) return;
+      const handler = (e) => {
+        if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false);
+      };
+      document.addEventListener("mousedown", handler);
+      return () => document.removeEventListener("mousedown", handler);
+    }, [open]);
+
+    const copyField = (val, key) => {
+      navigator.clipboard.writeText(String(val || "")).then(() => {
+        setCopiedField(key);
+        setTimeout(() => setCopiedField(null), 2000);
+      });
+    };
+
+    const username = user?.username || "Port Admin";
+    const displayName = username.split("@")[0] || "Port Admin";
+    const role = user?.role || "Officer";
+    const initials = displayName.substring(0, 2).toUpperCase();
+
+    const statusMeta = { label: "Active", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300" };
+
+    const DetailRow = ({ icon: Icon, label, value, copyKey }) => (
+      <div className="flex items-start gap-3 py-2.5 border-b border-stone-100 dark:border-white/5 last:border-0">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-stone-100 dark:bg-white/5 text-stone-500 dark:text-stone-400 shrink-0 mt-0.5">
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">{label}</p>
+          <p className="text-sm font-semibold text-stone-800 dark:text-stone-100 truncate">{value || "—"}</p>
+        </div>
+        {value && value !== "—" && (
+          <button
+            onClick={() => copyField(value, copyKey)}
+            className="shrink-0 p-1 rounded text-stone-400 hover:text-amber-600 transition-colors"
+            title="Copy"
+          >
+            {copiedField === copyKey ? <CheckCheck className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
+        )}
+      </div>
+    );
+
+    return (
+      <div className="relative" ref={panelRef}>
+        {/* Trigger button */}
+        <button
+          onClick={() => setOpen((p) => !p)}
+          className="flex items-center gap-2.5 rounded-2xl px-3 py-2 bg-black/90 hover:bg-black text-white dark:bg-white/5 dark:hover:bg-white/10 dark:border dark:border-white/10 shadow-md transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-orange-500/40 active:scale-95 cursor-pointer"
+        >
+          {/* Avatar */}
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-base font-extrabold shrink-0 shadow-md ring-2 ring-amber-300/30">
+            {initials}
           </span>
+          {/* Name + role */}
+          <span className="hidden sm:flex flex-col text-left leading-tight min-w-0 pr-1">
+            <span className="text-sm font-extrabold truncate max-w-[140px] text-white">{displayName}</span>
+            <span className="text-[10px] uppercase tracking-wider text-orange-400 font-bold truncate">{role}</span>
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-stone-400 transition-transform duration-200 hidden sm:block",
+              open && "rotate-180"
+            )}
+          />
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="bottom" className="w-56">
-        <DropdownMenuLabel>
-          <div>
-            <p className="font-semibold text-slate-800">
-              {user?.username || "Admin"}
-            </p>
-            <p className="text-xs text-slate-500 font-normal mt-0.5">
-              {user?.role}
-            </p>
+
+        {/* Dropdown panel */}
+        {open && (
+          <div className="absolute right-0 top-[calc(100%+10px)] z-[200] w-80 rounded-3xl bg-white dark:bg-[#1f232d] shadow-[0_8px_40px_rgba(0,0,0,0.18)] ring-1 ring-stone-200/70 dark:ring-white/10 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Panel header */}
+            <div className="bg-gradient-to-r from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] px-5 py-4 relative overflow-hidden">
+              {/* Wave decoration */}
+              <svg aria-hidden viewBox="0 0 320 80" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-10 w-full text-amber-400/10">
+                <path fill="currentColor" d="M0,40 C80,80 160,0 240,40 C280,60 300,30 320,40 L320,80 L0,80 Z" />
+              </svg>
+              <div className="relative flex items-center gap-3">
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-xl font-extrabold shrink-0 shadow-lg ring-2 ring-amber-300/30">
+                  {initials}
+                </span>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-base font-extrabold text-white leading-tight truncate">{displayName}</p>
+                  <p className="text-xs text-stone-400 font-mono mt-0.5 truncate">{username}</p>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold mt-1.5 ${statusMeta.cls}`}>
+                    <BadgeCheck className="h-3 w-3" />
+                    {statusMeta.label}
+                  </span>
+                </div>
+                <button onClick={() => setOpen(false)} className="text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Detail rows */}
+            <div className="px-4 pt-2 pb-1 max-h-[340px] overflow-y-auto [scrollbar-width:thin] text-left">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">Account Profile</p>
+              <DetailRow icon={User}      label="Login ID"     value={username}       copyKey="lid" />
+              <DetailRow icon={Briefcase} label="Role"         value={role}           copyKey="role" />
+              <DetailRow icon={Building2} label="Department"   value={departmentName} copyKey="dept" />
+            </div>
+
+            {/* Actions */}
+            <div className="p-3 border-t border-stone-100 dark:border-white/5 space-y-1.5">
+              <button
+                onClick={() => { setOpen(false); onChangePassword(); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-orange-50 dark:hover:bg-orange-400/10 hover:text-orange-700 dark:hover:text-orange-300 transition-colors cursor-pointer text-left"
+              >
+                <KeyRound className="h-4 w-4 shrink-0" />
+                Change Password
+              </button>
+              <button
+                onClick={() => { setOpen(false); onLogout(); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors cursor-pointer text-left"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                Sign Out
+              </button>
+            </div>
           </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="cursor-pointer"
-          onClick={() => setShowPasswordChangeModal(true)}
-        >
-          <Lock className="h-4 w-4 mr-2 text-slate-500" />
-          Change Password
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={handleLogout}
-          className="text-red-600 cursor-pointer focus:text-red-600"
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Sign Out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -588,7 +677,7 @@ export default function AdminLayout({ children }) {
         {/* Main content area — fills remaining viewport, never overflows */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           {/* Top header */}
-          <header className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-3 shrink-0 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 transition-all duration-300">
+          <header className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-3 shrink-0 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 transition-all duration-300 relative z-50">
             <div className="flex items-center gap-3 min-w-0">
               {/* Mobile menu trigger */}
               <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
@@ -652,7 +741,12 @@ export default function AdminLayout({ children }) {
 
               {/* User name card (moved here from the sidebar bottom).
                   Clicking opens a menu with Change Password / Sign Out. */}
-              {renderUserNameCard()}
+              <UserProfilePanel
+                user={user}
+                departmentName="Admin Console"
+                onChangePassword={() => setShowPasswordChangeModal(true)}
+                onLogout={handleLogout}
+              />
             </div>
           </header>
 

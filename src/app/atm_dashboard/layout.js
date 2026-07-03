@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
@@ -25,10 +25,25 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronRight as ChevronCrumb,
+  KeyRound,
+  ChevronDown,
+  User,
+  Briefcase,
+  Building2,
+  X,
+  BadgeCheck,
+  CheckCheck,
+  Copy,
+  Lock,
+  Eye,
+  EyeOff,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
+const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 
 const navigationItems = [
   {
@@ -47,11 +62,148 @@ const navigationItems = [
   },
 ];
 
+function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const panelRef = useRef(null);
+  const [copiedField, setCopiedField] = useState(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const copyField = (val, key) => {
+    navigator.clipboard.writeText(String(val || "")).then(() => {
+      setCopiedField(key);
+      setTimeout(() => setCopiedField(null), 2000);
+    });
+  };
+
+  const username = user?.username || "ATM Admin";
+  const displayName = username.split("@")[0] || "ATM Admin";
+  const role = user?.role || "Officer";
+  const initials = displayName.substring(0, 2).toUpperCase();
+
+  const statusMeta = { label: "Active", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300" };
+
+  const DetailRow = ({ icon: Icon, label, value, copyKey }) => (
+    <div className="flex items-start gap-3 py-2.5 border-b border-stone-100 dark:border-white/5 last:border-0">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-stone-100 dark:bg-white/5 text-stone-500 dark:text-stone-400 shrink-0 mt-0.5">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">{label}</p>
+        <p className="text-sm font-semibold text-stone-800 dark:text-stone-100 truncate">{value || "\u2014"}</p>
+      </div>
+      {value && value !== "\u2014" && (
+        <button
+          onClick={() => copyField(value, copyKey)}
+          className="shrink-0 p-1 rounded text-stone-400 hover:text-amber-600 transition-colors"
+          title="Copy"
+        >
+          {copiedField === copyKey ? <CheckCheck className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="relative" ref={panelRef}>
+      {/* Trigger button */}
+      <button
+        onClick={() => setOpen((p) => !p)}
+        className="flex items-center gap-2.5 rounded-2xl px-3 py-2 bg-black/90 hover:bg-black text-white dark:bg-white/5 dark:hover:bg-white/10 dark:border dark:border-white/10 shadow-md transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-orange-500/40 active:scale-95 cursor-pointer"
+      >
+        {/* Avatar */}
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-base font-extrabold shrink-0 shadow-md ring-2 ring-amber-300/30">
+          {initials}
+        </span>
+        {/* Name + role */}
+        <span className="hidden sm:flex flex-col text-left leading-tight min-w-0 pr-1">
+          <span className="text-sm font-extrabold truncate max-w-[140px] text-white">{displayName}</span>
+          <span className="text-[10px] uppercase tracking-wider text-orange-400 font-bold truncate">{role}</span>
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-stone-400 transition-transform duration-200 hidden sm:block",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+
+      {/* Dropdown panel */}
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+10px)] z-[200] w-80 rounded-3xl bg-white dark:bg-[#1f232d] shadow-[0_8px_40px_rgba(0,0,0,0.18)] ring-1 ring-stone-200/70 dark:ring-white/10 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          {/* Panel header */}
+          <div className="bg-gradient-to-r from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] px-5 py-4 relative overflow-hidden">
+            {/* Wave decoration */}
+            <svg aria-hidden viewBox="0 0 320 80" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-10 w-full text-amber-400/10">
+              <path fill="currentColor" d="M0,40 C80,80 160,0 240,40 C280,60 300,30 320,40 L320,80 L0,80 Z" />
+            </svg>
+            <div className="relative flex items-center gap-3">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-xl font-extrabold shrink-0 shadow-lg ring-2 ring-amber-300/30">
+                {initials}
+              </span>
+              <div className="min-w-0 flex-1 text-left">
+                <p className="text-base font-extrabold text-white leading-tight truncate">{displayName}</p>
+                <p className="text-xs text-stone-400 font-mono mt-0.5 truncate">{username}</p>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold mt-1.5 ${statusMeta.cls}`}>
+                  <BadgeCheck className="h-3 w-3" />
+                  {statusMeta.label}
+                </span>
+              </div>
+              <button onClick={() => setOpen(false)} className="text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Detail rows */}
+          <div className="px-4 pt-2 pb-1 max-h-[340px] overflow-y-auto [scrollbar-width:thin] text-left">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">Account Profile</p>
+            <DetailRow icon={User}      label="Login ID"     value={username}       copyKey="lid" />
+            <DetailRow icon={Briefcase} label="Role"         value={role}           copyKey="role" />
+            <DetailRow icon={Building2} label="Department"   value={departmentName} copyKey="dept" />
+          </div>
+
+          {/* Actions */}
+          <div className="p-3 border-t border-stone-100 dark:border-white/5 space-y-1.5">
+            <button
+              onClick={() => { setOpen(false); onChangePassword(); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-orange-50 dark:hover:bg-orange-400/10 hover:text-orange-700 dark:hover:text-orange-300 transition-colors cursor-pointer text-left"
+            >
+              <KeyRound className="h-4 w-4 shrink-0" />
+              Change Password
+            </button>
+            <button
+              onClick={() => { setOpen(false); onLogout(); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors cursor-pointer text-left"
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ATMDashboardLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [modalLoading, setModalLoading] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Read from localStorage synchronously on first render to avoid flicker
   const [sidebarExpanded, setSidebarExpanded] = useState(() => {
@@ -92,10 +244,52 @@ export default function ATMDashboardLayout({ children }) {
         return;
       }
       setUser(parsedUser);
+      if (parsedUser.isPasswordChanged === false) {
+        setShowPasswordChangeModal(true);
+      }
     } else {
       router.push("/");
     }
   }, [router]);
+
+  const handlePasswordChangeSubmit = async (e) => {
+    e.preventDefault();
+    if (!newPassword || !confirmPassword) {
+      toast.warning("Please fill in all fields.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.warning("Passwords do not match.");
+      return;
+    }
+    setModalLoading(true);
+    try {
+      const token = localStorage.getItem("accessToken");
+      const res = await axios.post(
+        `${ADMIN_API}/user/change-password`,
+        { loginId: user?.username, newPassword, confirmPassword },
+        { headers: { Authorization: `Bearer ${token}` }, validateStatus: (s) => s < 500 }
+      );
+      if (res.status >= 200 && res.status < 300 && res.data?.success) {
+        toast.success("Password Updated Successfully", {
+          description: "Your default password has been successfully updated.",
+        });
+        const updatedUser = { ...user, isPasswordChanged: true };
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        setUser(updatedUser);
+        setShowPasswordChangeModal(false);
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        toast.error(res.data?.message || "Failed to update password.");
+      }
+    } catch (err) {
+      console.error("Change password error:", err);
+      toast.error(err.response?.data?.message || "Server not reachable");
+    } finally {
+      setModalLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -370,7 +564,7 @@ export default function ATMDashboardLayout({ children }) {
         {/* Main content */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           {/* Header */}
-          <header className="px-3 sm:px-4 lg:px-8 flex items-center justify-between gap-3 h-16 shrink-0 bg-white/90 backdrop-blur-xl border-b border-slate-200/80 shadow-sm">
+          <header className="px-3 sm:px-4 lg:px-8 flex items-center justify-between gap-3 h-16 shrink-0 bg-white/90 backdrop-blur-xl border-b border-slate-200/80 shadow-sm relative z-50">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <Button
                 onClick={() => setIsMobileMenuOpen(true)}
@@ -412,63 +606,107 @@ export default function ATMDashboardLayout({ children }) {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="flex items-center gap-2 px-1.5 sm:px-2 h-11 hover:bg-red-50 rounded-full"
-                  >
-                    <Avatar className="h-9 w-9 border-2 border-red-200">
-                      <AvatarFallback className="bg-gradient-to-br from-red-500 to-red-700 text-white text-sm font-bold">
-                        {initial}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="hidden md:block text-left">
-                      <p className="text-sm font-semibold text-slate-800 leading-tight max-w-[140px] truncate">
-                        {displayName}
-                      </p>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-red-600">
-                        {user?.role || "ATM"}
-                      </p>
-                    </div>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-60">
-                  <DropdownMenuLabel>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10 border-2 border-red-200">
-                        <AvatarFallback className="bg-gradient-to-br from-red-500 to-red-700 text-white text-sm font-bold">
-                          {initial}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-800 truncate">
-                          {displayName}
-                        </p>
-                        <p className="text-xs text-slate-500 font-normal mt-0.5 truncate">
-                          {user?.username || "ATM User"}
-                        </p>
-                      </div>
-                    </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleLogout}
-                    className="text-red-600 cursor-pointer focus:text-red-600 focus:bg-red-50"
-                  >
-                    <LogOut className="h-4 w-4 mr-2" /> Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </header>
+            <UserProfilePanel
+              user={user}
+              departmentName="ATM Pass Section"
+              onChangePassword={() => setShowPasswordChangeModal(true)}
+              onLogout={handleLogout}
+            />
+        </header>
 
-          <main className="flex-1 p-3 sm:p-4 lg:p-8 min-h-0 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.slate.300)_transparent]">
-            {children}
-          </main>
-        </div>
+        <main className="flex-1 p-3 sm:p-4 lg:p-8 min-h-0 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.slate.300)_transparent]">
+          {children}
+        </main>
       </div>
+    </div>
+
+      {/* ── Change Password Modal ───────────────────────────────────────────── */}
+      {showPasswordChangeModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#1f232d] rounded-3xl p-6 sm:p-8 shadow-2xl border border-stone-200/50 dark:border-white/5 animate-in fade-in zoom-in-95 duration-200 relative">
+            <div className="text-center mb-6">
+              <span className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 mb-4 shadow-inner">
+                <Lock className="h-7 w-7" strokeWidth={2.5} />
+              </span>
+              <h3 className="text-2xl font-extrabold text-[#1f1f1f] dark:text-white tracking-tight">
+                {user?.isPasswordChanged === false ? "Mandatory Password Update" : "Update Password"}
+              </h3>
+              <p className="text-sm text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
+                {user?.isPasswordChanged === false
+                  ? "Welcome! Since this is your first login or your password has been reset, you must update your password to continue."
+                  : "Protect your account by setting a new strong password below."}
+              </p>
+            </div>
+
+            <div className="bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/5 rounded-2xl px-4 py-3 mb-4 text-sm font-medium flex items-center gap-3">
+              <span className="text-stone-500 dark:text-stone-400">User Account:</span>
+              <span className="text-stone-900 dark:text-white font-bold">{user?.username}</span>
+            </div>
+
+            <form onSubmit={handlePasswordChangeSubmit} className="space-y-4">
+              <div className="relative group">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-amber-500 transition-colors duration-200" />
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  placeholder="New Password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full pl-11 pr-10 py-3.5 text-base bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/5 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 rounded-2xl focus:outline-none transition-all duration-200"
+                  required
+                />
+                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-650 focus:outline-none">
+                  {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+
+              <div className="relative group">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-amber-500 transition-colors duration-200" />
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="Confirm New Password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full pl-11 pr-10 py-3.5 text-base bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/5 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 rounded-2xl focus:outline-none transition-all duration-200"
+                  required
+                />
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-650 focus:outline-none">
+                  {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+
+              <div className="bg-amber-500/5 rounded-2xl p-4 border border-amber-500/10 space-y-1 text-xs text-amber-700 dark:text-amber-400">
+                <p className="font-bold mb-1">Password Requirements:</p>
+                <p>• Must be between 8 and 15 characters long.</p>
+                <p>• Must contain at least one uppercase &amp; one lowercase letter.</p>
+                <p>• Must contain at least one number.</p>
+                <p>• Must contain at least one special character.</p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                {user?.isPasswordChanged !== false && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowPasswordChangeModal(false); setNewPassword(""); setConfirmPassword(""); }}
+                    className="w-1/2 py-3.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-base font-bold tracking-wider uppercase rounded-2xl transition-all duration-200 focus:outline-none"
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={modalLoading}
+                  className={cn(
+                    "py-3.5 bg-amber-400 text-[#1f1f1f] text-base font-bold tracking-wider uppercase rounded-2xl hover:bg-amber-500 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] shadow-lg shadow-amber-400/20 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-400/20 disabled:opacity-75 disabled:pointer-events-none flex items-center justify-center",
+                    user?.isPasswordChanged !== false ? "w-1/2" : "w-full"
+                  )}
+                >
+                  {modalLoading ? <RefreshCw className="h-5 w-5 animate-spin" /> : "Update Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -31,6 +31,9 @@ import {
   Mail,
   CreditCard,
   RefreshCw,
+  GripVertical,
+  RotateCcw,
+  Zap,
 } from "lucide-react";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
@@ -101,6 +104,57 @@ export default function TrafficPassesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortBy, setSortBy] = useState("DATE_DESC");
   const [processedByMe, setProcessedByMe] = useState(false);
+
+  // ── Drag & Drop Stat Card Order ──
+  const [cardOrder, setCardOrder] = useState(["total", "pending", "processed"]);
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("traffic-card-order");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === 3) {
+          setCardOrder(parsed);
+        }
+      } catch (e) {}
+    }
+  }, []);
+
+  const handleDragStart = (e, idx) => {
+    setDraggedIndex(idx);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    if (dragOverIndex !== idx) setDragOverIndex(idx);
+  };
+
+  const handleDrop = (e, idx) => {
+    e.preventDefault();
+    if (draggedIndex === null) return;
+    const newOrder = [...cardOrder];
+    const [draggedItem] = newOrder.splice(draggedIndex, 1);
+    newOrder.splice(idx, 0, draggedItem);
+    setCardOrder(newOrder);
+    localStorage.setItem("traffic-card-order", JSON.stringify(newOrder));
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const resetCardOrder = () => {
+    const defaultOrder = ["total", "pending", "processed"];
+    setCardOrder(defaultOrder);
+    localStorage.removeItem("traffic-card-order");
+    toast.success("Card layout reset to default!");
+  };
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -608,49 +662,92 @@ export default function TrafficPassesPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 font-sans relative">
+      {/* ── Tip row ── */}
+      <div className="flex items-center justify-between gap-3 text-xs bg-orange-500/5 rounded-2xl px-4 py-2 border border-orange-500/10 shrink-0">
+        <p className="text-orange-700 dark:text-orange-400 font-medium flex items-center gap-1.5">
+          <Zap className="h-4 w-4 animate-bounce text-orange-500" />
+          Drag and drop stat cards using the grip icon to arrange your view.
+        </p>
+        <button
+          onClick={resetCardOrder}
+          className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-orange-750 hover:text-orange-855 dark:text-orange-300 dark:hover:text-orange-200 transition-colors shrink-0"
+        >
+          <RotateCcw className="h-3 w-3" />
+          Reset Order
+        </button>
+      </div>
+
       {/* ── Stat cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 lg:gap-4 shrink-0">
-        {/* Total */}
-        <div
-          onClick={() => handleCardClick("pending", "ALL")}
-          className="bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Total Passes</span>
-            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800">
-              <Users className="h-4 w-4 text-slate-600 dark:text-slate-300" strokeWidth={2.5} />
-            </span>
-          </div>
-          <p className="text-3xl font-extrabold text-[#0a1e4d] dark:text-stone-100 tabular-nums">{globalCounts.total}</p>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4 shrink-0">
+        {cardOrder.map((cardKey, index) => {
+          const cardData = {
+            total: {
+              label: "Total Passes",
+              value: globalCounts.total,
+              icon: Users,
+              color: "text-[#0a1e4d] dark:text-stone-300",
+              bgIcon: "bg-slate-100 dark:bg-slate-800",
+              onClick: () => handleCardClick("pending", "ALL"),
+            },
+            pending: {
+              label: "Pending",
+              value: globalCounts.pending,
+              icon: Clock,
+              color: "text-amber-650 dark:text-amber-405",
+              bgIcon: "bg-amber-50 dark:bg-amber-500/10",
+              onClick: () => handleCardClick("pending", "ALL"),
+            },
+            processed: {
+              label: "Processed",
+              value: globalCounts.processed,
+              icon: CheckCircle2,
+              color: "text-emerald-600 dark:text-emerald-400",
+              bgIcon: "bg-emerald-50 dark:bg-emerald-500/10",
+              onClick: () => handleCardClick("processed", "ALL"),
+            },
+          }[cardKey];
 
-        {/* Pending */}
-        <div
-          onClick={() => handleCardClick("pending", "ALL")}
-          className="bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">Pending</span>
-            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-50 dark:bg-amber-500/10">
-              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" strokeWidth={2.5} />
-            </span>
-          </div>
-          <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-300 tabular-nums">{globalCounts.pending}</p>
-        </div>
+          const isDragged = draggedIndex === index;
+          const isOver = dragOverIndex === index;
 
-        {/* Processed */}
-        <div
-          onClick={() => handleCardClick("processed", "ALL")}
-          className="col-span-2 sm:col-span-1 bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Processed</span>
-            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-emerald-50 dark:bg-emerald-500/10">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
-            </span>
-          </div>
-          <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-300 tabular-nums">{globalCounts.processed}</p>
-        </div>
+          return (
+            <div
+              key={cardKey}
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              className={
+                "transition-all duration-200 " +
+                (isDragged ? "opacity-30 scale-95" : "") +
+                (isOver ? "border-2 border-dashed border-orange-500 rounded-3xl p-1 bg-orange-500/5 shadow-inner scale-[1.02]" : "")
+              }
+            >
+              <div
+                onClick={cardData.onClick}
+                className="bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2 relative group"
+              >
+                {/* Grip Handle */}
+                <div className="absolute top-3 right-3 text-stone-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-400 transition-colors cursor-grab active:cursor-grabbing p-1 rounded hover:bg-slate-50 dark:hover:bg-white/5 z-10">
+                  <GripVertical className="h-4.5 w-4.5" />
+                </div>
+
+                <div className="flex items-center justify-between pr-6">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                    {cardData.label}
+                  </span>
+                  <span className={`flex items-center justify-center h-8 w-8 rounded-xl ${cardData.bgIcon}`}>
+                    <cardData.icon className={`h-4 w-4 ${cardData.color}`} strokeWidth={2.5} />
+                  </span>
+                </div>
+                <p className={`text-3xl font-extrabold tabular-nums ${cardData.color}`}>
+                  {cardData.value}
+                </p>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* ── Page header ── */}

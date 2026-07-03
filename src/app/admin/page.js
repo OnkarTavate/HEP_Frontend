@@ -27,9 +27,13 @@ import {
   ArrowUpCircle,
   CloudSun,
   ChevronDown,
+  GripVertical,
+  RotateCcw,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PaginationBar from "@/components/ui/PaginationBar";
+import { toast } from "sonner";
 
 const BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API;
 const AUTH_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API
@@ -45,6 +49,57 @@ export default function AdminDashboard() {
   const PAGE_LIMIT = 20;
   const [paginationMeta, setPaginationMeta] = useState({ totalRecords: 0, totalPages: 1, currentPage: 1, pageSize: PAGE_LIMIT });
   const [counts, setCounts] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
+
+  // ── Drag & Drop Stat Card Order ──
+  const [cardOrder, setCardOrder] = useState(["total", "approved", "pending", "rejected"]);
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("admin-card-order");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === 4) {
+          setCardOrder(parsed);
+        }
+      } catch (e) {}
+    }
+  }, []);
+
+  const handleDragStart = (e, idx) => {
+    setDraggedIndex(idx);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    if (dragOverIndex !== idx) setDragOverIndex(idx);
+  };
+
+  const handleDrop = (e, idx) => {
+    e.preventDefault();
+    if (draggedIndex === null) return;
+    const newOrder = [...cardOrder];
+    const [draggedItem] = newOrder.splice(draggedIndex, 1);
+    newOrder.splice(idx, 0, draggedItem);
+    setCardOrder(newOrder);
+    localStorage.setItem("admin-card-order", JSON.stringify(newOrder));
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const resetCardOrder = () => {
+    const defaultOrder = ["total", "approved", "pending", "rejected"];
+    setCardOrder(defaultOrder);
+    localStorage.removeItem("admin-card-order");
+    toast.success("Card layout reset to default!");
+  };
 
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [formOptions, setFormOptions] = useState({
@@ -488,39 +543,104 @@ export default function AdminDashboard() {
             Snapshot for today
           </p>
 
+          {/* Drag instruction & Reset layout */}
+          <div className="flex items-center justify-between gap-2 text-[10px] bg-amber-500/5 rounded-xl px-3 py-1.5 border border-amber-500/10 mb-3 shrink-0">
+            <p className="text-amber-800 dark:text-amber-400/80 font-medium flex items-center gap-1">
+              <Zap className="h-3.5 w-3.5 animate-bounce text-amber-500" />
+              Drag stat cards using grip icon to reorder.
+            </p>
+            <button
+              onClick={resetCardOrder}
+              className="flex items-center gap-0.5 font-bold uppercase tracking-wider text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300 transition-colors shrink-0"
+            >
+              <RotateCcw className="h-2.5 w-2.5" />
+              Reset
+            </button>
+          </div>
+
           {/* Responsive stats cards — 2 cols on mobile, 4 on sm+ */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 pb-1">
-            {/* Total */}
-            <div className="flex flex-col items-center p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full bg-slate-900 dark:bg-slate-800 flex items-center justify-center text-white ring-[3px] ring-slate-200 dark:ring-slate-700">
-                <span className="font-extrabold text-base sm:text-lg tabular-nums">{totalCount}</span>
-              </div>
-              <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 mt-1.5 sm:mt-2 uppercase tracking-wider">Total</span>
-            </div>
+            {cardOrder.map((cardKey, index) => {
+              const cardData = {
+                total: {
+                  label: "Total Requests",
+                  value: totalCount,
+                  icon: Shield,
+                  color: "text-slate-800 dark:text-stone-100",
+                  bgIcon: "bg-slate-100 dark:bg-slate-800",
+                  footnote: "All submitted passes today",
+                },
+                approved: {
+                  label: "Approved Passes",
+                  value: approvedCount,
+                  icon: CheckCircle2,
+                  color: "text-emerald-600 dark:text-emerald-400",
+                  bgIcon: "bg-emerald-50 dark:bg-emerald-500/10",
+                  footnote: `${totalCount > 0 ? Math.round((approvedCount / totalCount) * 100) : 0}% approval rate`,
+                },
+                pending: {
+                  label: "Pending Passes",
+                  value: pendingCount,
+                  icon: Clock,
+                  color: "text-amber-600 dark:text-amber-400",
+                  bgIcon: "bg-amber-50 dark:bg-amber-500/10",
+                  footnote: "Awaiting port decision",
+                },
+                rejected: {
+                  label: "Rejected Passes",
+                  value: rejectedCount,
+                  icon: AlertCircle,
+                  color: "text-red-600 dark:text-red-400",
+                  bgIcon: "bg-red-50 dark:bg-red-500/10",
+                  footnote: "Applications denied entry",
+                },
+              }[cardKey];
 
-            {/* Approved */}
-            <div className="flex flex-col items-center p-3 sm:p-4 bg-emerald-50/50 dark:bg-emerald-500/5 rounded-xl sm:rounded-2xl border border-emerald-100/60 dark:border-emerald-500/10 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-[3px] ring-emerald-100 dark:ring-emerald-500/20">
-                <span className="font-extrabold text-base sm:text-lg tabular-nums">{approvedCount}</span>
-              </div>
-              <span className="text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1.5 sm:mt-2 uppercase tracking-wider">Approved</span>
-            </div>
+              const isDragged = draggedIndex === index;
+              const isOver = dragOverIndex === index;
 
-            {/* Pending */}
-            <div className="flex flex-col items-center p-3 sm:p-4 bg-amber-50/50 dark:bg-amber-500/5 rounded-xl sm:rounded-2xl border border-amber-100/60 dark:border-amber-500/10 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full bg-amber-500 text-white flex items-center justify-center ring-[3px] ring-amber-100 dark:ring-amber-500/20">
-                <span className="font-extrabold text-base sm:text-lg tabular-nums">{pendingCount}</span>
-              </div>
-              <span className="text-[10px] sm:text-xs font-bold text-amber-600 dark:text-amber-400 mt-1.5 sm:mt-2 uppercase tracking-wider">Pending</span>
-            </div>
+              return (
+                <div
+                  key={cardKey}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDrop={(e) => handleDrop(e, index)}
+                  onDragEnd={handleDragEnd}
+                  className={
+                    "transition-all duration-200 flex flex-1 " +
+                    (isDragged ? "opacity-30 scale-95" : "") +
+                    (isOver ? "border-2 border-dashed border-amber-500 rounded-3xl p-1 bg-amber-500/5 shadow-inner scale-[1.02]" : "")
+                  }
+                >
+                  <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800/50 shadow-sm hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-md transition-all duration-300 flex flex-col gap-2 relative group flex-1 text-left">
+                    {/* Grip handle */}
+                    <div className="absolute top-3 right-3 text-stone-300 dark:text-slate-600 group-hover:text-stone-400 dark:group-hover:text-slate-450 transition-colors cursor-grab active:cursor-grabbing p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 z-10">
+                      <GripVertical className="h-4 w-4" />
+                    </div>
 
-            {/* Rejected */}
-            <div className="flex flex-col items-center p-3 sm:p-4 bg-red-50/50 dark:bg-red-500/5 rounded-xl sm:rounded-2xl border border-red-100/60 dark:border-red-500/10 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-transform duration-200">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-full bg-red-500 text-white flex items-center justify-center ring-[3px] ring-red-100 dark:ring-red-500/20">
-                <span className="font-extrabold text-base sm:text-lg tabular-nums">{rejectedCount}</span>
-              </div>
-              <span className="text-[10px] sm:text-xs font-bold text-red-600 dark:text-red-400 mt-1.5 sm:mt-2 uppercase tracking-wider">Rejected</span>
-            </div>
+                    <div className="flex items-center justify-between pr-6">
+                      <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-none">
+                        {cardData.label}
+                      </span>
+                      <span className={`flex h-8 w-8 items-center justify-center rounded-xl ${cardData.bgIcon}`}>
+                        <cardData.icon className={`h-4.5 w-4.5 ${cardData.color}`} strokeWidth={2.5} />
+                      </span>
+                    </div>
+
+                    <p className={`text-2xl sm:text-3xl font-extrabold tabular-nums ${cardData.color}`}>
+                      {cardData.value}
+                    </p>
+
+                    {cardData.footnote && (
+                      <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 mt-0.5">
+                        {cardData.footnote}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 

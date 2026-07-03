@@ -28,14 +28,24 @@ import {
   FileText,
   Eye,
   Hash,
+  Filter,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  Timer,
+  User,
+  ChevronDown,
+  ChevronUp,
+  BarChart3,
+  Building2,
+  GripVertical,
+  RotateCcw,
+  Zap,
 } from "lucide-react";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 
-// Origin of user_service (without /api) — used to build URLs for statically
-// served uploaded documents/photos (served at /uploads by user_service, also
-// proxied by next.config.mjs rewrites).
 const FILE_BASE = AGENT_API.replace(/\/api\/?$/, "");
 const fileUrl = (p) => {
   if (!p) return "";
@@ -43,10 +53,8 @@ const fileUrl = (p) => {
   return `${FILE_BASE}/${String(p).replace(/^\/+/, "")}`;
 };
 
-// ID-proof type code → label (matches the apply form's mapping)
 const ID_PROOF_LABELS = { 1: "Driving Licence", 2: "PAN", 3: "Passport" };
 
-// Per-entity status (lowercase) → label + badge colour
 const getEntityStatusMeta = (raw) => {
   const s = String(raw || "").toLowerCase();
   if (s === "approved") return { label: "Approved", color: "bg-emerald-100 text-emerald-700 border-emerald-200" };
@@ -80,9 +88,8 @@ import {
 } from "recharts";
 
 // ---------------------------------------------------------------------------
-// Pure helpers (kept outside the component so they don't get recreated)
+// Helpers
 // ---------------------------------------------------------------------------
-
 const currencyFmt = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
@@ -107,7 +114,6 @@ const getGreeting = (hour) => {
   return "Good Evening";
 };
 
-// Map a pass_request status (uppercase) to a label + badge colour.
 const getRequestStatusMeta = (rawStatus) => {
   const s = String(rawStatus || "").toUpperCase();
   if (s === "COMPLETED" || s === "APPROVED" || s === "ACTIVE")
@@ -118,31 +124,60 @@ const getRequestStatusMeta = (rawStatus) => {
     return { label: "Rejected", color: "bg-red-100 text-red-700 border-red-200" };
   if (s === "DRAFT")
     return { label: "Draft", color: "bg-stone-100 text-stone-600 border-stone-200" };
-  // SUBMITTED / UNDER_REVIEW / anything else → pending review
   return { label: s ? s.replace(/_/g, " ") : "Pending", color: "bg-amber-100 text-amber-700 border-amber-200" };
 };
 
+const daysUntil = (iso) => {
+  if (!iso) return null;
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return null;
+  const diff = Math.ceil((dt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  return diff;
+};
+
+const filterPassesByDate = (passes, filter) => {
+  if (filter === "all") return passes;
+  const now = new Date();
+  const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const today = startOf(now);
+  const endOfToday = new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+  return passes.filter((p) => {
+    const created = new Date(p.createdAt || p.submittedAt || 0);
+    if (filter === "today") return created >= today && created <= endOfToday;
+    if (filter === "week") {
+      const weekAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+      return created >= weekAgo;
+    }
+    if (filter === "month") {
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      return created >= monthStart;
+    }
+    return true;
+  });
+};
+
 // ---------------------------------------------------------------------------
-// Shared "shady" card shells
+// Card shells
 // ---------------------------------------------------------------------------
 const cardShell =
-  "rounded-3xl border-0 bg-white dark:bg-[#1f232d] " +
+  "rounded-3xl border-0 bg-white dark:bg-[#1f232d] h-full flex flex-col justify-between " +
   "ring-1 ring-stone-200/70 dark:ring-white/[0.06] " +
   "shadow-[0_1px_3px_rgba(15,23,42,0.04),0_18px_40px_-20px_rgba(15,23,42,0.20)] " +
   "dark:shadow-[0_1px_3px_rgba(0,0,0,0.55),0_30px_60px_-24px_rgba(0,0,0,0.70)] " +
   "hover:-translate-y-1 hover:scale-[1.01] " +
   "hover:shadow-[0_4px_12px_rgba(15,23,42,0.06),0_28px_56px_-20px_rgba(15,23,42,0.28)] " +
   "dark:hover:shadow-[0_4px_12px_rgba(0,0,0,0.65),0_36px_72px_-24px_rgba(0,0,0,0.85)] " +
-  "transition-all duration-300 ease-in-out";
+  "transition-all duration-300 ease-in-out relative group";
 
 const cardShellPrimary =
-  "rounded-3xl border-0 overflow-hidden relative text-white " +
+  "rounded-3xl border-0 overflow-hidden relative text-white h-full flex flex-col justify-between " +
   "bg-gradient-to-br from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] " +
   "ring-1 ring-amber-400/15 " +
   "shadow-[0_2px_6px_rgba(245,158,11,0.10),0_24px_56px_-20px_rgba(245,158,11,0.30)] " +
   "hover:-translate-y-1 hover:scale-[1.01] " +
   "hover:shadow-[0_4px_15px_rgba(245,158,11,0.16),0_36px_72px_-20px_rgba(245,158,11,0.42)] " +
-  "transition-all duration-300 ease-in-out";
+  "transition-all duration-300 ease-in-out group";
 
 const cardShellAlertRed =
   "rounded-3xl border-0 bg-white dark:bg-[#1f232d] overflow-hidden " +
@@ -159,9 +194,48 @@ const cardShellAlertAmber =
   "transition-all duration-300 ease-in-out";
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// Date filter chips component
 // ---------------------------------------------------------------------------
+const DATE_FILTERS = [
+  { key: "today", label: "Today" },
+  { key: "week", label: "This Week" },
+  { key: "month", label: "This Month" },
+  { key: "all", label: "All Time" },
+];
 
+const DateFilterChips = memo(function DateFilterChips({ value, onChange, counts }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <Filter className="h-4 w-4 text-stone-400 shrink-0" />
+      {DATE_FILTERS.map((f) => (
+        <button
+          key={f.key}
+          onClick={() => onChange(f.key)}
+          className={
+            "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all duration-150 " +
+            (value === f.key
+              ? "bg-amber-500 text-white shadow-md shadow-amber-500/30"
+              : "bg-stone-100 dark:bg-white/5 text-stone-600 dark:text-stone-400 hover:bg-amber-100 dark:hover:bg-amber-400/10 hover:text-amber-700 dark:hover:text-amber-300")
+          }
+        >
+          {f.label}
+          {counts?.[f.key] !== undefined && (
+            <span className={
+              "text-[10px] rounded-full px-1.5 py-0.5 font-extrabold tabular-nums " +
+              (value === f.key ? "bg-white/20 text-white" : "bg-stone-200 dark:bg-white/10 text-stone-500 dark:text-stone-400")
+            }>
+              {counts[f.key]}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Enhanced Movable StatCard
+// ---------------------------------------------------------------------------
 const StatCard = memo(function StatCard({
   icon: Icon,
   label,
@@ -171,10 +245,15 @@ const StatCard = memo(function StatCard({
   progress,
   footnote,
   footnoteTone,
+  subItems,
+  onClick,
 }) {
   const isPrimary = accent === "primary";
   return (
-    <Card className={isPrimary ? cardShellPrimary : cardShell}>
+    <Card
+      className={(isPrimary ? cardShellPrimary : cardShell) + (onClick ? " cursor-pointer" : "")}
+      onClick={onClick}
+    >
       {isPrimary && (
         <svg
           aria-hidden
@@ -191,14 +270,28 @@ const StatCard = memo(function StatCard({
           <path d="M150,170 q22,-22 44,0 t44,0 t44,0 t44,0" />
         </svg>
       )}
-      <CardHeader className="pb-3 relative">
+
+      {/* Grip drag handle icon (visible on hover) */}
+      <div className="absolute top-3 right-3 text-stone-300 dark:text-stone-600 group-hover:text-stone-400 dark:group-hover:text-stone-400 transition-colors cursor-grab active:cursor-grabbing p-1 rounded-md hover:bg-stone-50 dark:hover:bg-white/5 shrink-0 z-10">
+        <GripVertical className="h-4 w-4" />
+      </div>
+
+      <CardHeader className="pb-3 relative pr-8">
         <div className="flex items-center justify-between">
           <div
             className={
               "flex h-12 w-12 items-center justify-center rounded-2xl " +
-              (isPrimary
+              (accent === "primary"
                 ? "bg-amber-400/15 text-amber-300 ring-1 ring-amber-300/30"
-                : "bg-stone-100 dark:bg-white/5 text-stone-700 dark:text-amber-300")
+                : accent === "success"
+                  ? "bg-emerald-50 dark:bg-emerald-400/10 text-emerald-650 dark:text-emerald-400"
+                  : accent === "warning"
+                    ? "bg-amber-50 dark:bg-amber-400/10 text-amber-600 dark:text-amber-400"
+                    : accent === "danger"
+                      ? "bg-red-50 dark:bg-red-400/10 text-red-650 dark:text-red-400"
+                      : accent === "info"
+                        ? "bg-blue-50 dark:bg-blue-400/10 text-blue-650 dark:text-blue-400"
+                        : "bg-stone-100 dark:bg-white/5 text-stone-700 dark:text-amber-300")
             }
           >
             <Icon className="h-6 w-6" strokeWidth={2.25} />
@@ -217,71 +310,85 @@ const StatCard = memo(function StatCard({
           )}
         </div>
       </CardHeader>
-      <CardContent className="relative">
-        <p
-          className={
+      <CardContent className="relative flex-1 flex flex-col justify-between">
+        <div>
+          <p className={
             isPrimary
-              ? "text-stone-300 text-sm md:text-base font-medium mb-1 uppercase tracking-wider"
-              : "text-sm md:text-base text-stone-500 dark:text-stone-400 font-semibold mb-1 uppercase tracking-wider"
-          }
-        >
-          {label}
-        </p>
-        <p
-          className={
-            "text-3xl md:text-4xl font-bold tabular-nums " +
+              ? "text-stone-300 text-xs font-medium mb-1 uppercase tracking-wider"
+              : "text-xs text-stone-500 dark:text-stone-400 font-semibold mb-1 uppercase tracking-wider"
+          }>
+            {label}
+          </p>
+          <p className={
+            "text-3xl font-extrabold tabular-nums tracking-tight " +
             (isPrimary ? "text-white" : "text-stone-900 dark:text-stone-100")
-          }
-        >
-          {value}
-        </p>
-        {typeof progress === "number" && (
-          <Progress value={progress} className="mt-4 h-2.5" />
-        )}
-        {footnote && (
-          <p
-            className={
-              "text-sm font-semibold mt-3 inline-flex items-center gap-1.5 " +
+          }>
+            {value}
+          </p>
+        </div>
+
+        <div>
+          {typeof progress === "number" && (
+            <Progress value={progress} className="mt-3 h-2" />
+          )}
+
+          {/* Sub-items */}
+          {subItems && subItems.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2.5">
+              {subItems.map((si) => (
+                <span
+                  key={si.label}
+                  className={
+                    "inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full " +
+                    (isPrimary ? "bg-white/10 text-white/80" : "bg-stone-100 dark:bg-white/5 text-stone-500 dark:text-stone-400")
+                  }
+                >
+                  {si.icon && <si.icon className="h-2.5 w-2.5" />}
+                  {si.label}: <span className={isPrimary ? "text-amber-200" : "text-stone-800 dark:text-stone-100"}>{si.value}</span>
+                </span>
+              ))}
+            </div>
+          )}
+          {footnote && (
+            <p className={
+              "text-xs font-semibold mt-2 inline-flex items-center gap-1.5 " +
               (footnoteTone === "danger"
-                ? "text-red-600 dark:text-red-400"
+                ? "text-red-650 dark:text-red-400"
                 : footnoteTone === "warning"
                   ? "text-amber-600 dark:text-amber-400"
-                  : "text-stone-500 dark:text-stone-400")
-            }
-          >
-            <span className={"h-1.5 w-1.5 rounded-full " + (footnoteTone === "danger" ? "bg-red-500" : footnoteTone === "warning" ? "bg-amber-500" : "bg-stone-400")} />
-            {footnote}
-          </p>
-        )}
+                  : footnoteTone === "success"
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : footnoteTone === "info"
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-stone-500 dark:text-stone-400")
+            }>
+              <span className={"h-1.5 w-1.5 rounded-full " + (
+                footnoteTone === "danger" ? "bg-red-500" :
+                footnoteTone === "warning" ? "bg-amber-500" :
+                footnoteTone === "success" ? "bg-emerald-500" :
+                footnoteTone === "info" ? "bg-blue-500" : "bg-stone-400"
+              )} />
+              {footnote}
+            </p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
 });
 
-// Live status banner — clock is real-time; the chips now show the company's
-// OWN real metrics (no mock port-ops / weather data).
+// ---------------------------------------------------------------------------
+// Live status banner
+// ---------------------------------------------------------------------------
 const LivePortStatus = memo(function LivePortStatus({ now, stats, loading }) {
   const timeStr = useMemo(
-    () =>
-      new Intl.DateTimeFormat("en-IN", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      }).format(now),
+    () => new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(now),
     [now],
   );
   const dateStr = useMemo(
-    () =>
-      new Intl.DateTimeFormat("en-IN", {
-        weekday: "long",
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      }).format(now),
+    () => new Intl.DateTimeFormat("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(now),
     [now],
   );
-
   const chip = (Icon, label, value, tone) => (
     <span className="inline-flex items-center gap-1 rounded-full bg-white/5 ring-1 ring-white/10 px-2 py-0.5 text-[11px]">
       <Icon className={`h-3 w-3 ${tone}`} />
@@ -289,19 +396,12 @@ const LivePortStatus = memo(function LivePortStatus({ now, stats, loading }) {
       <span className={`font-semibold tabular-nums ${tone}`}>{loading ? "…" : value}</span>
     </span>
   );
-
   return (
     <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#1a1d27] via-[#252836] to-[#1a1d27] dark:from-black dark:via-[#1a1d27] dark:to-black text-white ring-1 ring-white/5 shadow-[0_2px_6px_rgba(15,23,42,0.06),0_24px_56px_-20px_rgba(15,23,42,0.40)]">
-      <svg
-        aria-hidden
-        viewBox="0 0 1440 120"
-        preserveAspectRatio="none"
-        className="absolute inset-x-0 bottom-0 h-16 w-full text-amber-400/15"
-      >
+      <svg aria-hidden viewBox="0 0 1440 120" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-16 w-full text-amber-400/15">
         <path fill="currentColor" d="M0,64 C240,128 480,0 720,32 C960,64 1200,128 1440,64 L1440,120 L0,120 Z" />
         <path fill="currentColor" opacity="0.5" d="M0,80 C240,40 480,120 720,80 C960,40 1200,96 1440,72 L1440,120 L0,120 Z" />
       </svg>
-
       <div className="relative px-4 py-3 md:px-5 md:py-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/15 ring-1 ring-emerald-400/40 shrink-0">
@@ -311,37 +411,198 @@ const LivePortStatus = memo(function LivePortStatus({ now, stats, loading }) {
           <div className="leading-tight min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-emerald-300">
-                Live Account Overview
-              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-emerald-300">Live Account Overview</span>
             </div>
             <p className="text-xs text-stone-300 truncate">
-              <span className="font-semibold text-white">Chennai Port</span>{" "}
-              <span className="text-stone-500">• Harbour Entry Permits</span>
+              <span className="font-semibold text-white">Chennai Port</span>
+              <span className="text-stone-500"> • Harbour Entry Permits</span>
             </p>
           </div>
         </div>
-
         <span className="hidden md:inline-block h-6 w-px bg-white/10" />
-
-        {/* Real company metrics */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {chip(CheckCircle, "Active", stats.activePasses, "text-emerald-300")}
           {chip(Clock, "Pending", stats.pendingApprovals, "text-amber-300")}
           {chip(Truck, "Vehicles", stats.vehicleCount, "text-orange-300")}
           {chip(Users, "Persons", stats.personnelCount + stats.driverCount, "text-fuchsia-300")}
+          {chip(Timer, "Expiring", stats.expiringSoon, stats.expiringSoon > 0 ? "text-red-300" : "text-stone-400")}
         </div>
-
         <div className="ml-auto text-right leading-tight">
-          <p className="font-mono text-base md:text-lg font-bold tabular-nums text-amber-200">
-            {timeStr}
-          </p>
+          <p className="font-mono text-base md:text-lg font-bold tabular-nums text-amber-200">{timeStr}</p>
           <p className="text-[10px] text-stone-400">{dateStr}</p>
         </div>
       </div>
     </div>
   );
 });
+
+// ---------------------------------------------------------------------------
+// Expiring Soon detail card
+// ---------------------------------------------------------------------------
+const ExpiringSoonCard = memo(function ExpiringSoonCard({ items, loading }) {
+  const [expanded, setExpanded] = useState(false);
+  const displayed = expanded ? items : items.slice(0, 5);
+
+  return (
+    <Card className={cardShell + " !hover:translate-y-0 !hover:scale-100 !flex-col"}>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-xl font-bold flex items-center gap-2 text-stone-900 dark:text-stone-100">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-100 dark:bg-red-400/15 text-red-600 dark:text-red-400">
+              <Timer className="h-5 w-5" />
+            </span>
+            Expiring Soon
+          </CardTitle>
+          <Badge className="bg-red-100 dark:bg-red-400/15 text-red-600 dark:text-red-400 border-0 font-bold rounded-full">
+            Within 7 days · {items.length}
+          </Badge>
+        </div>
+        <CardDescription className="text-sm text-stone-500 dark:text-stone-400 mt-1">
+          Passes/entities that will expire within the next 7 days
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => <div key={i} className="h-14 rounded-xl bg-stone-100 dark:bg-white/5 animate-pulse" />)}
+          </div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-stone-400">
+            <CheckCircle className="h-9 w-9 mb-2 text-emerald-400 opacity-80" />
+            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">All passes are safe!</p>
+            <p className="text-xs mt-1">No passes expiring in the next 7 days</p>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              {displayed.map((item, i) => {
+                const days = daysUntil(item.dateTo);
+                const urgency = days !== null && days <= 1 ? "red" : days !== null && days <= 3 ? "orange" : "amber";
+                const urgencyClasses = {
+                  red: { bg: "bg-red-50 dark:bg-red-400/10", ring: "ring-red-200/70 dark:ring-red-400/20", badge: "bg-red-100 text-red-700 dark:bg-red-400/20 dark:text-red-300", icon: "text-red-500" },
+                  orange: { bg: "bg-orange-50 dark:bg-orange-400/10", ring: "ring-orange-200/70 dark:ring-orange-400/20", badge: "bg-orange-100 text-orange-700 dark:bg-orange-400/20 dark:text-orange-300", icon: "text-orange-500" },
+                  amber: { bg: "bg-amber-50/60 dark:bg-amber-400/5", ring: "ring-amber-200/60 dark:ring-amber-400/10", badge: "bg-amber-100 text-amber-700 dark:bg-amber-400/20 dark:text-amber-300", icon: "text-amber-500" },
+                };
+                const u = urgencyClasses[urgency];
+                return (
+                  <div key={item.id || i} className={`flex items-center gap-3 rounded-xl ${u.bg} ring-1 ${u.ring} px-3 py-2.5`}>
+                    <span className={`flex h-9 w-9 items-center justify-center rounded-lg shrink-0 ${item.type === "vehicle" ? "bg-amber-100 dark:bg-amber-400/15" : "bg-teal-100 dark:bg-teal-400/15"}`}>
+                      {item.type === "vehicle"
+                        ? <Truck className="h-4 w-4 text-amber-600 dark:text-amber-300" />
+                        : <User className="h-4 w-4 text-teal-600 dark:text-teal-300" />}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-stone-800 dark:text-stone-100 truncate">
+                        {item.name || item.registrationNo || "—"}
+                      </p>
+                      <p className="text-xs text-stone-500 dark:text-stone-400 font-mono">
+                        {item.passNo || ""} · Expires {formatDate(item.dateTo)}
+                      </p>
+                    </div>
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-extrabold shrink-0 ${u.badge}`}>
+                      <AlertTriangle className="h-3 w-3" />
+                      {days === 0 ? "Today" : days === 1 ? "Tomorrow" : `${days}d`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            {items.length > 5 && (
+              <button
+                onClick={() => setExpanded((p) => !p)}
+                className="mt-3 w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors py-2 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-400/10"
+              >
+                {expanded ? <><ChevronUp className="h-4 w-4" /> Show Less</> : <><ChevronDown className="h-4 w-4" /> Show {items.length - 5} More</>}
+              </button>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Entity breakdown card
+// ---------------------------------------------------------------------------
+const EntityBreakdownCard = memo(function EntityBreakdownCard({ stats, loading }) {
+  const rows = [
+    { key: "vehicleCount", label: "Vehicles", icon: Truck, color: "#f59e0b", tint: "bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300" },
+    { key: "personnelCount", label: "Personnel", icon: Users, color: "#14b8a6", tint: "bg-teal-100 dark:bg-teal-400/15 text-teal-700 dark:text-teal-300" },
+    { key: "driverCount", label: "Drivers", icon: CreditCard, color: "#a855f7", tint: "bg-purple-100 dark:bg-purple-400/15 text-purple-700 dark:text-purple-300" },
+  ];
+  const total = stats.totalEntities || 0;
+
+  return (
+    <Card className={cardShell + " !flex-col"}>
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-xl font-bold flex items-center gap-2 text-stone-900 dark:text-stone-100">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-stone-100 dark:bg-white/5 text-stone-700 dark:text-amber-300">
+              <Building2 className="h-5 w-5" />
+            </span>
+            Entity Breakdown
+          </CardTitle>
+          <Badge className="bg-stone-100 dark:bg-white/5 text-stone-600 dark:text-stone-300 border-0 font-bold rounded-full">
+            {total} total
+          </Badge>
+        </div>
+        <CardDescription className="text-sm text-stone-500 dark:text-stone-400 mt-1">
+          Detailed count of all registered entity types
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {loading ? (
+          [1, 2, 3].map((i) => <div key={i} className="h-14 rounded-2xl bg-stone-100 dark:bg-white/5 animate-pulse" />)
+        ) : (
+          rows.map((r) => {
+            const val = stats[r.key] || 0;
+            const pct = total ? Math.round((val / total) * 100) : 0;
+            return (
+              <div key={r.key} className="flex items-center gap-3 rounded-2xl bg-stone-50 dark:bg-white/5 p-3.5">
+                <div className={"flex h-11 w-11 items-center justify-center rounded-xl shrink-0 " + r.tint}>
+                  <r.icon className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="font-bold text-stone-800 dark:text-stone-100">{r.label}</p>
+                    <p className="text-sm font-extrabold tabular-nums text-stone-900 dark:text-stone-100">
+                      {val}
+                      <span className="ml-1.5 text-xs font-semibold text-stone-500 dark:text-stone-400">{pct}%</span>
+                    </p>
+                  </div>
+                  <div className="mt-1.5 h-1.5 w-full rounded-full bg-stone-200/70 dark:bg-white/10 overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: r.color }} />
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </CardContent>
+    </Card>
+  );
+});
+
+// Quick insights cards are now rendered directly inside the main stat card grid
+
+// ---------------------------------------------------------------------------
+// Pass detail modal fields
+// ---------------------------------------------------------------------------
+const PassDetailModalDocs = ({ docs }) => {
+  const available = docs.filter((d) => d.path);
+  if (available.length === 0) return <p className="text-xs text-stone-400 italic">No documents uploaded</p>;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {available.map((d) => (
+        <a key={d.label} href={fileUrl(d.path)} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300 ring-1 ring-amber-200/70 dark:ring-amber-400/20 px-2.5 py-1.5 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-400/20 transition-colors">
+          <FileText className="h-3.5 w-3.5" />{d.label}<Eye className="h-3.5 w-3.5 opacity-70" />
+        </a>
+      ))}
+    </div>
+  );
+};
 
 // Tooltip for the application-trend chart
 const TrendTooltip = ({ active, payload, label }) => {
@@ -412,7 +673,7 @@ const ApplicationTrendChart = memo(function ApplicationTrendChart({ data }) {
                   : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
               }`}
             >
-              {trendUp ? "\u2191" : "\u2193"} {Math.abs(trendPct)}% MoM
+              {trendUp ? "↑" : "↓"} {Math.abs(trendPct)}% MoM
             </span>
             <Badge className="bg-stone-100 dark:bg-white/5 text-stone-600 dark:text-stone-300 border-0 font-semibold rounded-full">
               6 months
@@ -737,223 +998,14 @@ const DocLinks = ({ docs }) => {
   );
 };
 
-const PassDetailModal = memo(function PassDetailModal({ pass, hepTypes, onClose }) {
-  if (!pass) return null;
-  const persons = Array.isArray(pass.persons) ? pass.persons : [];
-  const vehicles = Array.isArray(pass.vehicles) ? pass.vehicles : [];
-  const reqMeta = getRequestStatusMeta(pass.status);
-
-  const dateRange = (from, to) => {
-    if (!from && !to) return "—";
-    return `${formatDate(from)} → ${formatDate(to)}`;
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-[#1f232d] w-full max-w-3xl rounded-3xl shadow-2xl ring-1 ring-stone-200/60 dark:ring-white/10 overflow-hidden animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
-        {/* Header */}
-        <div className="flex justify-between items-center px-5 sm:px-6 py-4 bg-gradient-to-r from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] text-white shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/15 text-amber-300 ring-1 ring-amber-300/30 shrink-0">
-              <Ship className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-lg font-bold truncate">{pass.referenceNo || "Pass Request"}</h2>
-              <p className="text-xs text-stone-400">
-                {persons.length} person{persons.length !== 1 ? "s" : ""} • {vehicles.length} vehicle{vehicles.length !== 1 ? "s" : ""}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={`hidden sm:inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold border ${reqMeta.color}`}>
-              {reqMeta.label.toUpperCase()}
-            </span>
-            <button onClick={onClose} className="text-white/80 hover:text-white active:scale-90 transition-all bg-white/10 p-1.5 rounded-lg">
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1 [scrollbar-width:thin]">
-          {/* Request summary */}
-          <div className="rounded-2xl bg-stone-50 dark:bg-white/5 ring-1 ring-stone-200/70 dark:ring-white/10 p-4">
-            <h3 className="text-xs font-bold text-stone-500 dark:text-stone-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <Hash className="h-4 w-4" /> Request Summary
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <Field label="Reference No" value={pass.referenceNo} mono />
-              <Field label="Status" value={reqMeta.label} />
-              <Field label="Payment Mode" value={pass.paymentMode} />
-              <Field label="Submitted" value={formatDate(pass.submittedAt || pass.createdAt)} />
-              <Field label="Gross Total" value={pass.grossTotal != null ? formatCurrency(parseFloat(pass.grossTotal)) : "—"} />
-              <Field label="GST" value={pass.gstAmount != null ? formatCurrency(parseFloat(pass.gstAmount)) : "—"} />
-              <Field label="Net Amount" value={pass.netAmount != null ? formatCurrency(parseFloat(pass.netAmount)) : "—"} />
-            </div>
-            {pass.requisitionLetterFilePath && (
-              <div className="mt-3 pt-3 border-t border-stone-200/70 dark:border-white/10">
-                <DocLinks docs={[{ label: pass.requisitionLetterFileName || "Requisition Letter", path: pass.requisitionLetterFilePath }]} />
-              </div>
-            )}
-          </div>
-
-          {/* Persons */}
-          {persons.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-stone-500 dark:text-stone-400 uppercase tracking-widest flex items-center gap-2">
-                <Users className="h-4 w-4" /> Persons ({persons.length})
-              </h3>
-              {persons.map((p, i) => {
-                const meta = getEntityStatusMeta(p.status);
-                const hep = hepTypes[p.hepTypeId];
-                return (
-                  <div key={p.id || i} className="rounded-2xl bg-white dark:bg-white/[0.03] ring-1 ring-stone-200/70 dark:ring-white/10 p-4">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-400/15 text-teal-700 dark:text-teal-300 shrink-0">
-                          <Users className="h-5 w-5" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="font-bold text-stone-900 dark:text-stone-100 truncate">{p.name || "—"}</p>
-                          <p className="text-xs text-stone-500 dark:text-stone-400 font-mono">{p.personPassNo || "Pass no. pending"}</p>
-                        </div>
-                      </div>
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${meta.color} shrink-0`}>
-                        {meta.label.toUpperCase()}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      <Field label="HEP Type" value={hep ? hep.charAt(0).toUpperCase() + hep.slice(1) : (p.hepTypeId ?? "—")} />
-                      <Field label="Aadhaar / ID" value={p.aadharNo} mono />
-                      <Field label="Mobile" value={p.mobile} />
-                      <Field label="Email" value={p.email} />
-                      <Field label="Nationality" value={p.nationality} />
-                      <Field label="Pass Type" value={p.passType} />
-                      <Field label="Validity" value={dateRange(p.dateFrom, p.dateTo)} />
-                      <Field label="Amount" value={p.amount != null ? formatCurrency(parseFloat(p.amount)) : "—"} />
-                      <Field label="ID Proof" value={p.idProofType ? `${ID_PROOF_LABELS[p.idProofType] || p.idProofType}: ${p.idProofNumber || "—"}` : (p.idProofNumber || "—")} />
-                      {p.visaNo ? <Field label="Visa No" value={p.visaNo} mono /> : null}
-                      {p.cardNumber ? <Field label="RFID Card" value={p.cardNumber} mono /> : null}
-                      {p.withTwoWheeler ? <Field label="Two-Wheeler" value={p.vehicleNo || "Yes"} mono /> : null}
-                    </div>
-
-                    {p.status === "reverted" && p.rejectedReason && (
-                      <div className="mt-3 rounded-xl bg-orange-50 dark:bg-orange-400/10 ring-1 ring-orange-200/70 dark:ring-orange-400/20 p-2.5">
-                        <p className="text-[10px] font-bold text-orange-600 dark:text-orange-300 uppercase tracking-wider mb-0.5">Revert / Reject Reason</p>
-                        <p className="text-xs text-orange-700 dark:text-orange-200">{p.rejectedReason}</p>
-                      </div>
-                    )}
-
-                    <div className="mt-3 pt-3 border-t border-stone-200/70 dark:border-white/10">
-                      <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-2">Documents</p>
-                      <DocLinks
-                        docs={[
-                          { label: "Photo", path: p.photoFilePath },
-                          { label: "Aadhaar PDF", path: p.aadharPDFFilePATH },
-                          { label: "ID Proof", path: p.idProofFilePath },
-                          { label: "Driver Licence", path: p.driverLicensePath },
-                          { label: "Police Verification", path: p.policeVerificationPath },
-                          { label: "Employment Proof", path: p.employmentProofPath },
-                          { label: "CHA Licence", path: p.chaLicensePath },
-                          { label: "Passport", path: p.passportPath },
-                        ]}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Vehicles */}
-          {vehicles.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-stone-500 dark:text-stone-400 uppercase tracking-widest flex items-center gap-2">
-                <Truck className="h-4 w-4" /> Vehicles ({vehicles.length})
-              </h3>
-              {vehicles.map((v, i) => {
-                const meta = getEntityStatusMeta(v.status);
-                return (
-                  <div key={v.id || i} className="rounded-2xl bg-white dark:bg-white/[0.03] ring-1 ring-stone-200/70 dark:ring-white/10 p-4">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300 shrink-0">
-                          <Truck className="h-5 w-5" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="font-bold text-stone-900 dark:text-stone-100 truncate font-mono">{v.registrationNo || "—"}</p>
-                          <p className="text-xs text-stone-500 dark:text-stone-400 font-mono">{v.vehiclePassNo || "Pass no. pending"}</p>
-                        </div>
-                      </div>
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${meta.color} shrink-0`}>
-                        {meta.label.toUpperCase()}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      <Field label="Vehicle Type" value={v.vehicleTypeId} />
-                      <Field label="RFID Card" value={v.rfidCardNumber} mono />
-                      <Field label="Pass Type" value={v.passType} />
-                      <Field label="Validity" value={dateRange(v.dateFrom, v.dateTo)} />
-                      <Field label="Amount" value={v.amount != null ? formatCurrency(parseFloat(v.amount)) : "—"} />
-                      <Field label="Insurance Expiry" value={formatDate(v.insuranceExpiry)} />
-                      <Field label="RC Validity" value={formatDate(v.rcValidity)} />
-                    </div>
-
-                    {v.status === "reverted" && v.rejectedReason && (
-                      <div className="mt-3 rounded-xl bg-orange-50 dark:bg-orange-400/10 ring-1 ring-orange-200/70 dark:ring-orange-400/20 p-2.5">
-                        <p className="text-[10px] font-bold text-orange-600 dark:text-orange-300 uppercase tracking-wider mb-0.5">Revert / Reject Reason</p>
-                        <p className="text-xs text-orange-700 dark:text-orange-200">{v.rejectedReason}</p>
-                      </div>
-                    )}
-
-                    <div className="mt-3 pt-3 border-t border-stone-200/70 dark:border-white/10">
-                      <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-2">Documents</p>
-                      <DocLinks
-                        docs={[
-                          { label: "RC / Scanned Copy", path: v.scannedCopyFilePath },
-                          { label: "Insurance", path: v.insuranceFilePath },
-                          { label: "Permit", path: v.permitFilePath },
-                          { label: "Fitness", path: v.fitnessFilePath },
-                          { label: "Request Letter", path: v.requestLetterPath },
-                          { label: "Tax", path: v.taxDocPath },
-                          { label: "Emission", path: v.emissionCertPath },
-                        ]}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {persons.length === 0 && vehicles.length === 0 && (
-            <div className="py-10 text-center text-stone-400">
-              <FileText className="h-10 w-10 mx-auto mb-3 opacity-40" />
-              <p className="text-sm font-semibold">No persons or vehicles on this request</p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-5 sm:px-6 py-4 border-t border-stone-200/70 dark:border-white/10 bg-stone-50 dark:bg-white/[0.02] shrink-0 flex justify-end">
-          <Button onClick={onClose} className="rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100 text-white font-bold px-6">
-            Close
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-});
-
 // ---------------------------------------------------------------------------
-// Main page
+// Main Page
 // ---------------------------------------------------------------------------
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [now, setNow] = useState(() => new Date());
+  const [dateFilter, setDateFilter] = useState("today");
 
   const [profileData, setProfileData] = useState(null);
   const [isBlacklisted, setIsBlacklisted] = useState(false);
@@ -971,9 +1023,13 @@ export default function DashboardPage() {
     vehicleCount: 0,
     personnelCount: 0,
     driverCount: 0,
+    todayVehicles: 0,
+    todayPersons: 0,
+    todayPassRequests: 0,
   });
   const [statusCounts, setStatusCounts] = useState({ approved: 0, pending: 0, rejected: 0, reverted: 0 });
-  const [recentPasses, setRecentPasses] = useState([]);
+  const [allPasses, setAllPasses] = useState([]);
+  const [expiringItems, setExpiringItems] = useState([]);
   const [penalties, setPenalties] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [hepTypes, setHepTypes] = useState({});
@@ -984,19 +1040,92 @@ export default function DashboardPage() {
     { name: "Driver", value: 0, color: "#a855f7" },
   ]);
 
+  // ── Drag & Drop Ordering state for the stat cards ──────────────────────────
+  const [cardOrder, setCardOrder] = useState([
+    "todayVehicles",
+    "todayPasses",
+    "approvalRate",
+    "pendingAge",
+    "expiryAlerts",
+    "totalSubmitted",
+    "activePasses",
+    "pendingApprovals",
+    "expiringSoon",
+    "totalEntities"
+  ]);
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+
+  // Load layout order from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("dashboard-card-order");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === 10) {
+          setCardOrder(parsed);
+        }
+      } catch (e) {}
+    }
+  }, []);
+
+  const handleDragStart = (e, idx) => {
+    setDraggedIndex(idx);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    if (dragOverIndex !== idx) setDragOverIndex(idx);
+  };
+
+  const handleDrop = (e, idx) => {
+    e.preventDefault();
+    if (draggedIndex === null) return;
+    const newOrder = [...cardOrder];
+    const [draggedItem] = newOrder.splice(draggedIndex, 1);
+    newOrder.splice(idx, 0, draggedItem);
+    setCardOrder(newOrder);
+    localStorage.setItem("dashboard-card-order", JSON.stringify(newOrder));
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const resetCardOrder = () => {
+    const defaultOrder = [
+      "todayVehicles",
+      "todayPasses",
+      "approvalRate",
+      "pendingAge",
+      "expiryAlerts",
+      "totalSubmitted",
+      "activePasses",
+      "pendingApprovals",
+      "expiringSoon",
+      "totalEntities"
+    ];
+    setCardOrder(defaultOrder);
+    localStorage.removeItem("dashboard-card-order");
+    toast.success("Card layout reset to default!");
+  };
+
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) setUser(JSON.parse(storedUser));
     else router.push("/");
   }, [router]);
 
-  // Live clock — 1 Hz
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  // ── Fetch ALL real dashboard data ──────────────────────────────────────
+  // ── Fetch all dashboard data ──────────────────────────────────────────────
   useEffect(() => {
     const fetchAllPasses = async (headers) => {
       const first = await axios.get(`${AGENT_API}/pass-request/my-pass-requests?page=1&limit=100`, { headers });
@@ -1009,70 +1138,52 @@ export default function DashboardPage() {
           reqs.push(axios.get(`${AGENT_API}/pass-request/my-pass-requests?page=${p}&limit=100`, { headers }));
         }
         const rest = await Promise.allSettled(reqs);
-        rest.forEach((r) => {
-          if (r.status === "fulfilled" && r.value.data?.success) all = all.concat(r.value.data.data || []);
-        });
+        rest.forEach((r) => { if (r.status === "fulfilled" && r.value.data?.success) all = all.concat(r.value.data.data || []); });
       }
       return all;
     };
 
     const fetchDashboardData = async () => {
       const token = localStorage.getItem("accessToken");
-      if (!token) {
-        setStatsLoading(false);
-        return;
-      }
+      if (!token) { setStatsLoading(false); return; }
       const authHeaders = { Authorization: `Bearer ${token}` };
 
-      // Profile / blacklist (independent of passes)
       try {
         const profileRes = await axios.get(`${AGENT_API}/agents/profile`, { headers: authHeaders });
         if (profileRes.data?.success) {
           const data = profileRes.data.data;
           setProfileData(data);
-          if (data.isBlacklisted) {
-            setIsBlacklisted(true);
-            setBlacklistReason(data.blacklistReason || "Suspended due to port violations.");
-            setShowBlacklistPopup(true);
-          }
-          if (data.blacklistedVehicles?.length > 0) {
-            setBlacklistedVehicles(data.blacklistedVehicles);
-            setShowVehicleWarningPopup(true);
-          }
+          if (data.isBlacklisted) { setIsBlacklisted(true); setBlacklistReason(data.blacklistReason || "Suspended due to port violations."); setShowBlacklistPopup(true); }
+          if (data.blacklistedVehicles?.length > 0) { setBlacklistedVehicles(data.blacklistedVehicles); setShowVehicleWarningPopup(true); }
         }
-      } catch (err) {
-        console.warn("Profile fetch failed:", err?.message);
-      }
+      } catch (err) { console.warn("Profile fetch failed:", err?.message); }
 
-      // hep-type id → name map (to split Personnel vs Driver accurately)
       const hepMap = {};
       try {
         const hepRes = await axios.get(`${AGENT_API}/pass-request/get-hep-types`, { headers: authHeaders });
-        (hepRes.data?.data || []).forEach((h) => {
-          hepMap[h.id] = String(h.hepType || h.name || h.type || h.hep_type || "").toLowerCase();
-        });
-      } catch {
-        /* fall back to treating all persons as personnel */
-      }
+        (hepRes.data?.data || []).forEach((h) => { hepMap[h.id] = String(h.hepType || h.name || h.type || h.hep_type || "").toLowerCase(); });
+      } catch { /* fallback */ }
       setHepTypes(hepMap);
 
-      // All pass requests
       try {
         const passes = await fetchAllPasses(authHeaders);
 
-        const now = new Date();
-        const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const nowTs = new Date();
+        const in7 = new Date(nowTs.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-        let vehicleCount = 0;
-        let personnelCount = 0;
-        let driverCount = 0;
-        let approved = 0;
-        let pending = 0;
-        let rejected = 0;
-        let reverted = 0;
-        let expiringSoon = 0;
+        let vehicleCount = 0, personnelCount = 0, driverCount = 0;
+        let approved = 0, pending = 0, rejected = 0, reverted = 0, expiringSoon = 0;
 
-        // Build last-6-months buckets
+        // Today start and end timestamps
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+        let todayVehicles = 0;
+        let todayPersons = 0;
+        let todayPassRequests = 0;
+
+        // Monthly buckets
         const base = new Date();
         base.setDate(1);
         const months = [];
@@ -1083,29 +1194,41 @@ export default function DashboardPage() {
         }
         const monthIdx = new Map(months.map((m, idx) => [m.key, idx]));
 
+        const expItems = [];
+
         const tallyEntity = (status) => {
           const s = String(status || "").toLowerCase();
           if (s === "approved") approved++;
           else if (s === "rejected") rejected++;
           else if (s === "reverted") reverted++;
-          else pending++; // pending / blank / under-review
+          else pending++;
         };
 
         passes.forEach((pr) => {
           const persons = Array.isArray(pr.persons) ? pr.persons : [];
           const vehicles = Array.isArray(pr.vehicles) ? pr.vehicles : [];
-
-          personnelCount += 0; // computed per-person below
           vehicleCount += vehicles.length;
+
+          // Check if request was created today
+          const cd = new Date(pr.createdAt || pr.submittedAt);
+          const isToday = !Number.isNaN(cd.getTime()) && cd >= startOfToday && cd <= endOfToday;
+
+          if (isToday) {
+            todayPassRequests++;
+            todayVehicles += vehicles.length;
+            todayPersons += persons.length;
+          }
 
           persons.forEach((p) => {
             const isDriver = (hepMap[p.hepTypeId] || "").includes("driver");
-            if (isDriver) driverCount++;
-            else personnelCount++;
+            if (isDriver) driverCount++; else personnelCount++;
             tallyEntity(p.status);
             if (String(p.status || "").toLowerCase() === "approved" && p.dateTo) {
               const dt = new Date(p.dateTo);
-              if (!Number.isNaN(dt.getTime()) && dt >= now && dt <= in7) expiringSoon++;
+              if (!Number.isNaN(dt.getTime()) && dt >= nowTs && dt <= in7) {
+                expiringSoon++;
+                expItems.push({ id: p.id, type: "person", name: p.name || "—", passNo: p.personPassNo, dateTo: p.dateTo, refNo: pr.referenceNo });
+              }
             }
           });
 
@@ -1113,12 +1236,13 @@ export default function DashboardPage() {
             tallyEntity(v.status);
             if (String(v.status || "").toLowerCase() === "approved" && v.dateTo) {
               const dt = new Date(v.dateTo);
-              if (!Number.isNaN(dt.getTime()) && dt >= now && dt <= in7) expiringSoon++;
+              if (!Number.isNaN(dt.getTime()) && dt >= nowTs && dt <= in7) {
+                expiringSoon++;
+                expItems.push({ id: v.id, type: "vehicle", name: v.registrationNo || "—", passNo: v.vehiclePassNo, dateTo: v.dateTo, refNo: pr.referenceNo });
+              }
             }
           });
 
-          // Monthly trend by request creation date
-          const cd = new Date(pr.createdAt || pr.submittedAt);
           if (!Number.isNaN(cd.getTime())) {
             const idx = monthIdx.get(monthKey(cd));
             if (idx !== undefined) {
@@ -1128,8 +1252,9 @@ export default function DashboardPage() {
           }
         });
 
-        const totalEntities = approved + pending + rejected + reverted;
+        expItems.sort((a, b) => new Date(a.dateTo) - new Date(b.dateTo));
 
+        const totalEntities = approved + pending + rejected + reverted;
         setApiStats({
           activePasses: approved,
           pendingApprovals: pending,
@@ -1138,33 +1263,28 @@ export default function DashboardPage() {
           vehicleCount,
           personnelCount,
           driverCount,
+          todayVehicles,
+          todayPersons,
+          todayPassRequests,
         });
         setStatusCounts({ approved, pending, rejected, reverted });
         setMonthlyData(months);
+        setExpiringItems(expItems);
         setPassTypeData([
           { name: "Vehicle", value: vehicleCount, color: "#f59e0b" },
           { name: "Personnel", value: personnelCount, color: "#14b8a6" },
           { name: "Driver", value: driverCount, color: "#a855f7" },
         ]);
+        setAllPasses(passes);
+      } catch (err) { console.warn("Pass requests fetch failed:", err?.message); }
 
-        // Recent applications — backend already sorts by createdAt DESC
-        setRecentPasses(passes.slice(0, 5));
-      } catch (err) {
-        console.warn("Pass requests fetch failed:", err?.message);
-      }
-
-      // Penalties — agent's own blacklist entries with a pending penalty
       try {
         const penaltyRes = await axios.get(`${ADMIN_API}/blacklist/my-blacklist?limit=100`, { headers: authHeaders });
         if (penaltyRes.data?.success) {
           const rows = penaltyRes.data.data || [];
-          setPenalties(
-            rows.filter((r) => r.has_penalty && String(r.penalty_status || "").toUpperCase() === "PENDING"),
-          );
+          setPenalties(rows.filter((r) => r.has_penalty && String(r.penalty_status || "").toUpperCase() === "PENDING"));
         }
-      } catch {
-        /* blacklist service may be unreachable — skip silently */
-      }
+      } catch { /* skip */ }
 
       setStatsLoading(false);
     };
@@ -1172,11 +1292,164 @@ export default function DashboardPage() {
     fetchDashboardData();
   }, []);
 
-  const username = useMemo(
-    () => profileData?.entityName || user?.username?.split("@")[0] || "Applicant",
-    [user, profileData],
-  );
+  const filteredPasses = useMemo(() => filterPassesByDate(allPasses, dateFilter), [allPasses, dateFilter]);
+  const recentFilteredPasses = useMemo(() => filteredPasses.slice(0, 10), [filteredPasses]);
+
+  const filterCounts = useMemo(() => ({
+    today: filterPassesByDate(allPasses, "today").length,
+    week: filterPassesByDate(allPasses, "week").length,
+    month: filterPassesByDate(allPasses, "month").length,
+    all: allPasses.length,
+  }), [allPasses]);
+
+  const username = useMemo(() => profileData?.entityName || user?.username?.split("@")[0] || "Applicant", [user, profileData]);
   const greeting = useMemo(() => getGreeting(now.getHours()), [now]);
+
+  const oldestPendingDays = useMemo(() => {
+    if (apiStats.pendingApprovals === 0) return null;
+    let max = null;
+    for (const pr of allPasses) {
+      const entities = [...(pr.persons || []), ...(pr.vehicles || [])];
+      for (const e of entities) {
+        if (String(e.status || "").toLowerCase() === "pending" || !e.status) {
+          const days = Math.floor((Date.now() - new Date(pr.createdAt || 0).getTime()) / (1000 * 60 * 60 * 24));
+          if (max === null || days > max) max = days;
+        }
+      }
+    }
+    return max;
+  }, [allPasses, apiStats.pendingApprovals]);
+
+  // ── Render functions for Drag & Drop ──────────────────────────────────────
+  const renderCard = (cardKey) => {
+    switch (cardKey) {
+      case "todayVehicles":
+        return (
+          <StatCard
+            key="todayVehicles"
+            icon={Truck}
+            label="Today's Vehicles"
+            value={statsLoading ? "—" : apiStats.todayVehicles}
+            accent="primary"
+            footnote="Vehicle passes applied today"
+          />
+        );
+      case "todayPasses":
+        return (
+          <StatCard
+            key="todayPasses"
+            icon={FileText}
+            label="Today's Total Passes"
+            value={statsLoading ? "—" : apiStats.todayPassRequests}
+            footnote={statsLoading ? "—" : `${apiStats.todayPersons} persons & ${apiStats.todayVehicles} vehicles`}
+          />
+        );
+      case "approvalRate":
+        const appRate = statsLoading ? 0 : (apiStats.totalEntities > 0 ? Math.round((apiStats.activePasses / apiStats.totalEntities) * 100) : 0);
+        return (
+          <StatCard
+            key="approvalRate"
+            icon={appRate >= 70 ? TrendingUp : TrendingDown}
+            label="Approval Rate"
+            value={statsLoading ? "—" : `${appRate}%`}
+            accent={appRate >= 70 ? "success" : "warning"}
+            footnote={statsLoading ? "—" : `${apiStats.activePasses} approved of ${apiStats.totalEntities}`}
+            footnoteTone={appRate >= 70 ? "success" : "warning"}
+          />
+        );
+      case "pendingAge":
+        return (
+          <StatCard
+            key="pendingAge"
+            icon={Clock}
+            label="Pending Age"
+            value={statsLoading ? "—" : (oldestPendingDays !== null ? `${oldestPendingDays}d` : "N/A")}
+            accent={oldestPendingDays !== null && oldestPendingDays > 7 ? "danger" : "warning"}
+            footnote={statsLoading ? "—" : (oldestPendingDays !== null ? "Oldest pending entity" : "No pending entities")}
+            footnoteTone={oldestPendingDays !== null && oldestPendingDays > 7 ? "danger" : "warning"}
+          />
+        );
+      case "expiryAlerts":
+        return (
+          <StatCard
+            key="expiryAlerts"
+            icon={AlertTriangle}
+            label="Expiry Alerts"
+            value={statsLoading ? "—" : apiStats.expiringSoon}
+            accent={apiStats.expiringSoon > 0 ? "danger" : "success"}
+            footnote={statsLoading ? "—" : (apiStats.expiringSoon > 0 ? `${apiStats.expiringSoon} expiring within 7d` : "No upcoming expirations")}
+            footnoteTone={apiStats.expiringSoon > 0 ? "danger" : "success"}
+          />
+        );
+      case "totalSubmitted":
+        return (
+          <StatCard
+            key="totalSubmitted"
+            icon={BarChart3}
+            label="Total Submitted"
+            value={statsLoading ? "—" : allPasses.length}
+            accent="info"
+            footnote="All-time pass requests"
+          />
+        );
+      case "activePasses":
+        return (
+          <StatCard
+            key="activePasses"
+            icon={CheckCircle}
+            label="Active Passes"
+            value={statsLoading ? "—" : apiStats.activePasses}
+            badge={apiStats.totalEntities > 0 ? `${Math.round((apiStats.activePasses / apiStats.totalEntities) * 100)}%` : null}
+            subItems={[
+              { icon: Users, label: "Persons", value: apiStats.personnelCount },
+              { icon: CreditCard, label: "Drivers", value: apiStats.driverCount },
+              { icon: Truck, label: "Vehicles", value: apiStats.vehicleCount },
+            ]}
+          />
+        );
+      case "pendingApprovals":
+        return (
+          <StatCard
+            key="pendingApprovals"
+            icon={Clock}
+            label="Pending Approvals"
+            value={statsLoading ? "—" : apiStats.pendingApprovals}
+            footnote={apiStats.pendingApprovals > 0
+              ? (oldestPendingDays !== null ? `Oldest: ${oldestPendingDays} day${oldestPendingDays !== 1 ? "s" : ""} ago` : "Awaiting review")
+              : "All up to date"}
+            footnoteTone={apiStats.pendingApprovals > 0 ? "warning" : undefined}
+          />
+        );
+      case "expiringSoon":
+        return (
+          <StatCard
+            key="expiringSoon"
+            icon={AlertTriangle}
+            label="Expiring Soon"
+            value={statsLoading ? "—" : apiStats.expiringSoon}
+            footnote={apiStats.expiringSoon > 0 ? "Within 7 days — action needed" : "No upcoming expirations"}
+            footnoteTone={apiStats.expiringSoon > 0 ? "danger" : undefined}
+          />
+        );
+      case "totalEntities":
+        return (
+          <StatCard
+            key="totalEntities"
+            icon={Users}
+            label="Total Entities"
+            value={statsLoading ? "—" : apiStats.totalEntities}
+            subItems={apiStats.totalEntities > 0 ? [
+              { icon: Truck, label: "V", value: apiStats.vehicleCount },
+              { icon: Users, label: "P", value: apiStats.personnelCount },
+              { icon: CreditCard, label: "D", value: apiStats.driverCount },
+            ] : undefined}
+            footnote={`${statusCounts.approved} approved · ${statusCounts.pending} pending`}
+          />
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="relative w-full font-sans">
@@ -1185,79 +1458,76 @@ export default function DashboardPage() {
       <div aria-hidden className="pointer-events-none absolute -right-24 top-[30%] h-80 w-80 rounded-full bg-teal-300/20 dark:bg-teal-500/[0.04] blur-3xl" />
 
       <div className="relative space-y-6">
-        {/* 1 ─ Live overview banner (real metrics + live clock) */}
+
+        {/* 1 ─ Live overview banner */}
         <LivePortStatus now={now} stats={apiStats} loading={statsLoading} />
 
         {/* 2 ─ Welcome row */}
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-2 bg-white dark:bg-white/5 px-4 py-1.5 rounded-full text-sm font-semibold text-amber-700 dark:text-amber-300 mb-3 shadow-sm ring-1 ring-amber-200/60 dark:ring-amber-400/20">
-              <Ship className="h-4 w-4" />
-              {greeting}
+              <Ship className="h-4 w-4" />{greeting}
             </div>
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-stone-900 dark:text-stone-100 mb-2">
               Welcome Company,{" "}
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-orange-500 dark:from-amber-300 dark:to-orange-400">{username}</span>
             </h1>
             <p className="text-base md:text-lg text-stone-600 dark:text-stone-400 max-w-2xl">
-              Here&rsquo;s your live port-pass overview.
+              Here&rsquo;s your live port-pass overview &amp; compliance summary.
             </p>
           </div>
-
           <div className="flex flex-wrap gap-3">
-            <Button variant="outline" className="rounded-2xl h-11 px-5 font-semibold bg-white dark:bg-white/5 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-white/10 hover:bg-stone-50 dark:hover:bg-white/10">
-              <Calendar className="mr-2 h-4 w-4" />
-              All Time
-            </Button>
             <Button
-              onClick={() => {
-                if (isBlacklisted) {
-                  setShowBlacklistPopup(true);
-                  toast.error("Blocked: Your company is blacklisted and cannot apply for passes.");
-                } else {
-                  router.push("/dashboard/pass_request");
-                }
-              }}
+              onClick={() => isBlacklisted ? (setShowBlacklistPopup(true), toast.error("Blocked: Your company is blacklisted.")) : router.push("/dashboard/pass_request")}
               className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl h-11 px-6 font-bold shadow-lg shadow-orange-500/30"
             >
-              <Plus className="mr-2 h-4 w-4" />
-              Apply New Pass
+              <Plus className="mr-2 h-4 w-4" />Apply New Pass
             </Button>
           </div>
         </div>
 
-        {/* 3 ─ Stat cards (real data) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          <StatCard
-            icon={CheckCircle}
-            label="Active Passes"
-            value={statsLoading ? "—" : apiStats.activePasses}
-            accent="primary"
-            badge={apiStats.totalEntities > 0 ? `${Math.round((apiStats.activePasses / apiStats.totalEntities) * 100)}%` : null}
-          />
-          <StatCard
-            icon={Clock}
-            label="Pending Approvals"
-            value={statsLoading ? "—" : apiStats.pendingApprovals}
-            footnote={apiStats.pendingApprovals > 0 ? "Awaiting review" : "All up to date"}
-            footnoteTone={apiStats.pendingApprovals > 0 ? "warning" : undefined}
-          />
-          <StatCard
-            icon={XCircle}
-            label="Expiring Soon"
-            value={statsLoading ? "—" : apiStats.expiringSoon}
-            footnote={apiStats.expiringSoon > 0 ? "Within 7 days" : "None expiring"}
-            footnoteTone={apiStats.expiringSoon > 0 ? "danger" : undefined}
-          />
-          <StatCard
-            icon={Users}
-            label="Total Entities"
-            value={statsLoading ? "—" : apiStats.totalEntities}
-            badge={apiStats.totalEntities > 0 ? `${apiStats.vehicleCount}V · ${apiStats.personnelCount + apiStats.driverCount}P` : null}
-          />
+        {/* 💡 Drag Instruction & Reset row */}
+        <div className="flex items-center justify-between gap-3 text-xs bg-amber-500/5 rounded-2xl px-4 py-2 border border-amber-500/10">
+          <p className="text-stone-600 dark:text-amber-400/80 font-medium flex items-center gap-1.5">
+            <Zap className="h-4 w-4 animate-bounce text-amber-500" />
+            Drag and drop card handles (grip icon) to arrange stats. Persistence saved!
+          </p>
+          <button
+            onClick={resetCardOrder}
+            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200 transition-colors shrink-0"
+            title="Reset layout to default"
+          >
+            <RotateCcw className="h-3 w-3" />
+            Reset Order
+          </button>
         </div>
 
-        {/* 4 ─ Compliance alerts (real data) */}
+        {/* 4 ─ Stat cards (5 Columns on large monitors, 3 on standard, 2 on tablet, 1 on mobile) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-5">
+          {cardOrder.map((cardKey, index) => {
+            const isDragged = draggedIndex === index;
+            const isOver = dragOverIndex === index;
+            return (
+              <div
+                key={cardKey}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                className={
+                  "transition-all duration-200 " +
+                  (isDragged ? "opacity-35 scale-95" : "") +
+                  (isOver ? " border-2 border-dashed border-amber-500 rounded-3xl p-1 bg-amber-500/5 shadow-inner scale-[1.02]" : "")
+                }
+              >
+                {renderCard(cardKey)}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 5 ─ Compliance alerts */}
         {(isBlacklisted || penalties.length > 0) && (
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
             {isBlacklisted && (
@@ -1272,29 +1542,20 @@ export default function DashboardPage() {
                         <CardTitle className="text-lg md:text-xl text-red-700 dark:text-red-300 font-bold truncate">Account Blacklisted</CardTitle>
                         <Badge className="bg-red-600 text-white border-0 text-xs font-bold px-2 py-0.5 flex-shrink-0 rounded-full">RESTRICTED</Badge>
                       </div>
-                      <CardDescription className="text-red-600/80 dark:text-red-300/80 text-sm md:text-base font-medium">Security violation detected</CardDescription>
+                      <CardDescription className="text-red-600/80 dark:text-red-300/80 text-sm font-medium">Security violation detected</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="bg-red-50 dark:bg-red-500/10 p-3 rounded-2xl ring-1 ring-red-200/60 dark:ring-red-500/20">
-                    <p className="text-red-700 dark:text-red-300 text-sm md:text-base leading-relaxed line-clamp-2">
-                      {blacklistReason || "Suspended due to port violations."}
-                    </p>
+                    <p className="text-red-700 dark:text-red-300 text-sm leading-relaxed line-clamp-2">{blacklistReason || "Suspended due to port violations."}</p>
                   </div>
                   <div className="flex items-center justify-end text-sm">
-                    <Button
-                      size="sm"
-                      onClick={() => router.push("/dashboard/blacklist_penalties")}
-                      className="rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold h-9 px-4"
-                    >
-                      View &amp; Resolve
-                    </Button>
+                    <Button size="sm" onClick={() => router.push("/dashboard/blacklist_penalties")} className="rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold h-9 px-4">View &amp; Resolve</Button>
                   </div>
                 </CardContent>
               </Card>
             )}
-
             {penalties.length > 0 && (
               <Card className={cardShellAlertAmber + " lg:col-span-2"}>
                 <CardHeader className="pb-3">
@@ -1305,11 +1566,9 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <CardTitle className="text-lg md:text-xl text-amber-700 dark:text-amber-300 font-bold truncate">Pending Penalties</CardTitle>
-                        <Badge className="bg-amber-600 text-white border-0 text-xs font-bold px-2 py-0.5 flex-shrink-0 rounded-full">
-                          {penalties.length} VIOLATION{penalties.length !== 1 ? "S" : ""}
-                        </Badge>
+                        <Badge className="bg-amber-600 text-white border-0 text-xs font-bold px-2 py-0.5 flex-shrink-0 rounded-full">{penalties.length} VIOLATION{penalties.length !== 1 ? "S" : ""}</Badge>
                       </div>
-                      <CardDescription className="text-amber-600/80 dark:text-amber-300/80 text-sm md:text-base font-medium">Outstanding payments required</CardDescription>
+                      <CardDescription className="text-amber-600/80 dark:text-amber-300/80 text-sm font-medium">Outstanding payments required</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
@@ -1317,31 +1576,15 @@ export default function DashboardPage() {
                   <div className="bg-amber-50 dark:bg-amber-400/10 p-3 rounded-2xl ring-1 ring-amber-200/60 dark:ring-amber-400/20">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-amber-700 dark:text-amber-300 font-bold text-sm">Total Due:</span>
-                      <span className="text-2xl font-bold text-amber-700 dark:text-amber-300 tabular-nums">
-                        {formatCurrency(penalties.reduce((sum, p) => sum + parseFloat(p.penalty_amount || 0), 0))}
-                      </span>
+                      <span className="text-2xl font-bold text-amber-700 dark:text-amber-300 tabular-nums">{formatCurrency(penalties.reduce((sum, p) => sum + parseFloat(p.penalty_amount || 0), 0))}</span>
                     </div>
-                    <p className="text-amber-600/80 dark:text-amber-300/80 text-sm line-clamp-1">
-                      {penalties[0]?.reason || penalties[0]?.reason_code || "Penalty violation"}
-                    </p>
+                    <p className="text-amber-600/80 dark:text-amber-300/80 text-sm line-clamp-1">{penalties[0]?.reason || penalties[0]?.reason_code || "Penalty violation"}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => router.push("/dashboard/blacklist_penalties")}
-                      className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-bold h-9 shadow-md shadow-amber-500/20"
-                    >
-                      <DollarSign className="mr-1 h-4 w-4" />
-                      Pay Now
+                    <Button size="sm" onClick={() => router.push("/dashboard/blacklist_penalties")} className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-bold h-9 shadow-md shadow-amber-500/20">
+                      <DollarSign className="mr-1 h-4 w-4" />Pay Now
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => router.push("/dashboard/blacklist_penalties")}
-                      className="flex-1 rounded-xl border border-amber-300 dark:border-amber-400/40 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-400/10 text-sm font-semibold h-9 bg-transparent"
-                    >
-                      Details
-                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => router.push("/dashboard/blacklist_penalties")} className="flex-1 rounded-xl border border-amber-300 dark:border-amber-400/40 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-400/10 text-sm font-semibold h-9 bg-transparent">Details</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -1349,61 +1592,70 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* 5 ─ Charts (real data) */}
+        {/* 6 ─ Expiring Soon detail + Entity Breakdown (side by side) */}
+        {(expiringItems.length > 0 || !statsLoading) && (
+          <div className="grid lg:grid-cols-2 gap-6">
+            <ExpiringSoonCard items={expiringItems} loading={statsLoading} />
+            <EntityBreakdownCard stats={apiStats} loading={statsLoading} />
+          </div>
+        )}
+
+        {/* 7 ─ Charts */}
         <div className="grid lg:grid-cols-2 gap-6">
           <ApplicationTrendChart data={monthlyData} />
           <PassTypeChart passTypeData={passTypeData} />
         </div>
 
-        {/* 6 ─ Status overview + Recent passes (real data) */}
+        {/* 8 ─ Status overview + Pass list */}
         <div className="grid lg:grid-cols-2 gap-6">
           <StatusOverview statusCounts={statusCounts} loading={statsLoading} />
 
-          <Card className={cardShell}>
-            <CardHeader className="flex flex-row items-center justify-between pb-4">
-              <div>
-                <CardTitle className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-900 dark:text-stone-100">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300">
-                    <Ship className="h-5 w-5" />
-                  </span>
-                  Recent Pass Applications
-                </CardTitle>
-                <CardDescription className="text-base text-stone-500 dark:text-stone-400 mt-1">
-                  Your latest pass requests and their status
-                </CardDescription>
+          <Card className={cardShell + " !hover:translate-y-0 !hover:scale-100"}>
+            <CardHeader className="pb-4">
+              <div className="flex flex-row items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <CardTitle className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-900 dark:text-stone-100">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300">
+                      <Ship className="h-5 w-5" />
+                    </span>
+                    Pass Applications
+                  </CardTitle>
+                  <CardDescription className="text-base text-stone-500 dark:text-stone-400 mt-1">
+                    {filteredPasses.length} {dateFilter === "today" ? "today" : dateFilter === "week" ? "this week" : dateFilter === "month" ? "this month" : "total"} · click any to view details
+                  </CardDescription>
+                </div>
+                <Button variant="ghost" onClick={() => router.push("/dashboard/pass_request")} className="text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 hover:bg-amber-50 dark:hover:bg-amber-400/10 font-bold rounded-xl">
+                  View All <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                onClick={() => router.push("/dashboard/pass_request")}
-                className="text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 hover:bg-amber-50 dark:hover:bg-amber-400/10 font-bold rounded-xl"
-              >
-                View All <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
+              <div className="mt-3">
+                <DateFilterChips value={dateFilter} onChange={setDateFilter} counts={filterCounts} />
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               {statsLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-20 rounded-2xl bg-stone-100 dark:bg-white/5 animate-pulse" />
-                  ))}
-                </div>
-              ) : recentPasses.length === 0 ? (
+                <div className="space-y-3">{[1, 2, 3].map((i) => <div key={i} className="h-20 rounded-2xl bg-stone-100 dark:bg-white/5 animate-pulse" />)}</div>
+              ) : recentFilteredPasses.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-stone-400">
                   <Ship className="h-10 w-10 mb-3 opacity-40" />
-                  <p className="text-sm font-semibold">No pass applications yet</p>
-                  <p className="text-xs mt-1">Click &quot;Apply New Pass&quot; to get started</p>
+                  <p className="text-sm font-semibold">
+                    {dateFilter === "today" ? "No passes applied today" : dateFilter === "week" ? "No passes this week" : "No pass applications yet"}
+                  </p>
+                  <p className="text-xs mt-1">
+                    {dateFilter !== "all" ? <button onClick={() => setDateFilter("all")} className="text-amber-600 dark:text-amber-400 underline font-semibold">View all passes</button> : "Click \"Apply New Pass\" to get started"}
+                  </p>
                 </div>
               ) : (
-                recentPasses.map((pass, idx) => {
+                recentFilteredPasses.map((pass, idx) => {
                   const persons = Array.isArray(pass.persons) ? pass.persons : [];
                   const vehicles = Array.isArray(pass.vehicles) ? pass.vehicles : [];
                   const isVehicleHeavy = vehicles.length > persons.length;
                   const meta = getRequestStatusMeta(pass.status);
-                  // Latest validity across entities (max dateTo)
-                  const allDates = [...persons, ...vehicles]
-                    .map((e) => (e.dateTo ? new Date(e.dateTo).getTime() : NaN))
-                    .filter((t) => !Number.isNaN(t));
+                  const allDates = [...persons, ...vehicles].map((e) => (e.dateTo ? new Date(e.dateTo).getTime() : NaN)).filter((t) => !Number.isNaN(t));
                   const latestTo = allDates.length ? new Date(Math.max(...allDates)) : null;
+                  const daysLeft = latestTo ? daysUntil(latestTo.toISOString()) : null;
+                  const hasExpiring = daysLeft !== null && daysLeft >= 0 && daysLeft <= 7;
+
                   return (
                     <div
                       key={pass.id || idx}
@@ -1411,17 +1663,10 @@ export default function DashboardPage() {
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedPass(pass); }}
-                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-stone-50 dark:bg-white/5 rounded-2xl hover:bg-amber-50 dark:hover:bg-amber-400/10 hover:ring-1 hover:ring-amber-300/50 transition-all gap-3 cursor-pointer group"
+                      className={"flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-2xl hover:bg-amber-50 dark:hover:bg-amber-400/10 hover:ring-1 hover:ring-amber-300/50 transition-all gap-3 cursor-pointer group " + (hasExpiring ? "bg-red-50/50 dark:bg-red-400/5 ring-1 ring-red-200/60 dark:ring-red-400/10" : "bg-stone-50 dark:bg-white/5")}
                     >
                       <div className="flex items-center gap-4">
-                        <div
-                          className={
-                            "w-12 h-12 rounded-2xl flex items-center justify-center " +
-                            (isVehicleHeavy
-                              ? "bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300"
-                              : "bg-teal-100 dark:bg-teal-400/15 text-teal-700 dark:text-teal-300")
-                          }
-                        >
+                        <div className={"w-12 h-12 rounded-2xl flex items-center justify-center " + (isVehicleHeavy ? "bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300" : "bg-teal-100 dark:bg-teal-400/15 text-teal-700 dark:text-teal-300")}>
                           {isVehicleHeavy ? <Truck className="h-6 w-6" /> : <Users className="h-6 w-6" />}
                         </div>
                         <div>
@@ -1429,15 +1674,20 @@ export default function DashboardPage() {
                           <p className="text-sm text-stone-500 dark:text-stone-400 font-medium">
                             {persons.length} person{persons.length !== 1 ? "s" : ""} &bull; {vehicles.length} vehicle{vehicles.length !== 1 ? "s" : ""}
                           </p>
+                          <p className="text-xs text-stone-400 dark:text-stone-500 font-semibold">Submitted {formatDate(pass.createdAt || pass.submittedAt)}</p>
                         </div>
                       </div>
                       <div className="text-left sm:text-right w-full sm:w-auto">
-                        <Badge className={`${meta.color} border-0 text-xs font-bold px-3 py-1 rounded-full`}>
+                        <Badge className={`${meta.color} border text-xs font-bold px-3 py-1 rounded-full`}>
                           {meta.label.toUpperCase()}
                         </Badge>
-                        <p className="text-sm text-stone-500 dark:text-stone-400 font-medium mt-1.5">
-                          {latestTo ? `Valid until ${formatDate(latestTo)}` : `Submitted ${formatDate(pass.submittedAt || pass.createdAt)}`}
-                        </p>
+                        {hasExpiring ? (
+                          <p className="text-xs text-red-600 dark:text-red-400 font-bold mt-1.5 flex items-center gap-1 justify-end">
+                            <Timer className="h-3 w-3 animate-pulse" />Expires in {daysLeft === 0 ? "today" : `${daysLeft}d`}
+                          </p>
+                        ) : latestTo ? (
+                          <p className="text-sm text-stone-500 dark:text-stone-400 font-medium mt-1.5">Valid until {formatDate(latestTo)}</p>
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -1447,9 +1697,9 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* 7 ─ Penalty breakdown (real data) */}
+        {/* 9 ─ Penalty breakdown */}
         {penalties.length > 0 && (
-          <Card className={cardShell}>
+          <Card className={cardShell + " !hover:translate-y-0 !hover:scale-100"}>
             <CardHeader className="pb-4">
               <CardTitle className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-900 dark:text-stone-100">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300">
@@ -1468,34 +1718,27 @@ export default function DashboardPage() {
                         <Ban className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="font-bold text-stone-900 dark:text-stone-100 text-sm">
-                          {pen.entity_type || "ENTITY"} — {pen.identifier || ""}
-                        </p>
-                        <p className="text-xs text-stone-500 dark:text-stone-400 font-medium mt-0.5">
-                          {pen.reason || pen.reason_code || "Violation"} · {pen.penalty_status || "PENDING"}
-                        </p>
+                        <p className="font-bold text-stone-900 dark:text-stone-100 text-sm">{pen.entity_type || "ENTITY"} — {pen.identifier || ""}</p>
+                        <p className="text-xs text-stone-500 dark:text-stone-400 font-medium mt-0.5">{pen.reason || pen.reason_code || "Violation"} · {pen.penalty_status || "PENDING"}</p>
                       </div>
                     </div>
-                    <p className="font-bold text-lg tabular-nums text-red-600 dark:text-red-400">
-                      ₹{parseFloat(pen.penalty_amount || 0).toLocaleString("en-IN")}
-                    </p>
+                    <p className="font-bold text-lg tabular-nums text-red-600 dark:text-red-400">₹{parseFloat(pen.penalty_amount || 0).toLocaleString("en-IN")}</p>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
         )}
+
       </div>
 
       {/* PASS DETAIL MODAL */}
-      {selectedPass && (
-        <PassDetailModal pass={selectedPass} hepTypes={hepTypes} onClose={() => setSelectedPass(null)} />
-      )}
+      {selectedPass && <PassDetailModal pass={selectedPass} hepTypes={hepTypes} onClose={() => setSelectedPass(null)} />}
 
-      {/* COMPANY BLACKLIST POPUP OVERLAY */}
+      {/* COMPANY BLACKLIST POPUP */}
       {showBlacklistPopup && (
         <div className="fixed inset-0 bg-[#0f172a]/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#1e293b] rounded-3xl max-w-lg w-full p-6 md:p-8 relative shadow-2xl border border-red-500/30 overflow-hidden transform transition-all duration-300 scale-100 flex flex-col items-center text-center">
+          <div className="bg-white dark:bg-[#1e293b] rounded-3xl max-w-lg w-full p-6 md:p-8 relative shadow-2xl border border-red-500/30 overflow-hidden flex flex-col items-center text-center">
             <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full bg-red-500/10 blur-3xl" />
             <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full bg-orange-500/10 blur-3xl" />
             <button onClick={() => setShowBlacklistPopup(false)} className="absolute top-4 right-4 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-1.5 rounded-full hover:bg-stone-100 dark:hover:bg-white/10 transition-colors">
@@ -1509,30 +1752,24 @@ export default function DashboardPage() {
               <AlertCircle className="h-3.5 w-3.5" /> Suspended Status
             </div>
             <p className="text-sm md:text-base text-stone-600 dark:text-stone-300 leading-relaxed max-w-md mb-6">
-              Your company profile (<span className="font-bold text-stone-900 dark:text-white">{username}</span>) has been blacklisted from Chennai Port. Pass requests and entries are currently restricted.
+              Your company profile (<span className="font-bold text-stone-900 dark:text-white">{username}</span>) has been blacklisted from Chennai Port.
             </p>
             <div className="w-full bg-stone-50 dark:bg-stone-900/50 rounded-2xl p-4 border border-stone-200/60 dark:border-white/5 text-left mb-6">
               <p className="text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-widest mb-1.5">Official Reason</p>
-              <p className="text-sm font-semibold text-stone-700 dark:text-stone-200 leading-relaxed">
-                {blacklistReason || "Reason not specified. Please contact administration."}
-              </p>
+              <p className="text-sm font-semibold text-stone-700 dark:text-stone-200 leading-relaxed">{blacklistReason || "Reason not specified. Please contact administration."}</p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 w-full">
-              <Button onClick={() => { setShowBlacklistPopup(false); router.push("/dashboard/blacklist_penalties"); }} className="flex-1 rounded-2xl h-12 bg-stone-900 hover:bg-stone-800 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100 text-white font-bold transition-all shadow-lg">
-                View Penalties
-              </Button>
-              <Button variant="outline" className="flex-1 rounded-2xl h-12 border-stone-200 dark:border-white/10 text-stone-700 dark:text-stone-200 font-bold hover:bg-stone-50 dark:hover:bg-white/5" onClick={() => window.open("mailto:support@chennaiport.gov.in")}>
-                Contact Support
-              </Button>
+              <Button onClick={() => { setShowBlacklistPopup(false); router.push("/dashboard/blacklist_penalties"); }} className="flex-1 rounded-2xl h-12 bg-stone-900 hover:bg-stone-800 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100 text-white font-bold">View Penalties</Button>
+              <Button variant="outline" className="flex-1 rounded-2xl h-12 border-stone-200 dark:border-white/10 text-stone-700 dark:text-stone-200 font-bold hover:bg-stone-50 dark:hover:bg-white/5" onClick={() => window.open("mailto:support@chennaiport.gov.in")}>Contact Support</Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* COMPANY VEHICLE BLACKLIST POPUP OVERLAY */}
+      {/* VEHICLE BLACKLIST POPUP */}
       {showVehicleWarningPopup && (
         <div className="fixed inset-0 bg-[#0f172a]/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#1e293b] rounded-3xl max-w-lg w-full p-6 md:p-8 relative shadow-2xl border border-amber-500/30 overflow-hidden transform transition-all duration-300 scale-100 flex flex-col items-center text-center">
+          <div className="bg-white dark:bg-[#1e293b] rounded-3xl max-w-lg w-full p-6 md:p-8 relative shadow-2xl border border-amber-500/30 overflow-hidden flex flex-col items-center text-center">
             <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full bg-amber-500/10 blur-3xl" />
             <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full bg-orange-500/10 blur-3xl" />
             <button onClick={() => setShowVehicleWarningPopup(false)} className="absolute top-4 right-4 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-1.5 rounded-full hover:bg-stone-100 dark:hover:bg-white/10 transition-colors">
@@ -1546,9 +1783,9 @@ export default function DashboardPage() {
               <AlertCircle className="h-3.5 w-3.5" strokeWidth={2.5} /> Vehicle Suspensions
             </div>
             <p className="text-sm md:text-base text-stone-600 dark:text-stone-300 leading-relaxed max-w-md mb-6">
-              The following vehicle(s) registered under your company profile have been blacklisted and will be excluded from new pass requests. You can still apply for person-only passes.
+              The following vehicle(s) registered under your company have been blacklisted and will be excluded from new pass requests.
             </p>
-            <div className="w-full max-h-48 overflow-y-auto space-y-3 mb-6 pr-1 [scrollbar-width:thin] [scrollbar-color:theme(colors.slate.200)_transparent]">
+            <div className="w-full max-h-48 overflow-y-auto space-y-3 mb-6 pr-1 [scrollbar-width:thin]">
               {blacklistedVehicles.map((veh, i) => (
                 <div key={i} className="bg-stone-50 dark:bg-stone-900/50 rounded-2xl p-4 border border-stone-200/60 dark:border-white/5 text-left">
                   <div className="flex items-center justify-between border-b border-stone-200/60 dark:border-white/5 pb-2 mb-2">
@@ -1556,19 +1793,13 @@ export default function DashboardPage() {
                     <span className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-500/10 px-2 py-0.5 rounded border border-red-200/50 uppercase tracking-wide">{veh.status}</span>
                   </div>
                   <p className="text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-widest mb-1">Reason</p>
-                  <p className="text-xs font-semibold text-stone-700 dark:text-stone-200 leading-normal">
-                    {veh.reason || "Suspended due to traffic violation."}
-                  </p>
+                  <p className="text-xs font-semibold text-stone-700 dark:text-stone-200 leading-normal">{veh.reason || "Suspended due to traffic violation."}</p>
                 </div>
               ))}
             </div>
             <div className="flex flex-col sm:flex-row gap-3 w-full">
-              <Button onClick={() => setShowVehicleWarningPopup(false)} className="flex-1 rounded-2xl h-12 bg-amber-600 hover:bg-amber-700 text-white font-bold transition-all shadow-lg">
-                Close Alert
-              </Button>
-              <Button variant="outline" className="flex-1 rounded-2xl h-12 border-stone-200 dark:border-white/10 text-stone-700 dark:text-stone-200 font-bold hover:bg-stone-50 dark:hover:bg-white/5" onClick={() => router.push("/dashboard/blacklist_penalties")}>
-                View Penalties
-              </Button>
+              <Button onClick={() => setShowVehicleWarningPopup(false)} className="flex-1 rounded-2xl h-12 bg-amber-600 hover:bg-amber-700 text-white font-bold">Close Alert</Button>
+              <Button variant="outline" className="flex-1 rounded-2xl h-12 border-stone-200 dark:border-white/10 text-stone-700 dark:text-stone-200 font-bold hover:bg-stone-50 dark:hover:bg-white/5" onClick={() => router.push("/dashboard/blacklist_penalties")}>View Penalties</Button>
             </div>
           </div>
         </div>
@@ -1576,3 +1807,197 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Pure Sub-component helpers
+// ---------------------------------------------------------------------------
+const PassDetailModal = memo(function PassDetailModal({ pass, hepTypes, onClose }) {
+  if (!pass) return null;
+  const persons = Array.isArray(pass.persons) ? pass.persons : [];
+  const vehicles = Array.isArray(pass.vehicles) ? pass.vehicles : [];
+  const reqMeta = getRequestStatusMeta(pass.status);
+  const dateRange = (from, to) => (!from && !to) ? "—" : `${formatDate(from)} → ${formatDate(to)}`;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-[#1f232d] w-full max-w-3xl rounded-3xl shadow-2xl ring-1 ring-stone-200/60 dark:ring-white/10 overflow-hidden animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
+        <div className="flex justify-between items-center px-5 sm:px-6 py-4 bg-gradient-to-r from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] text-white shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/15 text-amber-300 ring-1 ring-amber-300/30 shrink-0"><Ship className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold truncate">{pass.referenceNo || "Pass Request"}</h2>
+              <p className="text-xs text-stone-400">{persons.length} person{persons.length !== 1 ? "s" : ""} • {vehicles.length} vehicle{vehicles.length !== 1 ? "s" : ""}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`hidden sm:inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold border ${reqMeta.color}`}>{reqMeta.label.toUpperCase()}</span>
+            <button onClick={onClose} className="text-white/80 hover:text-white active:scale-90 transition-all bg-white/10 p-1.5 rounded-lg"><X className="h-5 w-5" /></button>
+          </div>
+        </div>
+
+        <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1 [scrollbar-width:thin]">
+          {/* Request summary */}
+          <div className="rounded-2xl bg-stone-50 dark:bg-white/5 ring-1 ring-stone-200/70 dark:ring-white/10 p-4">
+            <h3 className="text-xs font-bold text-stone-500 dark:text-stone-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <Hash className="h-4 w-4" /> Request Summary
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <Field label="Reference No" value={pass.referenceNo} mono />
+              <Field label="Status" value={reqMeta.label} />
+              <Field label="Payment Mode" value={pass.paymentMode} />
+              <Field label="Submitted" value={formatDate(pass.submittedAt || pass.createdAt)} />
+              <Field label="Gross Total" value={pass.grossTotal != null ? formatCurrency(parseFloat(pass.grossTotal)) : "—"} />
+              <Field label="GST" value={pass.gstAmount != null ? formatCurrency(parseFloat(pass.gstAmount)) : "—"} />
+              <Field label="Net Amount" value={pass.netAmount != null ? formatCurrency(parseFloat(pass.netAmount)) : "—"} />
+            </div>
+            {pass.requisitionLetterFilePath && (
+              <div className="mt-3 pt-3 border-t border-stone-200/70 dark:border-white/10">
+                <PassDetailModalDocs docs={[{ label: pass.requisitionLetterFileName || "Requisition Letter", path: pass.requisitionLetterFilePath }]} />
+              </div>
+            )}
+          </div>
+
+          {/* Persons */}
+          {persons.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-stone-500 dark:text-stone-400 uppercase tracking-widest flex items-center gap-2">
+                <Users className="h-4 w-4" /> Persons ({persons.length})
+              </h3>
+              {persons.map((p, i) => {
+                const meta = getEntityStatusMeta(p.status);
+                const hep = hepTypes[p.hepTypeId];
+                const days = daysUntil(p.dateTo);
+                return (
+                  <div key={p.id || i} className="rounded-2xl bg-white dark:bg-white/[0.03] ring-1 ring-stone-200/70 dark:ring-white/10 p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-400/15 text-teal-700 dark:text-teal-300 shrink-0"><Users className="h-5 w-5" /></span>
+                        <div className="min-w-0">
+                          <p className="font-bold text-stone-900 dark:text-stone-100 truncate">{p.name || "—"}</p>
+                          <p className="text-xs text-stone-500 dark:text-stone-400 font-mono">{p.personPassNo || "Pass no. pending"}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${meta.color}`}>{meta.label.toUpperCase()}</span>
+                        {days !== null && days >= 0 && days <= 7 && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-400/15 dark:text-red-300">
+                            <Timer className="h-3 w-3" />{days === 0 ? "Expires today" : `${days}d left`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <Field label="HEP Type" value={hep ? hep.charAt(0).toUpperCase() + hep.slice(1) : (p.hepTypeId ?? "—")} />
+                      <Field label="Aadhaar / ID" value={p.aadharNo} mono />
+                      <Field label="Mobile" value={p.mobile} />
+                      <Field label="Email" value={p.email} />
+                      <Field label="Nationality" value={p.nationality} />
+                      <Field label="Pass Type" value={p.passType} />
+                      <Field label="Validity" value={dateRange(p.dateFrom, p.dateTo)} />
+                      <Field label="Amount" value={p.amount != null ? formatCurrency(parseFloat(p.amount)) : "—"} />
+                      <Field label="ID Proof" value={p.idProofType ? `${ID_PROOF_LABELS[p.idProofType] || p.idProofType}: ${p.idProofNumber || "—"}` : (p.idProofNumber || "—")} />
+                      {p.visaNo ? <Field label="Visa No" value={p.visaNo} mono /> : null}
+                      {p.cardNumber ? <Field label="RFID Card" value={p.cardNumber} mono /> : null}
+                      {p.withTwoWheeler ? <Field label="Two-Wheeler" value={p.vehicleNo || "Yes"} mono /> : null}
+                    </div>
+                    {p.status === "reverted" && p.rejectedReason && (
+                      <div className="mt-3 rounded-xl bg-orange-50 dark:bg-orange-400/10 ring-1 ring-orange-200/70 dark:ring-orange-400/20 p-2.5">
+                        <p className="text-[10px] font-bold text-orange-600 dark:text-orange-300 uppercase tracking-wider mb-0.5">Revert / Reject Reason</p>
+                        <p className="text-xs text-orange-700 dark:text-orange-200">{p.rejectedReason}</p>
+                      </div>
+                    )}
+                    <div className="mt-3 pt-3 border-t border-stone-200/70 dark:border-white/10">
+                      <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-2">Documents</p>
+                      <PassDetailModalDocs docs={[
+                        { label: "Photo", path: p.photoFilePath },
+                        { label: "Aadhaar PDF", path: p.aadharPDFFilePATH },
+                        { label: "ID Proof", path: p.idProofFilePath },
+                        { label: "Driver Licence", path: p.driverLicensePath },
+                        { label: "Police Verification", path: p.policeVerificationPath },
+                        { label: "Employment Proof", path: p.employmentProofPath },
+                        { label: "CHA Licence", path: p.chaLicensePath },
+                        { label: "Passport", path: p.passportPath },
+                      ]} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Vehicles */}
+          {vehicles.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-stone-500 dark:text-stone-400 uppercase tracking-widest flex items-center gap-2">
+                <Truck className="h-4 w-4" /> Vehicles ({vehicles.length})
+              </h3>
+              {vehicles.map((v, i) => {
+                const meta = getEntityStatusMeta(v.status);
+                const days = daysUntil(v.dateTo);
+                return (
+                  <div key={v.id || i} className="rounded-2xl bg-white dark:bg-white/[0.03] ring-1 ring-stone-200/70 dark:ring-white/10 p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300 shrink-0"><Truck className="h-5 w-5" /></span>
+                        <div className="min-w-0">
+                          <p className="font-bold text-stone-900 dark:text-stone-100 truncate font-mono">{v.registrationNo || "—"}</p>
+                          <p className="text-xs text-stone-500 dark:text-stone-400 font-mono">{v.vehiclePassNo || "Pass no. pending"}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${meta.color}`}>{meta.label.toUpperCase()}</span>
+                        {days !== null && days >= 0 && days <= 7 && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-400/15 dark:text-red-300">
+                            <Timer className="h-3 w-3" />{days === 0 ? "Expires today" : `${days}d left`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <Field label="Vehicle Type" value={v.vehicleTypeId} />
+                      <Field label="RFID Card" value={v.rfidCardNumber} mono />
+                      <Field label="Pass Type" value={v.passType} />
+                      <Field label="Validity" value={dateRange(v.dateFrom, v.dateTo)} />
+                      <Field label="Amount" value={v.amount != null ? formatCurrency(parseFloat(v.amount)) : "—"} />
+                      <Field label="Insurance Expiry" value={formatDate(v.insuranceExpiry)} />
+                      <Field label="RC Validity" value={formatDate(v.rcValidity)} />
+                    </div>
+                    {v.status === "reverted" && v.rejectedReason && (
+                      <div className="mt-3 rounded-xl bg-orange-50 dark:bg-orange-400/10 ring-1 ring-orange-200/70 dark:ring-orange-400/20 p-2.5">
+                        <p className="text-[10px] font-bold text-orange-600 dark:text-orange-300 uppercase tracking-wider mb-0.5">Revert / Reject Reason</p>
+                        <p className="text-xs text-orange-700 dark:text-orange-200">{v.rejectedReason}</p>
+                      </div>
+                    )}
+                    <div className="mt-3 pt-3 border-t border-stone-200/70 dark:border-white/10">
+                      <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-2">Documents</p>
+                      <PassDetailModalDocs docs={[
+                        { label: "RC / Scanned Copy", path: v.scannedCopyFilePath },
+                        { label: "Insurance", path: v.insuranceFilePath },
+                        { label: "Permit", path: v.permitFilePath },
+                        { label: "Fitness", path: v.fitnessFilePath },
+                        { label: "Request Letter", path: v.requestLetterPath },
+                        { label: "Tax", path: v.taxDocPath },
+                        { label: "Emission", path: v.emissionCertPath },
+                      ]} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {persons.length === 0 && vehicles.length === 0 && (
+            <div className="py-10 text-center text-stone-400">
+              <FileText className="h-10 w-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm font-semibold">No persons or vehicles on this request</p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 sm:px-6 py-4 border-t border-stone-200/70 dark:border-white/10 bg-stone-50 dark:bg-white/[0.02] shrink-0 flex justify-end">
+          <Button onClick={onClose} className="rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100 text-white font-bold px-6">Close</Button>
+        </div>
+      </div>
+    </div>
+  );
+});

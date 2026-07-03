@@ -1,18 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Ship,
@@ -36,6 +28,20 @@ import {
   EyeOff,
   RefreshCw,
   Users,
+  Building2,
+  Phone,
+  Mail,
+  CreditCard,
+  Hash,
+  BadgeCheck,
+  X,
+  User,
+  KeyRound,
+  ChevronDown,
+  Copy,
+  CheckCheck,
+  FileCode2,
+  Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import axios from "axios";
@@ -58,36 +64,24 @@ const getNavigationItems = (role, departmentName) => {
     { name: "Blacklist & Penalties", href: "/dashboard/blacklist_penalties", icon: ShieldAlert },
   ];
 
-
-  // Traffic department gets the approver view
   const isTrafficDept = departmentName?.toLowerCase() === "traffic";
 
   const roleItems = {
     user: applicantItems,
     Applicant: applicantItems,
-
     Approval: isTrafficDept
       ? [
           ...baseItems,
-          {
-            name: "Traffic Approval",
-            href: "/dashboard/approval_admin",
-            icon: Truck,
-          },
+          { name: "Traffic Approval", href: "/dashboard/approval_admin", icon: Truck },
           { name: "Gate Log", href: "/dashboard/gate-log", icon: FileText },
           { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
         ]
       : [
           ...baseItems,
-          {
-            name: "Pass Approval",
-            href: "/dashboard/pass-approval",
-            icon: CheckSquare,
-          },
+          { name: "Pass Approval", href: "/dashboard/pass-approval", icon: CheckSquare },
           { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
           { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
         ],
-
     "Pass Officer": [
       ...baseItems,
       { name: "Pass Approval", href: "/dashboard/pass-approval", icon: CheckSquare },
@@ -106,10 +100,174 @@ const getNavigationItems = (role, departmentName) => {
   return roleItems[role] || roleItems[role?.toLowerCase()] || baseItems;
 };
 
+// ─── Tiny copy-to-clipboard hook ──────────────────────────────────────────────
+function useCopy() {
+  const [copied, setCopied] = useState(false);
+  const copy = (text) => {
+    navigator.clipboard.writeText(String(text || "")).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return { copied, copy };
+}
+
+// ─── Company Profile Panel (replaces old UserNameCard) ────────────────────────
+function CompanyProfilePanel({ user, profileData, onChangePassword, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const panelRef = useRef(null);
+  const { copied: copiedRef, copy: copyRef } = useCopy();
+  const [copiedField, setCopiedField] = useState(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const copyField = (val, key) => {
+    navigator.clipboard.writeText(String(val || "")).then(() => {
+      setCopiedField(key);
+      setTimeout(() => setCopiedField(null), 2000);
+    });
+  };
+
+  // Derive display values
+  const companyName = profileData?.entityName || user?.entityName || "Company";
+  const loginId = profileData?.loginId || user?.username || "—";
+  const refNo = profileData?.referenceNumber || "—";
+  const email = profileData?.email || "—";
+  const mobile = profileData?.mobileNo || "—";
+  const gst = profileData?.gstinNumber || "—";
+  const pan = profileData?.panNumber || "—";
+  const userType = profileData?.userTypeName || profileData?.userType?.name || "—";
+  const status = profileData?.status || "approved";
+  const initials = companyName.substring(0, 2).toUpperCase();
+
+  const statusMeta =
+    status === "approved"
+      ? { label: "Active", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300" }
+      : status === "pending"
+        ? { label: "Pending", cls: "bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300" }
+        : { label: status, cls: "bg-stone-100 text-stone-600 dark:bg-white/5 dark:text-stone-400" };
+
+  const DetailRow = ({ icon: Icon, label, value, copyKey }) => (
+    <div className="flex items-start gap-3 py-2.5 border-b border-stone-100 dark:border-white/5 last:border-0">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-stone-100 dark:bg-white/5 text-stone-500 dark:text-stone-400 shrink-0 mt-0.5">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">{label}</p>
+        <p className="text-sm font-semibold text-stone-800 dark:text-stone-100 truncate">{value || "—"}</p>
+      </div>
+      {value && value !== "—" && (
+        <button
+          onClick={() => copyField(value, copyKey)}
+          className="shrink-0 p-1 rounded text-stone-400 hover:text-amber-600 transition-colors"
+          title="Copy"
+        >
+          {copiedField === copyKey ? <CheckCheck className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="relative" ref={panelRef}>
+      {/* Trigger button */}
+      <button
+        id="company-profile-btn"
+        onClick={() => setOpen((p) => !p)}
+        className="flex items-center gap-2.5 rounded-2xl px-3 py-2 bg-black/90 hover:bg-black text-white dark:bg-white/5 dark:hover:bg-white/10 dark:border dark:border-white/10 shadow-md transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-amber-400/40 active:scale-95"
+      >
+        {/* Avatar */}
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-base font-extrabold shrink-0 shadow-md ring-2 ring-amber-300/30">
+          {initials}
+        </span>
+        {/* Name + role */}
+        <span className="hidden sm:flex flex-col text-left leading-tight min-w-0 pr-1">
+          <span className="text-sm font-extrabold truncate max-w-[140px]">{companyName}</span>
+          <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold truncate">Company</span>
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-stone-400 transition-transform duration-200 hidden sm:block",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+
+      {/* Dropdown panel */}
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+10px)] z-[200] w-80 rounded-3xl bg-white dark:bg-[#1f232d] shadow-[0_8px_40px_rgba(0,0,0,0.18)] ring-1 ring-stone-200/70 dark:ring-white/10 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          {/* Panel header */}
+          <div className="bg-gradient-to-r from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] px-5 py-4 relative overflow-hidden">
+            {/* Wave decoration */}
+            <svg aria-hidden viewBox="0 0 320 80" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-10 w-full text-amber-400/10">
+              <path fill="currentColor" d="M0,40 C80,80 160,0 240,40 C280,60 300,30 320,40 L320,80 L0,80 Z" />
+            </svg>
+            <div className="relative flex items-center gap-3">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-xl font-extrabold shrink-0 shadow-lg ring-2 ring-amber-300/30">
+                {initials}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-extrabold text-white leading-tight truncate">{companyName}</p>
+                <p className="text-xs text-stone-400 font-mono mt-0.5 truncate">{loginId}</p>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold mt-1.5 ${statusMeta.cls}`}>
+                  <BadgeCheck className="h-3 w-3" />
+                  {statusMeta.label}
+                </span>
+              </div>
+              <button onClick={() => setOpen(false)} className="text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Detail rows */}
+          <div className="px-4 pt-2 pb-1 max-h-[340px] overflow-y-auto [scrollbar-width:thin]">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">Company Details</p>
+            <DetailRow icon={Hash}        label="Reference No"  value={refNo}    copyKey="ref" />
+            <DetailRow icon={User}        label="Login ID"       value={loginId}  copyKey="lid" />
+            <DetailRow icon={Briefcase}   label="User Type"      value={userType} copyKey="utype" />
+            <DetailRow icon={Mail}        label="Email"          value={email}    copyKey="email" />
+            <DetailRow icon={Phone}       label="Mobile"         value={mobile}   copyKey="mob" />
+            <DetailRow icon={FileCode2}   label="GST Number"     value={gst}      copyKey="gst" />
+            <DetailRow icon={CreditCard}  label="PAN Number"     value={pan}      copyKey="pan" />
+          </div>
+
+          {/* Actions */}
+          <div className="p-3 border-t border-stone-100 dark:border-white/5 space-y-1.5">
+            <button
+              onClick={() => { setOpen(false); onChangePassword(); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-amber-50 dark:hover:bg-amber-400/10 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
+            >
+              <KeyRound className="h-4 w-4 shrink-0" />
+              Change Password
+            </button>
+            <button
+              onClick={() => { setOpen(false); onLogout(); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors"
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState(null);
+  const [profileData, setProfileData] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -118,7 +276,6 @@ export default function DashboardLayout({ children }) {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Read synchronously to eliminate flicker on hydration
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("dashboard-theme") === "dark";
@@ -156,6 +313,14 @@ export default function DashboardLayout({ children }) {
       if (isAdmin) { router.push("/admin"); return; }
       setUser(parsedUser);
       if (parsedUser.isPasswordChanged === false) setShowPasswordChangeModal(true);
+
+      // Fetch company profile for the panel
+      const token = localStorage.getItem("accessToken");
+      if (token && (role === "user" || role === "applicant" || role === "agent")) {
+        axios.get(`${AGENT_API}/agents/profile`, { headers: { Authorization: `Bearer ${token}` } })
+          .then((res) => { if (res.data?.success) setProfileData(res.data.data); })
+          .catch(() => {});
+      }
     } else {
       router.push("/");
     }
@@ -176,7 +341,7 @@ export default function DashboardLayout({ children }) {
         { headers: { Authorization: `Bearer ${token}` }, validateStatus: (s) => s < 500 }
       );
       if (res.status >= 200 && res.status < 300 && res.data?.success) {
-        toast.success("Password Updated Successfully", { description: "Your default password has been successfully updated." });
+        toast.success("Password Updated Successfully", { description: "Your password has been successfully updated." });
         const updatedUser = { ...user, isPasswordChanged: true };
         localStorage.setItem("user", JSON.stringify(updatedUser));
         setUser(updatedUser);
@@ -240,14 +405,13 @@ export default function DashboardLayout({ children }) {
           <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
             <header className="px-4 sm:px-6 lg:px-8 pt-4 pb-3 flex items-center justify-between gap-3 shrink-0">
               <div className="space-y-2">
-                <div className="h-7 sm:h-9 w-44 rounded-lg bg-stone-300/70 dark:bg-white/10 animate-pulse" />
-                <div className="h-3 w-56 rounded bg-stone-300/50 dark:bg-white/5 animate-pulse" />
+                <div className="h-5 w-56 rounded-lg bg-stone-300/70 dark:bg-white/10 animate-pulse" />
               </div>
               <div className="flex items-center gap-3">
                 <div className="hidden md:block h-10 w-72 rounded-full bg-white dark:bg-white/5 animate-pulse" />
                 <div className="h-10 w-10 rounded-full bg-white dark:bg-white/5 animate-pulse" />
                 <div className="h-10 w-10 rounded-full bg-white dark:bg-white/5 animate-pulse" />
-                <div className="h-12 w-32 rounded-2xl bg-black/90 dark:bg-white/5 animate-pulse" />
+                <div className="h-12 w-36 rounded-2xl bg-black/90 dark:bg-white/5 animate-pulse" />
               </div>
             </header>
             <main className="flex-1 px-4 sm:px-6 lg:px-8 pb-4 min-h-0 overflow-hidden">
@@ -285,11 +449,12 @@ export default function DashboardLayout({ children }) {
   }
 
   const navigationItems = getNavigationItems(user.role, user.departmentName);
+  const currentPageName = navigationItems.find((item) => item.href === pathname)?.name || "Port Gate Automation System";
 
   const SidebarContent = ({ onNavigate, expanded = sidebarExpanded, showCollapseToggle = true }) => (
     <div className="h-full flex flex-col justify-between py-8 bg-[#0a0a0a] dark:bg-black border-r border-black/20 dark:border-white/5 text-white overflow-hidden">
       <div className="flex flex-col gap-6">
-        {/* Brand row — expanded: logo+text left, toggle right. collapsed: logo centered, toggle below */}
+        {/* Brand row */}
         <div className="flex flex-col gap-2 px-4">
           <div className={cn("flex items-center", expanded ? "justify-between" : "justify-center")}>
             <Link href="/dashboard" className="flex items-center gap-3 group min-w-0" onClick={onNavigate}>
@@ -386,47 +551,13 @@ export default function DashboardLayout({ children }) {
     </div>
   );
 
-  const UserNameCard = () => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-3 rounded-2xl px-3 py-2 bg-black/90 hover:bg-black text-white dark:bg-white/5 dark:hover:bg-white/10 dark:border dark:border-white/10 shadow-md transition-colors duration-150 focus:outline-none">
-          <Avatar className="h-11 w-11 ring-2 ring-amber-400/60 shrink-0">
-            <AvatarFallback className="bg-gradient-to-br from-amber-400 to-orange-500 text-black text-base font-extrabold">
-              {user?.username?.charAt(0)?.toUpperCase() || "A"}
-            </AvatarFallback>
-          </Avatar>
-          <span className="hidden sm:flex flex-col text-left leading-tight min-w-0 pr-1">
-            <span className="text-sm font-extrabold truncate max-w-[160px]">{user?.username ? user.username.split("@")[0] : "User"}</span>
-            <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold truncate">{user?.role}</span>
-          </span>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="bottom" className="w-56">
-        <DropdownMenuLabel>
-          <div>
-            <p className="font-semibold text-slate-800">{user?.username || "User"}</p>
-            <p className="text-xs text-slate-500 font-normal mt-0.5">{user?.role}</p>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="cursor-pointer" onClick={() => setShowPasswordChangeModal(true)}>
-          <Lock className="h-4 w-4 mr-2 text-slate-500" /> Change Password
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout} className="text-red-600 cursor-pointer focus:text-red-600">
-          <LogOut className="h-4 w-4 mr-2" /> Sign Out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-
   return (
     <div
       className={cn("h-screen w-screen overflow-hidden flex transition-colors duration-300 bg-[#d8d0c8] dark:bg-[#0d0f17]", darkMode && "dark")}
       style={{ fontFamily: "'Montserrat', 'Inter', Arial, sans-serif" }}
     >
       <div className="w-full h-full bg-[#f5f1eb] dark:bg-[#1a1d27] flex overflow-hidden transition-colors duration-300">
-        {/* Desktop sidebar — GPU-composited width transition */}
+        {/* Desktop sidebar */}
         <aside
           className={cn(
             "hidden lg:flex flex-shrink-0 relative",
@@ -452,8 +583,9 @@ export default function DashboardLayout({ children }) {
 
         {/* Main content */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-          {/* Header */}
-          <header className="px-4 sm:px-6 lg:px-8 pt-4 pb-3 flex items-center justify-between gap-3 shrink-0">
+          {/* ── Header ─────────────────────────────────────────────────────────── */}
+          <header className="px-4 sm:px-6 lg:px-8 pt-4 pb-3 flex items-center justify-between gap-3 shrink-0 relative z-50">
+            {/* Left: mobile menu trigger + page title only */}
             <div className="flex items-center gap-3 min-w-0">
               <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                 <SheetTrigger asChild className="lg:hidden">
@@ -463,20 +595,22 @@ export default function DashboardLayout({ children }) {
                 </SheetTrigger>
               </Sheet>
 
+              {/* Page breadcrumb — NO user number here */}
               <div className="min-w-0">
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#1f1f1f] dark:text-stone-100 truncate">
-                  Hi, {user?.username ? user.username.split("@")[0] : "User"}!
-                </h1>
-                <p className="text-stone-500 dark:text-stone-400 text-sm mt-1 hidden sm:block">
-                  {navigationItems.find((item) => item.href === pathname)?.name || "Port Gate Automation System"}
+                <p className="text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-widest hidden sm:block">
+                  Dashboard
+                </p>
+                <p className="text-base sm:text-lg font-extrabold text-[#1f1f1f] dark:text-stone-100 truncate leading-tight">
+                  {currentPageName}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* Right: search + dark mode + notifications + Company Profile */}
+            <div className="flex items-center gap-2.5">
               {/* Search */}
-              <div className="hidden md:flex bg-white dark:bg-white/5 px-4 py-2.5 rounded-full shadow-sm items-center gap-2 w-72 border border-transparent dark:border-white/10">
-                <Search className="h-4 w-4 text-stone-400 dark:text-stone-500" />
+              <div className="hidden md:flex bg-white dark:bg-white/5 px-4 py-2.5 rounded-full shadow-sm items-center gap-2 w-64 border border-transparent dark:border-white/10">
+                <Search className="h-4 w-4 text-stone-400 dark:text-stone-500 shrink-0" />
                 <input
                   type="text"
                   placeholder="Search..."
@@ -484,7 +618,7 @@ export default function DashboardLayout({ children }) {
                 />
               </div>
 
-              {/* Dark mode toggle */}
+              {/* Dark mode */}
               <Button
                 onClick={toggleDarkMode}
                 variant="ghost"
@@ -495,7 +629,7 @@ export default function DashboardLayout({ children }) {
                 {darkMode ? <Sun className="h-5 w-5 text-amber-300" /> : <Moon className="h-5 w-5 text-stone-600" />}
               </Button>
 
-              {/* Notification */}
+              {/* Notifications */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -505,7 +639,13 @@ export default function DashboardLayout({ children }) {
                 <span className="absolute top-2 right-2 w-2 h-2 bg-orange-500 rounded-full" />
               </Button>
 
-              <UserNameCard />
+              {/* Company Profile Panel */}
+              <CompanyProfilePanel
+                user={user}
+                profileData={profileData}
+                onChangePassword={() => setShowPasswordChangeModal(true)}
+                onLogout={handleLogout}
+              />
             </div>
           </header>
 
@@ -515,7 +655,7 @@ export default function DashboardLayout({ children }) {
         </div>
       </div>
 
-      {/* Change Password Modal */}
+      {/* ── Change Password Modal ───────────────────────────────────────────── */}
       {showPasswordChangeModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
           <div className="w-full max-w-md bg-white dark:bg-[#1f232d] rounded-3xl p-6 sm:p-8 shadow-2xl border border-stone-200/50 dark:border-white/5 animate-in fade-in zoom-in-95 duration-200 relative">

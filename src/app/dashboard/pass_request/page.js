@@ -434,22 +434,22 @@ export default function PassRequestPage() {
   //   })),
   // ];
   const selectedMasterPersonIds = persons
-  .filter((p) => p.masterId)
-  .map((p) => String(p.masterId));
+    .filter((p) => p.masterId)
+    .map((p) => String(p.masterId));
 
-const personOptions = [
-  { value: "", label: "-- Apply Fresh (Manual Entry) --" },
-  ...Object.values(masterPersonsDB)
-    .filter(
-      (p) =>
-        !selectedMasterPersonIds.includes(String(p.id)) ||
-        String(personForm.masterId) === String(p.id) // allow current edit
-    )
-    .map((p) => ({
-      value: String(p.id),
-      label: `${p.name} - Aadhar: ${p.aadhar || ""}`,
-    })),
-];
+  const personOptions = [
+    { value: "", label: "-- Apply Fresh (Manual Entry) --" },
+    ...Object.values(masterPersonsDB)
+      .filter(
+        (p) =>
+          !selectedMasterPersonIds.includes(String(p.id)) ||
+          String(personForm.masterId) === String(p.id) // allow current edit
+      )
+      .map((p) => ({
+        value: String(p.id),
+        label: `${p.name} - Aadhar: ${p.aadhar || ""}`,
+      })),
+  ];
 
   // const vehicleOptions = [
   //   { value: "", label: "-- Apply Fresh (Manual Entry) --" },
@@ -482,22 +482,22 @@ const personOptions = [
   };
   const [vehicleForm, setVehicleForm] = useState(initialVehicleForm);
   const selectedMasterVehicleIds = vehicles
-  .filter((v) => v.masterId)
-  .map((v) => String(v.masterId));
+    .filter((v) => v.masterId)
+    .map((v) => String(v.masterId));
 
-const vehicleOptions = [
-  { value: "", label: "-- Apply Fresh (Manual Entry) --" },
-  ...Object.values(masterVehiclesDB)
-    .filter(
-      (v) =>
-        !selectedMasterVehicleIds.includes(String(v.id)) ||
-        String(vehicleForm.masterId) === String(v.id)
-    )
-    .map((v) => ({
-      value: String(v.id),
-      label: `${v.registrationNo || v.regNo || ""}`,
-    })),
-];
+  const vehicleOptions = [
+    { value: "", label: "-- Apply Fresh (Manual Entry) --" },
+    ...Object.values(masterVehiclesDB)
+      .filter(
+        (v) =>
+          !selectedMasterVehicleIds.includes(String(v.id)) ||
+          String(vehicleForm.masterId) === String(v.id)
+      )
+      .map((v) => ({
+        value: String(v.id),
+        label: `${v.registrationNo || v.regNo || ""}`,
+      })),
+  ];
 
   // --- DYNAMIC & DB MAPPED MASTER DATA ---
   const [masterData, setMasterData] = useState({
@@ -643,39 +643,39 @@ const vehicleOptions = [
   }, []);
 
   const fetchMasterRecords = async () => {
-      try {
-        let token = localStorage.getItem("accessToken");
-        if (!token) return;
+    try {
+      let token = localStorage.getItem("accessToken");
+      if (!token) return;
 
-        token = token.replace(/^["']|["']$/g, "");
+      token = token.replace(/^["']|["']$/g, "");
 
-        const res = await axios.get(
-          `${AGENT_API}/pass-request/my-master-records`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+      const res = await axios.get(
+        `${AGENT_API}/pass-request/my-master-records`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
 
-        if (res.data?.success) {
-          const persons = res.data.data.persons || [];
-          const vehicles = res.data.data.vehicles || [];
+      if (res.data?.success) {
+        const persons = res.data.data.persons || [];
+        const vehicles = res.data.data.vehicles || [];
 
-          const pDict = {};
-          persons.forEach((p) => (pDict[p.id] = p));
+        const pDict = {};
+        persons.forEach((p) => (pDict[p.id] = p));
 
-          const vDict = {};
-          vehicles.forEach((v) => (vDict[v.id] = v));
+        const vDict = {};
+        vehicles.forEach((v) => (vDict[v.id] = v));
 
-          setMasterPersonsDB(pDict);
-          setMasterVehiclesDB(vDict);
-        }
-      } catch (err) {
-        console.error("Master records fetch failed", err);
+        setMasterPersonsDB(pDict);
+        setMasterVehiclesDB(vDict);
       }
-    };
+    } catch (err) {
+      console.error("Master records fetch failed", err);
+    }
+  };
 
   useEffect(() => {
-    
+
 
     fetchMasterRecords();
   }, []);
@@ -1115,8 +1115,8 @@ const vehicleOptions = [
   const totals = calculateTotals();
 
   const handleMasterPersonSelect = (e) => {
-        const id = e.target.value;
-        const alreadySelected = persons.some(
+    const id = e.target.value;
+    const alreadySelected = persons.some(
       (p) => String(p.masterId) === String(id)
     );
 
@@ -1166,20 +1166,20 @@ const vehicleOptions = [
           : pTypeStr === "YEARLY" || pTypeStr === "ANNUAL"
             ? "3"
             : "1";
-        console.log("MASTER PERSON DATA837", JSON.stringify(data, null, 2)); 
-        const dateFromValue =
-          data.dateFrom
-            ? new Date(data.dateFrom).toISOString().slice(0,16)
-            : getCurrentDateTime();
+      console.log("MASTER PERSON DATA837", JSON.stringify(data, null, 2));
+      const dateFromValue =
+        data.dateFrom
+          ? new Date(data.dateFrom).toISOString().slice(0, 16)
+          : getCurrentDateTime();
 
-        const dateToValue = calculateDateTo(
-          dateFromValue,
-          data.passPeriod
-            ? String(data.passPeriod)
-            : "1",
-          passTypeVal
-        );     
-        setPersonForm({
+      const dateToValue = calculateDateTo(
+        dateFromValue,
+        data.passPeriod
+          ? String(data.passPeriod)
+          : "1",
+        passTypeVal
+      );
+      setPersonForm({
         ...initialPersonForm,
         masterId: id,
         existingPassRequestId: data.passRequestId || data.id, // Crucial for fetching old documents
@@ -1270,7 +1270,7 @@ const vehicleOptions = [
       console.log("MASTER VEHICLE DATA918", JSON.stringify(data, null, 2));
       const dateFromValue =
         data.dateFrom
-          ? new Date(data.dateFrom).toISOString().slice(0,16)
+          ? new Date(data.dateFrom).toISOString().slice(0, 16)
           : getCurrentDateTime();
 
       const dateToValue = calculateDateTo(
@@ -1797,11 +1797,11 @@ const vehicleOptions = [
         if (p.photo) formData.append(`personPhoto_${idx}`, p.photo);
         if (p.aadharFile) formData.append(`personAadhar_${idx}`, p.aadharFile);
         if (p.idProofFile) formData.append(`personIdProof_${idx}`, p.idProofFile);
-        
+
         // Auto-fallback if driverLicence is empty for a Driver
         const dlFile = p.driverLicence || (p.hepType === "1" ? p.idProofFile : null);
         if (dlFile) formData.append(`driverLicense_${idx}`, dlFile);
-        
+
         if (p.policeVerification)
           formData.append(`policeVerification_${idx}`, p.policeVerification);
         if (p.proofOfEmployment)
@@ -1930,11 +1930,10 @@ const vehicleOptions = [
           type="file"
           disabled={disabled}
           accept={fileType === "image" ? "image/*" : "application/pdf"}
-          className={`absolute inset-0 w-full h-full opacity-0 z-10 ${
-            disabled
+          className={`absolute inset-0 w-full h-full opacity-0 z-10 ${disabled
               ? "cursor-not-allowed"
               : "cursor-pointer"
-          }`}
+            }`}
           required={isRequired && !existingFileName && !file}
           onChange={(e) => {
             const file = e.target.files[0];
@@ -1951,13 +1950,12 @@ const vehicleOptions = [
           }}
         />
         <div
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
-            disabled
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${disabled
               ? "bg-slate-100 border-slate-300 opacity-60"
               : file
                 ? "border-orange-300 bg-orange-50"
                 : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
-          } transition-colors`}
+            } transition-colors`}
         >
           <Upload
             className={`w-4 h-4 flex-shrink-0 ${file ? "text-orange-600" : "text-slate-400"}`}
@@ -2092,7 +2090,7 @@ const vehicleOptions = [
         declarationForm: null,
         // Existing file names for viewing
         existingPassRequestId: editingRevertedPass?.id,
-  
+
         existingPhotoName: entity.photoFileName,
         existingPhotoPath: entity.photoFilePath,
 
@@ -2757,14 +2755,14 @@ const vehicleOptions = [
                         <div className="flex items-center gap-3">
                           {p.photo || p.existingPhotoName ? (
                             <img
-                            
-              src={
-                p.photo instanceof File
-                  ? URL.createObjectURL(p.photo)
-                  : p.existingPhotoPath
-                    ? `${AGENT_API}/${p.existingPhotoPath}`
-                    : `${AGENT_API}/pass-request/viewMasterDocument?masterId=${p.masterId}&entityType=person&documentType=personPhoto`
-              }
+
+                              src={
+                                p.photo instanceof File
+                                  ? URL.createObjectURL(p.photo)
+                                  : p.existingPhotoPath
+                                    ? `${AGENT_API}/${p.existingPhotoPath}`
+                                    : `${AGENT_API}/pass-request/viewMasterDocument?masterId=${p.masterId}&entityType=person&documentType=personPhoto`
+                              }
 
                               alt="Profile"
                               className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-sm"
@@ -3665,7 +3663,7 @@ const vehicleOptions = [
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700 uppercase">
                           Upload Aadhar <span className="text-red-500">*</span>
-                        
+
 
                         </label>
                         <FileUploadBox
@@ -3844,14 +3842,14 @@ const vehicleOptions = [
                           const hasVal = !!personForm.aadharNo.trim();
                           const isValid = /^\d{12}$/.test(personForm.aadharNo);
                           const hasError = !!personErrors.aadharNo;
-                          
+
                           let customBorderClass = "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
                           if (hasVal) {
                             customBorderClass = (hasError || !isValid)
                               ? "border-red-400 focus:ring-red-500/20 focus:border-red-400"
                               : "border-emerald-500 focus:ring-emerald-500/20 focus:border-emerald-500";
                           }
-                          
+
                           return (
                             <>
                               <input
@@ -3865,6 +3863,9 @@ const vehicleOptions = [
                                   setPersonForm({ ...personForm, aadharNo: val });
                                   if (val.length === 12) {
                                     validatePersonField("aadharNo", val);
+                                    // Real-time blacklist check — fires the moment 12 digits are complete
+                                    checkBlacklistStatus("PERSON", val);
+                                    checkBlacklistStatus("DRIVER", val);
                                   }
                                 }}
                                 onBlur={(e) => validatePersonField("aadharNo", e.target.value)}
@@ -3888,11 +3889,21 @@ const vehicleOptions = [
                                   )}
                                 </div>
                               )}
+                              {/* Real-time blacklist inline warning — same pattern as vehicle reg field */}
+                              {isValid && (blacklistWarnings["PERSON_" + personForm.aadharNo] || blacklistWarnings["DRIVER_" + personForm.aadharNo]) && (
+                                <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
+                                  <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
+                                  <span>
+                                    PORT BLACKLISTED —{" "}
+                                    {(blacklistWarnings["PERSON_" + personForm.aadharNo] || blacklistWarnings["DRIVER_" + personForm.aadharNo])?.replace("⚠️ BLACKLISTED ", "")}
+                                  </span>
+                                </div>
+                              )}
                             </>
                           );
                         })()}
                       </div>
-                      
+
                     </>
                   )}
 
@@ -3921,7 +3932,7 @@ const vehicleOptions = [
                           placeholder="A1234567"
                           maxLength={8}
                         />
-                         {personErrors.passportNo && (
+                        {personErrors.passportNo && (
                           <p className="text-xs text-red-500 mt-0.5 font-medium">
                             {personErrors.passportNo}
                           </p>
@@ -4077,9 +4088,6 @@ const vehicleOptions = [
                             onBlur={(e) => {
                               if (personForm.withTwoWheeler) {
                                 validatePersonField("vehicleNo", e.target.value);
-                                if (/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(e.target.value)) {
-                                  checkBlacklistStatus("VEHICLE", e.target.value.replace(/[\s-]/g, ""));
-                                }
                               }
                             }}
                             onChange={(e) => {
@@ -4088,8 +4096,13 @@ const vehicleOptions = [
                                 ...personForm,
                                 vehicleNo: val,
                               });
-                              if (personForm.withTwoWheeler && val.length >= 8) {
-                                validatePersonField("vehicleNo", val);
+                              if (personForm.withTwoWheeler) {
+                                if (val.length >= 8) {
+                                  validatePersonField("vehicleNo", val);
+                                }
+                                if (/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(val)) {
+                                  checkBlacklistStatus("VEHICLE", val.replace(/[\s-]/g, ""));
+                                }
                               }
                             }}
                           />
@@ -4398,19 +4411,22 @@ const vehicleOptions = [
                           onChange={(e) => {
                             const val = e.target.value.toUpperCase();
                             setPersonForm({ ...personForm, idProofNumber: val });
-                            if (val)
-                              validatePersonField("idProofNumber", val, {
+                            if (val) {
+                              const isValid = validatePersonField("idProofNumber", val, {
                                 idProofType: personForm.idProofType,
                               });
+                              if (isValid) {
+                                const valClean = val.replace(/[\s-]/g, "");
+                                checkBlacklistStatus("DRIVER", valClean);
+                                checkBlacklistStatus("PERSON", valClean);
+                              }
+                            }
                           }}
                           onBlur={(e) => {
                             if (e.target.value) {
                               validatePersonField("idProofNumber", e.target.value, {
                                 idProofType: personForm.idProofType,
                               });
-                              const valClean = e.target.value.replace(/[\s-]/g, "").toUpperCase();
-                              checkBlacklistStatus("DRIVER", valClean);
-                              checkBlacklistStatus("PERSON", valClean);
                             }
                           }}
                           className={`${inputClass} ${personErrors.idProofNumber ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
@@ -4642,82 +4658,82 @@ const vehicleOptions = [
               {((personForm.hepType === "1" && personForm.idProofType !== "1") ||
                 String(personForm.passType) === "2" ||
                 String(personForm.passType) === "3") && (
-              <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
-                  <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
-                  Mandatory Documents
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  {personForm.hepType === "1" && ( // 1 = Driver ID
-                    <FileUploadBox
-                      label="Driver Licence"
-                      isRequired
-                      file={personForm.driverLicence}
-                      existingFileName={personForm.existingDlName}
-                      onView={() =>
-                        handleViewDoc(
-                          personForm.existingPassRequestId,
-                          "driverLicense",
-                          personForm.existingDlName,
-                          personForm.editIndex
-                        )
-                      }
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          driverLicence: e.target.files[0],
-                        })
-                      }
-                    />
-                  )}
-                  {(String(personForm.passType) === "2" ||
-                    String(personForm.passType) === "3") && (
-                      <FileUploadBox
-                        label="Police Verification"
-                        isRequired
-                        file={personForm.policeVerification}
-                        existingFileName={personForm.existingPoliceName}
-                        onView={() =>
-                          handleViewDoc(
-                            personForm.existingPassRequestId,
-                            "policeVerification",
-                            personForm.existingPoliceName,
-                            personForm.editIndex
-                          )
-                        }
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            policeVerification: e.target.files[0],
-                          })
-                        }
-                      />
-                    )}
-                  {personForm.hepType === "3" && (
-                    <FileUploadBox
-                      label="Passport"
-                      isRequired
-                      file={personForm.passportDoc}
-                      existingFileName={personForm.existingPassportName}
-                      onView={() =>
-                        handleViewDoc(
-                          personForm.existingPassRequestId,
-                          "passportDoc",
-                          personForm.existingPassportName,
-                          personForm.editIndex
-                        )
-                      }
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          passportDoc: e.target.files[0],
-                        })
-                      }
-                    />
-                  )}
-                </div>
-              </div>
-              )}
+                  <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
+                      <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
+                      Mandatory Documents
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                      {personForm.hepType === "1" && ( // 1 = Driver ID
+                        <FileUploadBox
+                          label="Driver Licence"
+                          isRequired
+                          file={personForm.driverLicence}
+                          existingFileName={personForm.existingDlName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "driverLicense",
+                              personForm.existingDlName,
+                              personForm.editIndex
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              driverLicence: e.target.files[0],
+                            })
+                          }
+                        />
+                      )}
+                      {(String(personForm.passType) === "2" ||
+                        String(personForm.passType) === "3") && (
+                          <FileUploadBox
+                            label="Police Verification"
+                            isRequired
+                            file={personForm.policeVerification}
+                            existingFileName={personForm.existingPoliceName}
+                            onView={() =>
+                              handleViewDoc(
+                                personForm.existingPassRequestId,
+                                "policeVerification",
+                                personForm.existingPoliceName,
+                                personForm.editIndex
+                              )
+                            }
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                policeVerification: e.target.files[0],
+                              })
+                            }
+                          />
+                        )}
+                      {personForm.hepType === "3" && (
+                        <FileUploadBox
+                          label="Passport"
+                          isRequired
+                          file={personForm.passportDoc}
+                          existingFileName={personForm.existingPassportName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "passportDoc",
+                              personForm.existingPassportName,
+                              personForm.editIndex
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              passportDoc: e.target.files[0],
+                            })
+                          }
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -4818,12 +4834,13 @@ const vehicleOptions = [
                               const val = e.target.value.toUpperCase().slice(0, 13);
                               setVehicleForm({ ...vehicleForm, regNo: val });
                               if (val.length >= 8) validateVehicleField("regNo", val);
+                              // Real-time blacklist check — fires as soon as reg number format is valid
+                              if (/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(val)) {
+                                checkBlacklistStatus("VEHICLE", val.replace(/[\s-]/g, ""));
+                              }
                             }}
                             onBlur={(e) => {
                               validateVehicleField("regNo", e.target.value);
-                              if (/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(e.target.value)) {
-                                checkBlacklistStatus("VEHICLE", e.target.value.replace(/[\s-]/g, ""));
-                              }
                             }}
                             className={`${baseInputClass} ${customBorderClass} uppercase font-bold text-[#0a1e4d] tracking-wider`}
                             placeholder="TN-XX-XX-XXXX"
@@ -6181,9 +6198,8 @@ const vehicleOptions = [
       {viewingDocUrl && (
         <div className="fixed inset-0 z-[150] bg-slate-900/85 backdrop-blur-sm flex items-center justify-center p-4 md:p-6 lg:p-10 animate-in fade-in duration-300">
           <div
-            className={`bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${
-              isFullscreen ? "w-full h-full" : "w-full max-w-5xl h-[85vh]"
-            }`}
+            className={`bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${isFullscreen ? "w-full h-full" : "w-full max-w-5xl h-[85vh]"
+              }`}
           >
             {/* Header */}
             <div className="bg-slate-800 text-white px-6 py-4 flex items-center justify-between shrink-0">
@@ -6282,7 +6298,7 @@ const vehicleOptions = [
                   Suspended
                 </span>
               </div>
-              
+
               <div className="space-y-1">
                 <p className="text-[10px] font-bold text-slate-400 dark:text-stone-500 uppercase tracking-wider">Company Name</p>
                 <p className="text-sm font-extrabold text-slate-900 dark:text-stone-100">

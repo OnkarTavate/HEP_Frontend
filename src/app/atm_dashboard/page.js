@@ -34,6 +34,9 @@ import {
   Download,
   Wallet,
   Globe,
+  GripVertical,
+  RotateCcw,
+  Zap,
 } from "lucide-react";
 
 // Inline IndianRupee SVG icon component to match Lucide style
@@ -141,6 +144,57 @@ export default function ATMBlacklistPage() {
   const [activeTab, setActiveTab] = useState("active");
   const [searchInput, setSearchInput] = useState("");
   const [entityFilter, setEntityFilter] = useState("");
+
+  // ── Drag & Drop Stat Card Order ──
+  const [cardOrder, setCardOrder] = useState(["active", "pending", "penalties", "unblacklisted"]);
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("atm-card-order");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === 4) {
+          setCardOrder(parsed);
+        }
+      } catch (e) {}
+    }
+  }, []);
+
+  const handleDragStart = (e, idx) => {
+    setDraggedIndex(idx);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    if (dragOverIndex !== idx) setDragOverIndex(idx);
+  };
+
+  const handleDrop = (e, idx) => {
+    e.preventDefault();
+    if (draggedIndex === null) return;
+    const newOrder = [...cardOrder];
+    const [draggedItem] = newOrder.splice(draggedIndex, 1);
+    newOrder.splice(idx, 0, draggedItem);
+    setCardOrder(newOrder);
+    localStorage.setItem("atm-card-order", JSON.stringify(newOrder));
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const resetCardOrder = () => {
+    const defaultOrder = ["active", "pending", "penalties", "unblacklisted"];
+    setCardOrder(defaultOrder);
+    localStorage.removeItem("atm-card-order");
+    toast.success("Stat card layout reset to default!");
+  };
   const [currentUser, setCurrentUser] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("user");
@@ -753,69 +807,109 @@ export default function ATMBlacklistPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 font-sans">
+      {/* ── Tip row ── */}
+      <div className="flex items-center justify-between gap-3 text-xs bg-red-500/5 rounded-2xl px-4 py-2 border border-red-500/10 shrink-0">
+        <p className="text-red-700 dark:text-red-400 font-medium flex items-center gap-1.5">
+          <Zap className="h-4 w-4 animate-bounce text-red-500" />
+          Drag and drop stat cards using the grip icon to arrange your view.
+        </p>
+        <button
+          onClick={resetCardOrder}
+          className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors shrink-0"
+        >
+          <RotateCcw className="h-3 w-3" />
+          Reset Order
+        </button>
+      </div>
+
       {/* ── Stat cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        {[
-          {
-            label: "Active Blacklisted",
-            value: stats?.active_blacklisted || 0,
-            icon: ShieldBan,
-            color: "text-red-600 dark:text-red-400",
-            bgIcon: "bg-red-50 dark:bg-red-500/10",
-            footnote: "Active blocked cases",
-            onClick: () => { setActiveTab("active"); setSearchInput(""); setEntityFilter(""); },
-          },
-          {
-            label: "Pending Unblacklist",
-            value: stats?.pending_unblacklist || 0,
-            icon: Clock,
-            color: "text-amber-600 dark:text-amber-400",
-            bgIcon: "bg-amber-50 dark:bg-amber-500/10",
-            footnote: "Awaiting review",
-            onClick: () => { setActiveTab("requests"); setSearchInput(""); setEntityFilter(""); },
-          },
-          {
-            label: "Pending Penalties",
-            value: `₹${parseFloat(stats?.pending_penalties_sum || 0).toLocaleString("en-IN")}`,
-            icon: IndianRupee,
-            color: "text-orange-600 dark:text-orange-400",
-            bgIcon: "bg-orange-50 dark:bg-orange-500/10",
-            footnote: `${stats?.pending_penalties || 0} active penalties`,
-            onClick: () => { setActiveTab("all"); setSearchInput(""); setEntityFilter(""); },
-          },
-          {
-            label: "Total Unblacklisted",
-            value: stats?.total_unblacklisted || 0,
-            icon: ShieldCheck,
-            color: "text-emerald-600 dark:text-emerald-400",
-            bgIcon: "bg-emerald-50 dark:bg-emerald-500/10",
-            footnote: "Restored entries",
-            onClick: () => { setActiveTab("all"); setSearchInput(""); setEntityFilter(""); },
-          },
-        ].map((card, i) => (
-          <div
-            key={i}
-            onClick={card.onClick}
-            className="bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                {card.label}
-              </span>
-              <span className={`flex items-center justify-center h-8 w-8 rounded-xl ${card.bgIcon}`}>
-                <card.icon className={`h-4 w-4 ${card.color}`} strokeWidth={2.5} />
-              </span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 shrink-0">
+        {cardOrder.map((cardKey, index) => {
+          const cardData = {
+            active: {
+              label: "Active Blacklisted",
+              value: stats?.active_blacklisted || 0,
+              icon: ShieldBan,
+              color: "text-red-600 dark:text-red-400",
+              bgIcon: "bg-red-50 dark:bg-red-500/10",
+              footnote: "Active blocked cases",
+              onClick: () => { setActiveTab("active"); setSearchInput(""); setEntityFilter(""); },
+            },
+            pending: {
+              label: "Pending Unblacklist",
+              value: stats?.pending_unblacklist || 0,
+              icon: Clock,
+              color: "text-amber-600 dark:text-amber-400",
+              bgIcon: "bg-amber-50 dark:bg-amber-500/10",
+              footnote: "Awaiting review",
+              onClick: () => { setActiveTab("requests"); setSearchInput(""); setEntityFilter(""); },
+            },
+            penalties: {
+              label: "Pending Penalties",
+              value: `₹${parseFloat(stats?.pending_penalties_sum || 0).toLocaleString("en-IN")}`,
+              icon: IndianRupee,
+              color: "text-orange-600 dark:text-orange-400",
+              bgIcon: "bg-orange-50 dark:bg-orange-500/10",
+              footnote: `${stats?.pending_penalties || 0} active penalties`,
+              onClick: () => { setActiveTab("all"); setSearchInput(""); setEntityFilter(""); },
+            },
+            unblacklisted: {
+              label: "Total Unblacklisted",
+              value: stats?.total_unblacklisted || 0,
+              icon: ShieldCheck,
+              color: "text-emerald-600 dark:text-emerald-400",
+              bgIcon: "bg-emerald-50 dark:bg-emerald-500/10",
+              footnote: "Restored entries",
+              onClick: () => { setActiveTab("all"); setSearchInput(""); setEntityFilter(""); },
+            },
+          }[cardKey];
+
+          const isDragged = draggedIndex === index;
+          const isOver = dragOverIndex === index;
+
+          return (
+            <div
+              key={cardKey}
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              className={
+                "transition-all duration-200 " +
+                (isDragged ? "opacity-30 scale-95" : "") +
+                (isOver ? "border-2 border-dashed border-red-500 rounded-3xl p-1 bg-red-500/5 shadow-inner scale-[1.02]" : "")
+              }
+            >
+              <div
+                onClick={cardData.onClick}
+                className="bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2 relative group"
+              >
+                {/* Grip Handle */}
+                <div className="absolute top-3 right-3 text-stone-300 dark:text-slate-600 group-hover:text-stone-400 dark:group-hover:text-slate-400 transition-colors cursor-grab active:cursor-grabbing p-1 rounded hover:bg-slate-50 dark:hover:bg-white/5 z-10">
+                  <GripVertical className="h-4.5 w-4.5" />
+                </div>
+
+                <div className="flex items-center justify-between pr-6">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                    {cardData.label}
+                  </span>
+                  <span className={`flex items-center justify-center h-8 w-8 rounded-xl ${cardData.bgIcon}`}>
+                    <cardData.icon className={`h-4 w-4 ${cardData.color}`} strokeWidth={2.5} />
+                  </span>
+                </div>
+                <p className={`text-2xl sm:text-3xl font-extrabold tabular-nums ${cardData.color}`}>
+                  {cardData.value}
+                </p>
+                {cardData.footnote && (
+                  <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 mt-0.5">
+                    {cardData.footnote}
+                  </span>
+                )}
+              </div>
             </div>
-            <p className={`text-2xl sm:text-3xl font-extrabold tabular-nums ${card.color}`}>
-              {card.value}
-            </p>
-            {card.footnote && (
-              <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 mt-0.5">
-                {card.footnote}
-              </span>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* ── Page header + Actions ── */}
