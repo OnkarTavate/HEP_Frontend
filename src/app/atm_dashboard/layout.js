@@ -38,6 +38,8 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
+  Mail,
+  Phone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -84,8 +86,11 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
   };
 
   const username = user?.username || "ATM Admin";
-  const displayName = username.split("@")[0] || "ATM Admin";
+  const displayName = user?.name || username.split("@")[0] || "ATM Admin";
   const role = user?.role || "Officer";
+  const department = user?.departmentName || departmentName || "ATM Department";
+  const email = user?.email || "—";
+  const mobile = user?.mobile || user?.mobileNo || "—";
   const initials = displayName.substring(0, 2).toUpperCase();
 
   const statusMeta = { label: "Active", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300" };
@@ -165,9 +170,11 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
           {/* Detail rows */}
           <div className="px-4 pt-2 pb-1 max-h-[340px] overflow-y-auto [scrollbar-width:thin] text-left">
             <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">Account Profile</p>
-            <DetailRow icon={User}      label="Login ID"     value={username}       copyKey="lid" />
-            <DetailRow icon={Briefcase} label="Role"         value={role}           copyKey="role" />
-            <DetailRow icon={Building2} label="Department"   value={departmentName} copyKey="dept" />
+            <DetailRow icon={User}      label="Login ID"   value={username}   copyKey="lid" />
+            <DetailRow icon={Briefcase} label="Role"       value={role}       copyKey="role" />
+            <DetailRow icon={Building2} label="Department" value={department} copyKey="dept" />
+            <DetailRow icon={Mail}      label="Email"      value={email}      copyKey="email" />
+            <DetailRow icon={Phone}     label="Mobile"     value={mobile}     copyKey="mob" />
           </div>
 
           {/* Actions */}

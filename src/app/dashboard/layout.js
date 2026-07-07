@@ -465,8 +465,7 @@ export default function DashboardLayout({ children }) {
                 "flex flex-col leading-tight overflow-hidden transition-[opacity,max-width] duration-300 ease-in-out",
                 expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0"
               )}>
-                <span className="font-extrabold text-white text-xl tracking-tight whitespace-nowrap">Port Gate</span>
-                <span className="text-xs uppercase tracking-wider text-amber-400 font-bold whitespace-nowrap">Automation System</span>
+                <span className="font-extrabold text-white text-2xl tracking-tight whitespace-nowrap">APACS</span>
               </span>
             </Link>
 

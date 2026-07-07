@@ -46,6 +46,8 @@ import {
   BadgeCheck,
   CheckCheck,
   Copy,
+  Mail,
+  Phone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -336,7 +338,7 @@ export default function AdminLayout({ children }) {
           </div>
           <div>
             <h1 className="font-bold text-slate-800 text-lg leading-tight">
-              Port Gate
+              APACS
             </h1>
             <p className="text-xs text-orange-600 font-medium">Admin System</p>
           </div>
@@ -426,7 +428,7 @@ export default function AdminLayout({ children }) {
             {expanded && (
               <span className="flex flex-col leading-tight">
                 <span className="font-extrabold text-white text-xl tracking-tight">
-                  Port Gate
+                  APACS
                 </span>
                 <span className="text-xs uppercase tracking-wider text-amber-400 font-bold">
                   Admin System
@@ -527,8 +529,11 @@ export default function AdminLayout({ children }) {
     };
 
     const username = user?.username || "Port Admin";
-    const displayName = username.split("@")[0] || "Port Admin";
+    const displayName = user?.name || username.split("@")[0] || "Port Admin";
     const role = user?.role || "Officer";
+    const department = user?.departmentName || departmentName || "Admin Department";
+    const email = user?.email || "—";
+    const mobile = user?.mobile || user?.mobileNo || "—";
     const initials = displayName.substring(0, 2).toUpperCase();
 
     const statusMeta = { label: "Active", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300" };
@@ -608,9 +613,11 @@ export default function AdminLayout({ children }) {
             {/* Detail rows */}
             <div className="px-4 pt-2 pb-1 max-h-[340px] overflow-y-auto [scrollbar-width:thin] text-left">
               <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">Account Profile</p>
-              <DetailRow icon={User}      label="Login ID"     value={username}       copyKey="lid" />
-              <DetailRow icon={Briefcase} label="Role"         value={role}           copyKey="role" />
-              <DetailRow icon={Building2} label="Department"   value={departmentName} copyKey="dept" />
+              <DetailRow icon={User} label="Login ID" value={username} copyKey="lid" />
+              <DetailRow icon={Briefcase} label="Role" value={role} copyKey="role" />
+              <DetailRow icon={Building2} label="Department" value={department} copyKey="dept" />
+              <DetailRow icon={Mail} label="Email" value={email} copyKey="email" />
+              <DetailRow icon={Phone} label="Mobile" value={mobile} copyKey="mob" />
             </div>
 
             {/* Actions */}
