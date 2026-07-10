@@ -1,5 +1,6 @@
 import "./globals.css";
 import { Toaster } from "sonner";
+import ChatbotWidget from "../components/ChatbotWidget";
 
 export const metadata = {
   title: "Automated Port Access and Control System",
@@ -17,6 +18,7 @@ export default function RootLayout({ children }) {
         suppressHydrationWarning
       >
         {children}
+        <ChatbotWidget />
         <Toaster position="top-center" richColors />
       </body>
     </html>
