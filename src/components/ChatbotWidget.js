@@ -557,12 +557,6 @@ export default function ChatbotWidget() {
                       <>
                         <ReactMarkdown>{msg.text}</ReactMarkdown>
 
-                        {msg.latencyMs ? (
-                          <div className="lat">
-                            Generated in {(msg.latencyMs / 1000).toFixed(1)}s · {msg.retrieved?.length || 0} chunks retrieved
-                          </div>
-                        ) : null}
-
                         {msg.chips && msg.chips.length ? (
                           <div className="chips">
                             {msg.chips.map((c, i) => (
