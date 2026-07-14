@@ -461,15 +461,26 @@ const LoginPage = () => {
         localStorage.setItem("accessToken", data.accessToken);
         localStorage.setItem("refreshToken", data.refreshToken);
 
-        // ✅ Store role + department so layouts can gate access correctly.
-        //    Backend change #1 (see BACKEND_CHANGES_REQUIRED.md) must include
-        //    departmentName + departmentId in the login response. Until then
-        //    those fields will be null and Vendor Pass routing won't work.
+        // ✅ Derive role and department from the signed JWT, NOT from the
+        //    response body. The response body can be tampered with by an
+        //    attacker intercepting the request (e.g. Burp Suite), but the
+        //    JWT payload is cryptographically signed by the server — any
+        //    modification to it would invalidate the signature and the
+        //    server rejects the token on the next authenticated request.
+        let tokenClaims;
+        try {
+          tokenClaims = jwtDecode(data.accessToken);
+        } catch {
+          toast.error("Login failed: invalid token received.");
+          fetchCaptcha();
+          return;
+        }
+
         const user = {
           username: formData.username,
-          role: data.role,
-          departmentName: data.departmentName || null,
-          departmentId: data.departmentId || null,
+          role: tokenClaims.role,
+          departmentName: tokenClaims.departmentName || null,
+          departmentId: tokenClaims.departmentId || null,
           isPasswordChanged: data.isPasswordChanged,
         };
 
@@ -485,8 +496,8 @@ const LoginPage = () => {
         //   Marine            : 7
         //   Engineering Civil : 3  |  Engineering Mechanical : 4
         //   Finance           : 5  |  General Administration : 6
-        const role = (data.role || "").toLowerCase();
-        const deptId = data.departmentId; // numeric — comes from JWT/login response
+        const role = (tokenClaims.role || "").toLowerCase();
+        const deptId = tokenClaims.departmentId; // numeric — sourced from JWT claim
 
         const TRAFFIC_DEPT_IDS = [9, 10, 11, 12, 13, 14, 15];
         const MARINE_DEPT_ID = 7;

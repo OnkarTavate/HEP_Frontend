@@ -170,9 +170,11 @@ export default function AdminDashboard() {
 
   const fetchFormOptions = async () => {
     try {
+      const token = localStorage.getItem("accessToken");
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
       const [rolesRes, deptsRes] = await Promise.all([
-        axios.get(`${BASE_URL}/user/roles`),
-        axios.get(`${BASE_URL}/user/departments`),
+        axios.get(`${BASE_URL}/user/roles`, { headers: authHeaders }),
+        axios.get(`${BASE_URL}/user/departments`, { headers: authHeaders }),
       ]);
       setFormOptions({
         roles: rolesRes.data.data || [],
