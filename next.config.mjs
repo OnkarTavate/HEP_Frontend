@@ -2,6 +2,9 @@
 const nextConfig = {
   allowedDevOrigins: ['10.184.3.133', '14.139.180.41'],
 
+  // Remove the "X-Powered-By: Next.js" header from all responses
+  poweredByHeader: false,
+
   webpack: (config) => {
     // pdfjs-dist includes a Node-only code path that requires 'canvas'.
     // In the browser bundle this module is never actually used, so we
@@ -72,6 +75,10 @@ const nextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // Suppress any server/framework identification headers that may be
+          // injected by a reverse proxy (e.g. Apache) in front of this app.
+          { key: "X-Powered-By", value: "" },
+          { key: "Server", value: "" },
         ],
       },
     ];
