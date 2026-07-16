@@ -503,12 +503,13 @@ const LoginPage = () => {
         const MARINE_DEPT_ID = 7;
         // Civil, Mechanical, Finance, General Admin → vendor pass only (no dedicated portal)
         const VENDOR_ONLY_DEPT_IDS = [3, 4, 5, 6];
+        const TRAFFIC_APPROVAL_ROLES = ["approval", "safety officer", "fire safety officer", "senior deputy traffic manager"];
 
         if (role === "admin" || role === "administrator") {
           router.push("/admin");
         } else if (role === "atm") {
           router.push("/atm_dashboard");
-        } else if (role === "approval" && TRAFFIC_DEPT_IDS.includes(deptId)) {
+        } else if (TRAFFIC_APPROVAL_ROLES.includes(role) && TRAFFIC_DEPT_IDS.includes(deptId)) {
           router.push("/traffic_approval");
         } else if (role === "approval" && deptId === MARINE_DEPT_ID) {
           router.push("/marine_approval");

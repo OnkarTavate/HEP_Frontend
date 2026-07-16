@@ -68,7 +68,7 @@ const calculateDateTo = (fromDate, period, type) => {
     d.setDate(d.getDate() + p); // +1 day for 1-day pass ✅
   } else if (type === "MONTHLY" || type === "2" || type === 2) {
     d.setMonth(d.getMonth() + p); // +1 month, same day ✅
-  } else if (type === "YEARLY" || type === "3" || type === 3) {
+  } else if (type === "YEARLY" || type === "ANNUAL" || type === "3" || type === 3) {
     d.setFullYear(d.getFullYear() + p); // +1 year, same day ✅
   }
 
@@ -371,6 +371,8 @@ export default function VendorPassPublicPage() {
     copyOfLicence: null,
     passportDoc: null,
     driverLicence: null,
+    entryAuthorization: null,
+    existingEntryAuthName: "",
     passType: "1", // Default: 1 (Daily)
     passPeriod: "1",
     dateFrom: getCurrentDateTime(),
@@ -411,6 +413,10 @@ export default function VendorPassPublicPage() {
     requestLetter: null,
     taxDoc: null,
     emissionCert: null,
+    sparkArrester: null,
+    existingSparkArresterName: "",
+    twistLock: null,
+    existingTwistLockName: "",
     passType: "1", // Default: 1 (Daily)
     passPeriod: "1",
     dateFrom: getCurrentDateTime(),
@@ -448,6 +454,14 @@ export default function VendorPassPublicPage() {
       { id: 36, name: "China", iso2: "CN" },
     ],
   });
+
+  const isOilDockArea = (areaId) => {
+    if (!areaId) return false;
+    const area = masterData?.accessAreas?.find(a => String(a.id) === String(areaId));
+    if (area) return String(area.label || area.value || area.name).toUpperCase().includes("OIL JETTY") || String(area.id) === "1";
+    return String(areaId).toUpperCase().includes("OIL JETTY") || String(areaId) === "1";
+  };
+
 
   // Fetch vendor intake by token; pre-fill general form from intake
   useEffect(() => {
@@ -803,6 +817,7 @@ export default function VendorPassPublicPage() {
         existingEmpName: data.employmentProofName,
         existingChaName: data.chaLicenseName,
         existingPassportName: data.passportName,
+        existingEntryAuthName: data.entryAuthorizationFileName,
       });
       toast.success("Person details & documents auto-filled");
     } else {
@@ -870,6 +885,8 @@ export default function VendorPassPublicPage() {
         existingReqName: data.requestLetterName,
         existingTaxName: data.taxDocName,
         existingEmissionName: data.emissionCertName,
+        existingSparkArresterName: data.sparkArresterFileName,
+        existingTwistLockName: data.twistLockFileName,
       });
 
       toast.success("Vehicle details & documents auto-filled");
@@ -956,12 +973,30 @@ export default function VendorPassPublicPage() {
       return toast.error("Please fill all mandatory fields including Photo.");
     }
 
-    if (!(personForm.aadharFile || personForm.existingAadharName))
-      return toast.error("Aadhar Card upload is mandatory.");
+    if (personForm.hepType === "1" && !(personForm.driverLicence || personForm.existingDlName)) {
+      return toast.error("Driver Licence is mandatory for Drivers.");
+    }
 
-    const isMonthlyOrYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(personForm.passType));
+    if (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar") {
+      if (!(personForm.aadharFile || personForm.existingAadharName)) {
+        return toast.error("Aadhar Card upload is mandatory.");
+      }
+    }
+
+    if (personForm.hepType === "3" && personForm.seafarerIdType === "passport") {
+      if (!(personForm.passportDoc || personForm.existingPassportName)) {
+        return toast.error("Passport upload is mandatory for Seafarers with Passport.");
+      }
+    }
+
+    const isMonthlyOrYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(personForm.passType).toUpperCase());
     if (isMonthlyOrYearly && !(personForm.policeVerification || personForm.existingPoliceName)) {
       return toast.error("Police Verification Certificate is mandatory for Monthly/Yearly passes.");
+    }
+
+    const isPersonOilDock = isOilDockArea(personForm.accessArea);
+    if (isPersonOilDock && !(personForm.entryAuthorization || personForm.existingEntryAuthName)) {
+      return toast.error("Entry Authorization is mandatory for Oil Dock passes.");
     }
 
     if (editingPersonIndex !== null) {
@@ -1059,15 +1094,26 @@ export default function VendorPassPublicPage() {
       );
     }
     if (
-      String(vehicleForm.passType) === "2" ||
-      String(vehicleForm.passType) === "3"
+      ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType))
     ) {
       if (
+        !(vehicleForm.requestLetter || vehicleForm.existingReqName) ||
         !(vehicleForm.taxDoc || vehicleForm.existingTaxName) ||
         !(vehicleForm.emissionCert || vehicleForm.existingEmissionName)
       ) {
-        return toast.error("Tax Document and Emission Certificate are mandatory for Monthly/Yearly passes.");
+        return toast.error("Request Letter, Tax Document, and Emission Certificate are mandatory for Monthly/Yearly passes.");
       }
+    }
+
+    const isVehicleOilDock = isOilDockArea(vehicleForm.accessArea);
+    if (isVehicleOilDock) {
+      if (!(vehicleForm.sparkArrester || vehicleForm.existingSparkArresterName)) {
+        return toast.error("Spark Arrester Certificate is mandatory for Oil Dock passes.");
+      }
+    }
+    const isMonthlyYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType).toUpperCase());
+    if (isMonthlyYearly && !(vehicleForm.twistLock || vehicleForm.existingTwistLockName)) {
+      return toast.error("Twist Lock Certificate is mandatory for Monthly/Yearly passes.");
     }
 
     if (editingVehicleIndex !== null) {
@@ -1247,6 +1293,7 @@ export default function VendorPassPublicPage() {
           formData.append("employmentProof", p.proofOfEmployment);
         if (p.copyOfLicence) formData.append("chaLicenseCopy", p.copyOfLicence);
         if (p.passportDoc) formData.append("passportDoc", p.passportDoc);
+        if (p.entryAuthorization) formData.append("entryAuthorization", p.entryAuthorization);
       });
 
       vehicles.forEach((v) => {
@@ -1259,6 +1306,8 @@ export default function VendorPassPublicPage() {
           formData.append("vehicleRequestLetter", v.requestLetter);
         if (v.taxDoc) formData.append("vehicleTax", v.taxDoc);
         if (v.emissionCert) formData.append("vehicleEmission", v.emissionCert);
+        if (v.sparkArrester) formData.append("sparkArrester", v.sparkArrester);
+        if (v.twistLock) formData.append("twistLock", v.twistLock);
       });
 
       const response = await axios.post(
@@ -2123,64 +2172,7 @@ export default function VendorPassPublicPage() {
                     </>
                   )}
 
-                  {/* Passport Fields - Show only for seafarers who selected passport */}
-                  {personForm.hepType === "3" && personForm.seafarerIdType === "passport" && (
-                    <>
-                      <div className="space-y-1.5 animate-in zoom-in">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          Passport No. <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={personForm.passportNo}
-                          onChange={(e) => {
-                            const val = e.target.value.toUpperCase().slice(0, 8);
-                            setPersonForm({ ...personForm, passportNo: val });
-                            // Clear error on change
-                            if (personErrors.passportNo) {
-                              setPersonErrors((prev) => ({ ...prev, passportNo: null }));
-                            }
-                          }}
-                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${
-                            personErrors.passportNo
-                              ? "border-red-400 bg-red-50"
-                              : "border-slate-300 bg-white"
-                          }`}
-                          placeholder="A1234567"
-                          maxLength={8}
-                        />
-                        {personErrors.passportNo && (
-                          <p className="text-xs text-red-500 mt-0.5 font-medium">
-                            {personErrors.passportNo}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-1.5 animate-in zoom-in">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          Upload Passport <span className="text-red-500">*</span>
-                        </label>
-                        <FileUploadBox
-                          file={personForm.passportDoc}
-                          existingFileName={personForm.existingPassportName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "passportDoc",
-                              personForm.existingPassportName,
-                              personForm.editIndex || 0,
-                              true
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              passportDoc: e.target.files[0],
-                            })
-                          }
-                        />
-                      </div>
-                    </>
-                  )}
+
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Mobile <span className="text-red-500">*</span>
@@ -2646,39 +2638,6 @@ export default function VendorPassPublicPage() {
                 </div>
               </div>
 
-              {(String(personForm.passType) === "2" ||
-                String(personForm.passType) === "3") && (
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
-                  <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
-                  Mandatory Documents
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  <FileUploadBox
-                    label="Police Verification Certificate"
-                    isRequired
-                    file={personForm.policeVerification}
-                    existingFileName={personForm.existingPoliceName}
-                    onView={() =>
-                      handleViewDoc(
-                        personForm.existingPassRequestId,
-                        "policeVerification",
-                        personForm.existingPoliceName,
-                        personForm.editIndex || 0,
-                        true
-                      )
-                    }
-                    onChange={(e) =>
-                      setPersonForm({
-                        ...personForm,
-                        policeVerification: e.target.files[0],
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              )}
-
               <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-[#0a1e4d] text-white">
@@ -2782,6 +2741,143 @@ export default function VendorPassPublicPage() {
                   </tbody>
                 </table>
               </div>
+
+              {((personForm.hepType === "1" && personForm.idProofType !== "1") ||
+                String(personForm.passType) === "2" ||
+                String(personForm.passType) === "3" ||
+                personForm.hepType === "3" ||
+                String(personForm.accessArea).toUpperCase().includes("OIL JETTY") ||
+                String(personForm.accessArea) === "1") && (
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
+                    <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
+                    Mandatory Documents
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    {personForm.hepType === "1" && ( // 1 = Driver ID
+                      <FileUploadBox
+                        label="Driver Licence"
+                        isRequired
+                        file={personForm.driverLicence}
+                        existingFileName={personForm.existingDlName}
+                        onView={() =>
+                          handleViewDoc(
+                            personForm.existingPassRequestId,
+                            "driverLicense",
+                            personForm.existingDlName,
+                            personForm.editIndex || 0,
+                            true
+                          )
+                        }
+                        onChange={(e) =>
+                          setPersonForm({
+                            ...personForm,
+                            driverLicence: e.target.files[0],
+                          })
+                        }
+                      />
+                    )}
+                    {(String(personForm.passType) === "2" ||
+                      String(personForm.passType) === "3") && (
+                      <FileUploadBox
+                        label="Police Verification Certificate"
+                        isRequired
+                        file={personForm.policeVerification}
+                        existingFileName={personForm.existingPoliceName}
+                        onView={() =>
+                          handleViewDoc(
+                            personForm.existingPassRequestId,
+                            "policeVerification",
+                            personForm.existingPoliceName,
+                            personForm.editIndex || 0,
+                            true
+                          )
+                        }
+                        onChange={(e) =>
+                          setPersonForm({
+                            ...personForm,
+                            policeVerification: e.target.files[0],
+                          })
+                        }
+                      />
+                    )}
+                    {personForm.hepType === "3" && (
+                      <>
+                        {personForm.seafarerIdType === "passport" && (
+                          <div className="space-y-1.5 animate-in zoom-in">
+                            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                              Passport No. <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={personForm.passportNo}
+                              onChange={(e) => {
+                                const val = e.target.value.toUpperCase().slice(0, 8);
+                                setPersonForm({ ...personForm, passportNo: val });
+                                if (personErrors.passportNo) {
+                                  setPersonErrors((prev) => ({ ...prev, passportNo: null }));
+                                }
+                              }}
+                              className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${
+                                personErrors.passportNo ? "border-red-400 bg-red-50" : "border-slate-300 bg-white"
+                              }`}
+                              placeholder="A1234567"
+                              maxLength={8}
+                            />
+                            {personErrors.passportNo && (
+                              <p className="text-xs text-red-500 mt-0.5 font-medium">{personErrors.passportNo}</p>
+                            )}
+                          </div>
+                        )}
+                        <FileUploadBox
+                          label="Passport"
+                          isRequired
+                          file={personForm.passportDoc}
+                          existingFileName={personForm.existingPassportName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "passportDoc",
+                              personForm.existingPassportName,
+                              personForm.editIndex || 0,
+                              true
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              passportDoc: e.target.files[0],
+                            })
+                          }
+                        />
+                      </>
+                    )}
+                    {(isOilDockArea(personForm.accessArea)) && (
+                      <FileUploadBox
+                        label="Entry Authorization Document"
+                        isRequired
+                        file={personForm.entryAuthorization}
+                        existingFileName={personForm.existingEntryAuthName}
+                        onView={() =>
+                          handleViewDoc(
+                            personForm.existingPassRequestId,
+                            "entryAuthorization",
+                            personForm.existingEntryAuthName,
+                            personForm.editIndex || 0,
+                            true
+                          )
+                        }
+                        onChange={(e) =>
+                          setPersonForm({
+                            ...personForm,
+                            entryAuthorization: e.target.files[0],
+                          })
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -2976,6 +3072,96 @@ export default function VendorPassPublicPage() {
                   </div>
                 </div>
               </div>
+              <div className="mt-8 border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-[#0a1e4d] text-white">
+                    <tr>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Type of Pass <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Pass Period <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Date From <span className="text-orange-400">*</span>
+                      </th>
+                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                        Date To <span className="text-orange-400">*</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    <tr>
+                      <td className="p-3 border-r border-slate-200">
+                        <select
+                          value={vehicleForm.passType}
+                          onChange={(e) =>
+                            setVehicleForm({
+                              ...vehicleForm,
+                              passType: e.target.value,
+                            })
+                          }
+                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                        >
+                          {getFilteredPassTypes(intake, masterData.passTypes).map((t) => (
+                            <option
+                              key={t.id || t.value}
+                              value={t.id || t.value}
+                            >
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            value={vehicleForm.passPeriod}
+                            min="1"
+                            max={
+                              String(vehicleForm.passType) === "1" ? "7" : "1"
+                            }
+                            disabled={String(vehicleForm.passType) !== "1"}
+                            onChange={(e) =>
+                              setVehicleForm({
+                                ...vehicleForm,
+                                passPeriod: e.target.value,
+                              })
+                            }
+                            className={inputClass}
+                          />
+                          <span className="text-sm font-bold text-slate-700">
+                            Days
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <input
+                          type="datetime-local"
+                          value={vehicleForm.dateFrom}
+                          min={getCurrentDateTime()}
+                          onChange={(e) =>
+                            setVehicleForm({
+                              ...vehicleForm,
+                              dateFrom: e.target.value,
+                            })
+                          }
+                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                        />
+                      </td>
+                      <td className="p-3 border-r border-slate-200">
+                        <input
+                          readOnly
+                          type="datetime-local"
+                          value={vehicleForm.dateTo}
+                          className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
+                        />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
               <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
@@ -3067,9 +3253,100 @@ export default function VendorPassPublicPage() {
                       })
                     }
                   />
-                  {(String(vehicleForm.passType) === "2" ||
-                    String(vehicleForm.passType) === "3") && (
+                  {(isOilDockArea(vehicleForm.accessArea)) && (
+                    <FileUploadBox
+                      label="Spark Arrester Certificate"
+                      isRequired
+                      file={vehicleForm.sparkArrester}
+                      existingFileName={vehicleForm.existingSparkArresterName}
+                      onView={() =>
+                        handleViewDoc(
+                          vehicleForm.existingPassRequestId,
+                          "sparkArrester",
+                          vehicleForm.existingSparkArresterName,
+                          vehicleForm.editIndex || 0,
+                          true
+                        )
+                      }
+                      onChange={(e) =>
+                        setVehicleForm({
+                          ...vehicleForm,
+                          sparkArrester: e.target.files[0],
+                        })
+                      }
+                    />
+                  )}
+                  {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType).toUpperCase()) && (
+                    <FileUploadBox
+                      label="Twist Lock Certificate"
+                      isRequired
+                      file={vehicleForm.twistLock}
+                      existingFileName={vehicleForm.existingTwistLockName}
+                      onView={() =>
+                        handleViewDoc(
+                          vehicleForm.existingPassRequestId,
+                          "twistLock",
+                          vehicleForm.existingTwistLockName,
+                          vehicleForm.editIndex || 0,
+                          true
+                        )
+                      }
+                      onChange={(e) =>
+                        setVehicleForm({
+                          ...vehicleForm,
+                          twistLock: e.target.files[0],
+                        })
+                      }
+                    />
+                  )}
+                  {(!["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) &&
+                    ((String(vehicleForm.passType) === "1" || String(vehicleForm.passType).toUpperCase() === "DAILY") &&
+                     (isOilDockArea(vehicleForm.accessArea)))) && (
+                    <FileUploadBox
+                      label="Request Letter"
+                      isRequired
+                      file={vehicleForm.requestLetter}
+                      existingFileName={vehicleForm.existingReqName}
+                      onView={() =>
+                        handleViewDoc(
+                          vehicleForm.existingPassRequestId,
+                          "vehicleRequestLetter",
+                          vehicleForm.existingReqName,
+                          vehicleForm.editIndex || 0,
+                          true
+                        )
+                      }
+                      onChange={(e) =>
+                        setVehicleForm({
+                          ...vehicleForm,
+                          requestLetter: e.target.files[0],
+                        })
+                      }
+                    />
+                  )}
+                  {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) && (
                     <>
+                      <FileUploadBox
+                        label="Request Letter"
+                        isRequired
+                        file={vehicleForm.requestLetter}
+                        existingFileName={vehicleForm.existingReqName}
+                        onView={() =>
+                          handleViewDoc(
+                            vehicleForm.existingPassRequestId,
+                            "vehicleRequestLetter",
+                            vehicleForm.existingReqName,
+                            vehicleForm.editIndex || 0,
+                            true
+                          )
+                        }
+                        onChange={(e) =>
+                          setVehicleForm({
+                            ...vehicleForm,
+                            requestLetter: e.target.files[0],
+                          })
+                        }
+                      />
                       <FileUploadBox
                         label="Tax Document"
                         isRequired
@@ -3115,97 +3392,6 @@ export default function VendorPassPublicPage() {
                     </>
                   )}
                 </div>
-              </div>
-
-              <div className="mt-8 border border-slate-300 rounded-xl overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-[#0a1e4d] text-white">
-                    <tr>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Type of Pass <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Pass Period <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Date From <span className="text-orange-400">*</span>
-                      </th>
-                      <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                        Date To <span className="text-orange-400">*</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    <tr>
-                      <td className="p-3 border-r border-slate-200">
-                        <select
-                          value={vehicleForm.passType}
-                          onChange={(e) =>
-                            setVehicleForm({
-                              ...vehicleForm,
-                              passType: e.target.value,
-                            })
-                          }
-                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
-                        >
-                          {getFilteredPassTypes(intake, masterData.passTypes).map((t) => (
-                            <option
-                              key={t.id || t.value}
-                              value={t.id || t.value}
-                            >
-                              {t.label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="number"
-                            value={vehicleForm.passPeriod}
-                            min="1"
-                            max={
-                              String(vehicleForm.passType) === "1" ? "7" : "1"
-                            }
-                            disabled={String(vehicleForm.passType) !== "1"}
-                            onChange={(e) =>
-                              setVehicleForm({
-                                ...vehicleForm,
-                                passPeriod: e.target.value,
-                              })
-                            }
-                            className={inputClass}
-                          />
-                          <span className="text-sm font-bold text-slate-700">
-                            Days
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <input
-                          type="datetime-local"
-                          value={vehicleForm.dateFrom}
-                          min={getCurrentDateTime()}
-                          onChange={(e) =>
-                            setVehicleForm({
-                              ...vehicleForm,
-                              dateFrom: e.target.value,
-                            })
-                          }
-                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                        />
-                      </td>
-                      <td className="p-3 border-r border-slate-200">
-                        <input
-                          readOnly
-                          type="datetime-local"
-                          value={vehicleForm.dateTo}
-                          className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
-                        />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
               </div>
             </div>
 

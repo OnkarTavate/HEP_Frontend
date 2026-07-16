@@ -40,6 +40,32 @@ const maskAadhar = (aadhar) => {
   return `XXXX XXXX ${last4}`;
 };
 
+const formatPassType = (passType) => {
+  if (!passType) return "N/A";
+  const type = String(passType).trim().toUpperCase();
+  if (type === "YEARLY" || type === "ANNUAL") {
+    return "ANNUAL";
+  }
+  return type;
+};
+
+const formatPassPeriod = (period, passType) => {
+  if (!period) return "N/A";
+  const type = String(passType || "").trim().toUpperCase();
+  const p = parseInt(period, 10);
+  if (isNaN(p)) return period;
+  if (type === "DAILY") {
+    return `${p} Day${p > 1 ? "s" : ""}`;
+  }
+  if (type === "MONTHLY") {
+    return `${p} Month${p > 1 ? "s" : ""}`;
+  }
+  if (type === "YEARLY" || type === "ANNUAL") {
+    return `${p} Year${p > 1 ? "s" : ""}`;
+  }
+  return `${p} Day${p > 1 ? "s" : ""}`;
+};
+
 export default function MasterRecordsPage() {
   const [activeTab, setActiveTab] = useState("personnel");
   const [searchVal, setSearchVal] = useState("");
@@ -626,16 +652,12 @@ export default function MasterRecordsPage() {
                       />
                       <DetailItem
                         label="Pass Type"
-                        value={selectedRecord.passType}
+                        value={formatPassType(selectedRecord.passType)}
                         highlight
                       />
                       <DetailItem
                         label="Pass Period"
-                        value={
-                          selectedRecord.passPeriod
-                            ? `${selectedRecord.passPeriod} Days`
-                            : "N/A"
-                        }
+                        value={formatPassPeriod(selectedRecord.passPeriod, selectedRecord.passType)}
                       />
                       <DetailItem
                         label="Date Added"
@@ -688,16 +710,12 @@ export default function MasterRecordsPage() {
                       />
                       <DetailItem
                         label="Pass Type"
-                        value={selectedRecord.passType}
+                        value={formatPassType(selectedRecord.passType)}
                         highlight
                       />
                       <DetailItem
                         label="Pass Period"
-                        value={
-                          selectedRecord.passPeriod
-                            ? `${selectedRecord.passPeriod} Days`
-                            : "N/A"
-                        }
+                        value={formatPassPeriod(selectedRecord.passPeriod, selectedRecord.passType)}
                       />
                       <DetailItem
                         label="Date Added"

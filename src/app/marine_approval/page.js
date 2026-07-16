@@ -55,6 +55,44 @@ const extractEntityIndex = (entityId) => {
   return isNaN(index) ? 0 : index;
 };
 
+const formatAccessArea = (accessAreaId) => {
+  if (!accessAreaId) return "N/A";
+  const area = String(accessAreaId).trim().toUpperCase();
+  if (area === "1" || area === "OIL_JETTY" || area === "OIL JETTY" || area === "OIL JETTY AND OTHER GATES") {
+    return "Oil Jetty and Other Gates";
+  }
+  if (area === "2" || area === "OTHER_GATES" || area === "OTHER GATES ONLY") {
+    return "Other Gates Only";
+  }
+  return accessAreaId;
+};
+
+const formatPassType = (passType) => {
+  if (!passType) return "N/A";
+  const type = String(passType).trim().toUpperCase();
+  if (type === "YEARLY" || type === "ANNUAL") {
+    return "ANNUAL";
+  }
+  return type;
+};
+
+const formatPassPeriod = (period, passType) => {
+  if (!period) return "N/A";
+  const type = String(passType || "").trim().toUpperCase();
+  const p = parseInt(period, 10);
+  if (isNaN(p)) return period;
+  if (type === "DAILY") {
+    return `${p} Day${p > 1 ? "s" : ""}`;
+  }
+  if (type === "MONTHLY") {
+    return `${p} Month${p > 1 ? "s" : ""}`;
+  }
+  if (type === "YEARLY" || type === "ANNUAL") {
+    return `${p} Year${p > 1 ? "s" : ""}`;
+  }
+  return `${p} Day${p > 1 ? "s" : ""}`;
+};
+
 // --- Reusable UI Components ---
 const DetailItem = ({ label, value, highlight = false }) => (
   <div className="flex flex-col">
@@ -169,6 +207,26 @@ export default function TrafficPassesPage() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [companyProfile, setCompanyProfile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const extractEntityIndex = (entityId) => {
+    if (!entityId) return 0;
+    const isVendor = selectedRequest?.originType === "VENDOR";
+    if (isVendor) {
+      const parts = String(entityId).split("-");
+      const index = parseInt(parts[parts.length - 1]);
+      return isNaN(index) ? 0 : index;
+    } else {
+      const type = entityModal.type;
+      if (type === "person" && selectedRequest?.persons) {
+        const idx = selectedRequest.persons.findIndex(p => p.id === entityId);
+        return idx === -1 ? 0 : idx;
+      } else if (type === "vehicle" && selectedRequest?.vehicles) {
+        const idx = selectedRequest.vehicles.findIndex(v => v.id === entityId);
+        return idx === -1 ? 0 : idx;
+      }
+    }
+    return 0;
+  };
 
   // Active Locks State for Concurrency Control
   const [activeLocks, setActiveLocks] = useState({});
@@ -1119,7 +1177,7 @@ export default function TrafficPassesPage() {
                           <tr
                             key={p.id}
                             onClick={() => {
-                              if (p.status === 'pending' || p.status === 'reverted') {
+                              if (!isViewMode) {
                                 setEntityModal({
                                   isOpen: true,
                                   data: p,
@@ -1133,7 +1191,7 @@ export default function TrafficPassesPage() {
                                 );
                               }
                             }}
-                            className={`transition-all hover:shadow-sm ${(p.status === 'pending' || p.status === 'reverted') ? 'hover:bg-slate-50 cursor-pointer' : 'bg-slate-50/50 cursor-default'}`}
+                            className={`transition-all hover:shadow-sm ${!isViewMode ? 'hover:bg-slate-50 cursor-pointer' : 'bg-slate-50/50 cursor-default'}`}
                           >
                             <td className="p-3 text-slate-800 font-mono font-bold text-xs">
                               {p.personPassNo || "-"}
@@ -1141,7 +1199,7 @@ export default function TrafficPassesPage() {
                             <td className="p-3 font-bold text-[#0a1e4d]">
                               {p.name}
                               <span className="block font-medium text-xs text-slate-500">
-                                {p.hepTypeId} • {p.passType}
+                                {formatHepType(p.hepType || p.hepTypeId)} • {formatPassType(p.passType)}
                               </span>
                             </td>
                             <td className="p-3 text-slate-600 font-mono text-xs">
@@ -1187,7 +1245,7 @@ export default function TrafficPassesPage() {
                                     </>
                                   );
                                 })()}
-                                {!isViewMode && (p.status === 'pending' || p.status === 'reverted') && (
+                                {!isViewMode && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -1202,7 +1260,7 @@ export default function TrafficPassesPage() {
                                     }}
                                     className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
                                   >
-                                    {entityStatuses.persons[p.id]
+                                    {entityStatuses.persons[p.id] || p.status === 'approved' || p.status === 'rejected'
                                       ? "Re-verify"
                                       : "Verify"}
                                   </button>
@@ -1247,7 +1305,7 @@ export default function TrafficPassesPage() {
                           <tr
                             key={v.id}
                             onClick={() => {
-                              if (v.status === 'pending' || v.status === 'reverted') {
+                              if (!isViewMode) {
                                 setEntityModal({
                                   isOpen: true,
                                   data: v,
@@ -1261,7 +1319,7 @@ export default function TrafficPassesPage() {
                                 );
                               }
                             }}
-                            className={`transition-all hover:shadow-sm ${(v.status === 'pending' || v.status === 'reverted') ? 'hover:bg-slate-50 cursor-pointer' : 'bg-slate-50/50 cursor-default'}`}
+                            className={`transition-all hover:shadow-sm ${!isViewMode ? 'hover:bg-slate-50 cursor-pointer' : 'bg-slate-50/50 cursor-default'}`}
                           >
                             <td className="p-3 text-slate-800 font-mono font-bold text-xs">
                               {v.vehiclePassNo || "-"}
@@ -1270,7 +1328,7 @@ export default function TrafficPassesPage() {
                               {v.registrationNo}
                             </td>
                             <td className="p-3 text-slate-600 text-xs font-medium">
-                              {v.vehicleTypeId} • {v.passType}
+                              {v.vehicleTypeName || v.vehicleTypeId} • {formatPassType(v.passType)}
                             </td>
                             <td className="p-3 text-right">
                               <div className="flex justify-end items-center gap-3">
@@ -1312,7 +1370,7 @@ export default function TrafficPassesPage() {
                                     </>
                                   );
                                 })()}
-                                {!isViewMode && (v.status === 'pending' || v.status === 'reverted') && (
+                                {!isViewMode && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -1327,7 +1385,7 @@ export default function TrafficPassesPage() {
                                     }}
                                     className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
                                   >
-                                    {entityStatuses.vehicles[v.id]
+                                    {entityStatuses.vehicles[v.id] || v.status === 'approved' || v.status === 'rejected'
                                       ? "Re-verify"
                                       : "Verify"}
                                   </button>
@@ -1419,7 +1477,7 @@ export default function TrafficPassesPage() {
                       />
                       <DetailItem
                         label="HEP Type"
-                        value={entityModal.data.hepTypeId}
+                        value={formatHepType(entityModal.data.hepType || entityModal.data.hepTypeId)}
                       />
                       <DetailItem
                         label="Designation"
@@ -1493,7 +1551,7 @@ export default function TrafficPassesPage() {
                       />
                       <DetailItem
                         label="Vehicle Type"
-                        value={entityModal.data.vehicleTypeId}
+                        value={entityModal.data.vehicleTypeName || entityModal.data.vehicleTypeId}
                       />
                       {/* <DetailItem
                         label="RFID Card"
@@ -1522,17 +1580,17 @@ export default function TrafficPassesPage() {
                 <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
                   <DetailItem
                     label="Access Area"
-                    value={entityModal.data.accessAreaId}
+                    value={formatAccessArea(entityModal.data.accessAreaId || entityModal.data.accessArea)}
                     highlight
                   />
                   <DetailItem
                     label="Pass Type"
-                    value={entityModal.data.passType}
+                    value={formatPassType(entityModal.data.passType)}
                     highlight
                   />
                   <DetailItem
                     label="Pass Period"
-                    value={`${entityModal.data.passPeriod} Days`}
+                    value={formatPassPeriod(entityModal.data.passPeriod, entityModal.data.passType)}
                   />
                   <DetailItem
                     label="Valid From Date"
@@ -1672,6 +1730,15 @@ export default function TrafficPassesPage() {
                         entityIndex={extractEntityIndex(entityModal.data.id)}
                         isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
+                      <DocumentCard
+                        label="Entry Authorization Document"
+                        filePath={entityModal.data.entryAuthorizationFilePath}
+                        documentType="entryAuthorization"
+                        passRequestId={selectedRequest.id}
+                        onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
+                      />
                     </>
                   ) : (
                     <>
@@ -1711,6 +1778,17 @@ export default function TrafficPassesPage() {
                         entityIndex={extractEntityIndex(entityModal.data.id)}
                         isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
+                      {(entityModal.data.twistLockFilePath || ['MONTHLY', 'YEARLY', 'ANNUAL'].includes(entityModal.data.passType)) && (
+                        <DocumentCard
+                          label="Twist Lock Certificate"
+                          filePath={entityModal.data.twistLockFilePath}
+                          documentType="twistLock"
+                          passRequestId={selectedRequest.id}
+                          onView={handleViewDoc}
+                          entityIndex={extractEntityIndex(entityModal.data.id)}
+                          isVendorPass={selectedRequest.originType === "VENDOR"}
+                        />
+                      )}
                       <DocumentCard
                         label="Request Letter"
                         filePath={entityModal.data.requestLetterPath}
@@ -1733,6 +1811,15 @@ export default function TrafficPassesPage() {
                         label="Emission Certificate (PUC)"
                         filePath={entityModal.data.emissionFilePath}
                         documentType="vehicleEmission"
+                        passRequestId={selectedRequest.id}
+                        onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
+                      />
+                      <DocumentCard
+                        label="Spark Arrester Certificate"
+                        filePath={entityModal.data.sparkArresterFilePath}
+                        documentType="sparkArrester"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
                         entityIndex={extractEntityIndex(entityModal.data.id)}

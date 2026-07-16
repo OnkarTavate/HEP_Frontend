@@ -170,7 +170,7 @@ export default function VendorPassApprovedPage() {
     }
 
     setIframeLoading(true);
-    
+
     let detectedIsImage = false;
     try {
       const response = await fetch(docUrl, { method: 'HEAD' });
@@ -220,8 +220,16 @@ export default function VendorPassApprovedPage() {
       { id: 4, name: "Site Visit" },
       { id: 5, name: "New Project" },
       { id: 6, name: "Others" },
-    ],
+    ]
   });
+
+  const isOilDockArea = (areaId) => {
+    if (!areaId) return false;
+    const area = masterData?.accessAreas?.find(a => String(a.id) === String(areaId));
+    if (area) return String(area.label || area.value || area.name).toUpperCase().includes("OIL JETTY") || String(area.id) === "1";
+    return String(areaId).toUpperCase().includes("OIL JETTY") || String(areaId) === "1";
+  };
+
 
 
   const [revertedPersons, setRevertedPersons] = useState([]);
@@ -268,6 +276,8 @@ export default function VendorPassApprovedPage() {
     copyOfLicence: null,
     passportDoc: null,
     driverLicence: null,
+    entryAuthorization: null,
+    existingEntryAuthName: "",
     passType: "1", // Default: 1 (Daily)
     passPeriod: "1",
     dateFrom: getCurrentDateTime(),
@@ -291,6 +301,10 @@ export default function VendorPassApprovedPage() {
     requestLetter: null,
     taxDoc: null,
     emissionCert: null,
+    sparkArrester: null,
+    existingSparkArresterName: "",
+    twistLock: null,
+    existingTwistLockName: "",
     passType: "1", // Default: 1 (Daily)
     passPeriod: "1",
     dateFrom: getCurrentDateTime(),
@@ -522,7 +536,7 @@ export default function VendorPassApprovedPage() {
   const handleEditEntity = (type, index, entity) => {
     // Close the reverted edit modal first
     setRevertedEditModal(false);
-    
+
     // Find original index in full list
     let originalIdx = index;
     if (type === 'person' && passData?.persons) {
@@ -586,13 +600,13 @@ export default function VendorPassApprovedPage() {
         aadharFile: null,
         driverLicence: null,
         requisitionLetter: null,
-        passportDoc: null,
         policeVerification: null,
         proofOfEmployment: null,
         copyOfLicence: null,
         idProofFile: null,
         cdcDocument: null,
         declarationForm: null,
+        entryAuthorization: null,
         existingPassRequestId: vendorPassId,
         existingPhotoName: entity.photoFileName,
         existingAadharName: entity.aadharPDFFileName,
@@ -605,6 +619,7 @@ export default function VendorPassApprovedPage() {
         existingIdProofName: entity.idProofFileName,
         existingCdcName: entity.cdcDocumentName,
         existingDeclarationName: entity.declarationFormName,
+        existingEntryAuthName: entity.entryAuthorizationFileName,
         isEditing: true,
         editIndex: index
       });
@@ -652,6 +667,8 @@ export default function VendorPassApprovedPage() {
         requestLetter: null,
         taxDoc: null,
         emissionCert: null,
+        sparkArrester: null,
+        twistLock: null,
         existingPassRequestId: vendorPassId,
         existingRcName: entity.scannedCopyFileName,
         existingInsName: entity.insuranceFileName,
@@ -660,6 +677,8 @@ export default function VendorPassApprovedPage() {
         existingReqName: entity.requestLetterName,
         existingTaxName: entity.taxDocName,
         existingEmissionName: entity.emissionCertName,
+        existingSparkArresterName: entity.sparkArresterFileName,
+        existingTwistLockName: entity.twistLockFileName,
         isEditing: true,
         editIndex: index
       });
@@ -710,6 +729,12 @@ export default function VendorPassApprovedPage() {
 
     const { type, index, id, revertedIndex } = editingRevertedEntity;
 
+    const getEnumValue = (arr, valId, fallback = '') => {
+      if (!valId) return fallback;
+      const found = arr.find(x => String(x.id || x.value) === String(valId));
+      return found ? (found.label || found.name || found.value || '') : fallback;
+    };
+
     const passTypeEnumMap = { '1': 'DAILY', '2': 'MONTHLY', '3': 'YEARLY' };
     const toPassTypeEnum = (val) => passTypeEnumMap[String(val)] || val || 'DAILY';
 
@@ -746,7 +771,7 @@ export default function VendorPassApprovedPage() {
           amount: personForm.amount,
           nationality: toNationalityEnum(personForm.nationality),
           countryId: personForm.country,
-          accessAreaId: personForm.accessArea,
+          accessAreaId: getEnumValue(masterData.accessAreas, personForm.accessArea, "OTHER GATES ONLY"),
           visaNo: personForm.visaNo,
           passportNo: personForm.passportNo,
           cdcNumber: personForm.cdcNumber,
@@ -765,6 +790,7 @@ export default function VendorPassApprovedPage() {
           idProofFileName: personForm.existingIdProofName,
           cdcDocumentName: personForm.existingCdcName,
           declarationFormName: personForm.existingDeclarationName,
+          entryAuthorizationFileName: personForm.existingEntryAuthName,
           // Newly uploaded files:
           newPhoto: personForm.photo,
           newAadhar: personForm.aadharFile,
@@ -777,6 +803,7 @@ export default function VendorPassApprovedPage() {
           newCdc: personForm.cdcDocument,
           newDeclaration: personForm.declarationForm,
           newRequisitionLetter: personForm.requisitionLetter,
+          newEntryAuthorization: personForm.entryAuthorization,
         };
 
         const updatedPersons = [...revertedPersons];
@@ -795,9 +822,9 @@ export default function VendorPassApprovedPage() {
           regNo: vehicleForm.regNo,
           vehicleRegistrationNo: vehicleForm.regNo,
           vehicleTypeId: vehicleForm.type,
-          vehicleType: vehicleForm.type,
+          vehicleType: getEnumValue(masterData.vehicleTypes, vehicleForm.type, ""),
           fuelType: vehicleForm.fuelType,
-          accessAreaId: vehicleForm.accessArea,
+          accessAreaId: getEnumValue(masterData.accessAreas, vehicleForm.accessArea, "OTHER GATES ONLY"),
           insuranceExpiry: vehicleForm.insuranceExpiry,
           rcValidity: vehicleForm.rcValidity,
           passType: toPassTypeEnum(vehicleForm.passType),
@@ -812,6 +839,8 @@ export default function VendorPassApprovedPage() {
           requestLetterName: vehicleForm.existingReqName,
           taxDocName: vehicleForm.existingTaxName,
           emissionCertName: vehicleForm.existingEmissionName,
+          sparkArresterFileName: vehicleForm.existingSparkArresterName,
+          twistLockFileName: vehicleForm.existingTwistLockName,
           // Newly uploaded files:
           newRc: vehicleForm.rcDocument,
           newInsurance: vehicleForm.insuranceDocument,
@@ -819,7 +848,9 @@ export default function VendorPassApprovedPage() {
           newFitness: vehicleForm.fitnessCert,
           newRequestLetter: vehicleForm.requestLetter,
           newTax: vehicleForm.taxDoc,
-          newEmission: vehicleForm.emissionCert
+          newEmission: vehicleForm.emissionCert,
+          newSparkArrester: vehicleForm.sparkArrester,
+          newTwistLock: vehicleForm.twistLock,
         };
 
         const updatedVehicles = [...revertedVehicles];
@@ -890,6 +921,7 @@ export default function VendorPassApprovedPage() {
           formData.append('idProofFileName', person.idProofFileName || '');
           formData.append('cdcDocumentName', person.cdcDocumentName || '');
           formData.append('declarationFormName', person.declarationFormName || '');
+          formData.append('entryAuthorizationFileName', person.entryAuthorizationFileName || '');
 
           // Append file fields
           if (person.newPhoto) formData.append('personPhoto', person.newPhoto);
@@ -903,6 +935,7 @@ export default function VendorPassApprovedPage() {
           if (person.newRequisitionLetter) formData.append('requisitionLetter', person.newRequisitionLetter);
           if (person.newCdc) formData.append('cdcDocument', person.newCdc);
           if (person.newDeclaration) formData.append('declarationForm', person.newDeclaration);
+          if (person.newEntryAuthorization) formData.append('entryAuthorization', person.newEntryAuthorization);
 
           const originalIndex = passData.persons.findIndex(p => p.id === person.id);
           if (originalIndex === -1) {
@@ -945,6 +978,8 @@ export default function VendorPassApprovedPage() {
           formData.append('requestLetterName', vehicle.requestLetterName || '');
           formData.append('taxDocName', vehicle.taxDocName || '');
           formData.append('emissionCertName', vehicle.emissionCertName || '');
+          formData.append('sparkArresterFileName', vehicle.sparkArresterFileName || '');
+          formData.append('twistLockFileName', vehicle.twistLockFileName || '');
 
           // Append file fields
           if (vehicle.newRc) formData.append('vehicleRC', vehicle.newRc);
@@ -954,6 +989,8 @@ export default function VendorPassApprovedPage() {
           if (vehicle.newRequestLetter) formData.append('vehicleRequestLetter', vehicle.newRequestLetter);
           if (vehicle.newTax) formData.append('vehicleTax', vehicle.newTax);
           if (vehicle.newEmission) formData.append('vehicleEmission', vehicle.newEmission);
+          if (vehicle.newSparkArrester) formData.append('sparkArrester', vehicle.newSparkArrester);
+          if (vehicle.newTwistLock) formData.append('twistLock', vehicle.newTwistLock);
 
           const originalIndex = passData.vehicles.findIndex(v => v.id === vehicle.id);
           if (originalIndex === -1) {
@@ -1575,7 +1612,7 @@ export default function VendorPassApprovedPage() {
                     <Users className="h-5 w-5 text-blue-600" />
                     Reverted Persons ({revertedPersons.length})
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                     {revertedPersons.map((person, idx) => (
                       <div
                         key={person.id || idx}
@@ -1644,7 +1681,7 @@ export default function VendorPassApprovedPage() {
                     <Truck className="h-5 w-5 text-emerald-600" />
                     Reverted Vehicles ({revertedVehicles.length})
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                     {revertedVehicles.map((vehicle, idx) => (
                       <div
                         key={vehicle.id || idx}
@@ -1745,7 +1782,7 @@ export default function VendorPassApprovedPage() {
                 {submitLoading ? (
                   <><Loader2 className="h-4 w-4 animate-spin" /> Resubmitting...</>
                 ) : (
-                  <><RefreshCw className="h-4 w-4" /> Resubmit Pass to Traffic Dept</>
+                  <><RefreshCw className="h-4 w-4" /> Resubmit</>
                 )}
               </button>
             </div>
@@ -2622,37 +2659,63 @@ export default function VendorPassApprovedPage() {
                 </table>
               </div>
 
-              {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(personForm.passType)) && (
-                <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
-                    <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
-                    Mandatory Documents
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    <FileUploadBox
-                      label="Police Verification Certificate"
-                      isRequired
-                      file={personForm.policeVerification}
-                      existingFileName={personForm.existingPoliceName}
-                      onView={() =>
-                        handleViewDoc(
-                          personForm.existingPassRequestId,
-                          "policeVerification",
-                          personForm.existingPoliceName,
-                          editingRevertedEntity?.index ?? 0,
-                          true
-                        )
-                      }
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          policeVerification: e.target.files[0],
-                        })
-                      }
-                    />
+              {(["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(personForm.passType)) ||
+                isOilDockArea(personForm.accessArea)) && (
+                  <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
+                      <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
+                      Mandatory Documents
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                      {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(personForm.passType)) && (
+                        <FileUploadBox
+                          label="Police Verification Certificate"
+                          isRequired
+                          file={personForm.policeVerification}
+                          existingFileName={personForm.existingPoliceName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "policeVerification",
+                              personForm.existingPoliceName,
+                              editingRevertedEntity?.index ?? 0,
+                              true
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              policeVerification: e.target.files[0],
+                            })
+                          }
+                        />
+                      )}
+                      {isOilDockArea(personForm.accessArea) && (
+                        <FileUploadBox
+                          label="Entry Authorization Document"
+                          isRequired
+                          file={personForm.entryAuthorization}
+                          existingFileName={personForm.existingEntryAuthName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "entryAuthorization",
+                              personForm.existingEntryAuthName,
+                              editingRevertedEntity?.index ?? 0,
+                              true
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              entryAuthorization: e.target.files[0],
+                            })
+                          }
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -3019,8 +3082,100 @@ export default function VendorPassApprovedPage() {
                       })
                     }
                   />
+                  {(String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") || String(vehicleForm.accessArea) === "1") && (
+                    <FileUploadBox
+                      label="Spark Arrester Certificate"
+                      isRequired
+                      file={vehicleForm.sparkArrester}
+                      existingFileName={vehicleForm.existingSparkArresterName}
+                      onView={() =>
+                        handleViewDoc(
+                          vehicleForm.existingPassRequestId,
+                          "sparkArrester",
+                          vehicleForm.existingSparkArresterName,
+                          editingRevertedEntity?.index ?? 0,
+                          true
+                        )
+                      }
+                      onChange={(e) =>
+                        setVehicleForm({
+                          ...vehicleForm,
+                          sparkArrester: e.target.files[0],
+                        })
+                      }
+                    />
+                  )}
+                  {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) && (
+                    <FileUploadBox
+                      label="Twist Lock Certificate"
+                      isRequired
+                      file={vehicleForm.twistLock}
+                      existingFileName={vehicleForm.existingTwistLockName}
+                      onView={() =>
+                        handleViewDoc(
+                          vehicleForm.existingPassRequestId,
+                          "twistLock",
+                          vehicleForm.existingTwistLockName,
+                          editingRevertedEntity?.index ?? 0,
+                          true
+                        )
+                      }
+                      onChange={(e) =>
+                        setVehicleForm({
+                          ...vehicleForm,
+                          twistLock: e.target.files[0],
+                        })
+                      }
+                    />
+                  )}
+                  {(!["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) &&
+                    ((String(vehicleForm.passType) === "1" || String(vehicleForm.passType).toUpperCase() === "DAILY") &&
+                      (String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") || String(vehicleForm.accessArea) === "1"))) && (
+                      <FileUploadBox
+                        label="Request Letter"
+                        isRequired
+                        file={vehicleForm.requestLetter}
+                        existingFileName={vehicleForm.existingReqName}
+                        onView={() =>
+                          handleViewDoc(
+                            vehicleForm.existingPassRequestId,
+                            "vehicleRequestLetter",
+                            vehicleForm.existingReqName,
+                            editingRevertedEntity?.index ?? 0,
+                            true
+                          )
+                        }
+                        onChange={(e) =>
+                          setVehicleForm({
+                            ...vehicleForm,
+                            requestLetter: e.target.files[0],
+                          })
+                        }
+                      />
+                    )}
                   {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) && (
                     <>
+                      <FileUploadBox
+                        label="Request Letter"
+                        isRequired
+                        file={vehicleForm.requestLetter}
+                        existingFileName={vehicleForm.existingReqName}
+                        onView={() =>
+                          handleViewDoc(
+                            vehicleForm.existingPassRequestId,
+                            "vehicleRequestLetter",
+                            vehicleForm.existingReqName,
+                            editingRevertedEntity?.index ?? 0,
+                            true
+                          )
+                        }
+                        onChange={(e) =>
+                          setVehicleForm({
+                            ...vehicleForm,
+                            requestLetter: e.target.files[0],
+                          })
+                        }
+                      />
                       <FileUploadBox
                         label="Tax Document"
                         isRequired

@@ -237,7 +237,10 @@ export default function TrafficLayout({ children }) {
       const dept = String(parsedUser.departmentName || "").toLowerCase().trim();
       const isAdmin = role === "admin" || role === "administrator";
       if (isAdmin) { router.push("/admin"); return; }
-      const isTrafficApprover = (role === "approval" && dept.includes("traffic")) || role.includes("traffic");
+      const isTrafficApprover =
+        (role === "approval" && dept.includes("traffic")) ||
+        role.includes("traffic") ||
+        ["safety officer", "fire safety officer", "senior deputy traffic manager"].includes(role);
       if (!isTrafficApprover) { alert("Unauthorized Access: Traffic Department Only."); router.push("/"); return; }
       setUser(parsedUser);
       if (parsedUser.isPasswordChanged === false) setShowPasswordChangeModal(true);

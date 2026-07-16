@@ -52,6 +52,44 @@ const extractEntityIndex = (entityId) => {
   return isNaN(index) ? 0 : index;
 };
 
+const formatAccessArea = (accessAreaId) => {
+  if (!accessAreaId) return "N/A";
+  const area = String(accessAreaId).trim().toUpperCase();
+  if (area === "1" || area === "OIL_JETTY" || area === "OIL JETTY" || area === "OIL JETTY AND OTHER GATES") {
+    return "Oil Jetty and Other Gates";
+  }
+  if (area === "2" || area === "OTHER_GATES" || area === "OTHER GATES ONLY") {
+    return "Other Gates Only";
+  }
+  return accessAreaId;
+};
+
+const formatPassType = (passType) => {
+  if (!passType) return "N/A";
+  const type = String(passType).trim().toUpperCase();
+  if (type === "YEARLY" || type === "ANNUAL") {
+    return "ANNUAL";
+  }
+  return type;
+};
+
+const formatPassPeriod = (period, passType) => {
+  if (!period) return "N/A";
+  const type = String(passType || "").trim().toUpperCase();
+  const p = parseInt(period, 10);
+  if (isNaN(p)) return period;
+  if (type === "DAILY") {
+    return `${p} Day${p > 1 ? "s" : ""}`;
+  }
+  if (type === "MONTHLY") {
+    return `${p} Month${p > 1 ? "s" : ""}`;
+  }
+  if (type === "YEARLY" || type === "ANNUAL") {
+    return `${p} Year${p > 1 ? "s" : ""}`;
+  }
+  return `${p} Day${p > 1 ? "s" : ""}`;
+};
+
 // --- Reusable UI Components ---
 const DetailItem = ({ label, value, highlight = false }) => (
   <div className="flex flex-col">
@@ -382,61 +420,68 @@ export default function AdminPassApprovalsPage() {
         const vendorPassId = selectedRequest.id;
 
         // 2. BUILD PERSON PROMISES for vendor passes
-        const personPromises = persons.map((p) => {
+        const personTasks = [];
+        persons.forEach((p) => {
           const status = entityStatuses.persons[p.id];
+          if (!status) return;
           const personIndex = extractEntityIndex(p.id);
           const remark = entityRemarks.persons[p.id];
 
           if (status === "APPROVED") {
-            return axios.put(
+            personTasks.push(() => axios.put(
               `${AGENT_API}/vendor-pass/${vendorPassId}/approve-person/${personIndex}`,
               {},
               { headers }
-            );
+            ));
           } else if (status === "REVERTED") {
-            return axios.put(
+            personTasks.push(() => axios.put(
               `${AGENT_API}/vendor-pass/${vendorPassId}/revert-person/${personIndex}`,
               { revertReason: remark },
               { headers }
-            );
+            ));
           } else {
-            return axios.put(
+            personTasks.push(() => axios.put(
               `${AGENT_API}/vendor-pass/${vendorPassId}/reject-person/${personIndex}`,
               { rejectedReason: remark },
               { headers }
-            );
+            ));
           }
         });
 
         // 3. BUILD VEHICLE PROMISES for vendor passes
-        const vehiclePromises = vehicles.map((v) => {
+        const vehicleTasks = [];
+        vehicles.forEach((v) => {
           const status = entityStatuses.vehicles[v.id];
+          if (!status) return;
           const vehicleIndex = extractEntityIndex(v.id);
           const remark = entityRemarks.vehicles[v.id];
 
           if (status === "APPROVED") {
-            return axios.put(
+            vehicleTasks.push(() => axios.put(
               `${AGENT_API}/vendor-pass/${vendorPassId}/approve-vehicle/${vehicleIndex}`,
               {},
               { headers }
-            );
+            ));
           } else if (status === "REVERTED") {
-            return axios.put(
+            vehicleTasks.push(() => axios.put(
               `${AGENT_API}/vendor-pass/${vendorPassId}/revert-vehicle/${vehicleIndex}`,
               { revertReason: remark },
               { headers }
-            );
+            ));
           } else {
-            return axios.put(
+            vehicleTasks.push(() => axios.put(
               `${AGENT_API}/vendor-pass/${vendorPassId}/reject-vehicle/${vehicleIndex}`,
               { rejectedReason: remark },
               { headers }
-            );
+            ));
           }
         });
 
-        // 4. EXECUTE ALL ENTITY ACTIONS CONCURRENTLY
-        await Promise.all([...personPromises, ...vehiclePromises]);
+        // 4. EXECUTE ALL ENTITY ACTIONS SEQUENTIALLY TO AVOID 401 ERRORS
+        const allTasks = [...personTasks, ...vehicleTasks];
+        for (const task of allTasks) {
+          await task();
+        }
 
         // 5. FINALLY, SUBMIT THE 'COMPLETE-REVIEW' FLAG
         await axios.put(
@@ -449,8 +494,10 @@ export default function AdminPassApprovalsPage() {
         const actionUrl = `${ADMIN_API}/pass-request/agent-pass-request-action`;
 
         // 2. BUILD PERSON PAYLOADS
-        const personPromises = persons.map((p) => {
+        const personTasks = [];
+        persons.forEach((p) => {
           const status = entityStatuses.persons[p.id];
+          if (!status) return;
           const remark = entityRemarks.persons[p.id];
 
           const payload = {
@@ -469,12 +516,14 @@ export default function AdminPassApprovalsPage() {
             payload.revertReason = remark;
           }
 
-          return axios.patch(actionUrl, payload, { headers });
+          personTasks.push(() => axios.patch(actionUrl, payload, { headers }));
         });
 
         // 3. BUILD VEHICLE PAYLOADS
-        const vehiclePromises = vehicles.map((v) => {
+        const vehicleTasks = [];
+        vehicles.forEach((v) => {
           const status = entityStatuses.vehicles[v.id];
+          if (!status) return;
           const remark = entityRemarks.vehicles[v.id];
 
           const payload = {
@@ -493,11 +542,14 @@ export default function AdminPassApprovalsPage() {
             payload.revertReason = remark;
           }
 
-          return axios.patch(actionUrl, payload, { headers });
+          vehicleTasks.push(() => axios.patch(actionUrl, payload, { headers }));
         });
 
-        // 4. EXECUTE ALL ENTITY ACTIONS CONCURRENTLY
-        await Promise.all([...personPromises, ...vehiclePromises]);
+        // 4. EXECUTE ALL ENTITY ACTIONS SEQUENTIALLY TO AVOID 401 ERRORS
+        const allTasks = [...personTasks, ...vehicleTasks];
+        for (const task of allTasks) {
+          await task();
+        }
 
         // 5. FINALLY, SUBMIT THE 'COMPLETE-REVIEW' FLAG
         const finalPayload = {
@@ -1061,7 +1113,7 @@ export default function AdminPassApprovalsPage() {
                             <td className="p-3 font-bold text-[#0a1e4d]">
                               {p.name}
                               <span className="block font-medium text-xs text-slate-500">
-                                {p.hepTypeId} • {p.passType}
+                                {formatHepType(p.hepType || p.hepTypeId)} • {formatPassType(p.passType)}
                               </span>
                             </td>
                             <td className="p-3 text-slate-600 font-mono text-xs">
@@ -1190,7 +1242,7 @@ export default function AdminPassApprovalsPage() {
                               {v.registrationNo}
                             </td>
                             <td className="p-3 text-slate-600 text-xs font-medium">
-                              {v.vehicleTypeName} • {v.passType}
+                              {v.vehicleTypeName || v.vehicleTypeId} • {formatPassType(v.passType)}
                             </td>
                             <td className="p-3 text-right">
                               <div className="flex justify-end items-center gap-3">
@@ -1339,7 +1391,7 @@ export default function AdminPassApprovalsPage() {
                       />
                       <DetailItem
                         label="HEP Type"
-                        value={entityModal.data.hepType}
+                        value={formatHepType(entityModal.data.hepType || entityModal.data.hepTypeId)}
                       />
                       <DetailItem
                         label="Designation"
@@ -1442,17 +1494,17 @@ export default function AdminPassApprovalsPage() {
                 <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
                   <DetailItem
                     label="Access Area"
-                    value={entityModal.data.accessAreaId}
+                    value={formatAccessArea(entityModal.data.accessAreaId || entityModal.data.accessArea)}
                     highlight
                   />
                   <DetailItem
                     label="Pass Type"
-                    value={entityModal.data.passType}
+                    value={formatPassType(entityModal.data.passType)}
                     highlight
                   />
                   <DetailItem
                     label="Pass Period"
-                    value={`${entityModal.data.passPeriod} Days`}
+                    value={formatPassPeriod(entityModal.data.passPeriod, entityModal.data.passType)}
                   />
                   <DetailItem
                     label="Valid From Date"

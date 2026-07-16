@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const AGENT_API =
-  process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
+  process.env.NEXT_PUBLIC_AGENT_API;
 
 const authHeaders = () => {
   const token =

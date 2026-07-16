@@ -36,9 +36,11 @@ import {
   Zap,
 } from "lucide-react";
 
-const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
+const AGENT_API =
+  process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
-const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
+const ADMIN_API =
+  process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 
 // --- URL Helper to reliably strip '/api' for static file fetching ---
 const getFileUrl = (path) => {
@@ -81,7 +83,9 @@ const DocumentCard = ({
   if (!filePath) return null; // Only renders if the file exists in the JSON data
   return (
     <button
-      onClick={() => onView(passRequestId, documentType, filePath, entityIndex, isVendorPass)}
+      onClick={() =>
+        onView(passRequestId, documentType, filePath, entityIndex, isVendorPass)
+      }
       className="flex items-center w-full justify-between bg-white p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] hover:shadow-sm transition-all group"
     >
       <div className="flex items-center gap-2 overflow-hidden">
@@ -162,16 +166,105 @@ export default function TrafficPassesPage() {
   // Pagination state
   const [pageSize, setPageSize] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
-  const [paginationMeta, setPaginationMeta] = useState({ totalRecords: 0, totalPages: 1, currentPage: 1, pageSize: 20 });
-  const [globalCounts, setGlobalCounts] = useState({ total: 0, pending: 0, processed: 0 });
+  const [paginationMeta, setPaginationMeta] = useState({
+    totalRecords: 0,
+    totalPages: 1,
+    currentPage: 1,
+    pageSize: 20,
+  });
+  const [globalCounts, setGlobalCounts] = useState({
+    total: 0,
+    pending: 0,
+    processed: 0,
+  });
 
   // Main Modal & Profile States
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [companyProfile, setCompanyProfile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const extractEntityIndex = (entityId) => {
+    if (!entityId) return 0;
+    const isVendor = selectedRequest?.originType === "VENDOR";
+    if (isVendor) {
+      const parts = String(entityId).split("-");
+      const index = parseInt(parts[parts.length - 1]);
+      return isNaN(index) ? 0 : index;
+    } else {
+      if (selectedRequest?.persons) {
+        const idx = selectedRequest.persons.findIndex((p) => p.id === entityId);
+        if (idx !== -1) return idx;
+      }
+      if (selectedRequest?.vehicles) {
+        const idx = selectedRequest.vehicles.findIndex(
+          (v) => v.id === entityId,
+        );
+        if (idx !== -1) return idx;
+      }
+    }
+    return 0;
+  };
+
+  const isOilDockArea = (val) => {
+    if (!val) return false;
+    const str = String(val).toUpperCase();
+    return (
+      str === "1" || str.includes("OIL JETTY") || str.includes("OIL_JETTY")
+    );
+  };
+
+  const canUserVerifyPerson = (p) => {
+    if (userRole === "Senior Deputy Traffic Manager") {
+      return isOilDockArea(p.accessAreaId || p.accessArea);
+    }
+    if (userRole === "Approval") {
+      const needsDtm = isOilDockArea(p.accessAreaId || p.accessArea);
+      return !needsDtm || p.srDtmApproved;
+    }
+    return false;
+  };
+
+  const canUserVerifyVehicle = (v) => {
+    if (userRole === "Safety Officer") {
+      return ["MONTHLY", "YEARLY", "ANNUAL"].includes(v.passType);
+    }
+    if (userRole === "Fire Safety Officer") {
+      return isOilDockArea(v.accessAreaId || v.accessArea);
+    }
+    if (userRole === "Senior Deputy Traffic Manager") {
+      return isOilDockArea(v.accessAreaId || v.accessArea);
+    }
+    if (userRole === "Approval") {
+      const isMonthlyYearly = ["MONTHLY", "YEARLY", "ANNUAL"].includes(
+        v.passType,
+      );
+      const isOilDock = isOilDockArea(v.accessAreaId || v.accessArea);
+      if (isMonthlyYearly && !v.twistLockCertified) {
+        return false;
+      }
+      if (isOilDock && (!v.sparkArresterCertified || !v.srDtmApproved)) {
+        return false;
+      }
+      return true;
+    }
+    return false;
+  };
+
   // Active Locks State for Concurrency Control
   const [activeLocks, setActiveLocks] = useState({});
+  const [userRole, setUserRole] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const userStr = localStorage.getItem("user");
+        if (userStr) {
+          return JSON.parse(userStr).role || "";
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return "";
+  });
 
   const fetchActiveLocks = useCallback(async () => {
     try {
@@ -183,7 +276,7 @@ export default function TrafficPassesPage() {
       if (response.data && response.data.success) {
         const newLocks = response.data.data;
         setActiveLocks((prev) =>
-          JSON.stringify(newLocks) === JSON.stringify(prev) ? prev : newLocks
+          JSON.stringify(newLocks) === JSON.stringify(prev) ? prev : newLocks,
         );
       }
     } catch (err) {
@@ -194,12 +287,16 @@ export default function TrafficPassesPage() {
   const acquireLock = async (passId, type) => {
     try {
       const token = localStorage.getItem("accessToken");
-      const res = await axios.post(`${AGENT_API}/locks/acquire`, {
-        applicationId: passId,
-        type,
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.post(
+        `${AGENT_API}/locks/acquire`,
+        {
+          applicationId: passId,
+          type,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       return { success: true, lock: res.data.lock };
     } catch (error) {
       const message = error.response?.data?.message || "Failed to acquire lock";
@@ -210,12 +307,16 @@ export default function TrafficPassesPage() {
   const releaseLock = async (passId, type) => {
     try {
       const token = localStorage.getItem("accessToken");
-      await axios.post(`${AGENT_API}/locks/release`, {
-        applicationId: passId,
-        type,
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.post(
+        `${AGENT_API}/locks/release`,
+        {
+          applicationId: passId,
+          type,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
     } catch (error) {
       console.error("Failed to release lock:", error);
     }
@@ -230,12 +331,14 @@ export default function TrafficPassesPage() {
   useEffect(() => {
     if (!isModalOpen || !selectedRequest || isViewMode) return;
 
-    const lockType = selectedRequest.originType === "VENDOR" ? "vendor-pass" : "pass";
+    const lockType =
+      selectedRequest.originType === "VENDOR" ? "vendor-pass" : "pass";
     const interval = setInterval(async () => {
       const lockRes = await acquireLock(selectedRequest.id, lockType);
       if (!lockRes.success) {
         toast.error("Lock Lost", {
-          description: "This application lock has expired or was taken by another user.",
+          description:
+            "This application lock has expired or was taken by another user.",
         });
         setIsModalOpen(false);
       }
@@ -288,49 +391,65 @@ export default function TrafficPassesPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const fetchPassRequests = useCallback(async (isPoll = false) => {
-    try {
-      if (!isPoll) setLoading(true);
-      const token = localStorage.getItem("accessToken");
-      const response = await axios.get(
-        `${AGENT_API}/pass-request/get-agent-pass-requests`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          params: {
-            page: currentPage,
-            limit: pageSize,
-            search: debouncedSearch || undefined,
-            status: activeTab || undefined,
-            sortOrder: sortBy === "DATE_ASC" ? "ASC" : sortBy === "EXPIRY_SOON" ? "EXPIRY_SOON" : "DESC",
-            processedByMe: processedByMe ? "true" : undefined,
+  const fetchPassRequests = useCallback(
+    async (isPoll = false) => {
+      try {
+        if (!isPoll) setLoading(true);
+        const token = localStorage.getItem("accessToken");
+        const response = await axios.get(
+          `${AGENT_API}/pass-request/get-agent-pass-requests`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params: {
+              page: currentPage,
+              limit: pageSize,
+              search: debouncedSearch || undefined,
+              status: activeTab || undefined,
+              sortOrder:
+                sortBy === "DATE_ASC"
+                  ? "ASC"
+                  : sortBy === "EXPIRY_SOON"
+                    ? "EXPIRY_SOON"
+                    : "DESC",
+              processedByMe: processedByMe ? "true" : undefined,
+            },
           },
-        },
-      );
+        );
 
-      if (response.data && response.data.success) {
-        const newRequests = response.data.data || [];
-        const newMeta = response.data.pagination || {};
-        const newCounts = response.data.counts || { total: 0, pending: 0, processed: 0 };
+        if (response.data && response.data.success) {
+          const newRequests = response.data.data || [];
+          const newMeta = response.data.pagination || {};
+          const newCounts = response.data.counts || {
+            total: 0,
+            pending: 0,
+            processed: 0,
+          };
 
-        setRequests((prev) =>
-          JSON.stringify(newRequests) === JSON.stringify(prev) ? prev : newRequests
-        );
-        setPaginationMeta((prev) =>
-          JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta
-        );
-        setGlobalCounts((prev) =>
-          JSON.stringify(newCounts) === JSON.stringify(prev) ? prev : newCounts
-        );
-      } else {
-        setRequests((prev) => prev.length === 0 ? prev : []);
+          setRequests((prev) =>
+            JSON.stringify(newRequests) === JSON.stringify(prev)
+              ? prev
+              : newRequests,
+          );
+          setPaginationMeta((prev) =>
+            JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta,
+          );
+          setGlobalCounts((prev) =>
+            JSON.stringify(newCounts) === JSON.stringify(prev)
+              ? prev
+              : newCounts,
+          );
+        } else {
+          setRequests((prev) => (prev.length === 0 ? prev : []));
+        }
+      } catch (error) {
+        console.error("Failed to fetch requests", error);
+        if (!isPoll) toast.error("Failed to load pass requests.");
+      } finally {
+        if (!isPoll) setLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to fetch requests", error);
-      if (!isPoll) toast.error("Failed to load pass requests.");
-    } finally {
-      if (!isPoll) setLoading(false);
-    }
-  }, [currentPage, pageSize, debouncedSearch, activeTab, sortBy, processedByMe]);
+    },
+    [currentPage, pageSize, debouncedSearch, activeTab, sortBy, processedByMe],
+  );
 
   useEffect(() => {
     fetchPassRequests(false);
@@ -359,7 +478,13 @@ export default function TrafficPassesPage() {
   //   }
   // };
 
-  const handleViewDoc = (passRequestId, documentType, staticPath, entityIndex = 0, isVendorPass = false) => {
+  const handleViewDoc = (
+    passRequestId,
+    documentType,
+    staticPath,
+    entityIndex = 0,
+    isVendorPass = false,
+  ) => {
     // Check if the file is an image based on its extension
     const isImg = staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath);
     setIsImage(!!isImg);
@@ -373,13 +498,19 @@ export default function TrafficPassesPage() {
     }
   };
   const handleEntityDecision = (status) => {
-    if ((status === "REJECTED" || status === "REVERTED") && !currentRemark.trim()) {
-      toast.error(`${status === "REVERTED" ? "Revert" : "Rejection"} Reason Required`, {
-        description:
-          status === "REVERTED"
-            ? "You must provide a remark explaining what needs to be corrected."
-            : "You must provide a remark explaining why this pass is being rejected.",
-      });
+    if (
+      (status === "REJECTED" || status === "REVERTED") &&
+      !currentRemark.trim()
+    ) {
+      toast.error(
+        `${status === "REVERTED" ? "Revert" : "Rejection"} Reason Required`,
+        {
+          description:
+            status === "REVERTED"
+              ? "You must provide a remark explaining what needs to be corrected."
+              : "You must provide a remark explaining why this pass is being rejected.",
+        },
+      );
       return;
     }
 
@@ -404,19 +535,24 @@ export default function TrafficPassesPage() {
     let reviewStatus = null;
     let responseMessage = null;
 
-    // 1. VALIDATION: Only pending/reverted entities need a decision
-    // Already approved/rejected entities are pre-populated in entityStatuses
+    // 1. VALIDATION: Only pending/reverted entities that the current user is authorized to verify need a decision
     const unverifiedPersons = persons.filter(
-      (p) => !entityStatuses.persons[p.id] && (p.status === 'pending' || p.status === 'reverted'),
+      (p) =>
+        canUserVerifyPerson(p) &&
+        !entityStatuses.persons[p.id] &&
+        (p.status === "pending" || p.status === "reverted"),
     );
     const unverifiedVehicles = vehicles.filter(
-      (v) => !entityStatuses.vehicles[v.id] && (v.status === 'pending' || v.status === 'reverted'),
+      (v) =>
+        canUserVerifyVehicle(v) &&
+        !entityStatuses.vehicles[v.id] &&
+        (v.status === "pending" || v.status === "reverted"),
     );
 
     if (unverifiedPersons.length > 0 || unverifiedVehicles.length > 0) {
       toast.warning("Incomplete Verification", {
         description:
-          "You must approve, reject, or revert all pending persons and vehicles before submitting.",
+          "You must approve, reject, or revert all pending/reverted entities assigned to your role before submitting.",
       });
       return;
     }
@@ -432,59 +568,76 @@ export default function TrafficPassesPage() {
 
       if (isVendorPass) {
         // --- VENDOR PASS APPROVAL FLOW ---
-        // Use direct agent API endpoints for vendor passes
         const vendorPassId = selectedRequest.id;
 
         // 2. BUILD PERSON PROMISES for vendor passes
-        const personPromises = persons.map((p) => {
+        const personPromises = [];
+        persons.forEach((p) => {
+          if (!canUserVerifyPerson(p)) return;
           const status = entityStatuses.persons[p.id];
+          if (!status) return;
           const personIndex = extractEntityIndex(p.id);
           const remark = entityRemarks.persons[p.id];
 
           if (status === "APPROVED") {
-            return axios.put(
-              `${AGENT_API}/vendor-pass/${vendorPassId}/approve-person/${personIndex}`,
-              {},
-              { headers }
+            personPromises.push(
+              axios.put(
+                `${AGENT_API}/vendor-pass/${vendorPassId}/approve-person/${personIndex}`,
+                {},
+                { headers },
+              ),
             );
           } else if (status === "REVERTED") {
-            return axios.put(
-              `${AGENT_API}/vendor-pass/${vendorPassId}/revert-person/${personIndex}`,
-              { revertReason: remark },
-              { headers }
+            personPromises.push(
+              axios.put(
+                `${AGENT_API}/vendor-pass/${vendorPassId}/revert-person/${personIndex}`,
+                { revertReason: remark },
+                { headers },
+              ),
             );
           } else {
-            return axios.put(
-              `${AGENT_API}/vendor-pass/${vendorPassId}/reject-person/${personIndex}`,
-              { rejectedReason: remark },
-              { headers }
+            personPromises.push(
+              axios.put(
+                `${AGENT_API}/vendor-pass/${vendorPassId}/reject-person/${personIndex}`,
+                { rejectedReason: remark },
+                { headers },
+              ),
             );
           }
         });
 
         // 3. BUILD VEHICLE PROMISES for vendor passes
-        const vehiclePromises = vehicles.map((v) => {
+        const vehiclePromises = [];
+        vehicles.forEach((v) => {
+          if (!canUserVerifyVehicle(v)) return;
           const status = entityStatuses.vehicles[v.id];
+          if (!status) return;
           const vehicleIndex = extractEntityIndex(v.id);
           const remark = entityRemarks.vehicles[v.id];
 
           if (status === "APPROVED") {
-            return axios.put(
-              `${AGENT_API}/vendor-pass/${vendorPassId}/approve-vehicle/${vehicleIndex}`,
-              {},
-              { headers }
+            vehiclePromises.push(
+              axios.put(
+                `${AGENT_API}/vendor-pass/${vendorPassId}/approve-vehicle/${vehicleIndex}`,
+                {},
+                { headers },
+              ),
             );
           } else if (status === "REVERTED") {
-            return axios.put(
-              `${AGENT_API}/vendor-pass/${vendorPassId}/revert-vehicle/${vehicleIndex}`,
-              { revertReason: remark },
-              { headers }
+            vehiclePromises.push(
+              axios.put(
+                `${AGENT_API}/vendor-pass/${vendorPassId}/revert-vehicle/${vehicleIndex}`,
+                { revertReason: remark },
+                { headers },
+              ),
             );
           } else {
-            return axios.put(
-              `${AGENT_API}/vendor-pass/${vendorPassId}/reject-vehicle/${vehicleIndex}`,
-              { rejectedReason: remark },
-              { headers }
+            vehiclePromises.push(
+              axios.put(
+                `${AGENT_API}/vendor-pass/${vendorPassId}/reject-vehicle/${vehicleIndex}`,
+                { rejectedReason: remark },
+                { headers },
+              ),
             );
           }
         });
@@ -496,15 +649,18 @@ export default function TrafficPassesPage() {
         await axios.put(
           `${AGENT_API}/vendor-pass/${vendorPassId}/complete-review`,
           {},
-          { headers }
+          { headers },
         );
       } else {
         // --- NORMAL PASS APPROVAL FLOW (Admin Service) ---
         const actionUrl = `${ADMIN_API}/pass-request/agent-pass-request-action`;
 
         // 2. BUILD PERSON PAYLOADS
-        const personPromises = persons.map((p) => {
+        const personPromises = [];
+        persons.forEach((p) => {
+          if (!canUserVerifyPerson(p)) return;
           const status = entityStatuses.persons[p.id];
+          if (!status) return;
           const remark = entityRemarks.persons[p.id];
 
           const payload = {
@@ -523,12 +679,15 @@ export default function TrafficPassesPage() {
             payload.revertReason = remark;
           }
 
-          return axios.patch(actionUrl, payload, { headers });
+          personPromises.push(axios.patch(actionUrl, payload, { headers }));
         });
 
         // 3. BUILD VEHICLE PAYLOADS
-        const vehiclePromises = vehicles.map((v) => {
+        const vehiclePromises = [];
+        vehicles.forEach((v) => {
+          if (!canUserVerifyVehicle(v)) return;
           const status = entityStatuses.vehicles[v.id];
+          if (!status) return;
           const remark = entityRemarks.vehicles[v.id];
 
           const payload = {
@@ -547,7 +706,7 @@ export default function TrafficPassesPage() {
             payload.revertReason = remark;
           }
 
-          return axios.patch(actionUrl, payload, { headers });
+          vehiclePromises.push(axios.patch(actionUrl, payload, { headers }));
         });
 
         // 4. EXECUTE ALL ENTITY ACTIONS CONCURRENTLY
@@ -559,21 +718,26 @@ export default function TrafficPassesPage() {
           decision: "complete-review",
         };
 
-        const completeResponse = await axios.patch(actionUrl, finalPayload, { headers });
+        const completeResponse = await axios.patch(actionUrl, finalPayload, {
+          headers,
+        });
         reviewStatus = completeResponse.data?.data?.reviewStatus;
         responseMessage = completeResponse.data?.data?.message;
       }
 
       // 6. HANDLE SUCCESS
-      if (reviewStatus === 'REVERTED') {
+      if (reviewStatus === "REVERTED") {
         toast.success("Review Saved with Reverted Entities", {
           id: loadingToastId,
-          description: responseMessage || "Pass request has been reverted to the applicant for corrections.",
+          description:
+            responseMessage ||
+            "Pass request has been reverted to the applicant for corrections.",
         });
       } else {
         toast.success("Review Submitted", {
           id: loadingToastId,
-          description: responseMessage || "Pass Request review processed successfully.",
+          description:
+            responseMessage || "Pass Request review processed successfully.",
         });
       }
 
@@ -613,23 +777,23 @@ export default function TrafficPassesPage() {
       const initialVehicleRemarks = {};
 
       (pass.persons || []).forEach((p) => {
-        if (p.status === 'approved') {
+        if (p.status === "approved") {
           // Pre-fill as APPROVED (read-only, approver cannot change)
-          initialPersonStatuses[p.id] = 'APPROVED';
-        } else if (p.status === 'rejected') {
-          initialPersonStatuses[p.id] = 'REJECTED';
-          initialPersonRemarks[p.id] = p.rejectedReason || '';
+          initialPersonStatuses[p.id] = "APPROVED";
+        } else if (p.status === "rejected") {
+          initialPersonStatuses[p.id] = "REJECTED";
+          initialPersonRemarks[p.id] = p.rejectedReason || "";
         }
         // 'pending' and 'reverted' entities need fresh review — leave empty
       });
 
       (pass.vehicles || []).forEach((v) => {
-        if (v.status === 'approved') {
+        if (v.status === "approved") {
           // Pre-fill as APPROVED (read-only, approver cannot change)
-          initialVehicleStatuses[v.id] = 'APPROVED';
-        } else if (v.status === 'rejected') {
-          initialVehicleStatuses[v.id] = 'REJECTED';
-          initialVehicleRemarks[v.id] = v.rejectedReason || '';
+          initialVehicleStatuses[v.id] = "APPROVED";
+        } else if (v.status === "rejected") {
+          initialVehicleStatuses[v.id] = "REJECTED";
+          initialVehicleRemarks[v.id] = v.rejectedReason || "";
         }
         // 'pending' and 'reverted' entities need fresh review — leave empty
       });
@@ -652,6 +816,19 @@ export default function TrafficPassesPage() {
   // Use globalCounts for stat cards (always the full DB counts)
   // Use requests directly as filteredData (already paginated + filtered by server)
   const filteredData = requests;
+
+  const visiblePersons = selectedRequest
+    ? !isViewMode
+      ? (selectedRequest.persons || []).filter(canUserVerifyPerson)
+      : selectedRequest.persons || []
+    : [];
+  const visibleVehicles = selectedRequest
+    ? !isViewMode
+      ? (selectedRequest.vehicles || []).filter(canUserVerifyVehicle)
+      : selectedRequest.vehicles || []
+    : [];
+  const hasVisibleEntities =
+    visiblePersons.length > 0 || visibleVehicles.length > 0;
 
   const handleCardClick = (tab, filter) => {
     setActiveTab(tab);
@@ -721,7 +898,9 @@ export default function TrafficPassesPage() {
               className={
                 "transition-all duration-200 " +
                 (isDragged ? "opacity-30 scale-95" : "") +
-                (isOver ? "border-2 border-dashed border-orange-500 rounded-3xl p-1 bg-orange-500/5 shadow-inner scale-[1.02]" : "")
+                (isOver
+                  ? "border-2 border-dashed border-orange-500 rounded-3xl p-1 bg-orange-500/5 shadow-inner scale-[1.02]"
+                  : "")
               }
             >
               <div
@@ -737,11 +916,18 @@ export default function TrafficPassesPage() {
                   <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
                     {cardData.label}
                   </span>
-                  <span className={`flex items-center justify-center h-8 w-8 rounded-xl ${cardData.bgIcon}`}>
-                    <cardData.icon className={`h-4 w-4 ${cardData.color}`} strokeWidth={2.5} />
+                  <span
+                    className={`flex items-center justify-center h-8 w-8 rounded-xl ${cardData.bgIcon}`}
+                  >
+                    <cardData.icon
+                      className={`h-4 w-4 ${cardData.color}`}
+                      strokeWidth={2.5}
+                    />
                   </span>
                 </div>
-                <p className={`text-3xl font-extrabold tabular-nums ${cardData.color}`}>
+                <p
+                  className={`text-3xl font-extrabold tabular-nums ${cardData.color}`}
+                >
                   {cardData.value}
                 </p>
               </div>
@@ -773,8 +959,16 @@ export default function TrafficPassesPage() {
       {/* ── Tabs ── */}
       <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-0">
         {[
-          { id: "pending", label: "Pending Approvals", count: globalCounts.pending },
-          { id: "processed", label: "Processed Passes", count: globalCounts.processed },
+          {
+            id: "pending",
+            label: "Pending Approvals",
+            count: globalCounts.pending,
+          },
+          {
+            id: "processed",
+            label: "Processed Passes",
+            count: globalCounts.processed,
+          },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -792,9 +986,13 @@ export default function TrafficPassesPage() {
             }`}
           >
             {tab.label}
-            <span className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
-              activeTab === tab.id ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
-            }`}>
+            <span
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
+                activeTab === tab.id
+                  ? "bg-white/20 text-white"
+                  : "bg-slate-200 text-slate-600"
+              }`}
+            >
               {tab.count}
             </span>
           </button>
@@ -808,11 +1006,13 @@ export default function TrafficPassesPage() {
           <h3 className="font-bold text-slate-800 dark:text-stone-100 uppercase text-xs tracking-widest flex items-center gap-2">
             {activeTab === "pending" ? (
               <>
-                <ShieldAlert className="h-4 w-4 text-[#ff6b00]" /> Awaiting Review
+                <ShieldAlert className="h-4 w-4 text-[#ff6b00]" /> Awaiting
+                Review
               </>
             ) : (
               <>
-                <History className="h-4 w-4 text-emerald-500" /> Processed Passes
+                <History className="h-4 w-4 text-emerald-500" /> Processed
+                Passes
               </>
             )}
           </h3>
@@ -847,8 +1047,6 @@ export default function TrafficPassesPage() {
               </select>
             </div>
 
-
-
             <div className="relative w-full md:w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
               <input
@@ -876,8 +1074,21 @@ export default function TrafficPassesPage() {
             <thead>
               <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
                 {(activeTab === "processed"
-                  ? ["Ref No", "Company Details", "Entities Included", "Applied On", "Approved By", "Status"]
-                  : ["Ref No", "Company Details", "Entities Included", "Applied On", "Status"]
+                  ? [
+                      "Ref No",
+                      "Company Details",
+                      "Entities Included",
+                      "Applied On",
+                      "Approved By",
+                      "Status",
+                    ]
+                  : [
+                      "Ref No",
+                      "Company Details",
+                      "Entities Included",
+                      "Applied On",
+                      "Status",
+                    ]
                 ).map((h) => (
                   <th
                     key={h}
@@ -893,14 +1104,20 @@ export default function TrafficPassesPage() {
             <tbody className="divide-y divide-slate-50 dark:divide-slate-700/30">
               {loading ? (
                 <tr>
-                  <td colSpan={activeTab === "processed" ? 6 : 5} className="py-16 text-center text-slate-500">
+                  <td
+                    colSpan={activeTab === "processed" ? 6 : 5}
+                    className="py-16 text-center text-slate-500"
+                  >
                     <Loader2 className="h-10 w-10 mx-auto text-slate-300 mb-3 animate-spin" />
                     <p className="text-sm font-medium">Loading requests...</p>
                   </td>
                 </tr>
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={activeTab === "processed" ? 6 : 5} className="py-16 text-center text-slate-500">
+                  <td
+                    colSpan={activeTab === "processed" ? 6 : 5}
+                    className="py-16 text-center text-slate-500"
+                  >
                     <Search className="h-10 w-10 mx-auto text-slate-200 mb-3" />
                     <p className="text-sm font-medium">
                       No records found for the current filter/search.
@@ -910,16 +1127,25 @@ export default function TrafficPassesPage() {
               ) : (
                 filteredData.map((pass) => {
                   const statusColors = {
-                    approved: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
-                    processed: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
-                    reverted: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
-                    rejected: "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
+                    approved:
+                      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
+                    processed:
+                      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
+                    reverted:
+                      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
+                    rejected:
+                      "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
                   };
                   const statusKey = (pass.status || "").toLowerCase();
-                  const statusClass = statusColors[statusKey] || "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
-                  
-                  const lockType = pass.originType === "VENDOR" ? "vendor-pass" : "pass";
-                  const lock = activeLocks[lockType]?.find(l => String(l.applicationId) === String(pass.id));
+                  const statusClass =
+                    statusColors[statusKey] ||
+                    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+
+                  const lockType =
+                    pass.originType === "VENDOR" ? "vendor-pass" : "pass";
+                  const lock = activeLocks[lockType]?.find(
+                    (l) => String(l.applicationId) === String(pass.id),
+                  );
                   const isLocked = !!lock;
 
                   const rowClass = isLocked
@@ -928,7 +1154,11 @@ export default function TrafficPassesPage() {
 
                   return (
                     <tr
-                      key={pass.originType === "VENDOR" ? `vpr-${pass.id}` : pass.id}
+                      key={
+                        pass.originType === "VENDOR"
+                          ? `vpr-${pass.id}`
+                          : pass.id
+                      }
                       onClick={() =>
                         openReviewModal(pass, activeTab === "processed")
                       }
@@ -943,14 +1173,19 @@ export default function TrafficPassesPage() {
                             {(pass.entityName || "?").charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <div className="text-sm font-bold text-slate-800 dark:text-stone-100">{pass.entityName || "—"}</div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">{pass.email || "—"}</div>
+                            <div className="text-sm font-bold text-slate-800 dark:text-stone-100">
+                              {pass.entityName || "—"}
+                            </div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                              {pass.email || "—"}
+                            </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <span className="bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200 dark:border-blue-500/20">
-                          {pass.persons?.length || 0} Persons | {pass.vehicles?.length || 0} Vehicles
+                          {pass.persons?.length || 0} Persons |{" "}
+                          {pass.vehicles?.length || 0} Vehicles
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
@@ -963,7 +1198,9 @@ export default function TrafficPassesPage() {
                       )}
                       <td className="px-6 py-4 text-center">
                         <div className="flex flex-col items-center gap-1">
-                          <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}>
+                          <span
+                            className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}
+                          >
                             {(pass.status || "PENDING").toUpperCase()}
                           </span>
                           {isLocked && (
@@ -1089,257 +1326,476 @@ export default function TrafficPassesPage() {
               </div>
 
               {/* PERSONNEL REVIEW LIST */}
-              {selectedRequest.persons &&
-                selectedRequest.persons.length > 0 && (
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-5 py-3 bg-slate-100 border-b border-slate-200 flex justify-between items-center">
-                      <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest flex items-center gap-2">
-                        <Users className="h-4 w-4" /> Personnel Validation Queue
-                      </h4>
-                    </div>
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-slate-50 border-b border-slate-200">
-                        <tr>
-                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
-                            Pass No
-                          </th>
-                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
-                            Name & Role
-                          </th>
-                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
-                            Aadhar / ID
-                          </th>
-                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs text-right">
-                            Action / Status
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {selectedRequest.persons.map((p) => (
-                          <tr
-                            key={p.id}
-                            onClick={() => {
-                              if (p.status === 'pending' || p.status === 'reverted') {
-                                setEntityModal({
-                                  isOpen: true,
-                                  data: p,
-                                  type: "person",
-                                });
-                                setCurrentRemark(
-                                  entityRemarks.persons[p.id] ||
+              {visiblePersons.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-5 py-3 bg-slate-100 border-b border-slate-200 flex justify-between items-center">
+                    <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest flex items-center gap-2">
+                      <Users className="h-4 w-4" /> Personnel Validation Queue
+                    </h4>
+                  </div>
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                          Pass No
+                        </th>
+                        <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                          Name & Role
+                        </th>
+                        <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                          Aadhar / ID
+                        </th>
+                        <th className="p-3 font-semibold text-slate-600 uppercase text-xs text-right">
+                          Action / Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {visiblePersons.map((p) => (
+                        <tr
+                          key={p.id}
+                          onClick={() => {
+                            if (!isViewMode && canUserVerifyPerson(p)) {
+                              setEntityModal({
+                                isOpen: true,
+                                data: p,
+                                type: "person",
+                              });
+                              setCurrentRemark(
+                                entityRemarks.persons[p.id] ||
                                   p.revertReason ||
                                   p.rejectedReason ||
                                   "",
-                                );
-                              }
-                            }}
-                            className={`transition-all hover:shadow-sm ${(p.status === 'pending' || p.status === 'reverted') ? 'hover:bg-slate-50 cursor-pointer' : 'bg-slate-50/50 cursor-default'}`}
-                          >
-                            <td className="p-3 text-slate-800 font-mono font-bold text-xs">
-                              {p.personPassNo || "-"}
-                            </td>
-                            <td className="p-3 font-bold text-[#0a1e4d]">
-                              {p.name}
-                              <span className="block font-medium text-xs text-slate-500">
-                                {p.hepTypeId} • {p.passType}
+                              );
+                            }
+                          }}
+                          className={`transition-all hover:shadow-sm ${!isViewMode && canUserVerifyPerson(p) ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/50 cursor-default"}`}
+                        >
+                          <td className="p-3 text-slate-800 font-mono font-bold text-xs">
+                            {p.personPassNo || "-"}
+                          </td>
+                          <td className="p-3 font-bold text-[#0a1e4d]">
+                            {p.name}
+                            <span className="block font-medium text-xs text-slate-500">
+                              {p.hepTypeId} • {p.passType}
+                            </span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {isOilDockArea(
+                                p.accessAreaId || p.accessArea,
+                              ) && (
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                    p.srDtmApproved ||
+                                    (userRole ===
+                                      "Senior Deputy Traffic Manager" &&
+                                      entityStatuses.persons[p.id] ===
+                                        "APPROVED")
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : "bg-amber-100 text-amber-700"
+                                  }`}
+                                >
+                                  {p.srDtmApproved ||
+                                  (userRole ===
+                                    "Senior Deputy Traffic Manager" &&
+                                    entityStatuses.persons[p.id] === "APPROVED")
+                                    ? "✓ Sr. DTM"
+                                    : "⏳ Pending Sr. DTM"}
+                                </span>
+                              )}
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                  [
+                                    "APPROVED",
+                                    "REJECTED",
+                                    "REVERTED",
+                                    "approved",
+                                    "rejected",
+                                    "reverted",
+                                  ].includes(
+                                    selectedRequest?.status ||
+                                      selectedRequest?.decision,
+                                  ) ||
+                                  [
+                                    "approved",
+                                    "rejected",
+                                    "reverted",
+                                    "APPROVED",
+                                    "REJECTED",
+                                    "REVERTED",
+                                  ].includes(p.status || p.decision) ||
+                                  (userRole === "Approval" &&
+                                    entityStatuses.persons[p.id] === "APPROVED")
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-amber-100 text-amber-700"
+                                }`}
+                              >
+                                {[
+                                  "APPROVED",
+                                  "REJECTED",
+                                  "REVERTED",
+                                  "approved",
+                                  "rejected",
+                                  "reverted",
+                                ].includes(
+                                  selectedRequest?.status ||
+                                    selectedRequest?.decision,
+                                ) ||
+                                [
+                                  "approved",
+                                  "rejected",
+                                  "reverted",
+                                  "APPROVED",
+                                  "REJECTED",
+                                  "REVERTED",
+                                ].includes(p.status || p.decision) ||
+                                (userRole === "Approval" &&
+                                  entityStatuses.persons[p.id] === "APPROVED")
+                                  ? "✓ Pass Section"
+                                  : "⏳ Pending Pass Section"}
                               </span>
-                            </td>
-                            <td className="p-3 text-slate-600 font-mono text-xs">
-                              {p.aadharNo}
-                            </td>
-                            <td className="p-3 text-right">
-                              <div className="flex justify-end items-center gap-3">
-                                {(() => {
-                                  const personStatus =
-                                    entityStatuses.persons[p.id] ||
-                                    p.status ||
-                                    p.decision;
+                            </div>
+                          </td>
+                          <td className="p-3 text-slate-600 font-mono text-xs">
+                            {p.aadharNo}
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex justify-end items-center gap-3">
+                              {(() => {
+                                const personStatus =
+                                  entityStatuses.persons[p.id] ||
+                                  p.status ||
+                                  p.decision;
 
-                                  const personRemark =
-                                    entityRemarks.persons[p.id] ||
-                                    p.revertReason ||
-                                    p.rejectedReason;
+                                const personRemark =
+                                  entityRemarks.persons[p.id] ||
+                                  p.revertReason ||
+                                  p.rejectedReason;
 
-                                  return (
-                                    <>
-                                      {personStatus && (
-                                        <span
-                                          className={`px-2 py-1 rounded text-[10px] font-bold ${personStatus === "APPROVED"
+                                return (
+                                  <>
+                                    {personStatus && (
+                                      <span
+                                        className={`px-2 py-1 rounded text-[10px] font-bold ${
+                                          personStatus === "APPROVED"
                                             ? "bg-emerald-100 text-emerald-700"
                                             : personStatus === "REVERTED"
                                               ? "bg-amber-100 text-amber-700"
                                               : "bg-red-100 text-red-700"
-                                            }`}
-                                        >
-                                          {personStatus}
-                                        </span>
-                                      )}
+                                        }`}
+                                      >
+                                        {personStatus}
+                                      </span>
+                                    )}
 
-                                      {(personStatus === "REJECTED" || personStatus === "REVERTED") &&
-                                        personRemark && (
-                                          <div className={`mt-1 text-[10px] p-1 rounded border inline-block ${personStatus === "REVERTED"
-                                            ? "text-amber-600 bg-amber-50 border-amber-100"
-                                            : "text-red-600 bg-red-50 border-red-100"
-                                            }`}>
-                                            {personStatus === "REVERTED" ? "Revert: " : "Reason: "}{personRemark}
-                                          </div>
-                                        )}
-                                    </>
-                                  );
-                                })()}
-                                {!isViewMode && (p.status === 'pending' || p.status === 'reverted') && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEntityModal({
-                                        isOpen: true,
-                                        data: p,
-                                        type: "person",
-                                      });
-                                      setCurrentRemark(
-                                        entityRemarks.persons[p.id] || "",
-                                      );
-                                    }}
-                                    className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
-                                  >
-                                    {entityStatuses.persons[p.id]
-                                      ? "Re-verify"
-                                      : "Verify"}
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                                    {(personStatus === "REJECTED" ||
+                                      personStatus === "REVERTED") &&
+                                      personRemark && (
+                                        <div
+                                          className={`mt-1 text-[10px] p-1 rounded border inline-block ${
+                                            personStatus === "REVERTED"
+                                              ? "text-amber-600 bg-amber-50 border-amber-100"
+                                              : "text-red-600 bg-red-50 border-red-100"
+                                          }`}
+                                        >
+                                          {personStatus === "REVERTED"
+                                            ? "Revert: "
+                                            : "Reason: "}
+                                          {personRemark}
+                                        </div>
+                                      )}
+                                  </>
+                                );
+                              })()}
+                              {!isViewMode && canUserVerifyPerson(p) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEntityModal({
+                                      isOpen: true,
+                                      data: p,
+                                      type: "person",
+                                    });
+                                    setCurrentRemark(
+                                      entityRemarks.persons[p.id] || "",
+                                    );
+                                  }}
+                                  className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                                >
+                                  {entityStatuses.persons[p.id] ||
+                                  p.status === "approved" ||
+                                  p.status === "rejected"
+                                    ? "Re-verify"
+                                    : "Verify"}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               {/* VEHICLES REVIEW LIST */}
-              {selectedRequest.vehicles &&
-                selectedRequest.vehicles.length > 0 && (
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-5 py-3 bg-slate-100 border-b border-slate-200 flex justify-between items-center">
-                      <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest flex items-center gap-2">
-                        <Truck className="h-4 w-4" /> Vehicle Validation Queue
-                      </h4>
-                    </div>
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-slate-50 border-b border-slate-200">
-                        <tr>
-                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
-                            Pass No
-                          </th>
-                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
-                            Reg No
-                          </th>
-                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
-                            Type
-                          </th>
-                          <th className="p-3 font-semibold text-slate-600 uppercase text-xs text-right">
-                            Action / Status
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {selectedRequest.vehicles.map((v) => (
-                          <tr
-                            key={v.id}
-                            onClick={() => {
-                              if (v.status === 'pending' || v.status === 'reverted') {
-                                setEntityModal({
-                                  isOpen: true,
-                                  data: v,
-                                  type: "vehicle",
-                                });
-                                setCurrentRemark(
-                                  entityRemarks.vehicles[v.id] ||
+              {visibleVehicles.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-5 py-3 bg-slate-100 border-b border-slate-200 flex justify-between items-center">
+                    <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest flex items-center gap-2">
+                      <Truck className="h-4 w-4" /> Vehicle Validation Queue
+                    </h4>
+                  </div>
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                          Pass No
+                        </th>
+                        <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                          Reg No
+                        </th>
+                        <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                          Type
+                        </th>
+                        <th className="p-3 font-semibold text-slate-600 uppercase text-xs text-right">
+                          Action / Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {visibleVehicles.map((v) => (
+                        <tr
+                          key={v.id}
+                          onClick={() => {
+                            if (!isViewMode && canUserVerifyVehicle(v)) {
+                              setEntityModal({
+                                isOpen: true,
+                                data: v,
+                                type: "vehicle",
+                              });
+                              setCurrentRemark(
+                                entityRemarks.vehicles[v.id] ||
                                   v.revertReason ||
                                   v.rejectedReason ||
                                   "",
-                                );
-                              }
-                            }}
-                            className={`transition-all hover:shadow-sm ${(v.status === 'pending' || v.status === 'reverted') ? 'hover:bg-slate-50 cursor-pointer' : 'bg-slate-50/50 cursor-default'}`}
-                          >
-                            <td className="p-3 text-slate-800 font-mono font-bold text-xs">
-                              {v.vehiclePassNo || "-"}
-                            </td>
-                            <td className="p-3 font-bold text-[#0a1e4d] uppercase">
-                              {v.registrationNo}
-                            </td>
-                            <td className="p-3 text-slate-600 text-xs font-medium">
+                              );
+                            }
+                          }}
+                          className={`transition-all hover:shadow-sm ${!isViewMode && canUserVerifyVehicle(v) ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/50 cursor-default"}`}
+                        >
+                          <td className="p-3 text-slate-800 font-mono font-bold text-xs">
+                            {v.vehiclePassNo || "-"}
+                          </td>
+                          <td className="p-3 font-bold text-[#0a1e4d] uppercase">
+                            {v.registrationNo}
+                          </td>
+                          <td className="p-3 text-slate-600 text-xs font-medium">
+                            <div>
                               {v.vehicleTypeName} • {v.passType}
-                            </td>
-                            <td className="p-3 text-right">
-                              <div className="flex justify-end items-center gap-3">
-                                {(() => {
-                                  const vehicleStatus =
-                                    entityStatuses.vehicles[v.id] ||
-                                    v.status ||
-                                    v.decision;
+                            </div>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {["MONTHLY", "YEARLY", "ANNUAL"].includes(
+                                v.passType,
+                              ) && (
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                    v.twistLockCertified ||
+                                    (userRole === "Safety Officer" &&
+                                      entityStatuses.vehicles[v.id] ===
+                                        "APPROVED")
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : "bg-amber-100 text-amber-700"
+                                  }`}
+                                >
+                                  {v.twistLockCertified ||
+                                  (userRole === "Safety Officer" &&
+                                    entityStatuses.vehicles[v.id] ===
+                                      "APPROVED")
+                                    ? "✓ Safety"
+                                    : "⏳ Pending Safety"}
+                                </span>
+                              )}
+                              {isOilDockArea(
+                                v.accessAreaId || v.accessArea,
+                              ) && (
+                                <>
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                      v.sparkArresterCertified ||
+                                      (userRole === "Fire Safety Officer" &&
+                                        entityStatuses.vehicles[v.id] ===
+                                          "APPROVED")
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : "bg-amber-100 text-amber-700"
+                                    }`}
+                                  >
+                                    {v.sparkArresterCertified ||
+                                    (userRole === "Fire Safety Officer" &&
+                                      entityStatuses.vehicles[v.id] ===
+                                        "APPROVED")
+                                      ? "✓ Fire Safety"
+                                      : "⏳ Pending Fire Safety"}
+                                  </span>
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                      v.srDtmApproved ||
+                                      (userRole ===
+                                        "Senior Deputy Traffic Manager" &&
+                                        entityStatuses.vehicles[v.id] ===
+                                          "APPROVED")
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : "bg-amber-100 text-amber-700"
+                                    }`}
+                                  >
+                                    {v.srDtmApproved ||
+                                    (userRole ===
+                                      "Senior Deputy Traffic Manager" &&
+                                      entityStatuses.vehicles[v.id] ===
+                                        "APPROVED")
+                                      ? "✓ Sr. DTM"
+                                      : "⏳ Pending Sr. DTM"}
+                                  </span>
+                                </>
+                              )}
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                  [
+                                    "APPROVED",
+                                    "REJECTED",
+                                    "REVERTED",
+                                    "approved",
+                                    "rejected",
+                                    "reverted",
+                                  ].includes(
+                                    selectedRequest?.status ||
+                                      selectedRequest?.decision,
+                                  ) ||
+                                  [
+                                    "approved",
+                                    "rejected",
+                                    "reverted",
+                                    "APPROVED",
+                                    "REJECTED",
+                                    "REVERTED",
+                                  ].includes(v.status || v.decision) ||
+                                  (userRole === "Approval" &&
+                                    entityStatuses.vehicles[v.id] ===
+                                      "APPROVED")
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-amber-100 text-amber-700"
+                                }`}
+                              >
+                                {[
+                                  "APPROVED",
+                                  "REJECTED",
+                                  "REVERTED",
+                                  "approved",
+                                  "rejected",
+                                  "reverted",
+                                ].includes(
+                                  selectedRequest?.status ||
+                                    selectedRequest?.decision,
+                                ) ||
+                                [
+                                  "approved",
+                                  "rejected",
+                                  "reverted",
+                                  "APPROVED",
+                                  "REJECTED",
+                                  "REVERTED",
+                                ].includes(v.status || v.decision) ||
+                                (userRole === "Approval" &&
+                                  entityStatuses.vehicles[v.id] === "APPROVED")
+                                  ? "✓ Pass Section"
+                                  : "⏳ Pending Pass Section"}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex justify-end items-center gap-3">
+                              {(() => {
+                                const vehicleStatus =
+                                  entityStatuses.vehicles[v.id] ||
+                                  v.status ||
+                                  v.decision;
 
-                                  const vehicleRemark =
-                                    entityRemarks.vehicles[v.id] ||
-                                    v.revertReason ||
-                                    v.rejectedReason;
+                                const vehicleRemark =
+                                  entityRemarks.vehicles[v.id] ||
+                                  v.revertReason ||
+                                  v.rejectedReason;
 
-                                  return (
-                                    <>
-                                      {vehicleStatus && (
-                                        <span
-                                          className={`px-2 py-1 rounded text-[10px] font-bold ${vehicleStatus === "APPROVED"
+                                return (
+                                  <>
+                                    {vehicleStatus && (
+                                      <span
+                                        className={`px-2 py-1 rounded text-[10px] font-bold ${
+                                          vehicleStatus === "APPROVED"
                                             ? "bg-emerald-100 text-emerald-700"
                                             : vehicleStatus === "REVERTED"
                                               ? "bg-amber-100 text-amber-700"
                                               : "bg-red-100 text-red-700"
-                                            }`}
-                                        >
-                                          {vehicleStatus}
-                                        </span>
-                                      )}
+                                        }`}
+                                      >
+                                        {vehicleStatus}
+                                      </span>
+                                    )}
 
-                                      {(vehicleStatus === "REJECTED" || vehicleStatus === "REVERTED") &&
-                                        vehicleRemark && (
-                                          <div className={`mt-1 text-[10px] p-1 rounded border inline-block ${vehicleStatus === "REVERTED"
-                                            ? "text-amber-600 bg-amber-50 border-amber-100"
-                                            : "text-red-600 bg-red-50 border-red-100"
-                                            }`}>
-                                            {vehicleStatus === "REVERTED" ? "Revert: " : "Reason: "}{vehicleRemark}
-                                          </div>
-                                        )}
-                                    </>
-                                  );
-                                })()}
-                                {!isViewMode && (v.status === 'pending' || v.status === 'reverted') && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEntityModal({
-                                        isOpen: true,
-                                        data: v,
-                                        type: "vehicle",
-                                      });
-                                      setCurrentRemark(
-                                        entityRemarks.vehicles[v.id] || "",
-                                      );
-                                    }}
-                                    className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
-                                  >
-                                    {entityStatuses.vehicles[v.id]
-                                      ? "Re-verify"
-                                      : "Verify"}
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                                    {(vehicleStatus === "REJECTED" ||
+                                      vehicleStatus === "REVERTED") &&
+                                      vehicleRemark && (
+                                        <div
+                                          className={`mt-1 text-[10px] p-1 rounded border inline-block ${
+                                            vehicleStatus === "REVERTED"
+                                              ? "text-amber-600 bg-amber-50 border-amber-100"
+                                              : "text-red-600 bg-red-50 border-red-100"
+                                          }`}
+                                        >
+                                          {vehicleStatus === "REVERTED"
+                                            ? "Revert: "
+                                            : "Reason: "}
+                                          {vehicleRemark}
+                                        </div>
+                                      )}
+                                  </>
+                                );
+                              })()}
+                              {!isViewMode && canUserVerifyVehicle(v) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEntityModal({
+                                      isOpen: true,
+                                      data: v,
+                                      type: "vehicle",
+                                    });
+                                    setCurrentRemark(
+                                      entityRemarks.vehicles[v.id] || "",
+                                    );
+                                  }}
+                                  className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                                >
+                                  {entityStatuses.vehicles[v.id] ||
+                                  v.status === "approved" ||
+                                  v.status === "rejected"
+                                    ? "Re-verify"
+                                    : "Verify"}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {!isViewMode && selectedRequest && !hasVisibleEntities && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  This pass request contains no personnel or vehicles that
+                  require your approval at this stage.
+                </div>
+              )}
             </div>
 
             <div className="flex justify-between items-center p-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -1509,6 +1965,121 @@ export default function TrafficPassesPage() {
                       />
                     </>
                   )}
+
+                  {/* Oil Dock Workflow Status */}
+                  {isOilDockArea(
+                    entityModal.data.accessAreaId ||
+                      entityModal.data.accessArea,
+                  ) && (
+                    <div className="col-span-2 md:col-span-4 border-t border-slate-100 pt-4 mt-2">
+                      <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
+                        Essential Entry Permit Certifications
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {entityModal.type === "person" ? (
+                          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase">
+                              Sr. DTM Approval
+                            </span>
+                            <div className="flex items-center gap-2 mt-1">
+                              {entityModal.data.srDtmApproved ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                  AUTHORIZED
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                  PENDING AUTHORIZATION
+                                </span>
+                              )}
+                            </div>
+                            {entityModal.data.srDtmRemarks && (
+                              <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                Remarks: {entityModal.data.srDtmRemarks}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            {/* Safety Officer badge — shown only for MONTHLY, YEARLY, ANNUAL oil dock vehicles */}
+                            {["MONTHLY", "YEARLY", "ANNUAL"].includes(
+                              entityModal.data.passType,
+                            ) && (
+                              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                  Safety Officer (Twist Lock & Fitness)
+                                </span>
+                                <div className="flex items-center gap-2 mt-1">
+                                  {entityModal.data.twistLockCertified ? (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                      APPROVED
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                      PENDING APPROVAL
+                                    </span>
+                                  )}
+                                </div>
+                                {entityModal.data.twistLockRemarks && (
+                                  <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                    Remarks: {entityModal.data.twistLockRemarks}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+
+                            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                Fire Safety Officer (Spark Arrester)
+                              </span>
+                              <div className="flex items-center gap-2 mt-1">
+                                {entityModal.data.sparkArresterCertified ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                    CERTIFIED
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                    PENDING CERTIFICATION
+                                  </span>
+                                )}
+                              </div>
+                              {entityModal.data.sparkArresterRemarks && (
+                                <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                  Remarks:{" "}
+                                  {entityModal.data.sparkArresterRemarks}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                Sr. DTM Approval
+                              </span>
+                              <div className="flex items-center gap-2 mt-1">
+                                {entityModal.data.srDtmApproved ||
+                                (userRole === "Senior Deputy Traffic Manager" &&
+                                  entityStatuses.vehicles[
+                                    entityModal.data.id
+                                  ] === "APPROVED") ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                    AUTHORIZED
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                    PENDING AUTHORIZATION
+                                  </span>
+                                )}
+                              </div>
+                              {entityModal.data.srDtmRemarks && (
+                                <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                  Remarks: {entityModal.data.srDtmRemarks}
+                                </p>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1578,7 +2149,7 @@ export default function TrafficPassesPage() {
                                 "personPhoto",
                                 entityModal.data.photoFilePath,
                                 extractEntityIndex(entityModal.data.id),
-                                selectedRequest.originType === "VENDOR"
+                                selectedRequest.originType === "VENDOR",
                               )
                             }
                             title="Click to Enlarge Photo"
@@ -1672,6 +2243,15 @@ export default function TrafficPassesPage() {
                         entityIndex={extractEntityIndex(entityModal.data.id)}
                         isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
+                      <DocumentCard
+                        label="Entry Authorization Document"
+                        filePath={entityModal.data.entryAuthorizationFilePath}
+                        documentType="entryAuthorization"
+                        passRequestId={selectedRequest.id}
+                        onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
+                      />
                     </>
                   ) : (
                     <>
@@ -1711,6 +2291,21 @@ export default function TrafficPassesPage() {
                         entityIndex={extractEntityIndex(entityModal.data.id)}
                         isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
+                      {(entityModal.data.twistLockFilePath ||
+                        (selectedRequest?.isOilDock &&
+                          ["MONTHLY", "YEARLY", "ANNUAL"].includes(
+                            entityModal.data.passType,
+                          ))) && (
+                        <DocumentCard
+                          label="Twist Lock Certificate"
+                          filePath={entityModal.data.twistLockFilePath}
+                          documentType="twistLock"
+                          passRequestId={selectedRequest.id}
+                          onView={handleViewDoc}
+                          entityIndex={extractEntityIndex(entityModal.data.id)}
+                          isVendorPass={selectedRequest.originType === "VENDOR"}
+                        />
+                      )}
                       <DocumentCard
                         label="Request Letter"
                         filePath={entityModal.data.requestLetterPath}
@@ -1733,6 +2328,15 @@ export default function TrafficPassesPage() {
                         label="Emission Certificate (PUC)"
                         filePath={entityModal.data.emissionFilePath}
                         documentType="vehicleEmission"
+                        passRequestId={selectedRequest.id}
+                        onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
+                      />
+                      <DocumentCard
+                        label="Spark Arrester Certificate"
+                        filePath={entityModal.data.sparkArresterFilePath}
+                        documentType="sparkArrester"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
                         entityIndex={extractEntityIndex(entityModal.data.id)}
@@ -1781,7 +2385,19 @@ export default function TrafficPassesPage() {
                     onClick={() => handleEntityDecision("APPROVED")}
                     className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold shadow-md hover:bg-emerald-700 transition-colors flex items-center gap-2 uppercase text-sm tracking-wider"
                   >
-                    <CheckCircle2 className="h-5 w-5" /> Approve
+                    <CheckCircle2 className="h-5 w-5" />{" "}
+                    {userRole === "Safety Officer"
+                      ? entityModal.type === "vehicle" &&
+                        ["MONTHLY", "YEARLY", "ANNUAL"].includes(
+                          entityModal.data?.passType,
+                        )
+                        ? "Certify Twist Lock"
+                        : "Approve"
+                      : userRole === "Fire Safety Officer"
+                        ? "Certify Spark Arrester"
+                        : userRole === "Senior Deputy Traffic Manager"
+                          ? "Authorize Entry"
+                          : "Approve"}
                   </button>
                 </div>
               )}
