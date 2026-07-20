@@ -173,6 +173,7 @@ export default function RegisterPage() {
   const [entityFileName, setEntityFileName] = useState("");
   const [requisitionLetterFileName, setRequisitionLetterFileName] = useState("");
   const [workOrderFileName, setWorkOrderFileName] = useState("");
+  const [licenseDocFileName, setLicenseDocFileName] = useState("");
   const [tableFiles, setTableFiles] = useState({});
 
   // ── Inline field error state ──────────────────────────────
@@ -465,6 +466,8 @@ export default function RegisterPage() {
             setRequisitionLetterFileName("Previously Uploaded Document.pdf");
           if (data.workOrder)
             setWorkOrderFileName("Previously Uploaded Document.pdf");
+          if (data.licenseDoc)
+            setLicenseDocFileName("Previously Uploaded Document.pdf");
 
           setTableFiles({
             gstinDoc: data.gstinDoc ? "Previously Uploaded Document.pdf" : "",
@@ -637,6 +640,7 @@ export default function RegisterPage() {
     const entityFile = document.getElementById("entityFileInput")?.files[0];
     const requisitionLetterFile = document.getElementById("requisitionLetterFileInput")?.files[0];
     const workOrderFile = document.getElementById("workOrderFileInput")?.files[0];
+    const licenseDocFile = document.getElementById("licenseDocFileInput")?.files[0];
     const gstFile = document.getElementById("gstFileInput")?.files[0];
     const panFile = document.getElementById("panFileInput")?.files[0];
     const tanFile = document.getElementById("tanFileInput")?.files[0];
@@ -644,6 +648,7 @@ export default function RegisterPage() {
     if (entityFile) formData.append("entityFile", entityFile);
     if (requisitionLetterFile) formData.append("requisitionLetter", requisitionLetterFile);
     if (workOrderFile) formData.append("workOrder", workOrderFile);
+    if (licenseDocFile) formData.append("licenseDoc", licenseDocFile);
     if (gstFile) formData.append("gstinDoc", gstFile);
     if (panFile) formData.append("panDoc", panFile);
     if (tanFile) formData.append("tanDoc", tanFile);
@@ -703,14 +708,15 @@ export default function RegisterPage() {
   // Covers: Truck owners, Trailer operators, Container transport companies,
   //         Logistics service providers, Fleet operators, Lorry owners, Transport contractors
   const TRANSPORT_KEYWORDS = [
-    "transport", "truck", "trailer", "container", "logistics",
-    "fleet", "lorry", "carrier", "freight", "haulage",
+    "transport", "truck", "trailer", "logistics",
+    "fleet", "lorry", "carrier", "haulage",
   ];
   const selectedTypeObj = userTypes.find(
     (type) => type.id.toString() === selectedUserTypeId.toString(),
   );
   const selectedTypeName = (selectedTypeObj?.type_name || selectedTypeObj?.name || "").toLowerCase();
   const isTransportUser = TRANSPORT_KEYWORDS.some((kw) => selectedTypeName.includes(kw));
+  const isGovtUser = selectedTypeName.includes("govt") || selectedTypeName.includes("government");
 
   // Placeholder for identificationTypes
   const identificationTypes = useMemo(() => [
@@ -719,7 +725,7 @@ export default function RegisterPage() {
       numName: "gstinNumber",
       fileName: "gstinDoc",
       fileId: "gstFileInput",
-      req: !isTransportUser, // optional for Transport users
+      req: !isTransportUser && !isGovtUser, // optional for Transport and Govt users
       docType: "gst",
     },
     {
@@ -727,7 +733,7 @@ export default function RegisterPage() {
       numName: "panNumber",
       fileName: "panDoc",
       fileId: "panFileInput",
-      req: true, // always mandatory
+      req: !isGovtUser, // optional for Govt users
       docType: "pan",
     },
     {
@@ -738,7 +744,7 @@ export default function RegisterPage() {
       req: false,
       docType: "tan",
     },
-  ], [isTransportUser]);
+  ], [isTransportUser, isGovtUser]);
 
   // Shared input class helper
   const inputCls = (field) =>
@@ -917,7 +923,7 @@ export default function RegisterPage() {
                           <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                               License Number{" "}
-                              <span className="text-red-500">*</span>
+                              {!isTransportUser && !isGovtUser && <span className="text-red-500">*</span>}
                             </label>
                             <input
                               name="licenseNumber"
@@ -931,7 +937,7 @@ export default function RegisterPage() {
                               onBlur={(e) =>
                                 validateField("licenseNumber", e.target.value)
                               }
-                              required
+                              required={!isTransportUser && !isGovtUser}
                             />
                             <FieldError field="licenseNumber" />
                           </div>
@@ -940,7 +946,7 @@ export default function RegisterPage() {
                           <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
                               License Validity Date{" "}
-                              <span className="text-red-500">*</span>
+                              {!isTransportUser && !isGovtUser && <span className="text-red-500">*</span>}
                             </label>
                             <input
                               name="licenseValidityDate"
@@ -953,7 +959,7 @@ export default function RegisterPage() {
                               onBlur={(e) =>
                                 validateField("licenseValidityDate", e.target.value)
                               }
-                              required
+                              required={!isTransportUser && !isGovtUser}
                             />
                             <FieldError field="licenseValidityDate" />
                             {fieldValues.licenseValidityDate && (() => {
@@ -994,7 +1000,7 @@ export default function RegisterPage() {
                           {/* Requisition Letter Upload */}
                           <div className="md:col-span-1 space-y-1.5 mt-2">
                             <label className="text-xs font-semibold text-orange-700 uppercase tracking-wider ml-1 bg-orange-100 px-3 py-1 rounded-full">
-                              Requisition Letter <span className="text-red-500">*</span>
+                              Requisition Letter {!isGovtUser && <span className="text-red-500">*</span>}
                             </label>
 
                             <div className="flex flex-col gap-2 w-full mt-3">
@@ -1053,8 +1059,8 @@ export default function RegisterPage() {
                                   name="requisitionLetter"
                                   type="file"
                                   accept="application/pdf"
-                                  className="hidden"
-                                  required={!isEditMode}
+                                  className="absolute opacity-0 w-px h-px pointer-events-none"
+                                  required={!isEditMode && !isGovtUser}
                                   onChange={(e) => {
                                     const file = e.target.files[0];
                                     handleFileChange(
@@ -1072,7 +1078,7 @@ export default function RegisterPage() {
                           {/* Work Order Upload */}
                           <div className="md:col-span-1 space-y-1.5 mt-2">
                             <label className="text-xs font-semibold text-orange-700 uppercase tracking-wider ml-1 bg-orange-100 px-3 py-1 rounded-full">
-                              Work Order <span className="text-red-500">*</span>
+                              Work Order {!isTransportUser && !isGovtUser && <span className="text-red-500">*</span>}
                             </label>
 
                             <div className="flex flex-col gap-2 w-full mt-3">
@@ -1131,8 +1137,8 @@ export default function RegisterPage() {
                                   name="workOrder"
                                   type="file"
                                   accept="application/pdf"
-                                  className="hidden"
-                                  required={!isEditMode}
+                                  className="absolute opacity-0 w-px h-px pointer-events-none"
+                                  required={!isEditMode && !isTransportUser && !isGovtUser}
                                   onChange={(e) => {
                                     const file = e.target.files[0];
                                     handleFileChange(
@@ -1144,6 +1150,84 @@ export default function RegisterPage() {
                                 />
                               </label>
                               <FileError fileKey="workOrderFileInput" />
+                            </div>
+                          </div>
+
+                          {/* License Copy Upload */}
+                          <div className="md:col-span-1 space-y-1.5 mt-2">
+                            <label className="text-xs font-semibold text-orange-700 uppercase tracking-wider ml-1 bg-orange-100 px-3 py-1 rounded-full">
+                              License Copy {!isTransportUser && !isGovtUser && <span className="text-red-500">*</span>}
+                            </label>
+
+                            <div className="flex flex-col gap-2 w-full mt-3">
+                              {/* Top Row: Status & View Action */}
+                              {isEditMode && existingData?.licenseDoc && (
+                                <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-lg w-full">
+                                  <div className="flex items-center gap-2 px-1">
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                    <span className="text-xs font-bold text-slate-600">
+                                      PREVIOUSLY UPLOADED
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      setIframeLoading(true);
+                                      setViewingDocUrl(
+                                        `${process.env.NEXT_PUBLIC_AGENT_API}/agents/viewAgentDocument?referenceNumber=${editRef}&documentType=licenseDoc`,
+                                      );
+                                    }}
+                                    className="flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-blue-800 bg-blue-100/50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors shadow-sm border border-blue-200/50"
+                                  >
+                                    <Eye className="h-4 w-4" /> View Document
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* File Input */}
+                              <label
+                                className={`cursor-pointer bg-white border hover:border-orange-500 hover:bg-orange-50 px-4 py-6 rounded-xl text-sm font-bold transition-all shadow-sm flex flex-col items-center justify-center gap-2 w-full text-center ${fileErrors["licenseDocFileInput"]
+                                  ? "border-red-400 bg-red-50"
+                                  : isEditMode && existingData?.licenseDoc
+                                    ? "border-orange-300 text-orange-700"
+                                    : "border-slate-300 text-slate-600 border-dashed border-2"
+                                  }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <UploadCloud className="h-6 w-6" />
+                                  {isEditMode && existingData?.licenseDoc
+                                    ? "Replace File"
+                                    : "Click to upload or drag and drop"}
+                                </div>
+                                <span className="text-[11px] font-normal text-slate-400">
+                                  PDF only · Max 1 MB
+                                </span>
+
+                                {licenseDocFileName && (
+                                  <span className="text-emerald-600 text-xs truncate max-w-sm mt-1 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
+                                    {licenseDocFileName}
+                                  </span>
+                                )}
+
+                                <input
+                                  id="licenseDocFileInput"
+                                  name="licenseDoc"
+                                  type="file"
+                                  accept="application/pdf"
+                                  className="absolute opacity-0 w-px h-px pointer-events-none"
+                                  required={!isEditMode && !isTransportUser && !isGovtUser}
+                                  onChange={(e) => {
+                                    const file = e.target.files[0];
+                                    handleFileChange(
+                                      "licenseDocFileInput",
+                                      file,
+                                      (name) => setLicenseDocFileName(name),
+                                    );
+                                  }}
+                                />
+                              </label>
+                              <FileError fileKey="licenseDocFileInput" />
                             </div>
                           </div>
                         </div>
@@ -1423,7 +1507,7 @@ export default function RegisterPage() {
                                         name={idType.fileName}
                                         type="file"
                                         accept="application/pdf"
-                                        className="hidden"
+                                        className="absolute opacity-0 w-px h-px pointer-events-none"
                                         onChange={(e) => {
                                           const file = e.target.files[0];
                                           handleFileChange(
@@ -1605,13 +1689,15 @@ export default function RegisterPage() {
                             >
                               <span className="font-bold text-slate-900">
                                 I Read and Accept Terms & Conditions.
-                              </span>{" "}
-                              I/We hereby certify that the above permits are
-                              required only for our official purpose. We hold
-                              responsibility for all activities of the mentioned
-                              persons/vehicles inside the port. I/We declare that
-                              Chennai Port Authority will not be held responsible
-                              for any untoward incidents.
+                              </span>
+                              <span className="block mt-1">
+                                I/We hereby certify that the above permits are
+                                required only for our official purpose. We hold
+                                responsibility for all activities of the mentioned
+                                persons/vehicles inside the port. I/We declare that
+                                Chennai Port Authority will not be held responsible
+                                for any untoward incidents.
+                              </span>
                             </label>
                           </div>
                         </div>

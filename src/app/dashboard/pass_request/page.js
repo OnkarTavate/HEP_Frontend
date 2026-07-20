@@ -2598,7 +2598,7 @@ export default function PassRequestPage() {
         <div>
           <h2 className="text-3xl font-bold text-[#0a1e4d] dark:text-white">Pass Request</h2>
           <p className="text-base text-slate-500 dark:text-stone-300 font-medium">
-            Apply for new harbor entry permits
+            Apply for new harbour entry permits
           </p>
         </div>
         {/* <div className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-3 shadow-sm text-[#0a1e4d]">

@@ -764,30 +764,39 @@ export default function AdminCompanyApprovalsPage() {
                   Verification Documents
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                  {[
+                   {[
                     {
                       label: "Requisition Letter",
                       type: "requisitionLetter",
-                      always: true,
+                      show: !!selectedRequest.requisitionLetter && selectedRequest.requisitionLetter.trim() !== "",
                     },
-                    { label: "Work Order", type: "workOrder", always: true },
+                    {
+                      label: "Work Order",
+                      type: "workOrder",
+                      show: !!selectedRequest.workOrder && selectedRequest.workOrder.trim() !== "",
+                    },
+                    {
+                      label: "License Copy",
+                      type: "licenseDoc",
+                      show: !!selectedRequest.licenseDoc && selectedRequest.licenseDoc.trim() !== "",
+                    },
                     {
                       label: "GSTIN Document",
                       type: "gst",
-                      show: !!selectedRequest.gstinNumber,
+                      show: !!selectedRequest.gstinDoc && selectedRequest.gstinDoc.trim() !== "",
                     },
                     {
                       label: "PAN Document",
                       type: "pan",
-                      show: !!selectedRequest.panNumber,
+                      show: !!selectedRequest.panDoc && selectedRequest.panDoc.trim() !== "",
                     },
                     {
                       label: "TAN Document",
                       type: "tan",
-                      show: !!selectedRequest.tanNumber,
+                      show: !!selectedRequest.tanDoc && selectedRequest.tanDoc.trim() !== "",
                     },
                   ]
-                    .filter((d) => d.always || d.show)
+                    .filter((d) => d.show)
                     .map(({ label, type }) => (
                       <button
                         key={type}
