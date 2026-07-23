@@ -28,7 +28,6 @@ import {
   Download,
   Globe,
   ArrowRight,
-  ClipboardCheck,
 } from "lucide-react";
 
 // Inline IndianRupee SVG icon component to match Lucide style
@@ -52,14 +51,14 @@ const IndianRupee = ({ className, ...props }) => (
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:3002/api";
 
-/* ─────────── Reason Code Config ─────────── */
-const REASON_CODES = [
-  { code: "001", label: "001 - Unauthorized parking", penalty: 0 },
-  { code: "002", label: "002 - Tampering of documents", penalty: 10000 },
-  { code: "003", label: "003 - Misbehaviour with port officials", penalty: 0 },
-  { code: "004", label: "004 - Criminal offense inside port", penalty: 0 },
-  { code: "005", label: "005 - Unauthorized entry without passes caught", penalty: 0 },
-  { code: "006", label: "006 - Traffic Violation", penalty: 5000 },
+/* ─────────── Reason Code Config (fallback — overridden by API) ─────────── */
+const REASON_CODES_DEFAULT = [
+  { code: "001", label: "001 - Unauthorized parking", penalty: 500 },
+  { code: "002", label: "002 - Tampering of documents", penalty: 1000 },
+  { code: "003", label: "003 - Misbehaviour with port officials", penalty: 750 },
+  { code: "004", label: "004 - Criminal offense inside port", penalty: 2000 },
+  { code: "005", label: "005 - Unauthorized entry without passes caught", penalty: 1025 },
+  { code: "006", label: "006 - Traffic Violation", penalty: 500 },
   { code: "007", label: "007 - Others", penalty: 0 },
 ];
 
@@ -136,6 +135,9 @@ export default function TrafficBlacklistPage() {
   const [searchInput, setSearchInput] = useState("");
   const [entityFilter, setEntityFilter] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
+
+  // Dynamic penalty config from backend
+  const [penaltyConfig, setPenaltyConfig] = useState(REASON_CODES_DEFAULT);
 
   // Blacklist Modal & Form
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -232,6 +234,31 @@ export default function TrafficBlacklistPage() {
     fetchEntries();
     fetchStats();
   }, [fetchEntries, fetchStats]);
+
+  /* ── Fetch dynamic penalty config from backend ── */
+  const fetchPenaltyConfig = useCallback(async () => {
+    try {
+      const res = await axios.get(`${ADMIN_API}/blacklist/penalty-config`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.data.success && res.data.data?.length > 0) {
+        const mapped = res.data.data.map((cfg) => ({
+          code: cfg.reason_code,
+          label: `${cfg.reason_code} - ${cfg.reason_label}`,
+          penalty: parseFloat(cfg.default_amount) || 0,
+          isMandatory: cfg.is_mandatory,
+          minAmount: parseFloat(cfg.min_amount) || 0,
+        }));
+        setPenaltyConfig(mapped);
+      }
+    } catch (err) {
+      console.warn("Could not load penalty config from server, using defaults:", err.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPenaltyConfig();
+  }, [fetchPenaltyConfig]);
 
   /* ── High-Accuracy GPS Geotagging ── */
   const captureGeotag = () => {
@@ -357,9 +384,9 @@ export default function TrafficBlacklistPage() {
     }, 20000);
   };
 
-  /* ── Auto-calculate penalty based on Reason Code & Entity Type ── */
+  /* ── Auto-calculate penalty based on Reason Code & Entity Type (dynamic config) ── */
   const getInitialPenaltyForEntity = (entityType, reasonCode) => {
-    const selected = REASON_CODES.find((r) => r.code === reasonCode);
+    const selected = penaltyConfig.find((r) => r.code === reasonCode);
     const codePenalty = selected ? selected.penalty : 0;
     if (entityType === "VEHICLE") {
       return Math.max(codePenalty, 1025);
@@ -1055,7 +1082,7 @@ export default function TrafficBlacklistPage() {
                   onChange={(e) => handleReasonCodeChange(e.target.value)}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:border-red-400 appearance-none cursor-pointer"
                 >
-                  {REASON_CODES.map((rc) => (
+                  {penaltyConfig.map((rc) => (
                     <option key={rc.code} value={rc.code}>{rc.label}</option>
                   ))}
                 </select>
@@ -1593,39 +1620,6 @@ export default function TrafficBlacklistPage() {
                   </div>
                 )}
 
-                {/* Reinstatement Action Panel for Senior Official */}
-                {detailEntry.status === "BLACKLISTED" && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-4">
-                    <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
-                      <ClipboardCheck className="h-5 w-5 text-emerald-600" />
-                      Senior Official Reinstatement Workflow
-                    </div>
-                    <p className="text-xs text-emerald-700 leading-normal">
-                      Provide a justification/remarks to reinstate access and lift the port blacklist block.
-                    </p>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                        Justification / Authorization Remarks <span className="text-red-500">*</span>
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={reinstatementJustification}
-                        onChange={(e) => setReinstatementJustification(e.target.value)}
-                        placeholder="State justification for unblocking this entity..."
-                        className="w-full px-3 py-2.5 bg-white border border-emerald-200 rounded-xl text-sm focus:outline-none focus:border-emerald-400 resize-none font-medium text-slate-800"
-                        required
-                      />
-                    </div>
-                    <button
-                      onClick={handleReinstate}
-                      disabled={actionLoading}
-                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold tracking-wider uppercase rounded-xl transition shadow active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-1.5"
-                    >
-                      {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                      Approve Reinstatement & Release Access
-                    </button>
-                  </div>
-                )}
               </div>
             ) : null}
           </div>

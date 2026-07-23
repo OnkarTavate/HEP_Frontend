@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
 
@@ -333,8 +334,8 @@ export default function AdminLayout({ children }) {
       {/* Logo Section */}
       <div className="p-6 border-b border-orange-100">
         <Link href={consoleHref} className="flex items-center gap-3 group">
-          <div className="relative flex items-center justify-center w-11 h-11 rounded-xl gradient-orange shadow-lg shadow-orange-600/20">
-            <Ship className="h-6 w-6 text-white" />
+          <div className="relative flex items-center justify-center w-11 h-11 rounded-xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20">
+            <Image src="/logo1.png" alt="Chennai Port Logo" width={44} height={44} className="w-full h-full object-contain" />
           </div>
           <div>
             <h1 className="font-bold text-slate-800 text-lg leading-tight">

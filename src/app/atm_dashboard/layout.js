@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,8 @@ import {
   RefreshCw,
   Mail,
   Phone,
+  BarChart2,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -61,6 +64,27 @@ const navigationItems = [
     href: "/atm_dashboard/unblacklist",
     icon: ShieldCheck,
     description: "Review and approve unblacklist requests",
+  },
+  {
+    name: "Overstay Charges",
+    short: "Overstay",
+    href: "/atm_dashboard/overstay",
+    icon: ShieldBan,
+    description: "Detect expired pass holders & levy overstay fines",
+  },
+  {
+    name: "Blacklist Reports",
+    short: "Reports",
+    href: "/atm_dashboard/reports",
+    icon: BarChart2,
+    description: "View and export historical blacklist records",
+  },
+  {
+    name: "Penalty Config",
+    short: "Config",
+    href: "/atm_dashboard/penalty_config",
+    icon: Settings,
+    description: "Configure default penalty amounts per reason code",
   },
 ];
 
@@ -367,8 +391,8 @@ export default function ATMDashboardLayout({ children }) {
               className="flex items-center gap-3 group min-w-0"
               onClick={onNavigate}
             >
-              <span className="flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br from-red-500 to-red-700 shadow-lg shadow-red-900/40 shrink-0 ring-1 ring-white/10 group-hover:scale-105 transition-transform duration-200">
-                <ShieldBan className="h-6 w-6 text-white" />
+              <span className="flex items-center justify-center w-11 h-11 rounded-xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 ring-1 ring-white/10 group-hover:scale-105 transition-transform duration-200">
+                <Image src="/logo1.png" alt="Chennai Port Logo" width={44} height={44} className="w-full h-full object-contain" />
               </span>
               <span
                 className={cn(

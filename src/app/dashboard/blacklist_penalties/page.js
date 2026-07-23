@@ -44,12 +44,14 @@ const REASON_MAP = {
 
 export default function BlacklistPenaltiesPage() {
   const [entries, setEntries] = useState([]);
+  const [overstayCharges, setOverstayCharges] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("active"); // 'active' or 'history'
+  const [activeTab, setActiveTab] = useState("active"); // 'active' | 'history' | 'overstay'
   
   // Payment Modal States
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState(null);
+  const [isOverstayTarget, setIsOverstayTarget] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("wallet"); // 'wallet' or 'gateway'
   const [paymentProcessing, setPaymentProcessing] = useState(false);
 
@@ -60,7 +62,7 @@ export default function BlacklistPenaltiesPage() {
   const [cardCvv, setCardCvv] = useState("");
   const [paymentRemarks, setPaymentRemarks] = useState("");
 
-  // Unblock Request Modal States
+  // Unblock / Exception Request Modal States
   const [unblockModalOpen, setUnblockModalOpen] = useState(false);
   const [unblockRemarks, setUnblockRemarks] = useState("");
   const [unblockSubmitting, setUnblockSubmitting] = useState(false);
@@ -75,14 +77,18 @@ export default function BlacklistPenaltiesPage() {
   const fetchEntries = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${ADMIN_API}/blacklist/my-blacklist`, {
-        headers: getAuthHeaders(),
-      });
-      if (res.data && res.data.success) {
-        setEntries(res.data.data || []);
+      const [blRes, ovRes] = await Promise.allSettled([
+        axios.get(`${ADMIN_API}/blacklist/my-blacklist`, { headers: getAuthHeaders() }),
+        axios.get(`${ADMIN_API}/overstay/my-charges`, { headers: getAuthHeaders() }),
+      ]);
+      if (blRes.status === "fulfilled" && blRes.value.data?.success) {
+        setEntries(blRes.value.data.data || []);
+      }
+      if (ovRes.status === "fulfilled" && ovRes.value.data?.success) {
+        setOverstayCharges(ovRes.value.data.data || []);
       }
     } catch (err) {
-      console.error("Failed to fetch blacklist entries:", err);
+      console.error("Failed to fetch records:", err);
       toast.error("Failed to load your blacklist & penalty records.");
     } finally {
       setLoading(false);
@@ -93,8 +99,9 @@ export default function BlacklistPenaltiesPage() {
     fetchEntries();
   }, []);
 
-  const openPaymentModal = (entry) => {
+  const openPaymentModal = (entry, isOverstay = false) => {
     setSelectedEntry(entry);
+    setIsOverstayTarget(isOverstay);
     setPaymentMethod("wallet");
     setCardName("");
     setCardNumber("");
@@ -103,65 +110,47 @@ export default function BlacklistPenaltiesPage() {
     setPaymentRemarks("");
     setPaymentModalOpen(true);
   };
-
   const handleProcessPayment = async () => {
     if (!selectedEntry) return;
 
-    // Validate card details when gateway is selected
     if (paymentMethod === "gateway") {
-      if (!cardName.trim()) {
-        toast.warning("Please enter the cardholder name.");
-        return;
-      }
-      if (cardNumber.replace(/\s/g, "").length < 16) {
-        toast.warning("Please enter a valid 16-digit card number.");
-        return;
-      }
-      if (!cardExpiry.trim() || cardExpiry.length < 5) {
-        toast.warning("Please enter a valid card expiry in MM/YY format.");
-        return;
-      }
-      if (!cardCvv.trim() || cardCvv.length < 3) {
-        toast.warning("Please enter a valid 3-digit CVV.");
-        return;
-      }
+      if (!cardName.trim()) { toast.warning("Please enter the cardholder name."); return; }
+      if (cardNumber.replace(/\s/g, "").length < 16) { toast.warning("Please enter a valid 16-digit card number."); return; }
+      if (!cardExpiry.trim() || cardExpiry.length < 5) { toast.warning("Please enter a valid card expiry in MM/YY format."); return; }
+      if (!cardCvv.trim() || cardCvv.length < 3) { toast.warning("Please enter a valid 3-digit CVV."); return; }
     }
 
     setPaymentProcessing(true);
     try {
       const txnId = `TXN-${paymentMethod === "gateway" ? "GW" : "WL"}-${Date.now()}`;
-      const remarks =
-        paymentRemarks.trim() ||
-        `Paid via ${paymentMethod === "wallet" ? "Agent Wallet" : "Payment Gateway"}`;
+      const remarks = paymentRemarks.trim() || `Paid via ${paymentMethod === "wallet" ? "Agent Wallet" : "Payment Gateway"}`;
+      
+      const endpoint = isOverstayTarget 
+        ? `${ADMIN_API}/overstay/${selectedEntry.id}/pay`
+        : `${ADMIN_API}/blacklist/${selectedEntry.id}/pay-penalty`;
+
       const res = await axios.patch(
-      `${ADMIN_API}/blacklist/${selectedEntry.id}/pay-penalty`,
-        {
-          remarks,
-          payment_method: paymentMethod.toUpperCase(),
-          transaction_id: txnId,
-        },
+        endpoint,
+        { remarks, payment_method: paymentMethod.toUpperCase(), transaction_id: txnId },
         { headers: getAuthHeaders() }
       );
 
       if (res.data.success) {
-        toast.success("Penalty paid successfully!");
+        toast.success("Payment completed successfully!");
         setPaymentModalOpen(false);
-        setCardName("");
-        setCardNumber("");
-        setCardExpiry("");
-        setCardCvv("");
-        setPaymentRemarks("");
+        setCardName(""); setCardNumber(""); setCardExpiry(""); setCardCvv(""); setPaymentRemarks("");
         fetchEntries();
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to process penalty payment.");
+      toast.error(err.response?.data?.message || "Failed to process payment.");
     } finally {
       setPaymentProcessing(false);
     }
   };
 
-  const openUnblockModal = (entry) => {
+  const openUnblockModal = (entry, isOverstay = false) => {
     setSelectedEntry(entry);
+    setIsOverstayTarget(isOverstay);
     setUnblockRemarks("");
     setUnblockModalOpen(true);
   };
@@ -169,24 +158,28 @@ export default function BlacklistPenaltiesPage() {
   const handleRequestUnblock = async () => {
     if (!selectedEntry) return;
     if (!unblockRemarks.trim()) {
-      toast.warning("Please provide remarks / justification for unblocking");
+      toast.warning("Please provide remarks / justification");
       return;
     }
     setUnblockSubmitting(true);
     try {
-      const res = await axios.patch(
-        `${ADMIN_API}/blacklist/${selectedEntry.id}/request-unblacklist`,
-        { remarks: unblockRemarks.trim() },
-        { headers: getAuthHeaders() }
-      );
+      const endpoint = isOverstayTarget
+        ? `${ADMIN_API}/overstay/${selectedEntry.id}/request-exception`
+        : `${ADMIN_API}/blacklist/${selectedEntry.id}/request-unblacklist`;
+
+      const payload = isOverstayTarget
+        ? { exception_reason: unblockRemarks.trim() }
+        : { remarks: unblockRemarks.trim() };
+
+      const res = await axios.patch(endpoint, payload, { headers: getAuthHeaders() });
 
       if (res.data.success) {
-        toast.success("Unblock request submitted to ATM Pass Section.");
+        toast.success(isOverstayTarget ? "Exception request submitted to Traffic Manager." : "Unblock request submitted to ATM Pass Section.");
         setUnblockModalOpen(false);
         fetchEntries();
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to request unblock.");
+      toast.error(err.response?.data?.message || "Failed to submit request.");
     } finally {
       setUnblockSubmitting(false);
     }
@@ -287,6 +280,20 @@ export default function BlacklistPenaltiesPage() {
           Active Violations & Penalties ({activeViolations.length})
         </button>
         <button
+          onClick={() => setActiveTab("overstay")}
+          className={`px-8 py-4 text-sm transition-all flex items-center gap-2 ${
+            activeTab === "overstay"
+              ? "font-bold text-[#0a1e4d] border-b-2 border-[#0a1e4d]"
+              : "font-semibold text-slate-500 hover:text-[#0a1e4d]"
+          }`}
+        >
+          <Clock className="h-4 w-4 text-red-500" />
+          Overstay Charges ({overstayCharges.length})
+          {overstayCharges.some(c => c.status === 'PENDING') && (
+            <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+          )}
+        </button>
+        <button
           onClick={() => setActiveTab("history")}
           className={`px-8 py-4 text-sm transition-all flex items-center gap-2 ${
             activeTab === "history"
@@ -304,8 +311,144 @@ export default function BlacklistPenaltiesPage() {
         {loading ? (
           <div className="p-16 text-center italic text-slate-500 flex flex-col items-center justify-center gap-2">
             <RefreshCw className="h-8 w-8 text-slate-400 animate-spin" />
-            Loading blacklist records...
+            Loading records...
           </div>
+        ) : activeTab === "overstay" ? (
+          overstayCharges.length === 0 ? (
+            <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
+              <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+              <div>
+                <p className="font-bold text-slate-600">No Overstay Charges</p>
+                <p className="text-xs text-slate-400 mt-1">Your company has zero active or pending overstay penalties.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-0">
+              {/* Summary strip */}
+              <div className="px-6 py-3 bg-slate-50/80 border-b border-slate-200 flex flex-wrap gap-4 items-center text-xs">
+                <span className="font-bold text-slate-500">
+                  Total: <span className="text-[#0a1e4d]">{overstayCharges.length}</span>
+                </span>
+                <span className="font-bold text-red-500">
+                  Pending: {overstayCharges.filter(c => c.status === "PENDING").length}
+                </span>
+                <span className="font-bold text-emerald-500">
+                  Paid: {overstayCharges.filter(c => c.status === "PAID").length}
+                </span>
+                <span className="font-bold text-amber-500">
+                  Exception Requested: {overstayCharges.filter(c => c.status === "EXCEPTION_REQUESTED").length}
+                </span>
+                <span className="ml-auto font-black text-slate-700">
+                  Total Pending: ₹{overstayCharges.filter(c => c.status === "PENDING" || c.status === "EXCEPTION_REJECTED").reduce((s, c) => s + parseFloat(c.total_amount || 0), 0).toLocaleString("en-IN")}
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-[#0a1e4d] text-white text-[11px] font-semibold uppercase tracking-wider">
+                    <tr>
+                      <th className="px-5 py-3.5">Ref #</th>
+                      <th className="px-5 py-3.5">Entity & Identifier</th>
+                      <th className="px-5 py-3.5">Pass No</th>
+                      <th className="px-5 py-3.5">
+                        <span className="flex items-center gap-1"><ArrowRight className="h-3 w-3" /> Entry Date</span>
+                      </th>
+                      <th className="px-5 py-3.5">
+                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Expiry Date</span>
+                      </th>
+                      <th className="px-5 py-3.5">Overstay / Rate</th>
+                      <th className="px-5 py-3.5">Total Penalty</th>
+                      <th className="px-5 py-3.5">Status</th>
+                      <th className="px-5 py-3.5 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-sm">
+                    {overstayCharges.map((charge) => {
+                      const fmtD = (d) => {
+                        if (!d) return "—";
+                        return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+                      };
+                      const daysNum = parseInt(charge.overstay_days || 0, 10);
+                      const severityClass = daysNum >= 30 ? "bg-rose-100 text-rose-800 border-rose-300"
+                        : daysNum >= 14 ? "bg-red-50 text-red-700 border-red-200"
+                        : daysNum >= 7 ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : "bg-yellow-50 text-yellow-700 border-yellow-200";
+                      return (
+                        <tr key={charge.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-5 py-4 font-mono font-bold text-slate-500 text-xs">#{charge.id}</td>
+                          <td className="px-5 py-4">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                              {charge.entity_type}
+                            </span>
+                            <p className="font-bold text-[#0a1e4d] uppercase text-xs">{charge.identifier}</p>
+                            {charge.entity_name && charge.entity_name !== charge.identifier && (
+                              <p className="text-[10px] text-slate-500 mt-0.5">{charge.entity_name}</p>
+                            )}
+                          </td>
+                          <td className="px-5 py-4 font-mono text-xs font-semibold text-slate-600">{charge.pass_no || "—"}</td>
+                          <td className="px-5 py-4 text-xs font-medium text-emerald-700">
+                            {fmtD(charge.date_from)}
+                          </td>
+                          <td className="px-5 py-4 text-xs font-medium text-red-600">
+                            {fmtD(charge.date_to)}
+                          </td>
+                          <td className="px-5 py-4 text-xs font-medium">
+                            <span className={`font-extrabold px-2 py-0.5 rounded-md border text-[10px] ${severityClass}`}>
+                              {charge.overstay_days} day{daysNum !== 1 ? "s" : ""}
+                            </span>
+                            <p className="text-slate-400 mt-0.5">₹{charge.daily_rate}/day</p>
+                          </td>
+                          <td className="px-5 py-4 font-black text-slate-900 text-sm">
+                            ₹{parseFloat(charge.total_amount).toLocaleString("en-IN")}
+                          </td>
+                          <td className="px-5 py-4">
+                            <span
+                              className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
+                                charge.status === "PAID"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : charge.status === "EXCEPTION_REQUESTED"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200 animate-pulse"
+                                  : charge.status === "EXCEPTION_APPROVED" || charge.status === "WAIVED"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : charge.status === "EXCEPTION_REJECTED"
+                                  ? "bg-rose-50 text-rose-700 border-rose-200"
+                                  : "bg-red-50 text-red-700 border-red-200"
+                              }`}
+                            >
+                              {charge.status.replace(/_/g, " ")}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-center">
+                            {charge.status === "PENDING" || charge.status === "EXCEPTION_REJECTED" ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => openPaymentModal(charge, true)}
+                                  className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1"
+                                >
+                                  <CreditCard className="h-3.5 w-3.5" />
+                                  Pay Fine
+                                </button>
+                                {charge.status === "PENDING" && (
+                                  <button
+                                    onClick={() => openUnblockModal(charge, true)}
+                                    className="px-3.5 py-2 border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 text-[#0a1e4d] rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                                  >
+                                    Request Exception
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400 font-semibold italic">No Action Needed</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
         ) : visibleEntries.length === 0 ? (
           <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
             <CheckCircle2 className="h-12 w-12 text-slate-300" />

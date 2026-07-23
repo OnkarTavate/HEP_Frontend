@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -458,8 +459,8 @@ export default function DashboardLayout({ children }) {
         <div className="flex flex-col gap-2 px-4">
           <div className={cn("flex items-center", expanded ? "justify-between" : "justify-center")}>
             <Link href="/dashboard" className="flex items-center gap-3 group min-w-0" onClick={onNavigate}>
-              <span className="flex items-center justify-center w-12 h-12 rounded-2xl bg-[#1f1f1f] dark:bg-amber-400 text-amber-300 dark:text-[#1f1f1f] shadow-lg shrink-0 group-hover:scale-105 transition-transform duration-200">
-                <Ship className="h-6 w-6" />
+              <span className="flex items-center justify-center w-12 h-12 rounded-2xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
+                <Image src="/logo1.png" alt="Chennai Port Logo" width={48} height={48} className="w-full h-full object-contain" />
               </span>
               <span className={cn(
                 "flex flex-col leading-tight overflow-hidden transition-[opacity,max-width] duration-300 ease-in-out",

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
 import { Button } from "@/components/ui/button";
@@ -302,7 +303,7 @@ export default function TrafficLayout({ children }) {
     { name: "Pass Approvals", href: "/traffic_approval", icon: FileText },
     { name: "Company Approvals", href: "/traffic_approval/companies", icon: Building2 },
     { name: "Blacklist Management", href: "/traffic_approval/blacklist", icon: ShieldBan },
-    // { name: "Unblacklist Approvals", href: "/traffic_approval/unblacklist", icon: ShieldCheck },
+    { name: "Overstay Exceptions", href: "/traffic_approval/overstay", icon: ShieldCheck },
     { name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users },
   ];
 
@@ -313,8 +314,8 @@ export default function TrafficLayout({ children }) {
         <div className="flex flex-col gap-2 px-4">
           <div className={cn("flex items-center", expanded ? "justify-between" : "justify-center")}>
             <Link href="/traffic_approval" className="flex items-center gap-3 group min-w-0" onClick={onNavigate}>
-              <span className="flex items-center justify-center w-11 h-11 rounded-xl bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
-                <Ship className="h-6 w-6 text-white" />
+              <span className="flex items-center justify-center w-11 h-11 rounded-xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
+                <Image src="/logo1.png" alt="Chennai Port Logo" width={44} height={44} className="w-full h-full object-contain" />
               </span>
               <span className={cn(
                 "flex flex-col leading-tight overflow-hidden transition-[opacity,max-width] duration-300 ease-in-out",

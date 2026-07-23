@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -60,14 +60,14 @@ const IndianRupee = ({ className, ...props }) => (
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
 
-/* ─────────── Reason Code Config ─────────── */
-const REASON_CODES = [
-  { code: "001", label: "001 - Unauthorized parking", penalty: 0 },
-  { code: "002", label: "002 - Tampering of documents", penalty: 10000 },
-  { code: "003", label: "003 - Misbehaviour with port officials", penalty: 0 },
-  { code: "004", label: "004 - Criminal offense inside port", penalty: 0 },
-  { code: "005", label: "005 - Unauthorized entry without passes caught", penalty: 0 },
-  { code: "006", label: "006 - Traffic Violation", penalty: 5000 },
+/* ─────────── Reason Code Config (fallback — overridden by API) ─────────── */
+const REASON_CODES_DEFAULT = [
+  { code: "001", label: "001 - Unauthorized parking", penalty: 500 },
+  { code: "002", label: "002 - Tampering of documents", penalty: 1000 },
+  { code: "003", label: "003 - Misbehaviour with port officials", penalty: 750 },
+  { code: "004", label: "004 - Criminal offense inside port", penalty: 2000 },
+  { code: "005", label: "005 - Unauthorized entry without passes caught", penalty: 1025 },
+  { code: "006", label: "006 - Traffic Violation", penalty: 500 },
   { code: "007", label: "007 - Others", penalty: 0 },
 ];
 
@@ -144,6 +144,9 @@ export default function ATMBlacklistPage() {
   const [activeTab, setActiveTab] = useState("active");
   const [searchInput, setSearchInput] = useState("");
   const [entityFilter, setEntityFilter] = useState("");
+
+  // Dynamic penalty config fetched from backend
+  const [penaltyConfig, setPenaltyConfig] = useState(REASON_CODES_DEFAULT);
 
   // ── Drag & Drop Stat Card Order ──
   const [cardOrder, setCardOrder] = useState(["active", "pending", "penalties", "unblacklisted"]);
@@ -304,8 +307,177 @@ export default function ATMBlacklistPage() {
     fetchStats();
   }, [fetchEntries, fetchStats]);
 
+  /* ── Fetch dynamic penalty config from backend ── */
+  const fetchPenaltyConfig = useCallback(async () => {
+    try {
+      const res = await axios.get(`${ADMIN_API}/blacklist/penalty-config`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.data.success && res.data.data?.length > 0) {
+        const mapped = res.data.data.map((cfg) => ({
+          code: cfg.reason_code,
+          label: `${cfg.reason_code} - ${cfg.reason_label}`,
+          penalty: parseFloat(cfg.default_amount) || 0,
+          isMandatory: cfg.is_mandatory,
+          minAmount: parseFloat(cfg.min_amount) || 0,
+        }));
+        setPenaltyConfig(mapped);
+      }
+    } catch (err) {
+      // Silently fall back to defaults — penalty-config table may not be ready yet
+      console.warn("Could not load penalty config from server, using defaults:", err.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPenaltyConfig();
+  }, [fetchPenaltyConfig]);
+
   /* ── High-Accuracy GPS Geotagging ── */
   const [gpsLoading, setGpsLoading] = useState(false);
+
+  /* ── Interactive Inline Map Picker (Leaflet + OpenStreetMap via CDN — no npm install) ── */
+  const [geotagEnabled, setGeotagEnabled] = useState(false);
+  const [mapLoading, setMapLoading] = useState(false);
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markerRef = useRef(null);
+
+  const loadLeaflet = useCallback(() => {
+    return new Promise((resolve, reject) => {
+      if (typeof window === "undefined") return reject(new Error("Not in browser"));
+      if (window.L) return resolve();
+      if (!document.getElementById("leaflet-css")) {
+        const link = document.createElement("link");
+        link.id = "leaflet-css";
+        link.rel = "stylesheet";
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        document.head.appendChild(link);
+      }
+      const existing = document.getElementById("leaflet-js");
+      if (existing) {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", reject, { once: true });
+        return;
+      }
+      const script = document.createElement("script");
+      script.id = "leaflet-js";
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = reject;
+      document.body.appendChild(script);
+    });
+  }, []);
+
+  const destroyMap = useCallback(() => {
+    if (mapInstanceRef.current) {
+      try { mapInstanceRef.current.remove(); } catch (_) {}
+      mapInstanceRef.current = null;
+      markerRef.current = null;
+    }
+  }, []);
+
+  const initInlineMap = useCallback(async () => {
+    setMapLoading(true);
+    try {
+      await loadLeaflet();
+    } catch (_) {
+      toast.error("Failed to load map. Check your internet connection.");
+      setMapLoading(false);
+      return;
+    }
+    // Wait for the DOM node to actually exist in the form
+    const tryInit = (attempts = 0) => {
+      if (!window.L) { setMapLoading(false); return; }
+      if (!mapContainerRef.current) {
+        if (attempts < 10) return setTimeout(() => tryInit(attempts + 1), 60);
+        setMapLoading(false);
+        return;
+      }
+      if (mapInstanceRef.current) { setMapLoading(false); return; }
+
+      const initialLat = parseFloat(createForm.geotag_latitude) || 13.0827360;
+      const initialLon = parseFloat(createForm.geotag_longitude) || 80.2707040;
+
+      const map = window.L.map(mapContainerRef.current, { zoomControl: true }).setView(
+        [initialLat, initialLon],
+        16
+      );
+      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19,
+      }).addTo(map);
+
+      const defaultIcon = window.L.icon({
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41],
+      });
+
+      const marker = window.L.marker([initialLat, initialLon], { draggable: true, icon: defaultIcon }).addTo(map);
+      mapInstanceRef.current = map;
+      markerRef.current = marker;
+
+      const applyLatLng = (lat, lon) => {
+        const latStr = Number(lat).toFixed(7);
+        const lonStr = Number(lon).toFixed(7);
+        setCreateForm((prev) => ({
+          ...prev,
+          geotag_latitude: latStr,
+          geotag_longitude: lonStr,
+          geotag_accuracy: "0",
+        }));
+        setGeotagStatus(`📍 Picked on map · Lat ${latStr}, Lon ${lonStr}`);
+      };
+
+      map.on("click", (e) => {
+        marker.setLatLng(e.latlng);
+        applyLatLng(e.latlng.lat, e.latlng.lng);
+      });
+      marker.on("dragend", () => {
+        const ll = marker.getLatLng();
+        applyLatLng(ll.lat, ll.lng);
+      });
+
+      setTimeout(() => map.invalidateSize(), 200);
+      setMapLoading(false);
+    };
+    tryInit();
+  }, [createForm.geotag_latitude, createForm.geotag_longitude, loadLeaflet]);
+
+  // Init / teardown map when the toggle flips (or modal closes)
+  useEffect(() => {
+    if (geotagEnabled && isCreateOpen) {
+      initInlineMap();
+    } else {
+      destroyMap();
+    }
+    return () => destroyMap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geotagEnabled, isCreateOpen]);
+
+  // Keep marker synced when GPS button updates coords externally
+  useEffect(() => {
+    if (
+      geotagEnabled &&
+      mapInstanceRef.current &&
+      markerRef.current &&
+      createForm.geotag_latitude &&
+      createForm.geotag_longitude
+    ) {
+      const lat = parseFloat(createForm.geotag_latitude);
+      const lon = parseFloat(createForm.geotag_longitude);
+      if (!isNaN(lat) && !isNaN(lon)) {
+        markerRef.current.setLatLng([lat, lon]);
+        mapInstanceRef.current.setView([lat, lon], mapInstanceRef.current.getZoom());
+      }
+    }
+  }, [createForm.geotag_latitude, createForm.geotag_longitude, geotagEnabled]);
 
   const captureGeotag = () => {
     if (!navigator.geolocation) {
@@ -445,9 +617,9 @@ export default function ATMBlacklistPage() {
     }, 20000);
   };
 
-  /* ── Auto-calculate penalty based on Reason Code & Entity Type ── */
+  /* ── Auto-calculate penalty based on Reason Code & Entity Type (using dynamic config) ── */
   const getInitialPenaltyForEntity = (entityType, reasonCode) => {
-    const selected = REASON_CODES.find((r) => r.code === reasonCode);
+    const selected = penaltyConfig.find((r) => r.code === reasonCode);
     const codePenalty = selected ? selected.penalty : 0;
     if (entityType === "VEHICLE") {
       return Math.max(codePenalty, 1025);
@@ -520,10 +692,6 @@ export default function ATMBlacklistPage() {
       return;
     }
     if (createForm.reason_code === "001") {
-      if (!createForm.geotag_latitude || !createForm.geotag_longitude) {
-        toast.warning("Geotagged GPS coordinates are required for Unauthorized Parking (Reason Code 001). Please click 'Get GPS Tag' first.");
-        return;
-      }
       if (!supportingFile) {
         toast.warning("A supporting photograph is required as proof for Unauthorized Parking (Reason Code 001). Please select a file.");
         return;
@@ -1248,7 +1416,7 @@ export default function ATMBlacklistPage() {
                   onChange={(e) => handleReasonCodeChange(e.target.value)}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:border-red-400 appearance-none cursor-pointer"
                 >
-                  {REASON_CODES.map((rc) => (
+                  {penaltyConfig.map((rc) => (
                     <option key={rc.code} value={rc.code}>{rc.label}</option>
                   ))}
                 </select>
@@ -1389,30 +1557,79 @@ export default function ATMBlacklistPage() {
                 />
               </div>
 
-              {/* Geotagging GPS Widget — High Accuracy */}
+              {/* Geotagging GPS Widget — Optional (tick to enable, includes inline map) */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Geotag Coordinates</label>
-                  <button
-                    type="button"
-                    onClick={captureGeotag}
-                    disabled={gpsLoading}
-                    className={`text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95 shadow-sm ${gpsLoading
-                      ? "bg-amber-50 border-amber-200 text-amber-700 cursor-wait"
-                      : createForm.geotag_latitude
-                        ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                        : "bg-red-50/80 border-red-200/50 text-red-700 hover:bg-red-100/80"
-                      }`}
-                  >
-                    {gpsLoading ? (
-                      <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Acquiring GPS...</>
-                    ) : createForm.geotag_latitude ? (
-                      <><MapPin className="h-3.5 w-3.5" /> Re-tag GPS</>
-                    ) : (
-                      <><MapPin className="h-3.5 w-3.5 animate-bounce" /> Get GPS Tag</>
-                    )}
-                  </button>
-                </div>
+                {/* Tick-mark toggle to enable/disable Geotag */}
+                <label className="flex items-start gap-3 cursor-pointer bg-slate-50 border border-slate-200 rounded-xl p-3 hover:border-blue-300 hover:bg-blue-50/30 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={geotagEnabled}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      setGeotagEnabled(next);
+                      if (!next) {
+                        // Clear coords when user unticks
+                        setCreateForm((f) => ({ ...f, geotag_latitude: "", geotag_longitude: "", geotag_accuracy: "" }));
+                        setGeotagStatus("No location tagged");
+                      }
+                    }}
+                    className="mt-0.5 w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-bold text-slate-800">Add Geotag / Location</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-200/70 px-1.5 py-0.5 rounded">Optional</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Tick to attach GPS coordinates — pick from map or use device GPS.</p>
+                  </div>
+                </label>
+
+                {/* Show map + status only when geotag is enabled */}
+                {geotagEnabled && (
+                  <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                    {/* Action buttons */}
+                    <div className="flex items-center justify-end gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={captureGeotag}
+                        disabled={gpsLoading}
+                        className={`text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95 shadow-sm ${gpsLoading
+                          ? "bg-amber-50 border-amber-200 text-amber-700 cursor-wait"
+                          : createForm.geotag_latitude
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                            : "bg-red-50/80 border-red-200/50 text-red-700 hover:bg-red-100/80"
+                          }`}
+                      >
+                        {gpsLoading ? (
+                          <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Acquiring GPS…</>
+                        ) : createForm.geotag_latitude ? (
+                          <><MapPin className="h-3.5 w-3.5" /> Re-tag via GPS</>
+                        ) : (
+                          <><MapPin className="h-3.5 w-3.5 animate-bounce" /> Use Device GPS</>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* INLINE INTERACTIVE MAP (Leaflet + OpenStreetMap) */}
+                    <div className="relative rounded-2xl overflow-hidden border-2 border-blue-200 shadow-inner bg-slate-100" style={{ height: "300px" }}>
+                      <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+                      {mapLoading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-slate-50/80 backdrop-blur-sm z-[500]">
+                          <div className="flex items-center gap-2 text-slate-600 text-sm font-semibold bg-white px-4 py-3 rounded-xl shadow-lg border border-slate-200">
+                            <RefreshCw className="h-5 w-5 animate-spin text-blue-500" /> Loading map…
+                          </div>
+                        </div>
+                      )}
+                      {!mapLoading && (
+                        <div className="absolute top-2 left-2 right-2 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-md border border-slate-200 z-[400] pointer-events-none">
+                          <p className="text-[10px] font-semibold text-slate-600 flex items-center gap-1.5">
+                            <MapPin className="h-3 w-3 text-blue-500" />
+                            Click on the map or drag the marker to select a location
+                          </p>
+                        </div>
+                      )}
+                    </div>
 
                 {/* GPS Status Display */}
                 <div className={`p-3.5 rounded-xl border transition-all duration-300 ${gpsLoading
@@ -1460,13 +1677,15 @@ export default function ATMBlacklistPage() {
                               : parseFloat(createForm.geotag_accuracy) <= 80
                                 ? "text-amber-700"
                                 : "text-red-700"
-                              }`}>±{createForm.geotag_accuracy}m</p>
+                            }`}>±{createForm.geotag_accuracy}m</p>
                           </div>
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
+                  </div>
+                )}
               </div>
 
               {/* Upload Evidence Photograph Card */}
@@ -1478,8 +1697,9 @@ export default function ATMBlacklistPage() {
                     accept="image/*"
                     onChange={(e) => {
                       setSupportingFile(e.target.files[0]);
-                      if (e.target.files[0]) {
-                        captureGeotag(); // Auto-geotag on file select
+                      // Only auto-geotag if the user has opted into geotagging
+                      if (e.target.files[0] && geotagEnabled) {
+                        captureGeotag();
                       }
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer z-10"
@@ -1999,89 +2219,6 @@ export default function ATMBlacklistPage() {
       )}
 
       {/* Payment checkout removed from ATM portal — handled by Company Dashboard */}
-      {false && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-3xl shadow-2xl border border-white/20 overflow-hidden animate-in zoom-in-95 duration-200">
-            {/* Header */}
-            <div className="flex justify-between items-center px-4 sm:px-6 py-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white shrink-0 border-b border-slate-800 shadow-md">
-              <div className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-amber-500" />
-                <h2 className="text-base font-bold">Secure Penalty Payment</h2>
-              </div>
-              <button
-                onClick={() => setIsCheckoutOpen(false)}
-                className="text-white/80 hover:text-white p-1.5 rounded-lg bg-white/10"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="p-4 sm:p-6 space-y-4">
-              <div className="flex justify-between items-center p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-xs font-bold text-slate-500 uppercase">Amount Due</span>
-                <span className="text-lg font-extrabold text-slate-800">₹{parseFloat(detailEntry?.penalty_amount || 0).toLocaleString("en-IN")}</span>
-              </div>
-
-              {/* Credit Card payment details form */}
-              <div className="space-y-2 border border-slate-200 p-3.5 rounded-xl bg-slate-50">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Credit Card Details (Simulator)</span>
-                <input
-                  type="text"
-                  placeholder="Cardholder Name"
-                  value={cardName}
-                  onChange={(e) => setCardName(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs"
-                />
-                <input
-                  type="text"
-                  placeholder="Card Number"
-                  value={cardNumber}
-                  onChange={(e) => setCardNumber(e.target.value.replace(/\s?/g, "").replace(/(\d{4})/g, "$1 ").trim().substring(0, 19))}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="MM/YY"
-                    value={cardExpiry}
-                    onChange={(e) => setCardExpiry(e.target.value.substring(0, 5))}
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
-                  <input
-                    type="password"
-                    placeholder="CVV"
-                    value={cardCvv}
-                    onChange={(e) => setCardCvv(e.target.value.substring(0, 3))}
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Payment remarks */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Payment Remarks</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Paid online reference / counter #"
-                  value={paymentRemarks}
-                  onChange={(e) => setPaymentRemarks(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs"
-                />
-              </div>
-
-              {/* Action */}
-              <button
-                onClick={executePayment}
-                disabled={actionLoading}
-                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold tracking-wider uppercase rounded-xl transition shadow active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-1.5"
-              >
-                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4 text-emerald-500" />}
-                Authorize Payment of ₹{parseFloat(detailEntry?.penalty_amount || 0).toLocaleString("en-IN")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
