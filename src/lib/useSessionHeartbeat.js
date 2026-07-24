@@ -42,7 +42,7 @@ export function useSessionHeartbeat() {
           localStorage.removeItem("accessToken");
           localStorage.removeItem("refreshToken");
           localStorage.removeItem("user");
-          router.push("/");
+          setTimeout(() => router.push("/"), 0);
         }
         // Any other error (network blip, 5xx) — silently ignore, try again next interval
       }

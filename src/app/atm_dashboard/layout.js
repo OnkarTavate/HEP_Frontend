@@ -264,14 +264,14 @@ export default function ATMDashboardLayout({ children }) {
         if (role === "approval") {
           const deptId = Number(parsedUser.departmentId);
           if ([9, 10, 11, 12, 13, 14, 15].includes(deptId)) {
-            router.push("/traffic_approval");
+            setTimeout(() => router.push("/traffic_approval"), 0);
             return;
           } else if (deptId === 7) {
-            router.push("/marine_approval");
+            setTimeout(() => router.push("/marine_approval"), 0);
             return;
           }
         }
-        router.push("/");
+        setTimeout(() => router.push("/"), 0);
         return;
       }
       setUser(parsedUser);
@@ -279,7 +279,7 @@ export default function ATMDashboardLayout({ children }) {
         setShowPasswordChangeModal(true);
       }
     } else {
-      router.push("/");
+      setTimeout(() => router.push("/"), 0);
     }
   }, [router]);
 

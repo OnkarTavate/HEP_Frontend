@@ -238,16 +238,16 @@ export default function TrafficLayout({ children }) {
       const role = String(parsedUser.role || "").toLowerCase().trim();
       const dept = String(parsedUser.departmentName || "").toLowerCase().trim();
       const isAdmin = role === "admin" || role === "administrator";
-      if (isAdmin) { router.push("/admin"); return; }
+      if (isAdmin) { setTimeout(() => router.push("/admin"), 0); return; }
       const isTrafficApprover =
         (role === "approval" && dept.includes("traffic")) ||
         role.includes("traffic") ||
         ["safety officer", "fire safety officer", "senior deputy traffic manager"].includes(role);
-      if (!isTrafficApprover) { alert("Unauthorized Access: Traffic Department Only."); router.push("/"); return; }
+      if (!isTrafficApprover) { alert("Unauthorized Access: Traffic Department Only."); setTimeout(() => router.push("/"), 0); return; }
       setUser(parsedUser);
       if (parsedUser.isPasswordChanged === false) setShowPasswordChangeModal(true);
     } else {
-      router.push("/");
+      setTimeout(() => router.push("/"), 0);
     }
   }, [router]);
 

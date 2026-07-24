@@ -226,13 +226,13 @@ export default function MarineLayout({ children }) {
       const role = String(parsedUser.role || "").toLowerCase().trim();
       const dept = String(parsedUser.departmentName || "").toLowerCase().trim();
       const isAdmin = role === "admin" || role === "administrator";
-      if (isAdmin) { router.push("/admin"); return; }
+      if (isAdmin) { setTimeout(() => router.push("/admin"), 0); return; }
       const isMarineApprover = (role === "approval" && dept.includes("marine")) || role.includes("marine");
-      if (!isMarineApprover) { alert("Unauthorized Access: Marine Department Only."); router.push("/"); return; }
+      if (!isMarineApprover) { alert("Unauthorized Access: Marine Department Only."); setTimeout(() => router.push("/"), 0); return; }
       setUser(parsedUser);
       if (parsedUser.isPasswordChanged === false) setShowPasswordChangeModal(true);
     } else {
-      router.push("/");
+      setTimeout(() => router.push("/"), 0);
     }
   }, [router]);
 

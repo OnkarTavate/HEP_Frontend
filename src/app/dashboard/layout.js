@@ -324,7 +324,7 @@ export default function DashboardLayout({ children }) {
       const parsedUser = JSON.parse(storedUser);
       const role = String(parsedUser.role || "").toLowerCase().trim();
       const isAdmin = role === "admin" || role === "administrator";
-      if (isAdmin) { router.push("/admin"); return; }
+      if (isAdmin) { setTimeout(() => router.push("/admin"), 0); return; }
       setUser(parsedUser);
       if (parsedUser.isPasswordChanged === false) setShowPasswordChangeModal(true);
 
@@ -336,7 +336,7 @@ export default function DashboardLayout({ children }) {
           .catch(() => { });
       }
     } else {
-      router.push("/");
+      setTimeout(() => router.push("/"), 0);
     }
   }, [router]);
 

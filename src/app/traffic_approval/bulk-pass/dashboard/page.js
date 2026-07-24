@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 export default function BulkPassDashboardRedirect() {
   const router = useRouter();
   useEffect(() => {
-    router.replace("/traffic_approval/bulk-pass");
+    setTimeout(() => router.replace("/traffic_approval/bulk-pass"), 0);
   }, [router]);
   return null;
 }

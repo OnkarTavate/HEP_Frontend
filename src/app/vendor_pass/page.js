@@ -10,9 +10,9 @@ export default function VendorPassRootPage() {
     if (typeof window !== "undefined") {
       const token = sessionStorage.getItem("vendor_pass_token");
       if (token) {
-        router.replace(`/vendor_pass/${token}`);
+        setTimeout(() => router.replace(`/vendor_pass/${token}`), 0);
       } else {
-        router.replace("/");
+        setTimeout(() => router.replace("/"), 0);
       }
     }
   }, [router]);

@@ -10,9 +10,9 @@ export default function VendorPassApprovedRootPage() {
     if (typeof window !== "undefined") {
       const id = sessionStorage.getItem("vendor_pass_approved_id");
       if (id) {
-        router.replace(`/vendor_pass_approved/${id}`);
+        setTimeout(() => router.replace(`/vendor_pass_approved/${id}`), 0);
       } else {
-        router.replace("/");
+        setTimeout(() => router.replace("/"), 0);
       }
     }
   }, [router]);
