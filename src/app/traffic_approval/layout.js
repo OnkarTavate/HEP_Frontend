@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
+import NotificationPanel from "@/components/NotificationPanel";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -451,14 +452,7 @@ export default function TrafficLayout({ children }) {
                 {darkMode ? <Sun className="h-5 w-5 text-amber-300" /> : <Moon className="h-5 w-5 text-stone-600" />}
               </Button>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative bg-white dark:bg-white/5 dark:border dark:border-white/10 shadow-sm rounded-full hover:bg-stone-50 dark:hover:bg-white/10 active:scale-95 transition-all duration-150"
-              >
-                <Bell className="h-5 w-5 text-stone-600 dark:text-stone-300" />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-orange-500 rounded-full" />
-              </Button>
+              <NotificationPanel role="approver" />
 
               <UserProfilePanel
                 user={user}

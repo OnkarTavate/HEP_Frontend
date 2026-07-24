@@ -909,7 +909,7 @@ const LoginPage = () => {
                             }}
                             className="w-full py-3.5 bg-white text-orange-600 text-base font-semibold tracking-wider uppercase rounded-xl border-2 border-orange-600 hover:bg-orange-50 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-orange-500/20"
                           >
-                            Track Pass
+                            Track Registration Status
                           </button>
 
                           {/* Mobile-only navigation links (hidden on desktop) */}

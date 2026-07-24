@@ -237,7 +237,7 @@ export default function RegisterPage() {
       if (res.data && res.data.success) {
         const countriesList = res.data.data || [];
         setCountries(countriesList);
-        
+
         // If in new mode (not edit mode) and we haven't selected a country, default to "India"
         if (!editRef && !selectedCountryName) {
           const indiaObj = countriesList.find(c => c.name.toLowerCase() === "india");
@@ -263,7 +263,7 @@ export default function RegisterPage() {
       if (res.data && res.data.success) {
         const statesList = res.data.data || [];
         setStates(statesList);
-        
+
         // If in new mode (not edit mode) and we haven't selected a state yet, default to "Tamil Nadu"
         if (!editRef && !selectedStateName) {
           const tnObj = statesList.find(s => s.name.toLowerCase() === "tamil nadu");
@@ -303,7 +303,7 @@ export default function RegisterPage() {
     setSelectedCityName("");
     setStates([]);
     setCities([]);
-    
+
     const countryObj = countries.find(c => c.name === countryName);
     if (countryObj) {
       setSelectedCountryId(countryObj.id);
@@ -317,7 +317,7 @@ export default function RegisterPage() {
     setSelectedStateName(stateName);
     setSelectedCityName("");
     setCities([]);
-    
+
     const stateObj = states.find(s => s.name === stateName);
     if (stateObj) {
       setSelectedStateId(stateObj.id);
@@ -330,7 +330,7 @@ export default function RegisterPage() {
   useEffect(() => {
     const loadCountryDetails = async () => {
       if (!existingData || countries.length === 0) return;
-      
+
       const countryObj = countries.find(c => c.name === existingData.country);
       if (countryObj) {
         setSelectedCountryId(countryObj.id);
@@ -343,7 +343,7 @@ export default function RegisterPage() {
           if (stateRes.data && stateRes.data.success) {
             const statesList = stateRes.data.data || [];
             setStates(statesList);
-            
+
             const stateObj = statesList.find(s => s.name === existingData.state);
             if (stateObj) {
               setSelectedStateId(stateObj.id);
@@ -1693,7 +1693,7 @@ export default function RegisterPage() {
                               <span className="block mt-1">
                                 I/We hereby certify that the above permits are
                                 required only for our official purpose. We hold
-                                responsibility for all activities of the mentioned
+                                responsibility for all activities and events of the mentioned
                                 persons/vehicles inside the port. I/We declare that
                                 Chennai Port Authority will not be held responsible
                                 for any untoward incidents.

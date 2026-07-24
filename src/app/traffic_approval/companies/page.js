@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import PaginationBar from "@/components/ui/PaginationBar";
 import axios from "axios";
 import { toast } from "sonner";
+import ProfileUpdateDiffModal from "@/components/ProfileUpdateDiffModal";
 import {
   Search,
   Building2,
@@ -27,7 +28,12 @@ const ADMIN_API =
 const AGENT_API =
   process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
+import { useSearchParams } from "next/navigation";
+
 export default function TrafficCompanyApprovals() {
+  const searchParams = useSearchParams();
+  const tabQuery = searchParams ? searchParams.get("tab") : null;
+
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -36,6 +42,12 @@ export default function TrafficCompanyApprovals() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const [activeTab, setActiveTab] = useState("pending");
+
+  useEffect(() => {
+    if (tabQuery) {
+      setActiveTab(tabQuery);
+    }
+  }, [tabQuery]);
   const [isViewMode, setIsViewMode] = useState(false);
   const [processedByMe, setProcessedByMe] = useState(false);
 
@@ -58,6 +70,12 @@ export default function TrafficCompanyApprovals() {
   // Modal States
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [remarks, setRemarks] = useState("");
+
+  // Profile Update Requests State
+  const [profileUpdateRequests, setProfileUpdateRequests] = useState([]);
+  const [profileUpdatesCount, setProfileUpdatesCount] = useState(0);
+  const [selectedProfileUpdateRequest, setSelectedProfileUpdateRequest] = useState(null);
+  const [isProfileUpdateModalOpen, setIsProfileUpdateModalOpen] = useState(false);
 
   // Concurrency locking state
   const [activeLocks, setActiveLocks] = useState({});
@@ -162,50 +180,86 @@ export default function TrafficCompanyApprovals() {
     try {
       if (!isPoll) setLoading(true);
       const token = localStorage.getItem("accessToken");
-      const response = await axios.get(`${ADMIN_API}/user/agent-users`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          page: currentPage,
-          limit: pageSize,
-          status: activeTab,
-          search: searchQuery || undefined,
-          processedByMe: processedByMe ? "true" : undefined,
-        },
-      });
+      const headers = { Authorization: `Bearer ${token}` };
 
-      if (response.data?.data) {
-        const newRequests = response.data.data;
-        const newMeta = response.data.pagination || {
-          totalRecords: response.data.data.length,
-          totalPages: 1,
-          currentPage: 1,
-          pageSize: pageSize,
-        };
-        const newCounts = response.data.counts || {
-          total: 0,
-          approved: 0,
-          rejected: 0,
-          pending: 0,
-        };
+      // Fetch profile update count separately
+      axios
+        .get(`${ADMIN_API}/user/profile-update-requests`, {
+          headers,
+          params: { status: "pending", limit: 1 },
+        })
+        .then((res) => {
+          if (res.data?.pagination) {
+            setProfileUpdatesCount(res.data.pagination.totalRecords || 0);
+          }
+        })
+        .catch(() => {});
 
-        setRequests((prev) =>
-          JSON.stringify(newRequests) === JSON.stringify(prev) ? prev : newRequests
-        );
-        setPaginationMeta((prev) =>
-          JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta
-        );
-        setGlobalCounts((prev) =>
-          JSON.stringify(newCounts) === JSON.stringify(prev) ? prev : newCounts
-        );
+      if (activeTab === "profile_updates") {
+        const response = await axios.get(`${ADMIN_API}/user/profile-update-requests`, {
+          headers,
+          params: {
+            page: currentPage,
+            limit: pageSize,
+            search: searchQuery || undefined,
+          },
+        });
+
+        if (response.data?.data) {
+          const newReqs = response.data.data;
+          setProfileUpdateRequests((prev) =>
+            JSON.stringify(newReqs) === JSON.stringify(prev) ? prev : newReqs
+          );
+          if (response.data.pagination) {
+            setPaginationMeta(response.data.pagination);
+          }
+        }
       } else {
-        setRequests((prev) => prev.length === 0 ? prev : []);
+        const response = await axios.get(`${ADMIN_API}/user/agent-users`, {
+          headers,
+          params: {
+            page: currentPage,
+            limit: pageSize,
+            status: activeTab,
+            search: searchQuery || undefined,
+            processedByMe: processedByMe ? "true" : undefined,
+          },
+        });
+
+        if (response.data?.data) {
+          const newRequests = response.data.data;
+          const newMeta = response.data.pagination || {
+            totalRecords: response.data.data.length,
+            totalPages: 1,
+            currentPage: 1,
+            pageSize: pageSize,
+          };
+          const newCounts = response.data.counts || {
+            total: 0,
+            approved: 0,
+            rejected: 0,
+            pending: 0,
+          };
+
+          setRequests((prev) =>
+            JSON.stringify(newRequests) === JSON.stringify(prev) ? prev : newRequests
+          );
+          setPaginationMeta((prev) =>
+            JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta
+          );
+          setGlobalCounts((prev) =>
+            JSON.stringify(newCounts) === JSON.stringify(prev) ? prev : newCounts
+          );
+        } else {
+          setRequests((prev) => (prev.length === 0 ? prev : []));
+        }
       }
     } catch (error) {
       console.error(
         "Failed to fetch company requests:",
         error.response || error.message,
       );
-      if (!isPoll) toast.error("Failed to load company data. Check backend connection.");
+      if (!isPoll) toast.error("Failed to load data. Check backend connection.");
     } finally {
       if (!isPoll) setLoading(false);
     }
@@ -402,11 +456,8 @@ export default function TrafficCompanyApprovals() {
       <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-0">
         {[
           { id: "pending", label: "Pending", count: pendingCount },
-          {
-            id: "processed",
-            label: "Processed",
-            count: processedCount,
-          },
+          { id: "processed", label: "Processed", count: processedCount },
+          { id: "profile_updates", label: "Profile Updates", count: profileUpdatesCount },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -482,122 +533,205 @@ export default function TrafficCompanyApprovals() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
-                {(activeTab === "processed"
-                  ? ["Ref No", "Company Name", "Operator Type", "Approved By", "Status"]
-                  : ["Ref No", "Company Name", "Operator Type", activeTab === "pending" ? "Action" : "Status"]
-                ).map((h) => (
-                  <th
-                    key={h}
-                    className={`px-5 py-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${h === "Action" || h === "Status" ? "text-center" : ""}`}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50 dark:divide-slate-700/30">
-              {displayedRequests.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={activeTab === "processed" ? 5 : 4}
-                    className="py-16 text-center text-slate-400 dark:text-slate-500"
-                  >
-                    <Building2 className="h-10 w-10 mx-auto text-slate-200 dark:text-slate-700 mb-3" />
-                    <p className="text-sm font-medium">No records found.</p>
-                  </td>
+          {activeTab === "profile_updates" ? (
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
+                  {["Ref No", "Company / Agent Name", "Submitted Date", "Status", "Action"].map((h) => (
+                    <th
+                      key={h}
+                      className={`px-5 py-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${h === "Action" || h === "Status" ? "text-center" : ""}`}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ) : (
-                displayedRequests.map((req) => {
-                  const statusColors = {
-                    approved:
-                      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
-                    reverted:
-                      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
-                    rejected:
-                      "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
-                  };
-                  const statusClass =
-                    statusColors[req.status] ||
-                    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
-                  
-                  const lock = activeLocks.company?.find(l => String(l.applicationId) === String(req.id));
-                  const isLocked = !!lock;
-
-                  const rowClass = isLocked
-                    ? "bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group"
-                    : "hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group";
-
-                  return (
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-700/30">
+                {profileUpdateRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-16 text-center text-slate-400 dark:text-slate-500">
+                      <Building2 className="h-10 w-10 mx-auto text-slate-200 dark:text-slate-700 mb-3" />
+                      <p className="text-sm font-medium">No profile update requests found.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  profileUpdateRequests.map((req) => (
                     <tr
                       key={req.id}
-                      onClick={async () => {
-                        const viewOnly = activeTab === "processed";
-                        if (!viewOnly) {
-                          const lockRes = await acquireLock(req.id, "company");
-                          if (!lockRes.success) {
-                            toast.error("Application In-Use", {
-                              description: lockRes.message,
-                            });
-                            return;
-                          }
-                        }
-                        setSelectedRequest(req);
-                        setIsViewMode(viewOnly);
-                        setRemarks(req.rejectedReason || "");
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+                      onClick={() => {
+                        setSelectedProfileUpdateRequest(req);
+                        setIsProfileUpdateModalOpen(true);
                       }}
-                      className={rowClass}
                     >
                       <td className="px-5 py-4 text-sm font-bold text-slate-800 dark:text-stone-200 font-mono">
-                        {req.referenceNumber || "—"}
+                        {req.referenceNumber}
                       </td>
                       <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-300 to-orange-400 dark:from-amber-400 dark:to-orange-500 flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0">
-                            {(req.entityName || "?").charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div className="text-sm font-bold text-slate-800 dark:text-stone-100">
-                              {req.entityName || "—"}
-                            </div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">
-                              {req.email || "—"}
-                            </div>
-                          </div>
+                        <div className="text-sm font-bold text-slate-800 dark:text-stone-100">
+                          {req.currentEntityName || req.currentProfile?.entityName || req.entityName || `Agent ID #${req.agentId}`}
                         </div>
+                        {req.remarks && req.remarks.trim() !== "" && req.remarks.trim() !== "-" && req.remarks.trim() !== "—" && (
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            Remarks: {req.remarks}
+                          </div>
+                        )}
                       </td>
-                      <td className="px-5 py-4">
-                        <span className="bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200 dark:border-blue-500/20">
-                          {req.userTypeName || "Agent"}
+                      <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">
+                        {new Date(req.createdAt).toLocaleDateString("en-GB")}
+                      </td>
+                      <td className="px-5 py-4 text-center">
+                        <span
+                          className={`px-3 py-1 rounded-full text-[11px] font-bold border uppercase ${
+                            req.status === "approved"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : req.status === "reverted"
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : req.status === "rejected"
+                              ? "bg-red-50 text-red-700 border-red-200"
+                              : "bg-blue-50 text-blue-700 border-blue-200"
+                          }`}
+                        >
+                          {req.status}
                         </span>
                       </td>
-                      {activeTab === "processed" && (
-                        <td className="px-5 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                          {req.approvedBy || "—"}
-                        </td>
-                      )}
                       <td className="px-5 py-4 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <span
-                            className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}
-                          >
-                            {(req.status || "PENDING").toUpperCase()}
-                          </span>
-                          {isLocked && (
-                            <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900 animate-pulse">
-                              IN-USE BY {lock.userName.toUpperCase()}
-                            </span>
-                          )}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProfileUpdateRequest(req);
+                            setIsProfileUpdateModalOpen(true);
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-black font-extrabold text-xs shadow-sm"
+                        >
+                          Review Diff & Process
+                        </button>
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                  ))
+                )}
+              </tbody>
+            </table>
+          ) : (
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
+                  {(activeTab === "processed"
+                    ? ["Ref No", "Company Name", "Operator Type", "Approved By", "Status"]
+                    : ["Ref No", "Company Name", "Operator Type", activeTab === "pending" ? "Action" : "Status"]
+                  ).map((h) => (
+                    <th
+                      key={h}
+                      className={`px-5 py-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${h === "Action" || h === "Status" ? "text-center" : ""}`}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-700/30">
+                {displayedRequests.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={activeTab === "processed" ? 5 : 4}
+                      className="py-16 text-center text-slate-400 dark:text-slate-500"
+                    >
+                      <Building2 className="h-10 w-10 mx-auto text-slate-200 dark:text-slate-700 mb-3" />
+                      <p className="text-sm font-medium">No records found.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  displayedRequests.map((req) => {
+                    const statusColors = {
+                      approved:
+                        "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
+                      reverted:
+                        "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
+                      rejected:
+                        "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
+                    };
+                    const statusClass =
+                      statusColors[req.status] ||
+                      "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+                    
+                    const lock = activeLocks.company?.find(l => String(l.applicationId) === String(req.id));
+                    const isLocked = !!lock;
+
+                    const rowClass = isLocked
+                      ? "bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group"
+                      : "hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group";
+
+                    return (
+                      <tr
+                        key={req.id}
+                        onClick={async () => {
+                          const viewOnly = activeTab === "processed";
+                          if (!viewOnly) {
+                            const lockRes = await acquireLock(req.id, "company");
+                            if (!lockRes.success) {
+                              toast.error("Application In-Use", {
+                                description: lockRes.message,
+                              });
+                              return;
+                            }
+                          }
+                          setSelectedRequest(req);
+                          setIsViewMode(viewOnly);
+                          setRemarks(req.rejectedReason || "");
+                        }}
+                        className={rowClass}
+                      >
+                        <td className="px-5 py-4 text-sm font-bold text-slate-800 dark:text-stone-200 font-mono">
+                          {req.referenceNumber || "—"}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-300 to-orange-400 dark:from-amber-400 dark:to-orange-500 flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0">
+                              {(req.entityName || "?").charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-800 dark:text-stone-100">
+                                {req.entityName || "—"}
+                              </div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400">
+                                {req.email || "—"}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className="bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200 dark:border-blue-500/20">
+                            {req.userTypeName || "Agent"}
+                          </span>
+                        </td>
+                        {activeTab === "processed" && (
+                          <td className="px-5 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                            {req.approvedBy || "—"}
+                          </td>
+                        )}
+                        <td className="px-5 py-4 text-center">
+                          <div className="flex flex-col items-center gap-1">
+                            <span
+                              className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}
+                            >
+                              {(req.status || "PENDING").toUpperCase()}
+                            </span>
+                            {isLocked && (
+                              <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900 animate-pulse">
+                                IN-USE BY {lock.userName.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
 
         {/* Pagination bar */}
@@ -950,6 +1084,17 @@ export default function TrafficCompanyApprovals() {
           )}
         </div>
       )}
+
+      {/* ── Profile Update Diff Modal ── */}
+      <ProfileUpdateDiffModal
+        request={selectedProfileUpdateRequest}
+        isOpen={isProfileUpdateModalOpen}
+        onClose={() => {
+          setIsProfileUpdateModalOpen(false);
+          setSelectedProfileUpdateRequest(null);
+        }}
+        onActionSuccess={() => fetchDashboardData()}
+      />
     </div>
   );
 }

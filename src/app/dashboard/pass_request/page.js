@@ -91,6 +91,30 @@ const calculateDateTo = (fromDate, period, type) => {
   return `${yyyy}-${mm}-${dd}T${PASS_EXPIRY_TIME}`;
 };
 
+const formatDateGB = (dateInput) => {
+  if (!dateInput) return "N/A";
+  const dateStr = String(dateInput).split("T")[0];
+  const [yyyy, mm, dd] = dateStr.split("-").map(Number);
+  if (!yyyy || !mm || !dd) return String(dateInput);
+  return `${String(dd).padStart(2, "0")}/${String(mm).padStart(2, "0")}/${yyyy}`;
+};
+
+const formatDateLong = (dateInput) => {
+  if (!dateInput) return "N/A";
+  const dateStr = String(dateInput).split("T")[0];
+  const [yyyy, mm, dd] = dateStr.split("-").map(Number);
+  if (!yyyy || !mm || !dd) return String(dateInput);
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const monthName = monthNames[mm - 1] || "";
+  const formattedDay = String(dd).padStart(2, "0");
+  return `${formattedDay} ${monthName} ${yyyy}`;
+};
+
 const getLabelById = (arr, val, key = "label") => {
   if (!val) return "";
   if (!Array.isArray(arr)) return val;
@@ -153,6 +177,9 @@ const VALIDATORS = {
 };
 
 const getValidationError = (field, value, extra = {}) => {
+  if (field === "hepType") {
+    return value && String(value).trim() !== "" ? null : "Please select Type of HEP";
+  }
   if (!value && value !== false) return null; // skip empty optional
   switch (field) {
     case "email":
@@ -400,7 +427,7 @@ export default function PassRequestPage() {
 
   const initialPersonForm = {
     masterId: "",
-    hepType: "2", // Default: 2 (Personnel)
+    hepType: "", // Default: empty (user must explicitly select type)
     seafarerPassFor: "Sign-On",
     seafarerIdType: "", // New: "aadhaar" or "passport"
     name: "",
@@ -413,7 +440,7 @@ export default function PassRequestPage() {
     withTwoWheeler: false,
     vehicleNo: "",
     nationality: "1", // Default: 1 (INDIAN)
-    country: "75", // Default: 75 (India)
+    country: "75", // Default: India
     visaNo: "",
     accessArea: "",
     designation: "",
@@ -567,7 +594,7 @@ export default function PassRequestPage() {
         const token = localStorage.getItem("accessToken");
         const config = { headers: { Authorization: `Bearer ${token}` } };
 
-        const [natRes, passRes, idRes, accessRes, desigRes, vehRes] =
+        const [natRes, passRes, idRes, accessRes, desigRes, vehRes, countryRes] =
           await Promise.all([
             axios
               .get(`${AGENT_API}/pass-request/get-nationality`, config)
@@ -587,6 +614,9 @@ export default function PassRequestPage() {
             axios
               .get(`${AGENT_API}/pass-request/getVehicleTypes`, config)
               .catch(() => ({ data: [] })),
+            axios
+              .get(`${AGENT_API}/pass-request/get-countries`, config)
+              .catch(() => ({ data: [] })),
           ]);
 
         const extractArray = (res) =>
@@ -596,6 +626,8 @@ export default function PassRequestPage() {
               ? res.data
               : [];
 
+        const fetchedCountries = extractArray(countryRes);
+
         setMasterData((prev) => ({
           ...prev,
           nationalities: extractArray(natRes),
@@ -604,7 +636,24 @@ export default function PassRequestPage() {
           accessAreas: extractArray(accessRes),
           designations: extractArray(desigRes),
           vehicleTypes: extractArray(vehRes),
+          countries: fetchedCountries.length > 0 ? fetchedCountries : prev.countries,
         }));
+
+        // Auto-set country to India's real DB ID when nationality is Indian
+        if (fetchedCountries.length > 0) {
+          const indiaEntry = fetchedCountries.find(
+            (c) => String(c.name || "").trim().toLowerCase() === "india"
+          );
+          if (indiaEntry) {
+            setPersonForm((prev) => {
+              // Only set if nationality is Indian (default) and country is empty or stale
+              if (prev.nationality === "1" && (!prev.country || prev.country === "75")) {
+                return { ...prev, country: String(indiaEntry.id) };
+              }
+              return prev;
+            });
+          }
+        }
       } catch (error) {
         console.error("Error loading API master data", error);
       }
@@ -630,12 +679,30 @@ export default function PassRequestPage() {
         if (response.data && response.data.success) {
           const agentData = response.data.data;
 
+          let remainingDays = null;
+          let isLicenseExpired = false;
+          if (agentData.licenseValidityDate) {
+            const datePart = String(agentData.licenseValidityDate).split('T')[0];
+            const [yyyy, mm, dd] = datePart.split('-').map(Number);
+            if (yyyy && mm && dd) {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const expDate = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+              const diffMs = expDate.getTime() - today.getTime();
+              remainingDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+              isLicenseExpired = remainingDays <= 0;
+            }
+          }
+
           // Populate the General Form with the DB data
           setGeneralForm((prev) => ({
             ...prev,
             companyName: agentData.entityName || "N/A",
             email: agentData.email || "N/A",
             mobile: agentData.mobileNo || "N/A",
+            licenseValidityDate: agentData.licenseValidityDate || null,
+            remainingDays,
+            isLicenseExpired,
           }));
 
           // Set company blacklisting details if blacklisted
@@ -701,6 +768,10 @@ export default function PassRequestPage() {
   }, []);
 
   const toggleModal = (modalName, state) => {
+    if (state && generalForm.isLicenseExpired && (modalName === "person" || modalName === "vehicle")) {
+      toast.error("Pass generation is locked because your company license has expired.");
+      return;
+    }
     setModals({ ...modals, [modalName]: state });
     if (!state) {
       if (modalName === "person") {
@@ -717,11 +788,30 @@ export default function PassRequestPage() {
   useEffect(() => {
     let updatedPeriod = personForm.passPeriod;
 
-    // ✅ Restrict DAILY to max 7 days
+    // Check license remaining days lock
+    if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && !generalForm.isLicenseExpired) {
+      const pTypeStr = String(personForm.passType);
+      if ((pTypeStr === "2" || pTypeStr === "MONTHLY") && generalForm.remainingDays < 30) {
+        toast.warning(`Monthly passes are locked because your license expires in ${generalForm.remainingDays} days.`);
+        setPersonForm((prev) => ({ ...prev, passType: "1" }));
+        return;
+      }
+      if ((pTypeStr === "3" || pTypeStr === "YEARLY" || pTypeStr === "ANNUAL") && generalForm.remainingDays < 365) {
+        toast.warning(`Yearly passes are locked because your license expires in ${generalForm.remainingDays} days.`);
+        setPersonForm((prev) => ({ ...prev, passType: "1" }));
+        return;
+      }
+    }
+
+    // ✅ Restrict DAILY to max 7 days or remaining license days
     if (String(personForm.passType) === "1") {
-      if (parseInt(updatedPeriod) > 7) {
-        updatedPeriod = "7";
-        toast.warning("Maximum 7 days allowed for daily pass");
+      let maxAllowed = 7;
+      if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && generalForm.remainingDays < 7) {
+        maxAllowed = Math.max(1, generalForm.remainingDays);
+      }
+      if (parseInt(updatedPeriod, 10) > maxAllowed) {
+        updatedPeriod = String(maxAllowed);
+        toast.warning(`Maximum ${maxAllowed} days allowed for daily pass`);
       }
     } else {
       // ❌ Disable period for Monthly/Yearly
@@ -730,7 +820,7 @@ export default function PassRequestPage() {
 
     let amt = 10.3;
     if (String(personForm.passType) === "1") {
-      amt = 10.3 * parseInt(updatedPeriod || 1);
+      amt = 10.3 * parseInt(updatedPeriod || 1, 10);
     } else if (String(personForm.passType) === "2") {
       amt = 154.0;
     } else if (String(personForm.passType) === "3") {
@@ -749,15 +839,34 @@ export default function PassRequestPage() {
       amount: amt,
       dateTo: newDateTo,
     }));
-  }, [personForm.passType, personForm.passPeriod, personForm.dateFrom]);
+  }, [personForm.passType, personForm.passPeriod, personForm.dateFrom, generalForm.remainingDays, generalForm.isLicenseExpired]);
 
   useEffect(() => {
     let updatedPeriod = vehicleForm.passPeriod;
 
+    // Check license remaining days lock
+    if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && !generalForm.isLicenseExpired) {
+      const vTypeStr = String(vehicleForm.passType);
+      if ((vTypeStr === "2" || vTypeStr === "MONTHLY") && generalForm.remainingDays < 30) {
+        toast.warning(`Monthly passes are locked because your license expires in ${generalForm.remainingDays} days.`);
+        setVehicleForm((prev) => ({ ...prev, passType: "1" }));
+        return;
+      }
+      if ((vTypeStr === "3" || vTypeStr === "YEARLY" || vTypeStr === "ANNUAL") && generalForm.remainingDays < 365) {
+        toast.warning(`Yearly passes are locked because your license expires in ${generalForm.remainingDays} days.`);
+        setVehicleForm((prev) => ({ ...prev, passType: "1" }));
+        return;
+      }
+    }
+
     if (String(vehicleForm.passType) === "1") {
-      if (parseInt(updatedPeriod) > 7) {
-        updatedPeriod = "7";
-        toast.warning("Daily pass max allowed is 7 days");
+      let maxAllowed = 7;
+      if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && generalForm.remainingDays < 7) {
+        maxAllowed = Math.max(1, generalForm.remainingDays);
+      }
+      if (parseInt(updatedPeriod, 10) > maxAllowed) {
+        updatedPeriod = String(maxAllowed);
+        toast.warning(`Daily pass max allowed is ${maxAllowed} days`);
       }
     } else {
       updatedPeriod = "1";
@@ -770,7 +879,7 @@ export default function PassRequestPage() {
     let amt = 25.7;
     if (isCargoEquipment) {
       if (String(vehicleForm.passType) === "1") {
-        amt = 41.0 * parseInt(updatedPeriod || 1);
+        amt = 41.0 * parseInt(updatedPeriod || 1, 10);
       } else if (String(vehicleForm.passType) === "2") {
         amt = 461.0;
       } else if (String(vehicleForm.passType) === "3") {
@@ -778,7 +887,7 @@ export default function PassRequestPage() {
       }
     } else {
       if (String(vehicleForm.passType) === "1") {
-        amt = 25.7 * parseInt(updatedPeriod || 1);
+        amt = 25.7 * parseInt(updatedPeriod || 1, 10);
       } else if (String(vehicleForm.passType) === "2") {
         amt = 308.0;
       } else if (String(vehicleForm.passType) === "3") {
@@ -798,7 +907,7 @@ export default function PassRequestPage() {
       amount: amt,
       dateTo: newDateTo,
     }));
-  }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom, vehicleForm.type, masterData.vehicleTypes]);
+  }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom, vehicleForm.type, masterData.vehicleTypes, generalForm.remainingDays, generalForm.isLicenseExpired]);
 
   // Live running time: update dateFrom every 30s while person modal is open
   useEffect(() => {
@@ -837,21 +946,30 @@ export default function PassRequestPage() {
       "label",
     )?.toUpperCase();
 
-    if (selectedNationality === "INDIAN") {
-      setPersonForm((prev) => ({
-        ...prev,
-        country: "75", // India
-      }));
+    const indiaObj = masterData.countries.find(
+      (c) => String(c.name || "").trim().toLowerCase() === "india"
+    );
+    const indiaId = indiaObj ? String(indiaObj.id) : "";
+
+    if (selectedNationality === "INDIAN" || !selectedNationality || personForm.nationality === "1") {
+      if (indiaId) {
+        setPersonForm((prev) => {
+          if (String(prev.country) !== indiaId) {
+            return { ...prev, country: indiaId };
+          }
+          return prev;
+        });
+      }
     } else if (selectedNationality && selectedNationality !== "INDIAN") {
-      // If switching from Indian → foreign, clear India
-      if (String(personForm.country) === "75") {
+      // If switching from Indian → foreign, clear country if it was India
+      if (String(personForm.country) === indiaId) {
         setPersonForm((prev) => ({
           ...prev,
           country: "",
         }));
       }
     }
-  }, [personForm.nationality, masterData.nationalities]);
+  }, [personForm.nationality, masterData.nationalities, masterData.countries]);
 
   const fetchSubmittedPasses = useCallback(async () => {
     setLoadingPasses(true);
@@ -1340,6 +1458,31 @@ export default function PassRequestPage() {
   };
 
   const handleAddPerson = () => {
+    // ---- License Expiry & Duration Lock Check ----
+    if (generalForm.isLicenseExpired) {
+      return toast.error("Pass generation is locked because your company license has expired.");
+    }
+    if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined) {
+      const pTypeStr = String(personForm.passType || "1");
+      if ((pTypeStr === "2" || pTypeStr === "MONTHLY") && generalForm.remainingDays < 30) {
+        return toast.error(`Cannot add Monthly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+      }
+      if ((pTypeStr === "3" || pTypeStr === "YEARLY" || pTypeStr === "ANNUAL") && generalForm.remainingDays < 365) {
+        return toast.error(`Cannot add Yearly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+      }
+      if (personForm.dateTo && generalForm.licenseValidityDate) {
+        const passEnd = new Date(personForm.dateTo);
+        const datePart = String(generalForm.licenseValidityDate).split('T')[0];
+        const [yyyy, mm, dd] = datePart.split('-').map(Number);
+        if (yyyy && mm && dd) {
+          const licExp = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
+          if (passEnd > licExp) {
+            return toast.error(`Cannot add pass. Pass end date (${formatDateGB(personForm.dateTo)}) exceeds company license expiry date (${formatDateLong(generalForm.licenseValidityDate)}).`);
+          }
+        }
+      }
+    }
+
     // ---- Auto-fallback for Driver Licence if ID proof is DL ----
     if (personForm.hepType === "1") {
       if (!personForm.driverLicence && personForm.idProofFile) {
@@ -1371,6 +1514,10 @@ export default function PassRequestPage() {
 
     // ---- Full field validation before add ----
     const errors = {};
+    if (!personForm.hepType || personForm.hepType.trim() === "") {
+      errors.hepType = "Please select Type of HEP (Drivers, Personnel, or Seafarers)";
+    }
+
     if (!personForm.name.trim()) errors.name = "Full name is required";
     else if (!/^[a-zA-Z\s.'-]{2,80}$/.test(personForm.name.trim()))
       errors.name = "Name must be 2-80 characters (letters only)";
@@ -1503,8 +1650,14 @@ export default function PassRequestPage() {
 
   const openAddPersonModal = () => {
     const now = getCurrentDateTime();
+    const indiaObj = masterData.countries.find(
+      (c) => String(c.name || "").trim().toLowerCase() === "india"
+    );
+    const indiaId = indiaObj ? String(indiaObj.id) : "";
+
     setPersonForm({
       ...initialPersonForm,
+      country: indiaId,
       dateFrom: now,
       dateTo: calculateDateTo(now, initialPersonForm.passPeriod, initialPersonForm.passType),
     });
@@ -1530,6 +1683,31 @@ export default function PassRequestPage() {
   };
 
   const handleAddVehicle = () => {
+    // ---- License Expiry & Duration Lock Check ----
+    if (generalForm.isLicenseExpired) {
+      return toast.error("Pass generation is locked because your company license has expired.");
+    }
+    if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined) {
+      const vTypeStr = String(vehicleForm.passType || "1");
+      if ((vTypeStr === "2" || vTypeStr === "MONTHLY") && generalForm.remainingDays < 30) {
+        return toast.error(`Cannot add Monthly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+      }
+      if ((vTypeStr === "3" || vTypeStr === "YEARLY" || vTypeStr === "ANNUAL") && generalForm.remainingDays < 365) {
+        return toast.error(`Cannot add Yearly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+      }
+      if (vehicleForm.dateTo && generalForm.licenseValidityDate) {
+        const passEnd = new Date(vehicleForm.dateTo);
+        const datePart = String(generalForm.licenseValidityDate).split('T')[0];
+        const [yyyy, mm, dd] = datePart.split('-').map(Number);
+        if (yyyy && mm && dd) {
+          const licExp = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
+          if (passEnd > licExp) {
+            return toast.error(`Cannot add pass. Pass end date (${formatDateGB(vehicleForm.dateTo)}) exceeds company license expiry date (${formatDateLong(generalForm.licenseValidityDate)}).`);
+          }
+        }
+      }
+    }
+
     // ---- Blacklist blocking check ----
     const cleanRegNo = vehicleForm.regNo ? vehicleForm.regNo.replace(/[\s-]/g, "").toUpperCase() : "";
     const regNoWarning = blacklistWarnings["VEHICLE_" + cleanRegNo];
@@ -1726,6 +1904,10 @@ export default function PassRequestPage() {
             ? p.passportNo
             : p.aadharNo;
 
+        const isCustomDesig = p.designation === "Crew" || p.designation === "Supernumerary" || p.designation === "Others";
+        const desigIdVal = isCustomDesig ? null : (parseInt(p.designation, 10) || null);
+        const desigOtherVal = (p.designation === "Crew" || p.designation === "Supernumerary") ? p.designation : (p.designation === "Others" ? p.designationOther : null);
+
         return {
           rateId: 1,
           hepTypeId: parseInt(p.hepType, 10) || 2,
@@ -1739,10 +1921,8 @@ export default function PassRequestPage() {
             "INDIAN",
           ),
           countryId: parseInt(p.country, 10) || 75,
-          designationId:
-            p.designation === "Others"
-              ? null
-              : parseInt(p.designation, 10) || null,
+          designationId: desigIdVal,
+          designationOther: desigOtherVal,
           cardNumber: p.cardNumber,
           accessAreaId: getEnumValue(
             masterData.accessAreas,
@@ -1751,6 +1931,10 @@ export default function PassRequestPage() {
           ),
           withTwoWheeler: p.withTwoWheeler,
           vehicleNo: p.vehicleNo,
+          cdcNumber: p.cdcNumber || null,
+          passportNo: p.passportNo || null,
+          seafarerPassFor: p.seafarerPassFor || null,
+          seafarerIdType: p.seafarerIdType || null,
           // Secondary ID proof — only relevant for non-seafarers
           idProofType:
             p.hepType !== "3"
@@ -1899,9 +2083,47 @@ export default function PassRequestPage() {
         setActiveTab("view");
       }
     } catch (error) {
-      toast.error(
-        error.response?.data?.message || "Submission failed. Server Error.",
-      );
+      const errData = error.response?.data;
+      if (errData && (errData.code === "LICENSE_EXPIRED" || errData.code === "PASS_EXCEEDS_LICENSE")) {
+        toast.custom((t) => (
+          <div className="flex flex-col gap-3 w-[360px] p-4 bg-white dark:bg-stone-900 border-l-4 border-red-500 rounded-xl shadow-2xl animate-in slide-in-from-top-4 duration-300">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg shrink-0">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h5 className="text-xs font-bold uppercase tracking-wider text-stone-900 dark:text-white">
+                  {errData.code === "LICENSE_EXPIRED" ? "License Expired" : "Exceeds Expiry"}
+                </h5>
+                <p className="text-[11px] text-stone-600 dark:text-stone-400 mt-1 leading-relaxed">
+                  {errData.message}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-1 border-t border-stone-100 dark:border-stone-850">
+              <button
+                onClick={() => toast.dismiss(t)}
+                className="px-2.5 py-1.5 text-[10px] font-bold text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 transition-all uppercase"
+              >
+                Dismiss
+              </button>
+              <button
+                onClick={() => {
+                  toast.dismiss(t);
+                  window.dispatchEvent(new Event("open-profile-update"));
+                }}
+                className="px-3 py-1.5 text-[10px] font-black bg-amber-400 hover:bg-amber-500 text-black rounded-lg transition-all shadow-sm uppercase tracking-wide"
+              >
+                Update Profile
+              </button>
+            </div>
+          </div>
+        ), { duration: 8000 });
+      } else {
+        toast.error(
+          errData?.message || "Submission failed. Server Error.",
+        );
+      }
       console.error("Submit Error:", error);
     } finally {
       setLoading(false);
@@ -2026,6 +2248,15 @@ export default function PassRequestPage() {
         designation: "13",
         idProofType: "1",
       }); // 13=Driver Desig, 1=DL
+    } else if (selectedType === "3") {
+      // 3 = Seafarers: force Daily pass type (1)
+      setPersonForm({
+        ...personForm,
+        hepType: selectedType,
+        passType: "1",
+        designation: "",
+        idProofType: "",
+      });
     } else {
       setPersonForm({
         ...personForm,
@@ -2080,12 +2311,25 @@ export default function PassRequestPage() {
       // Set editing index so master directory dropdown is hidden and button shows "Update Person"
       setEditingPersonIndex('reverted');
 
+      // Resolve HEP Type ID (1: Drivers, 2: Personnel, 3: Seafarers, 4: Vendors)
+      const rawHep = entity.hepTypeId || entity.hepType;
+      let resolvedHepType = "2";
+      if (String(rawHep) === "3" || String(rawHep).toUpperCase().includes("SEAFARER")) {
+        resolvedHepType = "3";
+      } else if (String(rawHep) === "1" || String(rawHep).toUpperCase().includes("DRIVER")) {
+        resolvedHepType = "1";
+      } else if (String(rawHep) === "4" || String(rawHep).toUpperCase().includes("VENDOR")) {
+        resolvedHepType = "4";
+      } else if (rawHep) {
+        resolvedHepType = String(rawHep);
+      }
+
       // Map ENUM strings to numeric IDs using masterData
       const nationalityEnum = entity.nationality; // "INDIAN" or "FOREIGNER"
       const nationalityObj = masterData.nationalities.find(n => (n.value || n.label || n.name || "").toUpperCase() === nationalityEnum?.toUpperCase());
-      const nationalityId = nationalityObj ? String(nationalityObj.id || nationalityObj.value) : (nationalityEnum === "INDIAN" ? "1" : "2");
+      const nationalityId = nationalityObj ? String(nationalityObj.id || nationalityObj.value) : (nationalityEnum === "FOREIGNER" ? "2" : "1");
 
-      const accessAreaEnum = entity.accessAreaId; // "OIL JETTY AND OTHER GATES" or "OTHER GATES ONLY"
+      const accessAreaEnum = entity.accessAreaId || entity.accessArea; // "OIL JETTY AND OTHER GATES" or "OTHER GATES ONLY"
       const accessAreaObj = masterData.accessAreas.find(a => (a.value || a.label || a.name || "").toUpperCase() === accessAreaEnum?.toUpperCase());
       const accessAreaId = accessAreaObj ? String(accessAreaObj.id || accessAreaObj.value) : '';
 
@@ -2097,8 +2341,48 @@ export default function PassRequestPage() {
       const passTypeObj = masterData.passTypes.find(p => (p.value || p.label || p.name || "").toUpperCase() === passTypeEnum?.toUpperCase());
       const passTypeId = passTypeObj ? String(passTypeObj.id || passTypeObj.value) : passTypeEnum;
 
+      // Resolve Seafarer ID Type (passport or aadhaar)
+      let resolvedSeafarerIdType = entity.seafarerIdType || '';
+      if (resolvedHepType === "3" && !resolvedSeafarerIdType) {
+        if (entity.passportPath || entity.passportName || entity.passportNo || String(entity.idProofType).toUpperCase().includes("PASSPORT")) {
+          resolvedSeafarerIdType = "passport";
+        } else {
+          resolvedSeafarerIdType = "aadhaar";
+        }
+      }
+
+      // Resolve Designation
+      const rawDesig = String(entity.designationId || entity.designation || entity.designationOther || '');
+      let resolvedDesignation = rawDesig;
+      const desigMatch = masterData.designations.find(d => 
+        String(d.id) === rawDesig || 
+        String(d.name || '').toUpperCase() === rawDesig.toUpperCase()
+      );
+      if (desigMatch) {
+        resolvedDesignation = String(desigMatch.id);
+      } else if (rawDesig.toUpperCase().includes("CREW")) {
+        resolvedDesignation = "Crew";
+      } else if (rawDesig.toUpperCase().includes("SUPERNUMERARY")) {
+        resolvedDesignation = "Supernumerary";
+      }
+      if (resolvedHepType === "3" && (!resolvedDesignation || resolvedDesignation === "null" || resolvedDesignation === "undefined" || resolvedDesignation === "")) {
+        resolvedDesignation = "Crew";
+      }
+
+      // Resolve Country
+      const rawCountry = entity.countryId || entity.country;
+      const countryObj = masterData.countries.find(c =>
+        String(c.id) === String(rawCountry) ||
+        String(c.name || '').trim().toUpperCase() === String(rawCountry || '').trim().toUpperCase()
+      );
+      const indiaObj = masterData.countries.find(c => String(c.name || '').trim().toLowerCase() === 'india');
+      const defaultIndiaId = indiaObj ? String(indiaObj.id) : '75';
+      const resolvedCountry = countryObj ? String(countryObj.id) : (rawCountry ? String(rawCountry) : defaultIndiaId);
+
+      // Resolve Passport No
+      const resolvedPassportNo = entity.passportNo || (resolvedSeafarerIdType === "passport" ? entity.aadharNo || entity.idProofNumber || '' : '');
+
       // Map reverted person data to personForm structure
-      // NOTE: personForm uses: country, designation, accessArea (not countryId, designationId, accessAreaId)
       console.log("REVERTED ENTITY1657", entity);
       setPersonForm({
         id: entity.id,
@@ -2106,28 +2390,28 @@ export default function PassRequestPage() {
         name: entity.name || '',
         mobile: entity.mobile || '',
         email: entity.email || '',
-        aadharNo: entity.aadharNo || entity.aadharNumber || entity.idProofNumber || '',
-        designation: String(entity.designationId || entity.designation || ''),
-        designationOther: '',
+        aadharNo: resolvedSeafarerIdType === "passport" ? '' : (entity.aadharNo || entity.aadharNumber || ''),
+        designation: resolvedDesignation,
+        designationOther: entity.designationOther || '',
         idProofType: idProofTypeId,
-        idProofNumber: entity.idProofNumber || entity.aadharNo || '',
-        hepType: String(entity.hepTypeId || '2'),
+        idProofNumber: entity.idProofNumber || '',
+        hepType: resolvedHepType,
         passType: passTypeId,
         passPeriod: entity.passPeriod || '1',
         dateFrom: entity.dateFrom ? (entity.dateFrom.includes('T') ? entity.dateFrom.split('T')[0] : entity.dateFrom) + 'T00:00' : '',
         dateTo: entity.dateTo ? (entity.dateTo.includes('T') ? entity.dateTo.split('T')[0] : entity.dateTo) + 'T00:00' : '',
         amount: entity.amount || '',
         nationality: nationalityId,
-        country: String(entity.countryId || '75'),
+        country: resolvedCountry,
         visaNo: entity.visaNo || '',
         cardNumber: entity.cardNumber || '',
         withTwoWheeler: entity.withTwoWheeler || false,
         vehicleNo: entity.vehicleNo || '',
         accessArea: accessAreaId,
-        passportNo: entity.passportNo || '',
+        passportNo: resolvedPassportNo,
         cdcNumber: entity.cdcNumber || '',
         seafarerPassFor: entity.seafarerPassFor || 'Sign-On',
-        seafarerIdType: entity.seafarerIdType || '',
+        seafarerIdType: resolvedSeafarerIdType,
         
         // Preserve newly uploaded files
         photo: entity.newPhoto || null,
@@ -2143,7 +2427,7 @@ export default function PassRequestPage() {
         declarationForm: entity.newDeclaration || null,
         entryAuthorization: entity.newEntryAuthorization || null,
 
-        // Existing file names for viewing
+        // Existing file names and paths for viewing
         existingPassRequestId: editingRevertedPass?.id,
 
         existingPhotoName: entity.photoFileName,
@@ -2160,10 +2444,12 @@ export default function PassRequestPage() {
 
         existingReqName: entity.requisitionLetterName,
         existingPassportName: entity.passportName,
+        existingPassportPath: entity.passportPath,
         existingPoliceName: entity.policeVerificationName,
         existingEmpName: entity.employmentProofName,
         existingChaName: entity.chaLicenseName,
         existingCdcName: entity.cdcDocumentName,
+        existingCdcPath: entity.cdcDocumentPath,
         existingDeclarationName: entity.declarationFormName,
         existingEntryAuthName: entity.entryAuthorizationFileName,
         existingEntryAuthPath: entity.entryAuthorizationFilePath,
@@ -2254,14 +2540,24 @@ export default function PassRequestPage() {
 
       if (type === 'person') {
         const currentEntity = revertedPersons[targetIdx] || {};
+        const isCustomDesig = personForm.designation === "Crew" || personForm.designation === "Supernumerary" || personForm.designation === "Others";
+        const desigIdVal = isCustomDesig ? null : (parseInt(personForm.designation, 10) || null);
+        const desigOtherVal = (personForm.designation === "Crew" || personForm.designation === "Supernumerary") ? personForm.designation : (personForm.designation === "Others" ? personForm.designationOther : null);
+        const primaryIdNo = personForm.hepType === "3" && personForm.seafarerIdType === "passport" ? personForm.passportNo : personForm.aadharNo;
+
+        const nationalityEnum = getEnumValue(masterData.nationalities, personForm.nationality, "INDIAN");
+        const idProofTypeEnum = getEnumValue(masterData.idProofTypes, personForm.idProofType, "");
+
         // Use personForm data for the update
         const updateData = {
           id: id,
           name: personForm.name,
           mobile: personForm.mobile,
-          aadharNo: personForm.aadharNo,
+          aadharNo: primaryIdNo,
           designation: personForm.designation,
-          idProofType: personForm.idProofType,
+          designationId: desigIdVal,
+          designationOther: desigOtherVal,
+          idProofType: idProofTypeEnum,
           hepTypeId: personForm.hepType,
           passType: personForm.passType,
           passPeriod: personForm.passPeriod,
@@ -2274,6 +2570,16 @@ export default function PassRequestPage() {
             personForm.accessArea,
             "OTHER GATES ONLY",
           ),
+          email: personForm.email || '',
+          visaNo: personForm.visaNo || '',
+          nationality: nationalityEnum,
+          idProofNumber: personForm.idProofNumber || '',
+          withTwoWheeler: personForm.withTwoWheeler || false,
+          vehicleNo: personForm.vehicleNo || '',
+          cdcNumber: personForm.cdcNumber || null,
+          passportNo: personForm.passportNo || null,
+          seafarerPassFor: personForm.seafarerPassFor || null,
+          seafarerIdType: personForm.seafarerIdType || null,
           // File names for reference
           photoFileName: personForm.existingPhotoName,
           aadharPDFFileName: personForm.existingAadharName,
@@ -2434,7 +2740,12 @@ export default function PassRequestPage() {
           formData.append('mobile', person.mobile || '');
           formData.append('aadharNo', person.aadharNo || '');
           formData.append('designation', person.designation || '');
-          formData.append('idProofType', person.idProofType || '');
+          if (person.designationId) formData.append('designationId', person.designationId);
+          if (person.designationOther) formData.append('designationOther', person.designationOther);
+          const natEnum = getEnumValue(masterData.nationalities, person.nationality, 'INDIAN');
+          const idTypeEnum = getEnumValue(masterData.idProofTypes, person.idProofType, '');
+
+          formData.append('idProofType', idTypeEnum || '');
           formData.append('hepTypeId', person.hepTypeId || '');
           formData.append('passType', passTypeEnum);
           formData.append('passPeriod', person.passPeriod || '');
@@ -2443,6 +2754,16 @@ export default function PassRequestPage() {
           formData.append('amount', person.amount || '');
           formData.append('countryId', person.countryId || '');
           formData.append('accessAreaId', person.accessAreaId || '');
+          formData.append('email', person.email || '');
+          formData.append('visaNo', person.visaNo || '');
+          formData.append('nationality', natEnum || 'INDIAN');
+          formData.append('idProofNumber', person.idProofNumber || '');
+          formData.append('withTwoWheeler', person.withTwoWheeler ? 'true' : 'false');
+          formData.append('vehicleNo', person.vehicleNo || '');
+          formData.append('passportNo', person.passportNo || '');
+          formData.append('cdcNumber', person.cdcNumber || '');
+          formData.append('seafarerPassFor', person.seafarerPassFor || '');
+          formData.append('seafarerIdType', person.seafarerIdType || '');
 
           // File name references
           formData.append('photoFileName', person.photoFileName || '');
@@ -2654,6 +2975,48 @@ export default function PassRequestPage() {
                   <span className="text-red-300 uppercase tracking-widest text-[10px]">Suspension Reason:</span>
                   <span className="uppercase tracking-wide">{companyBlacklistReason}</span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {generalForm.isLicenseExpired ? (
+            <div className="bg-white rounded-2xl border border-red-200 shadow-xl p-10 text-center max-w-2xl mx-auto my-8 animate-in zoom-in-95 duration-300">
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-200 shadow-sm animate-pulse">
+                <AlertCircle className="h-8 w-8 text-red-600" />
+              </div>
+              <h3 className="text-xl font-black text-stone-900 uppercase tracking-wide">
+                Pass Generation Locked — License Expired
+              </h3>
+              <p className="text-sm text-stone-600 mt-2 leading-relaxed font-medium">
+                Your company license expired on <strong className="text-red-700 font-bold">{formatDateLong(generalForm.licenseValidityDate)}</strong>. Pass application form is disabled until your company license is renewed.
+              </p>
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={() => window.dispatchEvent(new Event("open-profile-update"))}
+                  className="px-6 py-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-sm tracking-wider uppercase rounded-xl shadow-lg transition-all flex items-center gap-2"
+                >
+                  Renew / Update License Now
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+          {!generalForm.isLicenseExpired && generalForm.remainingDays !== null && generalForm.remainingDays <= 30 && (
+            <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 border border-amber-400/30 text-[#4c2d00] rounded-2xl p-5 flex items-start gap-4 animate-in slide-in-from-top-2 duration-300 shadow-lg shadow-amber-950/10">
+              <div className="bg-white/20 text-[#4c2d00] p-3 rounded-xl border border-white/30 shadow-inner shrink-0">
+                <AlertCircle className="h-6 w-6" />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-base font-extrabold tracking-wide uppercase">Company License Expiring Soon!</h4>
+                <p className="text-sm text-[#5c3c00] mt-1 leading-relaxed font-semibold">
+                  Your license expires in <span className="font-extrabold text-red-700 bg-red-100/50 px-1.5 py-0.5 rounded">{generalForm.remainingDays} days</span> (on {formatDateLong(generalForm.licenseValidityDate)}). Passes valid beyond this date cannot be created.
+                </p>
+                <button
+                  onClick={() => window.dispatchEvent(new Event("open-profile-update"))}
+                  className="mt-3.5 px-5 py-2.5 bg-stone-900 text-amber-400 hover:bg-stone-850 active:scale-95 transition-all text-xs font-black tracking-wider uppercase rounded-xl shadow-md flex items-center gap-1.5"
+                >
+                  Renew / Update License Now
+                </button>
               </div>
             </div>
           )}
@@ -3174,6 +3537,8 @@ export default function PassRequestPage() {
               </button>
             </div>
           </footer>
+            </>
+          )}
         </div>
       )}
 
@@ -3701,7 +4066,10 @@ export default function PassRequestPage() {
                     </label>
                     <select
                       value={personForm.hepType}
-                      onChange={handleHepTypeChange}
+                      onChange={(e) => {
+                        handleHepTypeChange(e);
+                        validatePersonField("hepType", e.target.value);
+                      }}
                       className={inputClass}
                     >
                       <option value="">Select Type</option>
@@ -3711,6 +4079,11 @@ export default function PassRequestPage() {
                         </option>
                       ))}
                     </select>
+                    {personErrors.hepType && (
+                      <p className="text-xs text-red-500 font-semibold mt-1">
+                        {personErrors.hepType}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
@@ -4313,9 +4686,9 @@ export default function PassRequestPage() {
                           )?.toUpperCase();
 
                           if (nationality === "INDIAN") {
-                            return c.id === 75; // only India
+                            return c.name && c.name.trim().toUpperCase() === "INDIA";
                           } else if (nationality) {
-                            return c.id !== 75; // exclude India
+                            return c.name && c.name.trim().toUpperCase() !== "INDIA";
                           }
                           return true;
                         })
@@ -4469,29 +4842,6 @@ export default function PassRequestPage() {
                           }
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase">
-                          Declaration Form Document <span className="text-red-500">*</span>
-                        </label>
-                        <FileUploadBox
-                          file={personForm.declarationForm}
-                          existingFileName={personForm.existingDeclarationName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "declarationForm",
-                              personForm.existingDeclarationName,
-                              personForm.editIndex
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              declarationForm: e.target.files[0],
-                            })
-                          }
-                        />
-                      </div>
                     </div>
                   )}
                   {/* Secondary ID Proof — hidden for Seafarers who have their own dedicated ID flow above */}
@@ -4616,6 +4966,7 @@ export default function PassRequestPage() {
                       />
                     )}
                   </div>
+                  {personForm.hepType !== "3" && (
                   <div className="space-y-1.5 md:col-span-2 max-w-sm">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Copy of{" "}
@@ -4645,6 +4996,7 @@ export default function PassRequestPage() {
                       }
                     />
                   </div>
+                  )}
                   {personForm.hepType === "3" && (
                     <div className="space-y-1.5 animate-in zoom-in">
                       <label className="text-xs text-orange-600 font-black uppercase tracking-wider">
@@ -4701,14 +5053,39 @@ export default function PassRequestPage() {
                           }
                           className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                         >
-                          {masterData.passTypes.map((t) => (
-                            <option
-                              key={t.id || t.value}
-                              value={t.id || t.value}
-                            >
-                              {t.label}
-                            </option>
-                          ))}
+                          {masterData.passTypes
+                            .filter((t) => {
+                              const val = String(t.id || t.value);
+                              const name = String(t.label || t.name || "").toUpperCase();
+                              if (String(personForm.hepType) === "3") {
+                                if (val !== "1" && !name.includes("DAILY")) return false;
+                              }
+                              return true;
+                            })
+                            .map((t) => {
+                              const val = String(t.id || t.value);
+                              const name = String(t.label || t.name || "").toUpperCase();
+                              let isLocked = false;
+                              let lockSuffix = "";
+                              if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && !generalForm.isLicenseExpired) {
+                                if ((val === "2" || name.includes("MONTHLY")) && generalForm.remainingDays < 30) {
+                                  isLocked = true;
+                                  lockSuffix = ` (Locked — License expires in ${generalForm.remainingDays} days)`;
+                                } else if ((val === "3" || name.includes("YEARLY") || name.includes("ANNUAL")) && generalForm.remainingDays < 365) {
+                                  isLocked = true;
+                                  lockSuffix = ` (Locked — License expires in ${generalForm.remainingDays} days)`;
+                                }
+                              }
+                              return (
+                                <option
+                                  key={t.id || t.value}
+                                  value={t.id || t.value}
+                                  disabled={isLocked}
+                                >
+                                  {(t.label || t.name) + lockSuffix}
+                                </option>
+                              );
+                            })}
                         </select>
                       </td>
                       <td className="p-3 border-r border-slate-200">
@@ -4718,7 +5095,9 @@ export default function PassRequestPage() {
                             value={personForm.passPeriod}
                             min="1"
                             max={
-                              String(personForm.passType) === "1" ? "7" : "1"
+                              String(personForm.passType) === "1"
+                                ? (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && generalForm.remainingDays < 7 ? String(Math.max(1, generalForm.remainingDays)) : "7")
+                                : "1"
                             }
                             disabled={String(personForm.passType) !== "1"}
                             onChange={(e) =>
@@ -5152,14 +5531,31 @@ export default function PassRequestPage() {
                           }
                           className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                         >
-                          {masterData.passTypes.map((t) => (
-                            <option
-                              key={t.id || t.value}
-                              value={t.id || t.value}
-                            >
-                              {t.label}
-                            </option>
-                          ))}
+                          {masterData.passTypes
+                            .map((t) => {
+                              const val = String(t.id || t.value);
+                              const name = String(t.label || t.name || "").toUpperCase();
+                              let isLocked = false;
+                              let lockSuffix = "";
+                              if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && !generalForm.isLicenseExpired) {
+                                if ((val === "2" || name.includes("MONTHLY")) && generalForm.remainingDays < 30) {
+                                  isLocked = true;
+                                  lockSuffix = ` (Locked — License expires in ${generalForm.remainingDays} days)`;
+                                } else if ((val === "3" || name.includes("YEARLY") || name.includes("ANNUAL")) && generalForm.remainingDays < 365) {
+                                  isLocked = true;
+                                  lockSuffix = ` (Locked — License expires in ${generalForm.remainingDays} days)`;
+                                }
+                              }
+                              return (
+                                <option
+                                  key={t.id || t.value}
+                                  value={t.id || t.value}
+                                  disabled={isLocked}
+                                >
+                                  {(t.label || t.name) + lockSuffix}
+                                </option>
+                              );
+                            })}
                         </select>
                       </td>
                       <td className="p-3 border-r border-slate-200">
@@ -5169,7 +5565,9 @@ export default function PassRequestPage() {
                             value={vehicleForm.passPeriod}
                             min="1"
                             max={
-                              String(vehicleForm.passType) === "1" ? "7" : "1"
+                              String(vehicleForm.passType) === "1"
+                                ? (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && generalForm.remainingDays < 7 ? String(Math.max(1, generalForm.remainingDays)) : "7")
+                                : "1"
                             }
                             disabled={String(vehicleForm.passType) !== "1"}
                             onChange={(e) =>

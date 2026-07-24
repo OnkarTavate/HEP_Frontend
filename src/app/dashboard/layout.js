@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
+import ProfileUpdateModal from "@/components/ProfileUpdateModal";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Ship,
@@ -48,6 +49,7 @@ import { cn } from "@/lib/utils";
 import axios from "axios";
 import { toast } from "sonner";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
+import NotificationPanel from "@/components/NotificationPanel";
 
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
@@ -72,17 +74,17 @@ const getNavigationItems = (role, departmentName) => {
     Applicant: applicantItems,
     Approval: isTrafficDept
       ? [
-          ...baseItems,
-          { name: "Traffic Approval", href: "/dashboard/approval_admin", icon: Truck },
-          { name: "Gate Log", href: "/dashboard/gate-log", icon: FileText },
-          { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
-        ]
+        ...baseItems,
+        { name: "Traffic Approval", href: "/dashboard/approval_admin", icon: Truck },
+        { name: "Gate Log", href: "/dashboard/gate-log", icon: FileText },
+        { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
+      ]
       : [
-          ...baseItems,
-          { name: "Pass Approval", href: "/dashboard/pass-approval", icon: CheckSquare },
-          { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
-          { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
-        ],
+        ...baseItems,
+        { name: "Pass Approval", href: "/dashboard/pass-approval", icon: CheckSquare },
+        { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
+        { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
+      ],
     "Pass Officer": [
       ...baseItems,
       { name: "Pass Approval", href: "/dashboard/pass-approval", icon: CheckSquare },
@@ -114,7 +116,7 @@ function useCopy() {
 }
 
 // ─── Company Profile Panel (replaces old UserNameCard) ────────────────────────
-function CompanyProfilePanel({ user, profileData, onChangePassword, onLogout }) {
+function CompanyProfilePanel({ user, profileData, onChangePassword, onUpdateProfile, onLogout }) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
   const { copied: copiedRef, copy: copyRef } = useCopy();
@@ -232,20 +234,24 @@ function CompanyProfilePanel({ user, profileData, onChangePassword, onLogout }) 
           {/* Detail rows */}
           <div className="px-4 pt-2 pb-1 max-h-[340px] overflow-y-auto [scrollbar-width:thin]">
             <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">Company Details</p>
-            <DetailRow icon={Hash}        label="Reference No"  value={refNo}    copyKey="ref" />
-            <DetailRow icon={User}        label="Login ID"       value={loginId}  copyKey="lid" />
-            <DetailRow icon={Briefcase}   label="User Type"      value={userType} copyKey="utype" />
-            <DetailRow icon={Mail}        label="Email"          value={email}    copyKey="email" />
-            <DetailRow icon={Phone}       label="Mobile"         value={mobile}   copyKey="mob" />
-            <DetailRow icon={FileCode2}   label="GST Number"     value={gst}      copyKey="gst" />
-            <DetailRow icon={CreditCard}  label="PAN Number"     value={pan}      copyKey="pan" />
+            <DetailRow icon={Hash} label="Reference No" value={refNo} copyKey="ref" />
+            <DetailRow icon={User} label="Login ID" value={loginId} copyKey="lid" />
+            <DetailRow icon={Mail} label="Email" value={email} copyKey="email" />
+            <DetailRow icon={Phone} label="Mobile" value={mobile} copyKey="mob" />
           </div>
 
           {/* Actions */}
           <div className="p-3 border-t border-stone-100 dark:border-white/5 space-y-1.5">
             <button
+              onClick={() => { setOpen(false); onUpdateProfile(); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold text-amber-700 bg-amber-50 dark:bg-amber-400/10 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-400/20 transition-colors"
+            >
+              <Building2 className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              Edit Profile
+            </button>
+            <button
               onClick={() => { setOpen(false); onChangePassword(); }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-amber-50 dark:hover:bg-amber-400/10 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-white/5 transition-colors"
             >
               <KeyRound className="h-4 w-4 shrink-0" />
               Change Password
@@ -271,6 +277,7 @@ export default function DashboardLayout({ children }) {
   const [profileData, setProfileData] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [showProfileUpdateModal, setShowProfileUpdateModal] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [modalLoading, setModalLoading] = useState(false);
@@ -285,7 +292,7 @@ export default function DashboardLayout({ children }) {
   const toggleDarkMode = () => {
     setDarkMode((prev) => {
       const next = !prev;
-      try { localStorage.setItem("dashboard-theme", next ? "dark" : "light"); } catch {}
+      try { localStorage.setItem("dashboard-theme", next ? "dark" : "light"); } catch { }
       return next;
     });
   };
@@ -298,12 +305,18 @@ export default function DashboardLayout({ children }) {
   const toggleSidebar = () => {
     setSidebarExpanded((prev) => {
       const next = !prev;
-      try { localStorage.setItem("dashboard-sidebar", next ? "expanded" : "collapsed"); } catch {}
+      try { localStorage.setItem("dashboard-sidebar", next ? "expanded" : "collapsed"); } catch { }
       return next;
     });
   };
 
   useSessionHeartbeat();
+
+  useEffect(() => {
+    const handleOpenProfileUpdate = () => setShowProfileUpdateModal(true);
+    window.addEventListener("open-profile-update", handleOpenProfileUpdate);
+    return () => window.removeEventListener("open-profile-update", handleOpenProfileUpdate);
+  }, []);
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -320,7 +333,7 @@ export default function DashboardLayout({ children }) {
       if (token && (role === "user" || role === "applicant" || role === "agent")) {
         axios.get(`${AGENT_API}/agents/profile`, { headers: { Authorization: `Bearer ${token}` } })
           .then((res) => { if (res.data?.success) setProfileData(res.data.data); })
-          .catch(() => {});
+          .catch(() => { });
       }
     } else {
       router.push("/");
@@ -630,20 +643,14 @@ export default function DashboardLayout({ children }) {
               </Button>
 
               {/* Notifications */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative bg-white dark:bg-white/5 shadow-sm rounded-full hover:bg-stone-50 dark:hover:bg-white/10 dark:border dark:border-white/10 active:scale-95 transition-all duration-150"
-              >
-                <Bell className="h-5 w-5 text-stone-600 dark:text-stone-300" />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-orange-500 rounded-full" />
-              </Button>
+              <NotificationPanel role="agent" />
 
               {/* Company Profile Panel */}
               <CompanyProfilePanel
                 user={user}
                 profileData={profileData}
                 onChangePassword={() => setShowPasswordChangeModal(true)}
+                onUpdateProfile={() => setShowProfileUpdateModal(true)}
                 onLogout={handleLogout}
               />
             </div>
@@ -742,6 +749,21 @@ export default function DashboardLayout({ children }) {
           </div>
         </div>
       )}
+
+      {/* ── Profile Update Request Modal ────────────────────────────────────── */}
+      <ProfileUpdateModal
+        isOpen={showProfileUpdateModal}
+        onClose={() => setShowProfileUpdateModal(false)}
+        onSuccess={() => {
+          // Refresh profile data in header panel
+          const token = localStorage.getItem("accessToken");
+          if (token) {
+            axios.get(`${AGENT_API}/agents/profile`, { headers: { Authorization: `Bearer ${token}` } })
+              .then((res) => { if (res.data?.success) setProfileData(res.data.data); })
+              .catch(() => { });
+          }
+        }}
+      />
     </div>
   );
 }

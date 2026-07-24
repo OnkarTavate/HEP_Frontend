@@ -64,6 +64,16 @@ const formatAccessArea = (accessAreaId) => {
   return accessAreaId;
 };
 
+const formatHepType = (hepType) => {
+  if (!hepType) return "N/A";
+  const typeStr = String(hepType).trim();
+  if (typeStr === "1" || typeStr.toLowerCase() === "driver" || typeStr.toLowerCase() === "drivers") return "Drivers";
+  if (typeStr === "2" || typeStr.toLowerCase() === "personnel" || typeStr.toLowerCase() === "personal") return "Personnel";
+  if (typeStr === "3" || typeStr.toLowerCase() === "seafarer" || typeStr.toLowerCase() === "seafarers") return "Seafarers";
+  if (typeStr === "4" || typeStr.toLowerCase() === "vendor" || typeStr.toLowerCase() === "vendors") return "Vendors";
+  return typeStr;
+};
+
 const formatPassType = (passType) => {
   if (!passType) return "N/A";
   const type = String(passType).trim().toUpperCase();
@@ -91,18 +101,23 @@ const formatPassPeriod = (period, passType) => {
 };
 
 // --- Reusable UI Components ---
-const DetailItem = ({ label, value, highlight = false }) => (
-  <div className="flex flex-col">
-    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-      {label}
-    </span>
-    <span
-      className={`text-sm font-semibold ${highlight ? "text-[#0a1e4d] font-black" : "text-slate-700"}`}
-    >
-      {value || "N/A"}
-    </span>
-  </div>
-);
+const DetailItem = ({ label, value, highlight = false, showIfEmpty = false }) => {
+  if (!showIfEmpty && (!value || value === "N/A" || value === "null" || value === "undefined" || String(value).trim() === "")) {
+    return null;
+  }
+  return (
+    <div className="flex flex-col">
+      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+        {label}
+      </span>
+      <span
+        className={`text-sm font-semibold ${highlight ? "text-[#0a1e4d] font-black" : "text-slate-700"}`}
+      >
+        {value || "N/A"}
+      </span>
+    </div>
+  );
+};
 
 const DocumentCard = ({
   label,
@@ -1433,6 +1448,10 @@ export default function AdminPassApprovalsPage() {
                         label="RFID Card"
                         value={entityModal.data.cardNumber}
                       /> */}
+                      <DetailItem
+                        label="CDC No."
+                        value={entityModal.data.cdcNumber}
+                      />
                       {entityModal.data.hepTypeId === "Seafarers" && (
                         <DetailItem
                           label="Seafarer Pass For"
@@ -1639,6 +1658,15 @@ export default function AdminPassApprovalsPage() {
                         label="Passport Document"
                         filePath={entityModal.data.passportPath}
                         documentType="passportDoc"
+                        passRequestId={selectedRequest.id}
+                        onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
+                      />
+                      <DocumentCard
+                        label="CDC Document"
+                        filePath={entityModal.data.cdcDocumentPath}
+                        documentType="cdcDocument"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
                         entityIndex={extractEntityIndex(entityModal.data.id)}
