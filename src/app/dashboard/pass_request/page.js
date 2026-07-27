@@ -240,18 +240,23 @@ const getValidationError = (field, value, extra = {}) => {
 
 // ============================================================
 
-const DetailItem = ({ label, value, highlight = false }) => (
-  <div className="flex flex-col">
-    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-      {label}
-    </span>
-    <span
-      className={`text-sm font-semibold ${highlight ? "text-[#0a1e4d] font-black" : "text-slate-700"}`}
-    >
-      {value || "N/A"}
-    </span>
-  </div>
-);
+const DetailItem = ({ label, value, highlight = false, showIfEmpty = false }) => {
+  if (!showIfEmpty && (!value || value === "N/A" || value === "null" || value === "undefined" || String(value).trim() === "")) {
+    return null;
+  }
+  return (
+    <div className="flex flex-col">
+      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+        {label}
+      </span>
+      <span
+        className={`text-sm font-semibold ${highlight ? "text-[#0a1e4d] font-black" : "text-slate-700"}`}
+      >
+        {value || "N/A"}
+      </span>
+    </div>
+  );
+};
 const getEnumValue = (arr, id, fallback) => {
   if (!id) return fallback;
 
@@ -445,6 +450,7 @@ export default function PassRequestPage() {
     accessArea: "",
     designation: "",
     designationOther: "",
+    dob: "",
     cdcNumber: "",
     cdcDocument: null,
     declarationForm: null,
@@ -940,27 +946,24 @@ export default function PassRequestPage() {
   }, [modals.vehicle]);
 
   useEffect(() => {
-    const selectedNationality = getLabelById(
-      masterData.nationalities,
-      personForm.nationality,
-      "label",
-    )?.toUpperCase();
+    const natObj = (masterData.nationalities || []).find(
+      (n) => String(n.id || n.value) === String(personForm.nationality)
+    );
+    const selectedNationality = (natObj?.label || natObj?.name || "").toUpperCase();
 
-    const indiaObj = masterData.countries.find(
+    const indiaObj = (masterData.countries || []).find(
       (c) => String(c.name || "").trim().toLowerCase() === "india"
     );
     const indiaId = indiaObj ? String(indiaObj.id) : "";
 
-    if (selectedNationality === "INDIAN" || !selectedNationality || personForm.nationality === "1") {
-      if (indiaId) {
-        setPersonForm((prev) => {
-          if (String(prev.country) !== indiaId) {
-            return { ...prev, country: indiaId };
-          }
-          return prev;
-        });
-      }
-    } else if (selectedNationality && selectedNationality !== "INDIAN") {
+    if ((selectedNationality === "INDIAN" || !personForm.nationality || String(personForm.nationality) === "1") && indiaId) {
+      setPersonForm((prev) => {
+        if (String(prev.country) !== indiaId) {
+          return { ...prev, country: indiaId };
+        }
+        return prev;
+      });
+    } else if (selectedNationality && selectedNationality !== "INDIAN" && String(personForm.nationality) !== "1") {
       // If switching from Indian → foreign, clear country if it was India
       if (String(personForm.country) === indiaId) {
         setPersonForm((prev) => ({
@@ -970,6 +973,17 @@ export default function PassRequestPage() {
       }
     }
   }, [personForm.nationality, masterData.nationalities, masterData.countries]);
+
+  const isPersonForeigner = useCallback(
+    (natValue) => {
+      const natObj = (masterData.nationalities || []).find(
+        (n) => String(n.id || n.value) === String(natValue) || (n.label || n.name || "").toUpperCase() === String(natValue).toUpperCase()
+      );
+      const label = (natObj?.label || natObj?.name || "").toUpperCase();
+      return label === "FOREIGNER" || String(natValue) === "2" || String(natValue).toUpperCase() === "FOREIGNER";
+    },
+    [masterData.nationalities]
+  );
 
   const fetchSubmittedPasses = useCallback(async () => {
     setLoadingPasses(true);
@@ -1483,6 +1497,33 @@ export default function PassRequestPage() {
       }
     }
 
+    // ---- Full field validation before add ----
+    const errors = {};
+
+    // ---- DOB & Under-18 Age Validation Check ----
+    if (!personForm.dob) {
+      errors.dob = "Date of Birth is required";
+    } else {
+      const dobDate = new Date(personForm.dob);
+      if (isNaN(dobDate.getTime())) {
+        errors.dob = "Enter a valid Date of Birth";
+      } else {
+        const today = new Date();
+        let age = today.getFullYear() - dobDate.getFullYear();
+        const monthDiff = today.getMonth() - dobDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dobDate.getDate())) {
+          age--;
+        }
+        const desigObj = (masterData.designations || []).find((d) => String(d.id) === String(personForm.designation));
+        const selectedDesigName = desigObj ? desigObj.name : personForm.designation;
+        const desigStr = String(selectedDesigName || personForm.designationOther || "").toLowerCase();
+        const isVisitor = desigStr.includes("visitor");
+        if (age < 18 && !isVisitor) {
+          errors.dob = "Pass application is not allowed for persons below 18 years of age (except Visitor designation).";
+        }
+      }
+    }
+
     // ---- Auto-fallback for Driver Licence if ID proof is DL ----
     if (personForm.hepType === "1") {
       if (!personForm.driverLicence && personForm.idProofFile) {
@@ -1512,8 +1553,6 @@ export default function PassRequestPage() {
       return toast.error(`Cannot add/update person: Two Wheeler is blacklisted! Reason: ${twoWheelerWarning.replace("⚠️ BLACKLISTED ", "")}`);
     }
 
-    // ---- Full field validation before add ----
-    const errors = {};
     if (!personForm.hepType || personForm.hepType.trim() === "") {
       errors.hepType = "Please select Type of HEP (Drivers, Personnel, or Seafarers)";
     }
@@ -1522,22 +1561,28 @@ export default function PassRequestPage() {
     else if (!/^[a-zA-Z\s.'-]{2,80}$/.test(personForm.name.trim()))
       errors.name = "Name must be 2-80 characters (letters only)";
 
-    // Aadhaar validation - required for non-seafarers OR seafarers who chose aadhaar
-    if (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar") {
+    const isForeigner = isPersonForeigner(personForm.nationality);
+
+    // Aadhaar validation - required for non-foreigners (non-seafarers OR seafarers who chose aadhaar)
+    if (!isForeigner && (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar")) {
       if (!personForm.aadharNo) errors.aadharNo = "Aadhaar number is required";
       else if (!/^\d{12}$/.test(personForm.aadharNo.replace(/\s/g, "")))
         errors.aadharNo = "Aadhaar must be exactly 12 digits";
     }
 
-    // Passport validation - required for seafarers who chose passport
-    if (personForm.hepType === "3" && personForm.seafarerIdType === "passport") {
+    // Passport validation - required for seafarers who chose passport OR for Foreigners
+    if (isForeigner) {
+      if (!personForm.idProofNumber && !personForm.passportNo) {
+        errors.idProofNumber = "Passport number is required for Foreigners";
+      }
+    } else if (personForm.hepType === "3" && personForm.seafarerIdType === "passport") {
       if (!personForm.passportNo) errors.passportNo = "Passport number is required";
-      else if (!/^[A-Z][0-9]{7}$/.test(personForm.passportNo))
-        errors.passportNo = "Passport must be 1 letter + 7 digits (e.g., A1234567)";
+      else if (!/^[A-Z0-9]{5,20}$/i.test(personForm.passportNo))
+        errors.passportNo = "Passport number must be 5-20 alphanumeric characters";
     }
 
     // Seafarer must select ID type
-    if (personForm.hepType === "3" && !personForm.seafarerIdType) {
+    if (personForm.hepType === "3" && !personForm.seafarerIdType && !isForeigner) {
       errors.seafarerIdType = "Please select Aadhaar or Passport";
     }
 
@@ -1561,12 +1606,13 @@ export default function PassRequestPage() {
     )
       errors.vehicleNo = "Enter a valid vehicle registration number";
 
-    if (
-      personForm.visaNo &&
-      String(personForm.country) !== "75" &&
-      !/^[A-Z0-9]{5,20}$/i.test(personForm.visaNo)
-    )
-      errors.visaNo = "Visa number must be 5-20 alphanumeric characters";
+    if (isForeigner) {
+      if (!personForm.visaNo || !personForm.visaNo.trim()) {
+        errors.visaNo = "Visa number is required for Foreigners";
+      } else if (!/^[A-Z0-9]{5,20}$/i.test(personForm.visaNo.trim())) {
+        errors.visaNo = "Visa number must be 5-20 alphanumeric characters";
+      }
+    }
 
     if (personForm.idProofNumber) {
       const err = getValidationError(
@@ -1579,9 +1625,7 @@ export default function PassRequestPage() {
 
     if (Object.keys(errors).length > 0) {
       setPersonErrors(errors);
-      return toast.error(
-        "Please fix the highlighted field errors before adding.",
-      );
+      return;
     }
     setPersonErrors({});
     if (
@@ -1599,13 +1643,12 @@ export default function PassRequestPage() {
     )
       return toast.error("Driver Licence is mandatory for Drivers.");
 
-    // Passport doc is only required for Seafarers who selected "passport" as their ID type
+    // Copy of Passport doc is required for Foreigners or Seafarers who selected "passport"
     if (
-      personForm.hepType === "3" &&
-      personForm.seafarerIdType === "passport" &&
-      !(personForm.passportDoc || personForm.existingPassportName)
+      isForeigner &&
+      !(personForm.idProofFile || personForm.existingIdProofName || personForm.passportDoc || personForm.existingPassportName)
     )
-      return toast.error("Please upload the Passport document for this Seafarer.");
+      return toast.error("Copy of Passport is mandatory for Foreigners.");
 
     if (personForm.passType === "2" || personForm.passType === "3") {
       if (!(personForm.policeVerification || personForm.existingPoliceName)) {
@@ -1843,7 +1886,7 @@ export default function PassRequestPage() {
     if (!generalForm.purpose)
       return toast.warning("Please select a Purpose of Visit.");
     if (!generalForm.authLetter)
-      return toast.warning("Please upload the Authorised Letter.");
+      return toast.warning("Please upload the Licence / Work Order / Contract document.");
     if (!generalForm.requisitionLetter)
       return toast.warning("Please upload the Requisition Letter.");
     if (!agreedToTerms)
@@ -1931,6 +1974,7 @@ export default function PassRequestPage() {
           ),
           withTwoWheeler: p.withTwoWheeler,
           vehicleNo: p.vehicleNo,
+          dob: p.dob || null,
           cdcNumber: p.cdcNumber || null,
           passportNo: p.passportNo || null,
           seafarerPassFor: p.seafarerPassFor || null,
@@ -2408,6 +2452,7 @@ export default function PassRequestPage() {
         withTwoWheeler: entity.withTwoWheeler || false,
         vehicleNo: entity.vehicleNo || '',
         accessArea: accessAreaId,
+        dob: entity.dob ? (entity.dob.includes('T') ? entity.dob.split('T')[0] : entity.dob) : '',
         passportNo: resolvedPassportNo,
         cdcNumber: entity.cdcNumber || '',
         seafarerPassFor: entity.seafarerPassFor || 'Sign-On',
@@ -2572,6 +2617,7 @@ export default function PassRequestPage() {
           ),
           email: personForm.email || '',
           visaNo: personForm.visaNo || '',
+          dob: personForm.dob || null,
           nationality: nationalityEnum,
           idProofNumber: personForm.idProofNumber || '',
           withTwoWheeler: personForm.withTwoWheeler || false,
@@ -2764,6 +2810,7 @@ export default function PassRequestPage() {
           formData.append('cdcNumber', person.cdcNumber || '');
           formData.append('seafarerPassFor', person.seafarerPassFor || '');
           formData.append('seafarerIdType', person.seafarerIdType || '');
+          formData.append('dob', person.dob || '');
 
           // File name references
           formData.append('photoFileName', person.photoFileName || '');
@@ -3106,7 +3153,7 @@ export default function PassRequestPage() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Authorised Letter Copy{" "}
+                    Licence / Work Order / Contract{" "}
                     <span className="text-red-500">*</span>
                   </label>
                   <label className="w-full h-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-lg px-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors group">
@@ -3114,7 +3161,7 @@ export default function PassRequestPage() {
                     <span className="text-sm text-slate-600 font-medium truncate group-hover:text-orange-600">
                       {generalForm.authLetter
                         ? generalForm.authLetter.name
-                        : "Upload PDF/JPG (Max 2MB)"}
+                        : "Upload PDF (Max 2MB)"}
                     </span>
                     <input
                       className="hidden"
@@ -4048,7 +4095,6 @@ export default function PassRequestPage() {
                       handleMasterPersonSelect({ target: { value: id } });
                     }}
                     placeholder="Search person..."
-                    isClearable
                     className="max-w-md w-full"
                     classNamePrefix="react-select"
                   />
@@ -4060,6 +4106,7 @@ export default function PassRequestPage() {
                   1. Role & Identity
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-x-5 gap-y-5">
+                  {/* Basic Profile Info */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Type of HEP <span className="text-red-500">*</span>
@@ -4085,6 +4132,7 @@ export default function PassRequestPage() {
                       </p>
                     )}
                   </div>
+
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Name <span className="text-red-500">*</span>
@@ -4109,369 +4157,7 @@ export default function PassRequestPage() {
                       </p>
                     )}
                   </div>
-                  {/* Seafarer ID Type Selection */}
-                  {personForm.hepType === "3" && (
-                    <div className="space-y-1.5 animate-in zoom-in">
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        ID Proof Type <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        value={personForm.seafarerIdType}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setPersonForm({
-                            ...personForm,
-                            seafarerIdType: value,
-                            // Clear opposite field when switching
-                            aadharNo: value === "passport" ? "" : personForm.aadharNo,
-                            passportNo: value === "aadhaar" ? "" : personForm.passportNo,
-                            aadharFile: value === "passport" ? null : personForm.aadharFile,
-                          });
-                          // Clear error when selection is made
-                          if (personErrors.seafarerIdType) {
-                            setPersonErrors((prev) => ({ ...prev, seafarerIdType: null }));
-                          }
-                        }}
-                        className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${personErrors.seafarerIdType
-                          ? "border-red-400 bg-red-50"
-                          : "border-slate-300 bg-white"
-                          }`}
-                      >
-                        <option value="">-- Select ID Type --</option>
-                        <option value="aadhaar">Aadhaar</option>
-                        <option value="passport">Passport</option>
-                      </select>
-                      {personErrors.seafarerIdType && (
-                        <p className="text-xs text-red-500 mt-0.5 font-medium">
-                          {personErrors.seafarerIdType}
-                        </p>
-                      )}
-                    </div>
-                  )}
 
-                  {/* Aadhaar Fields - Show for non-seafarers OR seafarers who selected aadhaar */}
-                  {(personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar") && (
-                    <>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase">
-                          Upload Aadhar <span className="text-red-500">*</span>
-
-
-                        </label>
-                        <FileUploadBox
-                          disabled={!!personForm.masterId}
-                          file={personForm.aadharFile}
-                          existingFileName={personForm.existingAadharName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "personAadhar",
-                              personForm.existingAadharName,
-                              personForm.editIndex
-                            )
-                          }
-
-                          // onChange={async (e) => {
-                          //   const file =
-                          //     e?.target?.files?.[0] ||
-                          //     e?.files?.[0] ||
-                          //     e?.file ||
-                          //     e;
-
-                          //   setPersonForm((prev) => ({
-                          //     ...prev,
-                          //     aadharFile: file,
-                          //   }));
-
-                          //   if (!file) return;
-
-                          //   try {
-                          //     toast.loading("Reading Aadhaar PDF...", {
-                          //       id: "aadhar-ocr",
-                          //     });
-
-                          //     const extractedAadhar =
-                          //       await extractAadharFromPdf(file);
-
-                          //     if (!extractedAadhar) {
-                          //       setPersonForm((prev) => ({
-                          //         ...prev,
-                          //         aadharFile: file,
-                          //         aadharNo: "", // clear old number
-                          //       }));
-
-                          //       toast.warning(
-                          //         "Could not detect Aadhaar automatically. Please enter manually."
-                          //       );
-
-                          //       return;
-                          //     }
-
-                          //     toast.dismiss("aadhar-ocr");
-
-                          //     if (extractedAadhar) {
-
-                          //       setPersonForm((prev) => ({
-                          //         ...prev,
-                          //         aadharFile: file,
-                          //         aadharNo: extractedAadhar,
-                          //       }));
-
-                          //       toast.success(
-                          //         `Aadhaar detected: ${extractedAadhar}`
-                          //       );
-
-                          //     } else {
-
-                          //       toast.warning(
-                          //         "Could not detect Aadhaar automatically. Please enter manually."
-                          //       );
-                          //     }
-
-                          //   } catch (error) {
-
-                          //     toast.dismiss("aadhar-ocr");
-
-                          //     console.error(error);
-
-                          //     toast.error("Failed to read Aadhaar PDF");
-                          //   }
-                          // }}
-                          onChange={async (e) => {
-
-                            if (personForm.masterId) {
-                              toast.error(
-                                "Aadhaar document comes from Master Directory and cannot be changed."
-                              );
-                              return;
-                            }
-
-
-                            const file =
-                              e?.target?.files?.[0] ||
-                              e?.files?.[0] ||
-                              e?.file ||
-                              e;
-
-                            if (!file) return;
-
-                            // Immediately store uploaded file
-                            setPersonForm((prev) => ({
-                              ...prev,
-                              aadharFile: file,
-                            }));
-
-                            try {
-                              toast.loading(
-                                "Reading Aadhaar PDF...",
-                                {
-                                  id: "aadhar-ocr",
-                                }
-                              );
-
-                              const extractedAadhar =
-                                await extractAadharFromPdf(file);
-
-                              // Always stop loading toast
-                              toast.dismiss("aadhar-ocr");
-
-                              // ==========================
-                              // Aadhaar NOT detected
-                              // ==========================
-                              if (!extractedAadhar) {
-                                setPersonForm((prev) => ({
-                                  ...prev,
-                                  aadharFile: file,
-                                  aadharNo: "", // clear previous Aadhaar
-                                }));
-
-                                toast.warning(
-                                  "Could not detect Aadhaar automatically. Please enter manually."
-                                );
-
-                                return;
-                              }
-
-                              // ==========================
-                              // Aadhaar detected
-                              // ==========================
-                              setPersonForm((prev) => ({
-                                ...prev,
-                                aadharFile: file,
-                                aadharNo: extractedAadhar,
-                              }));
-
-                              toast.success(
-                                `Aadhaar detected: ${extractedAadhar}`
-                              );
-
-                            } catch (error) {
-                              toast.dismiss("aadhar-ocr");
-
-                              console.error(error);
-
-                              // Clear old Aadhaar on failure
-                              setPersonForm((prev) => ({
-                                ...prev,
-                                aadharFile: file,
-                                aadharNo: "",
-                              }));
-
-                              toast.error(
-                                "Failed to read Aadhaar PDF"
-                              );
-                            }
-                          }}
-                        />
-                      </div>
-
-
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase">
-                          Aadhaar No. <span className="text-red-500">*</span>
-                        </label>
-                        {(() => {
-                          const hasVal = !!personForm.aadharNo.trim();
-                          const isValid = /^\d{12}$/.test(personForm.aadharNo);
-                          const hasError = !!personErrors.aadharNo;
-
-                          let customBorderClass = "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
-                          if (hasVal) {
-                            customBorderClass = (hasError || !isValid)
-                              ? "border-red-400 focus:ring-red-500/20 focus:border-red-400"
-                              : "border-emerald-500 focus:ring-emerald-500/20 focus:border-emerald-500";
-                          }
-
-                          return (
-                            <>
-                              <input
-                                type="text"
-                                value={personForm.aadharNo}
-                                readOnly={!!personForm.masterId}
-                                onChange={(e) => {
-                                  const val = e.target.value
-                                    .replace(/\D/g, "")
-                                    .slice(0, 12);
-                                  setPersonForm({ ...personForm, aadharNo: val });
-                                  if (val.length === 12) {
-                                    validatePersonField("aadharNo", val);
-                                    // Real-time blacklist check — fires the moment 12 digits are complete
-                                    checkBlacklistStatus("PERSON", val);
-                                    checkBlacklistStatus("DRIVER", val);
-                                  }
-                                }}
-                                onBlur={(e) => validatePersonField("aadharNo", e.target.value)}
-                                className={`w-full h-10 border rounded-lg text-sm px-3 shadow-sm outline-none transition-all focus:ring-2 ${customBorderClass}`}
-                                placeholder="XXXX XXXX XXXX"
-                                maxLength={12}
-                                inputMode="numeric"
-                              />
-                              {hasVal && (
-                                <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all animate-in fade-in duration-200">
-                                  {(hasError || !isValid) ? (
-                                    <>
-                                      <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                      <span className="text-red-500">Aadhaar must be exactly 12 digits</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                                      <span className="text-emerald-600">Valid Aadhaar format</span>
-                                    </>
-                                  )}
-                                </div>
-                              )}
-                              {/* Real-time blacklist inline warning — same pattern as vehicle reg field */}
-                              {isValid && (blacklistWarnings["PERSON_" + personForm.aadharNo] || blacklistWarnings["DRIVER_" + personForm.aadharNo]) && (
-                                <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
-                                  <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
-                                  <span>
-                                    PORT BLACKLISTED —{" "}
-                                    {(blacklistWarnings["PERSON_" + personForm.aadharNo] || blacklistWarnings["DRIVER_" + personForm.aadharNo])?.replace("⚠️ BLACKLISTED ", "")}
-                                  </span>
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-
-                    </>
-                  )}
-
-                  {/* Passport Fields - Show only for seafarers who selected passport */}
-                  {personForm.hepType === "3" && personForm.seafarerIdType === "passport" && (
-                    <>
-                      <div className="space-y-1.5 animate-in zoom-in">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          Passport No. <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={personForm.passportNo}
-                          onChange={(e) => {
-                            const val = e.target.value.toUpperCase().slice(0, 8);
-                            setPersonForm({ ...personForm, passportNo: val });
-                            // Clear error on change
-                            if (personErrors.passportNo) {
-                              setPersonErrors((prev) => ({ ...prev, passportNo: null }));
-                            }
-                          }}
-                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${personErrors.passportNo
-                            ? "border-red-400 bg-red-50"
-                            : "border-slate-300 bg-white"
-                            }`}
-                          placeholder="A1234567"
-                          maxLength={8}
-                        />
-                        {personErrors.passportNo && (
-                          <p className="text-xs text-red-500 mt-0.5 font-medium">
-                            {personErrors.passportNo}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-1.5 animate-in zoom-in">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          Upload Passport <span className="text-red-500">*</span>
-                        </label>
-                        <FileUploadBox
-                          file={personForm.passportDoc}
-                          existingFileName={personForm.existingPassportName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "passportDoc",
-                              personForm.existingPassportName,
-                              personForm.editIndex
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              passportDoc: e.target.files[0],
-                            })
-                          }
-                        />
-                      </div>
-                    </>
-                  )}
-                  {/* <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      Card Number
-                    </label>
-                    <input
-                      type="text"
-                      value={personForm.cardNumber}
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          cardNumber: e.target.value,
-                        })
-                      }
-                      className={inputClass}
-                      placeholder="RFID card number"
-                    />
-                  </div> */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Mobile <span className="text-red-500">*</span>
@@ -4485,7 +4171,7 @@ export default function PassRequestPage() {
                       </div>
                       <input
                         type="tel"
-                        value={personForm.mobile} // Fixed: Removed URL wrapper
+                        value={personForm.mobile}
                         className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${personErrors.mobile
                           ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
                           : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
@@ -4497,7 +4183,6 @@ export default function PassRequestPage() {
                           validatePersonField("mobile", e.target.value)
                         }
                         onChange={(e) => {
-                          // Logic merged: Clean the input AND update state
                           const val = e.target.value
                             .replace(/\D/g, "")
                             .slice(0, 10);
@@ -4515,6 +4200,7 @@ export default function PassRequestPage() {
                       </p>
                     )}
                   </div>
+
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Email Id
@@ -4540,6 +4226,123 @@ export default function PassRequestPage() {
                       </p>
                     )}
                   </div>
+
+                  {/* Nationality & Travel Details */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase">
+                      Nationality <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={personForm.nationality}
+                      onChange={(e) => {
+                        const value = e.target.value;
+
+                        const nationalityName = getLabelById(
+                          masterData.nationalities,
+                          value,
+                          "label",
+                        )?.toUpperCase();
+
+                        const isForeignerVal = nationalityName === "FOREIGNER" || value === "2";
+                        const passportIdObj = (masterData.idProofTypes || []).find(
+                          (t) => (t.label || t.name || "").toLowerCase().includes("passport")
+                        );
+                        const passportTypeId = passportIdObj ? String(passportIdObj.id || passportIdObj.value) : "4";
+
+                        const dlIdObj = (masterData.idProofTypes || []).find(
+                          (t) => (t.label || t.name || "").toLowerCase().includes("driver") || (t.label || t.name || "").toLowerCase().includes("licence")
+                        );
+                        const dlTypeId = dlIdObj ? String(dlIdObj.id || dlIdObj.value) : "1";
+
+                        const indiaObj = (masterData.countries || []).find(
+                          (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
+                        );
+                        const indiaId = indiaObj ? String(indiaObj.id || indiaObj.value) : "";
+
+                        setPersonForm((prev) => ({
+                          ...prev,
+                          nationality: value,
+                          country: nationalityName === "INDIAN" ? (indiaId || prev.country) : (prev.country === indiaId ? "" : prev.country),
+                          idProofType: prev.hepType === "1" ? dlTypeId : (isForeignerVal ? passportTypeId : prev.idProofType),
+                          aadharNo: isForeignerVal ? "" : prev.aadharNo,
+                          aadharFile: isForeignerVal ? null : prev.aadharFile,
+                        }));
+                      }}
+                      className={inputClass}
+                    >
+                      <option value="">Select Nationality</option>
+                      {masterData.nationalities.map((n) => (
+                        <option key={n.id || n.value} value={n.id || n.value}>
+                          {n.label || n.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase">
+                      Country <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={personForm.country}
+                      onChange={(e) =>
+                        setPersonForm({
+                          ...personForm,
+                          country: e.target.value,
+                        })
+                      }
+                      className={inputClass}
+                      disabled={
+                        !isPersonForeigner(personForm.nationality)
+                      }
+                    >
+                      <option value="">Select Country</option>
+
+                      {masterData.countries
+                        .filter((c) => {
+                          const isForeigner = isPersonForeigner(personForm.nationality);
+                          if (!isForeigner) {
+                            return c.name && c.name.trim().toUpperCase() === "INDIA";
+                          } else {
+                            return c.name && c.name.trim().toUpperCase() !== "INDIA";
+                          }
+                        })
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase">
+                      Visa No. {isPersonForeigner(personForm.nationality) && <span className="text-red-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      value={personForm.visaNo}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setPersonForm({ ...personForm, visaNo: val });
+                        if (val) validatePersonField("visaNo", val);
+                      }}
+                      onBlur={(e) => {
+                        if (e.target.value)
+                          validatePersonField("visaNo", e.target.value);
+                      }}
+                      disabled={!isPersonForeigner(personForm.nationality)}
+                      placeholder="Visa number (5-20 alphanumeric)"
+                      maxLength={20}
+                      className={`disabled:bg-slate-100 disabled:cursor-not-allowed ${inputClass} ${personErrors.visaNo ? "border-red-400" : ""}`}
+                    />
+                    {personErrors.visaNo && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {personErrors.visaNo}
+                      </p>
+                    )}
+                  </div>
+
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       With Two wheeler
@@ -4623,109 +4426,263 @@ export default function PassRequestPage() {
                       </div>
                     )}
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      Nationality <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={personForm.nationality}
-                      onChange={(e) => {
-                        const value = e.target.value;
 
-                        const nationalityName = getLabelById(
-                          masterData.nationalities,
-                          value,
-                          "label",
-                        )?.toUpperCase();
-
-                        setPersonForm((prev) => ({
-                          ...prev,
-                          nationality: value,
-                          country: nationalityName === "INDIAN" ? "75" : "",
-                        }));
-                      }}
-                      className={inputClass}
-                    >
-                      <option value="">Select Nationality</option>
-                      {masterData.nationalities.map((n) => (
-                        <option key={n.id || n.value} value={n.id || n.value}>
-                          {n.label || n.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      Country <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={personForm.country}
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          country: e.target.value,
-                        })
-                      }
-                      className={inputClass}
-                      disabled={
-                        getLabelById(
-                          masterData.nationalities,
-                          personForm.nationality,
-                          "label",
-                        )?.toUpperCase() === "INDIAN"
-                      }
-                    >
-                      <option value="">Select Country</option>
-
-                      {masterData.countries
-                        .filter((c) => {
-                          const nationality = getLabelById(
-                            masterData.nationalities,
-                            personForm.nationality,
-                            "label",
-                          )?.toUpperCase();
-
-                          if (nationality === "INDIAN") {
-                            return c.name && c.name.trim().toUpperCase() === "INDIA";
-                          } else if (nationality) {
-                            return c.name && c.name.trim().toUpperCase() !== "INDIA";
+                  {/* Seafarer ID Type Selection */}
+                  {personForm.hepType === "3" && (
+                    <div className="space-y-1.5 animate-in zoom-in">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        ID Proof Type <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={personForm.seafarerIdType}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setPersonForm({
+                            ...personForm,
+                            seafarerIdType: value,
+                            aadharNo: value === "passport" ? "" : personForm.aadharNo,
+                            passportNo: value === "aadhaar" ? "" : personForm.passportNo,
+                            aadharFile: value === "passport" ? null : personForm.aadharFile,
+                          });
+                          if (personErrors.seafarerIdType) {
+                            setPersonErrors((prev) => ({ ...prev, seafarerIdType: null }));
                           }
-                          return true;
-                        })
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      Visa No. <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={personForm.visaNo}
-                      onChange={(e) => {
-                        const val = e.target.value.toUpperCase();
-                        setPersonForm({ ...personForm, visaNo: val });
-                        if (val) validatePersonField("visaNo", val);
-                      }}
-                      onBlur={(e) => {
-                        if (e.target.value)
-                          validatePersonField("visaNo", e.target.value);
-                      }}
-                      disabled={String(personForm.country) === "75"}
-                      placeholder="Visa number (5-20 alphanumeric)"
-                      maxLength={20}
-                      className={`disabled:bg-slate-100 disabled:cursor-not-allowed ${inputClass} ${personErrors.visaNo ? "border-red-400" : ""}`}
-                    />
-                    {personErrors.visaNo && (
-                      <p className="text-xs text-red-500 mt-0.5 font-medium">
-                        {personErrors.visaNo}
-                      </p>
-                    )}
-                  </div>
+                        }}
+                        className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${personErrors.seafarerIdType
+                          ? "border-red-400 bg-red-50"
+                          : "border-slate-300 bg-white"
+                          }`}
+                      >
+                        <option value="">-- Select ID Type --</option>
+                        <option value="aadhaar">Aadhaar</option>
+                        <option value="passport">Passport</option>
+                      </select>
+                      {personErrors.seafarerIdType && (
+                        <p className="text-xs text-red-500 mt-0.5 font-medium">
+                          {personErrors.seafarerIdType}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Aadhaar Fields - Show for non-foreigners (non-seafarers OR seafarers who selected aadhaar) */}
+                  {!isPersonForeigner(personForm.nationality) && (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar") && (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          Upload Aadhar <span className="text-red-500">*</span>
+                        </label>
+                        <FileUploadBox
+                          disabled={!!personForm.masterId}
+                          file={personForm.aadharFile}
+                          existingFileName={personForm.existingAadharName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "personAadhar",
+                              personForm.existingAadharName,
+                              personForm.editIndex
+                            )
+                          }
+                          onChange={async (e) => {
+                            if (personForm.masterId) {
+                              toast.error(
+                                "Aadhaar document comes from Master Directory and cannot be changed."
+                              );
+                              return;
+                            }
+
+                            const file =
+                              e?.target?.files?.[0] ||
+                              e?.files?.[0] ||
+                              e?.file ||
+                              e;
+
+                            if (!file) return;
+
+                            setPersonForm((prev) => ({
+                              ...prev,
+                              aadharFile: file,
+                            }));
+
+                            try {
+                              toast.loading(
+                                "Reading Aadhaar PDF...",
+                                {
+                                  id: "aadhar-ocr",
+                                }
+                              );
+
+                              const extractedAadhar =
+                                await extractAadharFromPdf(file);
+
+                              toast.dismiss("aadhar-ocr");
+
+                              if (!extractedAadhar) {
+                                setPersonForm((prev) => ({
+                                  ...prev,
+                                  aadharFile: file,
+                                  aadharNo: "",
+                                }));
+
+                                toast.warning(
+                                  "Could not detect Aadhaar automatically. Please enter manually."
+                                );
+                                return;
+                              }
+
+                              setPersonForm((prev) => ({
+                                ...prev,
+                                aadharFile: file,
+                                aadharNo: extractedAadhar,
+                              }));
+
+                              toast.success(
+                                `Aadhaar detected: ${extractedAadhar}`
+                              );
+
+                            } catch (error) {
+                              toast.dismiss("aadhar-ocr");
+                              console.error(error);
+                              setPersonForm((prev) => ({
+                                ...prev,
+                                aadharFile: file,
+                                aadharNo: "",
+                              }));
+
+                              toast.error(
+                                "Failed to read Aadhaar PDF"
+                              );
+                            }
+                          }}
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          Aadhaar No. <span className="text-red-500">*</span>
+                        </label>
+                        {(() => {
+                          const hasVal = !!personForm.aadharNo.trim();
+                          const isValid = /^\d{12}$/.test(personForm.aadharNo);
+                          const hasError = !!personErrors.aadharNo;
+
+                          let customBorderClass = "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
+                          if (hasVal) {
+                            customBorderClass = (hasError || !isValid)
+                              ? "border-red-400 focus:ring-red-500/20 focus:border-red-400"
+                              : "border-emerald-500 focus:ring-emerald-500/20 focus:border-emerald-500";
+                          }
+
+                          return (
+                            <>
+                              <input
+                                type="text"
+                                value={personForm.aadharNo}
+                                readOnly={!!personForm.masterId}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                    .replace(/\D/g, "")
+                                    .slice(0, 12);
+                                  setPersonForm({ ...personForm, aadharNo: val });
+                                  if (val.length === 12) {
+                                    validatePersonField("aadharNo", val);
+                                    checkBlacklistStatus("PERSON", val);
+                                    checkBlacklistStatus("DRIVER", val);
+                                  }
+                                }}
+                                onBlur={(e) => validatePersonField("aadharNo", e.target.value)}
+                                className={`w-full h-10 border rounded-lg text-sm px-3 shadow-sm outline-none transition-all focus:ring-2 ${customBorderClass}`}
+                                placeholder="XXXX XXXX XXXX"
+                                maxLength={12}
+                                inputMode="numeric"
+                              />
+                              {hasVal && (
+                                <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all animate-in fade-in duration-200">
+                                  {(hasError || !isValid) ? (
+                                    <>
+                                      <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                      <span className="text-red-500">Aadhaar must be exactly 12 digits</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                      <span className="text-emerald-600">Valid Aadhaar format</span>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                              {isValid && (blacklistWarnings["PERSON_" + personForm.aadharNo] || blacklistWarnings["DRIVER_" + personForm.aadharNo]) && (
+                                <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
+                                  <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
+                                  <span>
+                                    PORT BLACKLISTED —{" "}
+                                    {(blacklistWarnings["PERSON_" + personForm.aadharNo] || blacklistWarnings["DRIVER_" + personForm.aadharNo])?.replace("⚠️ BLACKLISTED ", "")}
+                                  </span>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Passport Fields - Show only for seafarers who selected passport */}
+                  {personForm.hepType === "3" && personForm.seafarerIdType === "passport" && (
+                    <>
+                      <div className="space-y-1.5 animate-in zoom-in">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Passport No. <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={personForm.passportNo}
+                          onChange={(e) => {
+                            const val = e.target.value.toUpperCase().slice(0, 15);
+                            setPersonForm({ ...personForm, passportNo: val });
+                            if (personErrors.passportNo) {
+                              setPersonErrors((prev) => ({ ...prev, passportNo: null }));
+                            }
+                          }}
+                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${personErrors.passportNo
+                            ? "border-red-400 bg-red-50"
+                            : "border-slate-300 bg-white"
+                            }`}
+                          placeholder="Passport Number"
+                          maxLength={15}
+                        />
+                        {personErrors.passportNo && (
+                          <p className="text-xs text-red-500 mt-0.5 font-medium">
+                            {personErrors.passportNo}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5 animate-in zoom-in">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Upload Passport <span className="text-red-500">*</span>
+                        </label>
+                        <FileUploadBox
+                          file={personForm.passportDoc}
+                          existingFileName={personForm.existingPassportName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "passportDoc",
+                              personForm.existingPassportName,
+                              personForm.editIndex
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              passportDoc: e.target.files[0],
+                            })
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Access Area <span className="text-red-500">*</span>
@@ -4748,6 +4705,31 @@ export default function PassRequestPage() {
                       ))}
                     </select>
                   </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase">
+                      Date of Birth (DOB) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={personForm.dob || ""}
+                      onChange={(e) => {
+                        setPersonForm({
+                          ...personForm,
+                          dob: e.target.value,
+                        });
+                        if (personErrors.dob) {
+                          setPersonErrors((prev) => ({ ...prev, dob: null }));
+                        }
+                      }}
+                      className={`${inputClass} ${personErrors.dob ? "border-red-400 focus:border-red-500 focus:ring-red-500/20 bg-red-50/20" : ""}`}
+                    />
+                    {personErrors.dob && (
+                      <p className="text-[11px] font-semibold text-red-500 flex items-center gap-1 mt-1">
+                        <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" /> {personErrors.dob}
+                      </p>
+                    )}
+                  </div>
+
                   <div
                     className={`col-span-1 md:col-span-2 grid gap-4 ${personForm.designation === "Others" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"}`}
                   >
@@ -4757,12 +4739,15 @@ export default function PassRequestPage() {
                       </label>
                       <select
                         value={personForm.designation}
-                        onChange={(e) =>
+                        onChange={(e) => {
                           setPersonForm({
                             ...personForm,
                             designation: e.target.value,
-                          })
-                        }
+                          });
+                          if (personErrors.dob) {
+                            setPersonErrors((prev) => ({ ...prev, dob: null }));
+                          }
+                        }}
                         className={inputClass}
                         disabled={personForm.hepType === "1"}
                       >
@@ -4789,12 +4774,15 @@ export default function PassRequestPage() {
                           type="text"
                           placeholder="Specify designation"
                           value={personForm.designationOther || ""}
-                          onChange={(e) =>
+                          onChange={(e) => {
                             setPersonForm({
                               ...personForm,
                               designationOther: e.target.value,
-                            })
-                          }
+                            });
+                            if (personErrors.dob) {
+                              setPersonErrors((prev) => ({ ...prev, dob: null }));
+                            }
+                          }}
                           className={inputClass}
                         />
                       </div>
@@ -4844,12 +4832,12 @@ export default function PassRequestPage() {
                       </div>
                     </div>
                   )}
-                  {/* Secondary ID Proof — hidden for Seafarers who have their own dedicated ID flow above */}
+                  {/* Secondary ID Proof — hidden for Seafarers who have their own dedicated ID flow */}
                   {personForm.hepType !== "3" && (
                     <>
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700 uppercase">
-                          Type of Id proof
+                          Type of Id proof {isPersonForeigner(personForm.nationality) && <span className="text-red-500">*</span>}
                         </label>
                         <select
                           value={personForm.idProofType}
@@ -4860,7 +4848,7 @@ export default function PassRequestPage() {
                             })
                           }
                           className={inputClass}
-                          disabled={personForm.hepType === "1"}
+                          disabled={isPersonForeigner(personForm.nationality) || personForm.hepType === "1"}
                         >
                           <option value="">-- Select --</option>
                           {masterData.idProofTypes.map((t) => (
@@ -4872,7 +4860,7 @@ export default function PassRequestPage() {
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700 uppercase">
-                          {idProofLabel}
+                          {idProofLabel} {isPersonForeigner(personForm.nationality) && <span className="text-red-500">*</span>}
                         </label>
                         <input
                           type="text"

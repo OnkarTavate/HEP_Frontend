@@ -23,6 +23,7 @@ import {
   MapPin,
   Briefcase,
   AlertCircle,
+  Calendar,
   Maximize,
   Minimize,
   Loader2,
@@ -49,6 +50,20 @@ const getFileUrl = (path) => {
   return `${AGENT_API}${path.startsWith("/") ? "" : "/"}${path}`;
 };
 
+const formatDobWithAge = (dob) => {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (isNaN(d.getTime())) return dob;
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) {
+    age--;
+  }
+  const formattedDob = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return `${formattedDob} (${age} Yrs)`;
+};
+
 const extractEntityIndex = (entityId) => {
   // Vendor pass entity IDs are in format "vpr-{id}-p-{index}" or "vpr-{id}-v-{index}"
   if (!entityId || typeof entityId !== "string") return 0;
@@ -58,18 +73,23 @@ const extractEntityIndex = (entityId) => {
 };
 
 // --- Reusable UI Components ---
-const DetailItem = ({ label, value, highlight = false }) => (
-  <div className="flex flex-col">
-    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-      {label}
-    </span>
-    <span
-      className={`text-sm font-semibold ${highlight ? "text-[#0a1e4d] font-black" : "text-slate-700"}`}
-    >
-      {value || "N/A"}
-    </span>
-  </div>
-);
+const DetailItem = ({ label, value, highlight = false, showIfEmpty = false }) => {
+  if (!showIfEmpty && (!value || value === "N/A" || value === "null" || value === "undefined" || String(value).trim() === "")) {
+    return null;
+  }
+  return (
+    <div className="flex flex-col">
+      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+        {label}
+      </span>
+      <span
+        className={`text-sm font-semibold ${highlight ? "text-[#0a1e4d] font-black" : "text-slate-700"}`}
+      >
+        {value || "N/A"}
+      </span>
+    </div>
+  );
+};
 
 const DocumentCard = ({
   label,
@@ -182,6 +202,48 @@ export default function TrafficPassesPage() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [companyProfile, setCompanyProfile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [countriesList, setCountriesList] = useState([]);
+
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const token = localStorage.getItem("accessToken");
+        const res = await axios.get(`${AGENT_API}/pass-request/get-countries`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const list = res.data?.data || res.data || [];
+        if (Array.isArray(list)) setCountriesList(list);
+      } catch (err) {
+        console.error("Failed to fetch countries", err);
+      }
+    };
+    fetchCountries();
+  }, []);
+
+  const formatCountryName = (person) => {
+    if (!person) return "";
+    const isForeigner =
+      String(person.nationality || "").toUpperCase() === "FOREIGNER" ||
+      String(person.nationality) === "2";
+
+    if (person.country && isNaN(Number(person.country)) && String(person.country).trim() !== "") {
+      return person.country;
+    }
+    if (person.countryName && isNaN(Number(person.countryName)) && String(person.countryName).trim() !== "") {
+      return person.countryName;
+    }
+
+    const targetId = person.countryId || (person.country && !isNaN(Number(person.country)) ? person.country : null);
+    if (targetId && countriesList.length > 0) {
+      const found = countriesList.find(
+        (c) => String(c.id || c.value) === String(targetId)
+      );
+      if (found && found.name) return found.name;
+    }
+
+    if (!isForeigner) return "India";
+    return person.country || person.countryName || "N/A";
+  };
 
   const extractEntityIndex = (entityId) => {
     if (!entityId) return 0;
@@ -489,13 +551,9 @@ export default function TrafficPassesPage() {
     const isImg = staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath);
     setIsImage(!!isImg);
 
-    if (documentType === "authLetter") {
-      setViewingDocUrl(getFileUrl(staticPath));
-    } else {
-      setViewingDocUrl(
-        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${passRequestId}&documentType=${documentType}&entityIndex=${entityIndex}&isVendorPass=${isVendorPass}`,
-      );
-    }
+    setViewingDocUrl(
+      `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${passRequestId}&documentType=${documentType}&entityIndex=${entityIndex}&isVendorPass=${isVendorPass}`,
+    );
   };
   const handleEntityDecision = (status) => {
     if (
@@ -1274,20 +1332,36 @@ export default function TrafficPassesPage() {
                       </p>
                     </div>
                   </div>
-                  {selectedRequest.authLetterFilePath && (
-                    <button
-                      onClick={() =>
-                        handleViewDoc(
-                          selectedRequest.id,
-                          "authLetter",
-                          selectedRequest.authLetterFilePath,
-                        )
-                      }
-                      className="bg-orange-50 text-orange-700 border border-orange-200 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-orange-100 transition-colors"
-                    >
-                      <FileCheck2 className="h-4 w-4" /> View Master Auth Letter
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {selectedRequest.requisitionLetterFilePath && (
+                      <button
+                        onClick={() =>
+                          handleViewDoc(
+                            selectedRequest.id,
+                            "passRequisitionLetter",
+                            selectedRequest.requisitionLetterFilePath,
+                          )
+                        }
+                        className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
+                      >
+                        <FileText className="h-4 w-4 text-blue-600" /> View Requisition Letter
+                      </button>
+                    )}
+                    {selectedRequest.authLetterFilePath && (
+                      <button
+                        onClick={() =>
+                          handleViewDoc(
+                            selectedRequest.id,
+                            "authLetter",
+                            selectedRequest.authLetterFilePath,
+                          )
+                        }
+                        className="bg-orange-50 text-orange-700 border border-orange-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-orange-100 transition-colors shadow-sm"
+                      >
+                        <FileCheck2 className="h-4 w-4 text-orange-600" /> View Licence / Work Order / Contract
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* {companyProfile ? ( */}
@@ -1898,8 +1972,14 @@ export default function TrafficPassesPage() {
                         value={entityModal.data.nationality}
                       />
                       <DetailItem
+                        icon={Calendar}
+                        label="Date of Birth"
+                        value={formatDobWithAge(entityModal.data.dob)}
+                      />
+                      <DetailItem
                         label="Country"
-                        value={entityModal.data.country}
+                        value={formatCountryName(entityModal.data)}
+                        showIfEmpty={true}
                       />
                       <DetailItem
                         label="Visa No."
@@ -2171,15 +2251,7 @@ export default function TrafficPassesPage() {
                           </div>
                         </div>
                       )}
-                      <DocumentCard
-                        label="Requisition Letter"
-                        filePath={entityModal.data.requisitionLetterPath}
-                        documentType="requisitionLetter"
-                        passRequestId={selectedRequest.id}
-                        onView={handleViewDoc}
-                        entityIndex={extractEntityIndex(entityModal.data.id)}
-                        isVendorPass={selectedRequest.originType === "VENDOR"}
-                      />
+
                       <DocumentCard
                         label="Aadhar Card Document"
                         filePath={entityModal.data.aadharPDFFilePATH}

@@ -202,13 +202,7 @@ export default function VendorPassApprovedPage() {
     nationalities: [],
     accessAreas: [],
     vehicleTypes: [],
-    countries: [
-      { id: 75, name: "India", iso2: "IN" },
-      { id: 1, name: "Afghanistan", iso2: "AF" },
-      { id: 9, name: "Australia", iso2: "AU" },
-      { id: 31, name: "Canada", iso2: "CA" },
-      { id: 36, name: "China", iso2: "CN" },
-    ],
+    countries: [],
     hepTypes: [
       { id: 1, name: "Drivers" },
       { id: 2, name: "Personnel" },
@@ -478,15 +472,17 @@ export default function VendorPassApprovedPage() {
 
   const fetchMasterData = async () => {
     try {
-      const [natRes, passRes, idRes, accessRes, vehRes, desigRes] = await Promise.all([
+      const [natRes, passRes, idRes, accessRes, vehRes, desigRes, countryRes] = await Promise.all([
         axios.get(`${AGENT_API}/pass-request/get-nationality`).catch(() => ({ data: [] })),
         axios.get(`${AGENT_API}/pass-request/get-pass-types`).catch(() => ({ data: [] })),
         axios.get(`${AGENT_API}/pass-request/get-id-proof-types`).catch(() => ({ data: [] })),
         axios.get(`${AGENT_API}/pass-request/get-access-areas`).catch(() => ({ data: [] })),
         axios.get(`${AGENT_API}/pass-request/getVehicleTypes`).catch(() => ({ data: [] })),
         axios.get(`${AGENT_API}/pass-request/getDesignations`).catch(() => ({ data: [] })),
+        axios.get(`${AGENT_API}/pass-request/get-countries`).catch(() => ({ data: [] })),
       ]);
       const extractArray = (res) => Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res?.data) ? res.data : [];
+      const fetchedCountries = extractArray(countryRes);
       setMasterData(prev => ({
         ...prev,
         nationalities: extractArray(natRes),
@@ -495,6 +491,7 @@ export default function VendorPassApprovedPage() {
         accessAreas: extractArray(accessRes),
         vehicleTypes: extractArray(vehRes),
         designations: extractArray(desigRes),
+        countries: fetchedCountries.length > 0 ? fetchedCountries : prev.countries,
       }));
     } catch (e) { console.error(e); }
   };
@@ -586,7 +583,12 @@ export default function VendorPassApprovedPage() {
         dateTo: entity.dateTo ? (String(entity.dateTo).includes('T') ? String(entity.dateTo).split('T')[0] : String(entity.dateTo)) + 'T05:59' : '',
         amount: entity.amount || '',
         nationality: nationalityId,
-        country: String(entity.countryId || '75'),
+        country: entity.countryId ? String(entity.countryId) : (entity.country ? String(entity.country) : (() => {
+          const indiaObj = (masterData.countries || []).find(
+            (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
+          );
+          return indiaObj ? String(indiaObj.id || indiaObj.value) : "";
+        })()),
         visaNo: entity.visaNo || '',
         cardNumber: entity.cardNumber || '',
         withTwoWheeler: entity.withTwoWheeler === true || entity.withTwoWheeler === 'true',
@@ -2171,10 +2173,17 @@ export default function VendorPassApprovedPage() {
                           "label",
                         )?.toUpperCase();
 
+                        const indiaObj = (masterData.countries || []).find(
+                          (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
+                        );
+                        const indiaId = indiaObj ? String(indiaObj.id || indiaObj.value) : "";
+                        const isInd = nationalityName === "INDIAN" || value === "1";
+
                         setPersonForm((prev) => ({
                           ...prev,
                           nationality: value,
-                          country: nationalityName === "INDIAN" ? "75" : "",
+                          country: isInd ? (indiaId || prev.country) : (prev.country === indiaId ? "" : prev.country),
+                          aadharNo: prev.aadharNo,
                         }));
                       }}
                       className={inputClass}
@@ -2205,7 +2214,7 @@ export default function VendorPassApprovedPage() {
                           masterData.nationalities,
                           personForm.nationality,
                           "label",
-                        )?.toUpperCase() === "INDIAN"
+                        )?.toUpperCase() === "INDIAN" || personForm.nationality === "1"
                       }
                     >
                       <option value="">Select Country</option>
@@ -2217,16 +2226,18 @@ export default function VendorPassApprovedPage() {
                             personForm.nationality,
                             "label",
                           )?.toUpperCase();
+                          const isInd = nationality === "INDIAN" || personForm.nationality === "1";
+                          const isIndiaCountry = String(c.name || "").trim().toUpperCase() === "INDIA";
 
-                          if (nationality === "INDIAN") {
-                            return c.id === 75; // only India
-                          } else if (nationality) {
-                            return c.id !== 75; // exclude India
+                          if (isInd) {
+                            return isIndiaCountry;
+                          } else if (nationality || personForm.nationality) {
+                            return !isIndiaCountry;
                           }
                           return true;
                         })
                         .map((c) => (
-                          <option key={c.id} value={c.id}>
+                          <option key={c.id || c.value} value={c.id || c.value}>
                             {c.name}
                           </option>
                         ))}
@@ -2248,7 +2259,13 @@ export default function VendorPassApprovedPage() {
                         if (e.target.value)
                           validatePersonField("visaNo", e.target.value);
                       }}
-                      disabled={String(personForm.country) === "75"}
+                      disabled={
+                        getLabelById(
+                          masterData.nationalities,
+                          personForm.nationality,
+                          "label",
+                        )?.toUpperCase() === "INDIAN" || personForm.nationality === "1"
+                      }
                       placeholder="Visa number (5-20 alphanumeric)"
                       maxLength={20}
                       className={`disabled:bg-slate-100 disabled:cursor-not-allowed ${inputClass} ${personErrors.visaNo ? "border-red-400" : ""}`}

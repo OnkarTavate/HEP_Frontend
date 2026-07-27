@@ -18,18 +18,23 @@ import PaginationBar from "@/components/ui/PaginationBar";
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 
 // Reusable component for the View Modal
-const DetailItem = ({ label, value, highlight = false }) => (
-  <div className="flex flex-col">
-    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-      {label}
-    </span>
-    <span
-      className={`text-sm font-semibold ${highlight ? "text-[#0a1e4d] font-black" : "text-slate-700"}`}
-    >
-      {value || "N/A"}
-    </span>
-  </div>
-);
+const DetailItem = ({ label, value, highlight = false, showIfEmpty = false }) => {
+  if (!showIfEmpty && (!value || value === "N/A" || value === "null" || value === "undefined" || String(value).trim() === "")) {
+    return null;
+  }
+  return (
+    <div className="flex flex-col">
+      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+        {label}
+      </span>
+      <span
+        className={`text-sm font-semibold ${highlight ? "text-[#0a1e4d] font-black" : "text-slate-700"}`}
+      >
+        {value || "N/A"}
+      </span>
+    </div>
+  );
+};
 
 // Helper: Mask Aadhar to show only last 4 digits (e.g. "XXXX XXXX 1234")
 const maskAadhar = (aadhar) => {
