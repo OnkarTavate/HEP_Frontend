@@ -85,6 +85,17 @@ const SCENARIOS = [
   { value: "DAMAGES", label: "Damages within Port Premises" },
 ];
 
+// Auto-map reason code → scenario (removes need for manual scenario selection)
+const SCENARIO_MAP = {
+  "001": "TRAFFIC_VIOLATION",
+  "002": "FORGED_DOCUMENTS",
+  "003": "TRAFFIC_VIOLATION",
+  "004": "TRAFFIC_VIOLATION",
+  "005": "TRAFFIC_VIOLATION",
+  "006": "TRAFFIC_VIOLATION",
+  "007": "TRAFFIC_VIOLATION",
+};
+
 const STATUS_CONFIG = {
   BLACKLISTED: { color: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500", label: "Blacklisted" },
   PENDING_BLACKLIST: { color: "bg-indigo-50 text-indigo-700 border-indigo-200", dot: "bg-indigo-500 animate-pulse", label: "Pending Approval" },
@@ -161,7 +172,7 @@ export default function ATMBlacklistPage() {
         if (Array.isArray(parsed) && parsed.length === 4) {
           setCardOrder(parsed);
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }, []);
 
@@ -217,9 +228,9 @@ export default function ATMBlacklistPage() {
     identifier: "",
     entity_name: "",
     reason: "",
-    scenario: "",
-    has_penalty: false,
-    penalty_amount: "",
+    scenario: "TRAFFIC_VIOLATION",
+    has_penalty: true,
+    penalty_amount: "1270",
     reason_code: "001",
     authorizing_officer: "",
     geotag_latitude: "",
@@ -372,7 +383,7 @@ export default function ATMBlacklistPage() {
 
   const destroyMap = useCallback(() => {
     if (mapInstanceRef.current) {
-      try { mapInstanceRef.current.remove(); } catch (_) {}
+      try { mapInstanceRef.current.remove(); } catch (_) { }
       mapInstanceRef.current = null;
       markerRef.current = null;
     }
@@ -617,43 +628,37 @@ export default function ATMBlacklistPage() {
     }, 20000);
   };
 
-  /* ── Auto-calculate penalty based on Reason Code & Entity Type (using dynamic config) ── */
-  const getInitialPenaltyForEntity = (entityType, reasonCode) => {
-    const selected = penaltyConfig.find((r) => r.code === reasonCode);
-    const codePenalty = selected ? selected.penalty : 0;
-    if (entityType === "VEHICLE") {
-      return Math.max(codePenalty, 1025);
-    }
-    return codePenalty;
+  /* ── Default penalty (GST-inclusive) per reason code ── */
+  // ₹1,270 is the fixed GST-inclusive default for code 001 (Unauthorized Parking).
+  // All other codes default to 0; user can override.
+  const DEFAULT_PENALTY_001 = 1270;
+  const GST_RATE = 0.18;
+
+  const getDefaultPenaltyForCode = (code) => {
+    if (code === "001") return DEFAULT_PENALTY_001;
+    return 0;
   };
 
   const handleReasonCodeChange = (code) => {
-    const penalty = getInitialPenaltyForEntity(createForm.entity_type, code);
-    if (penalty > 0) {
-      setCreateForm((prev) => ({
-        ...prev,
-        reason_code: code,
-        has_penalty: true,
-        penalty_amount: penalty.toString(),
-      }));
-    } else {
-      setCreateForm((prev) => ({
-        ...prev,
-        reason_code: code,
-        has_penalty: false,
-        penalty_amount: "",
-      }));
-    }
+    const amount = getDefaultPenaltyForCode(code);
+    setCreateForm((prev) => ({
+      ...prev,
+      reason_code: code,
+      scenario: SCENARIO_MAP[code] || "TRAFFIC_VIOLATION",
+      has_penalty: true,
+      penalty_amount: amount.toString(),
+    }));
   };
 
   const handleEntityTypeChange = (typeVal) => {
-    const penalty = getInitialPenaltyForEntity(typeVal, createForm.reason_code);
+    const amount = getDefaultPenaltyForCode(createForm.reason_code);
     setCreateForm((prev) => ({
       ...prev,
       entity_type: typeVal,
       identifier: "",
-      has_penalty: penalty > 0,
-      penalty_amount: penalty > 0 ? penalty.toString() : "",
+      scenario: SCENARIO_MAP[prev.reason_code] || "TRAFFIC_VIOLATION",
+      has_penalty: true,
+      penalty_amount: amount.toString(),
     }));
   };
 
@@ -1515,20 +1520,6 @@ export default function ATMBlacklistPage() {
                 />
               </div>
 
-              {/* Scenario */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Scenario</label>
-                <select
-                  value={createForm.scenario}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, scenario: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:border-red-400 appearance-none cursor-pointer"
-                >
-                  <option value="">Select scenario...</option>
-                  {SCENARIOS.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
-              </div>
 
               {/* Reason Description */}
               <div>
@@ -1547,12 +1538,18 @@ export default function ATMBlacklistPage() {
 
               {/* Authorizing Officer */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Authorizing Officer</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Authorizing Officer
+                  <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-full normal-case tracking-normal">
+                    🔒 Auto-filled · Read-only
+                  </span>
+                </label>
                 <input
                   type="text"
                   value={createForm.authorizing_officer}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, authorizing_officer: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 focus:outline-none transition-all"
+                  readOnly
+                  tabIndex={-1}
+                  className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500 cursor-not-allowed select-none outline-none"
                   required
                 />
               </div>
@@ -1631,59 +1628,59 @@ export default function ATMBlacklistPage() {
                       )}
                     </div>
 
-                {/* GPS Status Display */}
-                <div className={`p-3.5 rounded-xl border transition-all duration-300 ${gpsLoading
-                  ? "bg-amber-50/50 border-amber-200"
-                  : createForm.geotag_latitude
-                    ? "bg-emerald-50/30 border-emerald-200"
-                    : "bg-slate-50/50 border-slate-200"
-                  }`}>
-                  <div className="flex items-start gap-2.5">
-                    {gpsLoading ? (
-                      <div className="mt-0.5 shrink-0">
-                        <RefreshCw className="h-4 w-4 text-amber-500 animate-spin" />
-                      </div>
-                    ) : createForm.geotag_latitude ? (
-                      <span className="relative flex h-3 w-3 mt-0.5 shrink-0">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
-                      </span>
-                    ) : (
-                      <Globe className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs font-bold leading-relaxed block break-all text-slate-700">{geotagStatus}</span>
-                      {createForm.geotag_latitude && (
-                        <div className="mt-1.5 grid grid-cols-3 gap-1.5">
-                          <div className="bg-white/80 rounded-lg border border-slate-100 px-2 py-1 text-center">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Latitude</p>
-                            <p className="text-[11px] font-black text-[#0a1e4d] font-mono">{createForm.geotag_latitude}</p>
+                    {/* GPS Status Display */}
+                    <div className={`p-3.5 rounded-xl border transition-all duration-300 ${gpsLoading
+                      ? "bg-amber-50/50 border-amber-200"
+                      : createForm.geotag_latitude
+                        ? "bg-emerald-50/30 border-emerald-200"
+                        : "bg-slate-50/50 border-slate-200"
+                      }`}>
+                      <div className="flex items-start gap-2.5">
+                        {gpsLoading ? (
+                          <div className="mt-0.5 shrink-0">
+                            <RefreshCw className="h-4 w-4 text-amber-500 animate-spin" />
                           </div>
-                          <div className="bg-white/80 rounded-lg border border-slate-100 px-2 py-1 text-center">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Longitude</p>
-                            <p className="text-[11px] font-black text-[#0a1e4d] font-mono">{createForm.geotag_longitude}</p>
-                          </div>
-                          <div className={`rounded-lg border px-2 py-1 text-center ${parseFloat(createForm.geotag_accuracy) <= 10
-                            ? "bg-emerald-50 border-emerald-200"
-                            : parseFloat(createForm.geotag_accuracy) <= 30
-                              ? "bg-green-50 border-green-200"
-                              : parseFloat(createForm.geotag_accuracy) <= 80
-                                ? "bg-amber-50 border-amber-200"
-                                : "bg-red-50 border-red-200"
-                            }`}>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Accuracy</p>
-                            <p className={`text-[11px] font-black font-mono ${parseFloat(createForm.geotag_accuracy) <= 30
-                              ? "text-emerald-700"
-                              : parseFloat(createForm.geotag_accuracy) <= 80
-                                ? "text-amber-700"
-                                : "text-red-700"
-                            }`}>±{createForm.geotag_accuracy}m</p>
-                          </div>
+                        ) : createForm.geotag_latitude ? (
+                          <span className="relative flex h-3 w-3 mt-0.5 shrink-0">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+                          </span>
+                        ) : (
+                          <Globe className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs font-bold leading-relaxed block break-all text-slate-700">{geotagStatus}</span>
+                          {createForm.geotag_latitude && (
+                            <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                              <div className="bg-white/80 rounded-lg border border-slate-100 px-2 py-1 text-center">
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Latitude</p>
+                                <p className="text-[11px] font-black text-[#0a1e4d] font-mono">{createForm.geotag_latitude}</p>
+                              </div>
+                              <div className="bg-white/80 rounded-lg border border-slate-100 px-2 py-1 text-center">
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Longitude</p>
+                                <p className="text-[11px] font-black text-[#0a1e4d] font-mono">{createForm.geotag_longitude}</p>
+                              </div>
+                              <div className={`rounded-lg border px-2 py-1 text-center ${parseFloat(createForm.geotag_accuracy) <= 10
+                                ? "bg-emerald-50 border-emerald-200"
+                                : parseFloat(createForm.geotag_accuracy) <= 30
+                                  ? "bg-green-50 border-green-200"
+                                  : parseFloat(createForm.geotag_accuracy) <= 80
+                                    ? "bg-amber-50 border-amber-200"
+                                    : "bg-red-50 border-red-200"
+                                }`}>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Accuracy</p>
+                                <p className={`text-[11px] font-black font-mono ${parseFloat(createForm.geotag_accuracy) <= 30
+                                  ? "text-emerald-700"
+                                  : parseFloat(createForm.geotag_accuracy) <= 80
+                                    ? "text-amber-700"
+                                    : "text-red-700"
+                                  }`}>±{createForm.geotag_accuracy}m</p>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                </div>
                   </div>
                 )}
               </div>
@@ -1744,29 +1741,67 @@ export default function ATMBlacklistPage() {
                   <input
                     type="checkbox"
                     checked={createForm.has_penalty}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, has_penalty: e.target.checked, penalty_amount: "" }))}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setCreateForm((f) => ({
+                        ...f,
+                        has_penalty: checked,
+                        penalty_amount: checked ? getDefaultPenaltyForCode(f.reason_code).toString() : "",
+                      }));
+                    }}
                     className="w-5 h-5 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer"
                   />
                   <span className="text-sm font-bold text-slate-700">This blacklisting includes a penalty</span>
                 </label>
                 {createForm.has_penalty && (
-                  <div className="animate-in slide-in-from-top-2 duration-200">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                      Penalty Amount (₹) <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <input
-                        type="number"
-                        min="1"
-                        step="0.01"
-                        value={createForm.penalty_amount}
-                        onChange={(e) => setCreateForm((f) => ({ ...f, penalty_amount: e.target.value }))}
-                        placeholder="e.g. 5000"
-                        className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:border-red-400 focus:ring-4 focus:ring-red-500/10 focus:outline-none transition-all"
-                        required
-                      />
+                  <div className="animate-in slide-in-from-top-2 duration-200 space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                        Penalty Amount (₹ incl. 18% GST) <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={createForm.penalty_amount}
+                          onChange={(e) => setCreateForm((f) => ({ ...f, penalty_amount: e.target.value }))}
+                          placeholder="e.g. 1270"
+                          className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:border-red-400 focus:ring-4 focus:ring-red-500/10 focus:outline-none transition-all"
+                          required
+                        />
+                      </div>
                     </div>
+                    {/* GST Breakdown */}
+                    {(() => {
+                      const total = parseFloat(createForm.penalty_amount) || 0;
+                      const base = total / 1.18;
+                      const gst = total - base;
+                      return total > 0 ? (
+                        <div className="rounded-xl border border-orange-200 bg-orange-50/50 overflow-hidden animate-in fade-in duration-200">
+                          <div className="px-3 py-2 bg-orange-100/60 border-b border-orange-200">
+                            <span className="text-[10px] font-extrabold text-orange-700 uppercase tracking-wider">GST Breakdown (18% inclusive)</span>
+                          </div>
+                          <table className="w-full text-xs">
+                            <tbody>
+                              <tr className="border-b border-orange-100">
+                                <td className="px-3 py-1.5 text-slate-600">Amount excluding GST</td>
+                                <td className="px-3 py-1.5 text-right font-semibold text-slate-700">₹{base.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              </tr>
+                              <tr className="border-b border-orange-100">
+                                <td className="px-3 py-1.5 text-slate-600">GST @ 18%</td>
+                                <td className="px-3 py-1.5 text-right font-semibold text-orange-700">₹{gst.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              </tr>
+                              <tr className="bg-orange-100/40">
+                                <td className="px-3 py-2 font-extrabold text-slate-800">Total (incl. GST)</td>
+                                <td className="px-3 py-2 text-right font-extrabold text-red-700">₹{total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                 )}
               </div>
