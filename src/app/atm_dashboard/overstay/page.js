@@ -172,19 +172,20 @@ export default function ATMOverstayPage() {
     if (!selectedEntity) return;
     setSubmitting(true);
     try {
-      const rate = parseFloat(customRate || selectedEntity.daily_rate);
-      const days = parseInt(selectedEntity.overstay_days, 10);
+      const rate = parseFloat(customRate || selectedEntity.daily_rate || 0) || 0;
+      const rawDays = selectedEntity.overstay_days ?? 0;
+      const days = isNaN(parseInt(rawDays, 10)) ? 0 : Math.max(0, parseInt(rawDays, 10));
       const total = rate * days;
       const payload = {
         entity_type: selectedEntity.entity_type,
-        entity_id: selectedEntity.entity_id,
-        pass_request_id: selectedEntity.pass_request_id,
-        agent_id: selectedEntity.agent_id,
+        entity_id: selectedEntity.entity_id || null,
+        pass_request_id: selectedEntity.pass_request_id || null,
+        agent_id: selectedEntity.agent_id || null,
         identifier: selectedEntity.identifier,
-        entity_name: selectedEntity.entity_name,
-        pass_no: selectedEntity.pass_no,
-        date_from: selectedEntity.date_from,
-        date_to: selectedEntity.date_to,
+        entity_name: selectedEntity.entity_name || "",
+        pass_no: selectedEntity.pass_no || "",
+        date_from: selectedEntity.date_from || null,
+        date_to: selectedEntity.date_to || null,
         overstay_days: days,
         daily_rate: rate,
         total_amount: total,
@@ -893,16 +894,47 @@ export default function ATMOverstayPage() {
                 />
               </div>
 
-              {/* Total Calculation Card */}
-              <div className="bg-gradient-to-br from-red-50 to-rose-100/50 p-4 rounded-2xl border border-red-200">
-                <p className="text-[10px] font-extrabold text-red-600 uppercase tracking-widest mb-1">Calculated Total Fine</p>
-                <p className="text-xs text-red-700 font-mono mb-1">
-                  {selectedEntity.overstay_days} days × {fmtMoney(customRate || selectedEntity.daily_rate)}/day
-                </p>
-                <p className="text-3xl font-black text-red-900">
-                  {fmtMoney(parseFloat(customRate || selectedEntity.daily_rate) * parseInt(selectedEntity.overstay_days, 10))}
-                </p>
-              </div>
+              {/* Total + GST Breakdown Card */}
+              {(() => {
+                const total = parseFloat(customRate || selectedEntity.daily_rate || 0) * parseInt(selectedEntity.overstay_days || 0, 10);
+                const base = total / 1.18;
+                const gst = total - base;
+                return (
+                  <div className="space-y-2">
+                    <div className="bg-gradient-to-br from-red-50 to-rose-100/50 p-4 rounded-2xl border border-red-200">
+                      <p className="text-[10px] font-extrabold text-red-600 uppercase tracking-widest mb-1">Calculated Total Fine (incl. 18% GST)</p>
+                      <p className="text-xs text-red-700 font-mono mb-2">
+                        {selectedEntity.overstay_days} days × {fmtMoney(customRate || selectedEntity.daily_rate)}/day
+                      </p>
+                      <p className="text-3xl font-black text-red-900">{fmtMoney(total)}</p>
+                    </div>
+
+                    {total > 0 && (
+                      <div className="rounded-xl border border-orange-200 bg-orange-50/50 overflow-hidden animate-in fade-in duration-200">
+                        <div className="px-3 py-2 bg-orange-100/60 border-b border-orange-200">
+                          <span className="text-[10px] font-extrabold text-orange-700 uppercase tracking-wider">GST Breakdown (18% inclusive)</span>
+                        </div>
+                        <table className="w-full text-xs">
+                          <tbody>
+                            <tr className="border-b border-orange-100">
+                              <td className="px-3 py-1.5 text-slate-600">Amount excluding GST</td>
+                              <td className="px-3 py-1.5 text-right font-semibold text-slate-700">₹{base.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr className="border-b border-orange-100">
+                              <td className="px-3 py-1.5 text-slate-600">GST @ 18%</td>
+                              <td className="px-3 py-1.5 text-right font-semibold text-orange-700">₹{gst.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr className="bg-orange-100/40">
+                              <td className="px-3 py-2 font-extrabold text-slate-800">Total (incl. GST)</td>
+                              <td className="px-3 py-2 text-right font-extrabold text-red-700">₹{total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Official Notes */}
               <div>
