@@ -6,7 +6,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   ArrowLeft, Users, FileText, Clock, Send, RotateCcw, Download,
-  CheckCircle2, XCircle, AlertCircle, X, RefreshCw, ChevronDown, ChevronUp, Car, ImageIcon,
+  XCircle, AlertCircle, X, RefreshCw, ChevronDown, ChevronUp, Car, ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getBulkBatchDetail, returnToApplicant, resendInvitation, downloadBulkPdf, fileUrl } from "@/lib/bulkPassApi";
@@ -47,6 +47,10 @@ function ReadField({ label, value, mono }) {
 
 function UploadLinkBanner({ tokenActive, tokenExpiresAt, linkValidityHours, onResend, resending }) {
   const isExpired = tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now();
+  // canResend: link is active OR expired by time (admin can refresh the window).
+  // If tokenActive=false but NOT time-expired the applicant already submitted —
+  // resending an invitation makes no sense in that case.
+  const canResend = tokenActive || isExpired;
   return (
     <div className={`rounded-2xl ring-1 p-5 ${isExpired || !tokenActive ? "bg-red-50 ring-red-200" : "bg-sky-50 ring-sky-200"}`}>
       <div className="flex items-center gap-2 mb-1">
@@ -54,24 +58,30 @@ function UploadLinkBanner({ tokenActive, tokenExpiresAt, linkValidityHours, onRe
         <p className={`text-sm font-bold ${isExpired || !tokenActive ? "text-red-700" : "text-sky-700"}`}>
           Applicant Upload Link
           {linkValidityHours && !isExpired && tokenActive && <span className="ml-2 text-xs font-normal text-sky-500">· valid for {linkValidityHours}h</span>}
-          {(isExpired || !tokenActive) && <span className="ml-2 text-xs font-normal text-red-500">· Link expired</span>}
+          {isExpired && <span className="ml-2 text-xs font-normal text-red-500">· Link expired</span>}
+          {!tokenActive && !isExpired && <span className="ml-2 text-xs font-normal text-red-500">· Submitted</span>}
           {tokenExpiresAt && !isExpired && tokenActive && (
             <span className="ml-2 text-xs font-normal text-sky-500">· expires {new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(tokenExpiresAt))}</span>
           )}
         </p>
       </div>
       <p className="text-xs text-slate-500 mb-4">
-        {isExpired || !tokenActive
-          ? "The applicant's upload link has expired. Resend the invitation to issue a fresh link."
-          : "If the applicant hasn't received the invitation email, resend it through the application."}
+        {isExpired
+          ? "The applicant\'s upload link has expired. Resend the invitation to issue a fresh link."
+          : !tokenActive
+          ? "The applicant has already submitted. Use Return to Applicant if corrections are needed."
+          : "If the applicant hasn\'t received the invitation email, resend it through the application."}
       </p>
-      <button onClick={onResend} disabled={resending}
-        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition">
-        <Send className="h-4 w-4" />{resending ? "Sending…" : "Resend Invitation Email"}
-      </button>
+      {canResend && (
+        <button onClick={onResend} disabled={resending}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition">
+          <Send className="h-4 w-4" />{resending ? "Sending…" : "Resend Invitation Email"}
+        </button>
+      )}
     </div>
   );
 }
+
 
 function ReturnModal({ batchId, refNo, onClose, onSuccess }) {  const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
@@ -166,7 +176,7 @@ function PersonsTable({ persons }) {
           <table className="w-full min-w-[800px] text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                {["#", "Photo", "Name", "Aadhaar", "DOB", "Mobile", "In Charge"].map((h) => (
+                {["#", "Photo", "Name", "Aadhaar", "DOB", "Mobile", "Aadhaar Card"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -181,16 +191,9 @@ function PersonsTable({ persons }) {
                   <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{fmtDateShort(p.dob)}</td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-600">{p.mobile || "—"}</td>
                   <td className="px-4 py-3">
-                    {p.inCharge ? (
-                      <div className="flex flex-col gap-1">
-                        <span className="inline-flex items-center gap-1 w-fit px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200">
-                          <CheckCircle2 className="h-3 w-3" /> In charge
-                        </span>
-                        {p.aadhaarCardPath
-                          ? <a href={fileUrl(p.aadhaarCardPath)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:text-amber-700 hover:underline"><FileText className="h-3 w-3" /> Aadhaar card</a>
-                          : <span className="text-[10px] text-red-400">No Aadhaar card</span>}
-                      </div>
-                    ) : <span className="text-slate-400 text-xs">—</span>}
+                    {p.aadhaarCardPath
+                      ? <a href={fileUrl(p.aadhaarCardPath)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:text-amber-700 hover:underline"><FileText className="h-3 w-3" /> View</a>
+                      : <span className="text-[10px] text-red-400">Missing</span>}
                   </td>
                 </tr>
               ))}

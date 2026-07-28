@@ -466,7 +466,7 @@ function ExcelUploadStep({ token, onParsed }) {
           </p>
           <ul className="space-y-1.5 text-xs text-amber-700 leading-relaxed">
             <li>• Each person needs a <strong>passport-style photo</strong> — you'll upload these in the next step.</li>
-            <li>• Exactly <strong>2 persons must be marked as in-charge</strong> with their Aadhaar card documents.</li>
+            <li>• <strong>Aadhaar card (PDF/JPEG/JPG/PNG) is mandatory for every person</strong> — upload each one individually in Step 2.</li>
             <li>• Use the template below — other formats may not parse correctly.</li>
           </ul>
         </div>
@@ -670,10 +670,12 @@ function PhotoThumb({ src, onRemove, onUpload, disabled }) {
 
 // ── Editable Row ──────────────────────────────────────────────────────────────
 
-// Compact Aadhaar card uploader used for in-charge persons.
+// ── Aadhaar card uploader (mandatory for every person) ───────────────────────
 function AadhaarCardUpload({ file, onChange, disabled }) {
   const inputRef = useRef(null);
   const MAX_MB = 10;
+  // image/jpg is not a standard MIME type — browsers send image/jpeg for .jpg files.
+  // The accept attribute uses extensions so the file picker shows all three.
   const ALLOWED = ["application/pdf", "image/jpeg", "image/png"];
 
   const handle = (e) => {
@@ -681,7 +683,7 @@ function AadhaarCardUpload({ file, onChange, disabled }) {
     e.target.value = "";
     if (!f) return;
     if (!ALLOWED.includes(f.type)) {
-      toast.error("Aadhaar card must be a PDF, JPEG or PNG.");
+      toast.error("Aadhaar card must be a PDF, JPG, JPEG or PNG.");
       return;
     }
     if (f.size > MAX_MB * 1024 * 1024) {
@@ -713,12 +715,12 @@ function AadhaarCardUpload({ file, onChange, disabled }) {
           <X className="h-3 w-3" />
         </button>
       )}
-      <input ref={inputRef} type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={handle} />
+      <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handle} />
     </div>
   );
 }
 
-function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors = [], inChargeFull = false }) {
+function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors = [] }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
     name: row.name,
@@ -926,34 +928,14 @@ function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors =
         )}
       </td>
 
-      {/* In Charge */}
-      <td className="px-3 py-3 min-w-[150px]">
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={!!row.inCharge}
-            disabled={disabled || (!row.inCharge && inChargeFull)}
-            onChange={(e) =>
-              onChange(index, {
-                ...row,
-                inCharge: e.target.checked,
-                // Drop the Aadhaar card if no longer in-charge
-                aadhaarCardFile: e.target.checked ? row.aadhaarCardFile : null,
-              })
-            }
-            className="h-4 w-4 accent-amber-500 disabled:opacity-40"
-          />
-          <span className="text-xs font-semibold text-stone-600">In charge</span>
-        </label>
-        {row.inCharge && (
-          <div className="mt-1.5">
-            <AadhaarCardUpload
-              file={row.aadhaarCardFile}
-              disabled={disabled}
-              onChange={(f) => onChange(index, { ...row, aadhaarCardFile: f })}
-            />
-          </div>
-        )}
+      {/* Aadhaar Card (mandatory for every person) */}
+      <td className="px-3 py-3 min-w-[140px]">
+        {/* Aadhaar card is mandatory for ALL persons */}
+        <AadhaarCardUpload
+          file={row.aadhaarCardFile}
+          disabled={disabled}
+          onChange={(f) => onChange(index, { ...row, aadhaarCardFile: f })}
+        />
       </td>
 
       {/* Status */}
@@ -969,6 +951,10 @@ function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors =
         ) : !hasPhoto ? (
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 whitespace-nowrap">
             <Camera className="h-3 w-3" /> No photo
+          </span>
+        ) : !row.aadhaarCardFile ? (
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200 whitespace-nowrap">
+            <FileText className="h-3 w-3" /> No Aadhaar card
           </span>
         ) : (
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 whitespace-nowrap">
@@ -990,7 +976,7 @@ function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors =
       </td>
 
       {/* Actions */}
-      <td className="px-3 py-3">
+      <td className="sticky right-0 z-10 px-3 py-3 bg-inherit shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.06)]">
         <div className="flex items-center gap-1.5">
           {editing ? (
             <>
@@ -1089,7 +1075,12 @@ function DocUpload({ label, file, onChange, required, disabled }) {
           }
         >
           {file ? <CheckCircle2 className="h-3 w-3" /> : <Upload className="h-3 w-3" />}
-          {file ? file.name.slice(0, 18) + (file.name.length > 18 ? "…" : "") : "Upload"}
+          {(() => {
+            const name = file && typeof file === "object" && typeof file.name === "string" ? file.name : null;
+            if (name) return name.slice(0, 18) + (name.length > 18 ? "…" : "");
+            if (file) return "Uploaded";
+            return "Upload";
+          })()}
         </button>
         {file && !disabled && (
           <button type="button" onClick={() => onChange(null)} className="text-stone-400 hover:text-red-500 transition">
@@ -1114,6 +1105,7 @@ function VehicleModal({ vehicle, onSave, onClose }) {
   const emptyVehicle = {
     // Driver particulars
     driverName: "", driverAadhaar: "", driverMobile: "", driverDob: "",
+    driverAadhaarCard: null, // Aadhaar card document for the driver
     // Vehicle details
     regNo: "", vehicleType: "",
     // Documents
@@ -1154,6 +1146,7 @@ function VehicleModal({ vehicle, onSave, onClose }) {
     if (!f.driverName.trim()) e.driverName = "Driver name is required";
     if (!f.driverAadhaar.trim()) e.driverAadhaar = "Aadhaar number is required";
     else if (!/^\d{12}$/.test(f.driverAadhaar.replace(/\s+/g, ""))) e.driverAadhaar = "Aadhaar must be exactly 12 digits";
+    if (!f.driverAadhaarCard) e.driverAadhaarCard = "Driver Aadhaar card document is required";
     if (!f.driverMobile.trim()) e.driverMobile = "Mobile number is required";
     else if (!/^[6-9]\d{9}$/.test(f.driverMobile.replace(/\s+/g, ""))) e.driverMobile = "Enter a valid 10-digit mobile starting with 6–9";
     // DOB is optional, but if provided it must be a valid past date
@@ -1256,6 +1249,23 @@ function VehicleModal({ vehicle, onSave, onClose }) {
                   onChange={(e) => { setForm((p) => ({ ...p, driverDob: formatDobInput(e.target.value) })); markTouched("driverDob"); }} />
                 {shownError("driverDob") && <p className="text-xs text-red-500 mt-1">{shownError("driverDob")}</p>}
               </div>
+            </div>
+
+            {/* Driver Aadhaar Card document (mandatory) */}
+            <div className="mt-4">
+              <label className="block text-xs font-bold text-stone-700 mb-1">
+                Driver Aadhaar Card <span className="text-red-500">*</span>
+              </label>
+              <DocUpload
+                label="Aadhaar Card"
+                file={form.driverAadhaarCard}
+                required
+                disabled={false}
+                onChange={(f) => { setForm((p) => ({ ...p, driverAadhaarCard: f })); markTouched("driverAadhaarCard"); }}
+              />
+              {shownError("driverAadhaarCard") && (
+                <p className="text-xs text-red-500 mt-1">{shownError("driverAadhaarCard")}</p>
+              )}
             </div>
           </div>
 
@@ -1380,14 +1390,8 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
   const personsExceeded = maxPersons > 0 && rows.length > maxPersons;
   const vehiclesExceeded = maxVehicles > 0 && vehicles.length > maxVehicles;
 
-  // In-charge rules: exactly 2 persons must be in-charge, and each must have
-  // their Aadhaar card uploaded.
-  const inChargeRows = rows.filter((r) => r.inCharge);
-  const inChargeCount = inChargeRows.length;
-  const inChargeFull = inChargeCount >= 2;
-  const inChargeCountOk = inChargeCount === 2;
-  const inChargeDocsMissing = inChargeRows.filter((r) => !r.aadhaarCardFile).length;
-  const inChargeReady = inChargeCountOk && inChargeDocsMissing === 0;
+  // Aadhaar card required for EVERY person
+  const aadhaarCardsMissing = rows.filter((r) => !r.aadhaarCardFile).length;
 
   // Persons must be valid + within limit; if vehicles are required, at least one
   // must be added and the count must not exceed the allowed maximum.
@@ -1396,9 +1400,14 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
     errorRows.length === 0 &&
     noPhotoRows.length === 0 &&
     !personsExceeded &&
-    inChargeReady;
+    aadhaarCardsMissing === 0;
+  // Driver Aadhaar card is mandatory for every vehicle
+  const vehicleAadhaarCardsMissing = vehicles.filter((v) => !v.driverAadhaarCard).length;
+
   const vehiclesReady =
-    (maxVehicles === 0 || vehicles.length > 0) && !vehiclesExceeded;
+    (maxVehicles === 0 || vehicles.length > 0) &&
+    !vehiclesExceeded &&
+    vehicleAadhaarCardsMissing === 0;
   const canSubmit = personsReady && vehiclesReady;
 
   const handleRowChange = (index, updatedRow) => {
@@ -1643,23 +1652,21 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
                 <XCircle className="h-3.5 w-3.5" />{errorRows.length} errors
               </span>
             )}
-            <span
-              className={
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold " +
-                (inChargeReady ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700")
-              }
-            >
-              <Users className="h-3.5 w-3.5" />{inChargeCount}/2 in-charge
-            </span>
+            {aadhaarCardsMissing > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                <FileText className="h-3.5 w-3.5" />{aadhaarCardsMissing} need Aadhaar card
+              </span>
+            )}
           </div>
 
-          {/* In-charge instruction */}
-          <div className="mb-5 flex items-start gap-2 px-4 py-3 rounded-2xl bg-blue-50 ring-1 ring-blue-100">
-            <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-blue-700 leading-relaxed">
-              Mark exactly <span className="font-bold">2 persons as in-charge</span> using the
-              checkbox in the "In Charge" column. Each in-charge person must have their{" "}
-              <span className="font-bold">Aadhaar card uploaded</span> (PDF/JPEG/PNG, max 10 MB).
+          {/* Aadhaar card requirement instruction */}
+          <div className="mb-5 flex items-start gap-2 px-4 py-3 rounded-2xl bg-red-50 ring-1 ring-red-200">
+            <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-700 leading-relaxed">
+              <span className="font-bold">Aadhaar card is mandatory for every person.</span>{" "}
+              Upload each person's Aadhaar card using the button in the{" "}
+              <span className="font-bold">"Aadhaar Card *"</span> column.
+              Accepted formats: PDF, JPEG, JPG, PNG — max 10 MB.
             </p>
           </div>
 
@@ -1745,14 +1752,16 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
             <table className="w-full min-w-[900px] text-sm">
               <thead>
                 <tr className="bg-stone-50 border-b border-stone-100">
-                  {["#", "Photo", "Name", "Aadhaar", "DOB", "Mobile", "In Charge", "Status", "Error", ""].map((h) => (
+                  {["#", "Photo", "Name", "Aadhaar", "DOB", "Mobile", "Aadhaar Card *", "Status", "Error"].map((h) => (
                     <th key={h} className="px-3 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-stone-400 whitespace-nowrap">{h}</th>
                   ))}
+                  {/* Sticky actions header */}
+                  <th className="sticky right-0 z-10 bg-stone-50 px-3 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-stone-400 whitespace-nowrap shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.06)]"></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, i) => (
-                  <EditableRow key={row.id || i} row={row} index={i} onChange={handleRowChange} onDelete={handleDeleteRow} disabled={submitting} derivedErrors={rowErrors[i]} inChargeFull={inChargeFull} />
+                  <EditableRow key={row.id || i} row={row} index={i} onChange={handleRowChange} onDelete={handleDeleteRow} disabled={submitting} derivedErrors={rowErrors[i]} />
                 ))}
               </tbody>
             </table>
@@ -1793,6 +1802,16 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
               </p>
             </div>
 
+            {vehicleAadhaarCardsMissing > 0 && (
+              <div className="mb-4 flex items-start gap-2 px-4 py-3 rounded-2xl bg-red-50 ring-1 ring-red-200">
+                <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-red-700 leading-relaxed">
+                  <span className="font-bold">Driver Aadhaar card is mandatory for every vehicle.</span>{" "}
+                  Click <span className="font-bold">"Upload *"</span> in the Driver Aadhaar Card column, or use the edit button (✏️) to open the vehicle and upload the document there.
+                </p>
+              </div>
+            )}
+
             {vehicles.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 rounded-2xl bg-stone-50 ring-1 ring-stone-100">
                 <Car className="h-8 w-8 text-stone-300 mb-3" />
@@ -1804,7 +1823,7 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
                 <table className="w-full min-w-[800px] text-sm">
                   <thead>
                     <tr className="bg-stone-50 border-b border-stone-100">
-                      {["#", "Driver Name", "Aadhaar", "Mobile", "Reg Number", "Type", "RC", "Insurance", "Other Docs", ""].map((h) => (
+                      {["#", "Driver Name", "Aadhaar", "Mobile", "Reg Number", "Type", "RC", "Insurance", "Driver Aadhaar Card *", "Other Docs", ""].map((h) => (
                         <th key={h} className="px-3 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-stone-400 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -1831,6 +1850,19 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
                           {v.insurance ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full"><CheckCircle2 className="h-3 w-3" /> Yes</span>
                           ) : <span className="text-red-400 text-[10px] font-semibold">Missing</span>}
+                        </td>
+                        <td className="px-3 py-3">
+                          {v.driverAadhaarCard ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full"><CheckCircle2 className="h-3 w-3" /> Yes</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setVehicleModal({ index: i, data: v })}
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-50 border border-dashed border-red-300 hover:bg-red-100 px-2 py-0.5 rounded-full transition"
+                            >
+                              <Upload className="h-3 w-3" /> Upload *
+                            </button>
+                          )}
                         </td>
                         <td className="px-3 py-3">
                           <span className="text-xs text-stone-500">
@@ -1882,13 +1914,12 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
                   `Too many persons: ${rows.length} entered, maximum allowed is ${maxPersons}. Remove ${rows.length - maxPersons}. `}
                 {errorRows.length > 0 && "Fix " + errorRows.length + " row(s) with errors. "}
                 {noPhotoRows.length > 0 && "Add photos for " + noPhotoRows.length + " person(s). "}
-                {!inChargeCountOk &&
-                  `Mark exactly 2 persons as in-charge (currently ${inChargeCount}). `}
-                {inChargeCountOk &&
-                  inChargeDocsMissing > 0 &&
-                  `Upload the Aadhaar card for ${inChargeDocsMissing} in-charge person(s). `}
+                {aadhaarCardsMissing > 0 &&
+                  `Upload Aadhaar card for ${aadhaarCardsMissing} person(s) — Aadhaar card is mandatory for every individual. `}
                 {vehiclesExceeded &&
                   `Too many vehicles: ${vehicles.length} added, maximum allowed is ${maxVehicles}. Remove ${vehicles.length - maxVehicles}. `}
+                {vehicleAadhaarCardsMissing > 0 &&
+                  `Upload driver Aadhaar card for ${vehicleAadhaarCardsMissing} vehicle(s) — it is mandatory for every vehicle. `}
                 {maxVehicles > 0 &&
                   vehicles.length === 0 &&
                   `Add at least 1 vehicle (${vehicles.length}/${maxVehicles} added).`}
@@ -2051,14 +2082,14 @@ export default function BulkPassPublicPage() {
       const rowsPayload = rows.map((r) => ({
         ...r,
         aadhaarCardFile: undefined,
-        inCharge: !!r.inCharge,
+        inCharge: false,
         hasAadhaarCard: !!r.aadhaarCardFile,
       }));
       formData.append("rows", JSON.stringify(rowsPayload));
 
-      // Append in-charge persons' Aadhaar card documents.
+      // Append ALL persons' Aadhaar card documents (mandatory for every individual).
       rows.forEach((r, i) => {
-        if (r.inCharge && r.aadhaarCardFile) {
+        if (r.aadhaarCardFile) {
           formData.append(`person_${i}_aadhaarCard`, r.aadhaarCardFile);
         }
       });
@@ -2077,6 +2108,7 @@ export default function BulkPassPublicPage() {
         hasPermit: !!v.permit,
         hasRoadTax: !!v.roadTax,
         hasEmission: !!v.emission,
+        hasDriverAadhaarCard: !!v.driverAadhaarCard,
       }));
       formData.append("vehicles", JSON.stringify(vehicleMeta));
 
@@ -2088,6 +2120,7 @@ export default function BulkPassPublicPage() {
         if (v.permit) formData.append(`vehicle_${i}_permit`, v.permit);
         if (v.roadTax) formData.append(`vehicle_${i}_roadTax`, v.roadTax);
         if (v.emission) formData.append(`vehicle_${i}_emission`, v.emission);
+        if (v.driverAadhaarCard) formData.append(`vehicle_${i}_driverAadhaarCard`, v.driverAadhaarCard);
       });
 
       await submitRowsDirectly(token, rows, formData);
@@ -2147,7 +2180,7 @@ export default function BulkPassPublicPage() {
       </div>
 
       {/* Step indicator */}
-      <div className="max-w-6xl mx-auto px-4 pt-6">
+      <div className="max-w-[1400px] mx-auto px-4 pt-6">
         <div className="flex items-center gap-2 mb-6">
           {[
             { label: "Upload Excel", key: "excel", num: 1 },
@@ -2193,7 +2226,7 @@ export default function BulkPassPublicPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 pb-10 flex flex-col gap-6">
+      <div className="max-w-[1400px] mx-auto px-4 pb-10 flex flex-col gap-6">
         <IntakeCard batch={batch} />
 
         {step === "excel" && <ExcelUploadStep token={token} onParsed={handleParsed} />}

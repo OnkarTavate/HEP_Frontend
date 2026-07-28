@@ -253,14 +253,36 @@ export async function getApprovalQueue() {
   return res.data?.data || [];
 }
 
-export async function approveBulkBatch(id) {
+// ── Individual person approval (new) ─────────────────────────────────────────
+
+export async function approvePersonInBatch(batchId, personId) {
   const res = await axios.post(
-    `${ADMIN_API}/bulk-pass/${id}/approve`,
+    `${ADMIN_API}/bulk-pass/${batchId}/persons/${personId}/approve`,
     {},
     { headers: authHeaders() }
   );
   return res.data;
 }
+
+export async function rejectPersonInBatch(batchId, personId, rejectionReason) {
+  const res = await axios.post(
+    `${ADMIN_API}/bulk-pass/${batchId}/persons/${personId}/reject`,
+    { rejectionReason },
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
+export async function finalizeBulkBatch(id) {
+  const res = await axios.post(
+    `${ADMIN_API}/bulk-pass/${id}/finalize`,
+    {},
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
+// ── Batch-level operations (kept for backward compat) ────────────────────────
 
 export async function rejectBulkBatch(id, rejectionReason) {
   const res = await axios.post(
@@ -275,6 +297,60 @@ export async function returnBulkBatchByTraffic(id, returnReason) {
   const res = await axios.post(
     `${ADMIN_API}/bulk-pass/${id}/return`,
     { returnReason },
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
+// ── Traffic: post-approval actions ───────────────────────────────────────────
+
+/**
+ * Fetch full batch detail via the approval-admin-service.
+ * Works for all statuses — traffic officers can view COMPLETED batches too.
+ */
+export async function getBulkBatchDetailAdmin(id) {
+  const res = await axios.get(`${ADMIN_API}/bulk-pass/${id}`, {
+    headers: authHeaders(),
+  });
+  const raw = res.data?.data;
+  if (!raw) return null;
+  return {
+    ...raw.batch,
+    persons: raw.persons || [],
+    uploads: raw.uploads || [],
+    statusLogs: raw.statusLog || raw.statusLogs || [],
+  };
+}
+
+/**
+ * Download the QR PDF via the approval-admin-service.
+ * Available to all traffic dept users for COMPLETED batches.
+ */
+export async function downloadBulkPdfAdmin(id) {
+  const res = await axios.get(`${ADMIN_API}/bulk-pass/${id}/pdf`, {
+    headers: authHeaders(),
+    responseType: "blob",
+  });
+  const contentType = res.headers["content-type"] || "";
+  if (!contentType.includes("application/pdf")) {
+    const text = await res.data.text();
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { parsed = { message: text }; }
+    const err = new Error(parsed.message || "PDF not available");
+    err.response = { data: parsed, status: res.status };
+    throw err;
+  }
+  return res.data;
+}
+
+/**
+ * Resend the approved-pass email to the applicant.
+ * Available to all traffic dept users on COMPLETED batches.
+ */
+export async function resendBulkPassEmail(id) {
+  const res = await axios.post(
+    `${ADMIN_API}/bulk-pass/${id}/resend-pass`,
+    {},
     { headers: authHeaders() }
   );
   return res.data;

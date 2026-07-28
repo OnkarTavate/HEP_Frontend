@@ -9,7 +9,6 @@ import {
   Users,
   Car,
   Building2,
-  ShieldCheck,
 } from "lucide-react";
 import { getBulkPassScan } from "@/lib/bulkPassApi";
 
@@ -218,11 +217,6 @@ function BulkPassViewContent() {
                       <td className="py-2.5 pr-4 text-stone-400">{i + 1}</td>
                       <td className="py-2.5 pr-4 font-semibold text-stone-800">
                         {p.name || "—"}
-                        {p.inCharge && (
-                          <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600">
-                            <ShieldCheck className="h-3 w-3" /> In-charge
-                          </span>
-                        )}
                       </td>
                       <td className="py-2.5 pr-4 font-mono text-stone-600">{p.aadhaar || "—"}</td>
                       <td className="py-2.5 pr-4 text-stone-600">{p.mobile || "—"}</td>

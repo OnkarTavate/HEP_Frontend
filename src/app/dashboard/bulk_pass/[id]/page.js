@@ -327,7 +327,7 @@ function PersonsTable({ persons }) {
                   "Aadhaar",
                   "DOB",
                   "Mobile",
-                  "In Charge",
+                  "Aadhaar Card",
                 ].map((h) => (
                   <th
                     key={h}
@@ -365,26 +365,17 @@ function PersonsTable({ persons }) {
                     {p.mobile || "—"}
                   </td>
                   <td className="px-4 py-3">
-                    {p.inCharge ? (
-                      <div className="flex flex-col gap-1">
-                        <span className="inline-flex items-center gap-1 w-fit px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200">
-                          <CheckCircle2 className="h-3 w-3" /> In charge
-                        </span>
-                        {p.aadhaarCardPath ? (
-                          <a
-                            href={fileUrl(p.aadhaarCardPath)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:text-amber-700 hover:underline"
-                          >
-                            <FileText className="h-3 w-3" /> Aadhaar card
-                          </a>
-                        ) : (
-                          <span className="text-[10px] text-red-400">No Aadhaar card</span>
-                        )}
-                      </div>
+                    {p.aadhaarCardPath ? (
+                      <a
+                        href={fileUrl(p.aadhaarCardPath)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:text-amber-700 hover:underline"
+                      >
+                        <FileText className="h-3 w-3" /> View
+                      </a>
                     ) : (
-                      <span className="text-stone-400 text-xs">—</span>
+                      <span className="text-[10px] text-red-400">Missing</span>
                     )}
                   </td>
                 </tr>
