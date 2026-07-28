@@ -79,6 +79,50 @@ const nextConfig = {
           // injected by a reverse proxy (e.g. Apache) in front of this app.
           { key: "X-Powered-By", value: "" },
           { key: "Server", value: "" },
+          // VAPT Vuln #12 – Strict-Transport-Security (HSTS)
+          // Forces HTTPS for 1 year; includeSubDomains covers *.bosschn.in
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
+          // VAPT Vuln #13 – Content-Security-Policy
+          // Restrictive policy tailored to this Next.js + React application.
+          // 'self' covers the same origin; 'unsafe-inline' for styles is
+          // required by Tailwind / Radix UI inline styles.  Script hashes or
+          // nonces should be preferred in a future hardening pass once all
+          // inline event handlers are removed.
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
+              "font-src 'self' data:",
+              "connect-src 'self'",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'none'",
+              "upgrade-insecure-requests",
+            ].join("; "),
+          },
+          // VAPT Vuln #14 – Permissions-Policy
+          // Disable browser features not used by this application
+          {
+            key: "Permissions-Policy",
+            value: [
+              "camera=()",
+              "microphone=()",
+              "geolocation=()",
+              "fullscreen=(self)",
+              "payment=()",
+              "usb=()",
+            ].join(", "),
+          },
+          // VAPT Vuln #15 – Cross-Origin-Embedder-Policy
+          { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
+          // VAPT Vuln #16 – Cross-Origin-Resource-Policy
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+          // Bonus: Cross-Origin-Opener-Policy (related isolation header)
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
         ],
       },
     ];
