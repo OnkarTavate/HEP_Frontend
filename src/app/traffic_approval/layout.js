@@ -26,6 +26,7 @@ import {
   Lock,
   FileText,
   BarChart3,
+  BadgeCheck as VvipIcon,
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -305,6 +306,7 @@ export default function TrafficLayout({ children }) {
   const navigationItems = [
     { name: "Dashboard", href: "/traffic_approval/dashboard", icon: BarChart3 },
     { name: "Pass Approvals", href: "/traffic_approval/passes", icon: FileText },
+    { name: "VVIP Pass", href: "/traffic_approval/vvip-pass", icon: VvipIcon },
     { name: "Company Approvals", href: "/traffic_approval/companies", icon: Building2 },
     { name: "Blacklist Management", href: "/traffic_approval/blacklist", icon: ShieldBan },
     { name: "Overstay Exceptions", href: "/traffic_approval/overstay", icon: ShieldCheck },
@@ -362,7 +364,10 @@ export default function TrafficLayout({ children }) {
         {/* Nav items */}
         <div className={cn("flex flex-col gap-1 px-3", expanded ? "items-stretch" : "items-center")}>
           {navigationItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive =
+              item.href === "/traffic_approval"
+                ? pathname === item.href
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.name}

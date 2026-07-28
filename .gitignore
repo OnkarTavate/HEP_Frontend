@@ -15,7 +15,11 @@
 
 # next.js
 /.next/
+/.next_broken*/
 /out/
+
+# local backup folders created while recovering broken installs
+/node_modules_broken*/
 
 # production
 /build

@@ -51,12 +51,143 @@ import {
   Mail,
   Phone,
   CheckCircle,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
+
+function UserProfileDetailRow({ icon: Icon, label, value, copyKey, copiedField, onCopy }) {
+  return (
+    <div className="flex items-start gap-3 py-2.5 border-b border-stone-100 dark:border-white/5 last:border-0">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-stone-100 dark:bg-white/5 text-stone-500 dark:text-stone-400 shrink-0 mt-0.5">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">{label}</p>
+        <p className="text-sm font-semibold text-stone-800 dark:text-stone-100 truncate">{value || "—"}</p>
+      </div>
+      {value && value !== "—" && (
+        <button
+          onClick={() => onCopy(value, copyKey)}
+          className="shrink-0 p-1 rounded text-stone-400 hover:text-amber-600 transition-colors"
+          title="Copy"
+        >
+          {copiedField === copyKey ? <CheckCheck className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const panelRef = useRef(null);
+  const [copiedField, setCopiedField] = useState(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const copyField = (val, key) => {
+    navigator.clipboard.writeText(String(val || "")).then(() => {
+      setCopiedField(key);
+      setTimeout(() => setCopiedField(null), 2000);
+    });
+  };
+
+  const username = user?.username || "Port Admin";
+  const displayName = user?.name || username.split("@")[0] || "Port Admin";
+  const role = user?.role || "Officer";
+  const department = user?.departmentName || departmentName || "Admin Department";
+  const email = user?.email || "—";
+  const mobile = user?.mobile || user?.mobileNo || "—";
+  const initials = displayName.substring(0, 2).toUpperCase();
+
+  const statusMeta = { label: "Active", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300" };
+
+  return (
+    <div className="relative" ref={panelRef}>
+      <button
+        onClick={() => setOpen((p) => !p)}
+        className="flex items-center gap-2.5 rounded-2xl px-3 py-2 bg-black/90 hover:bg-black text-white dark:bg-white/5 dark:hover:bg-white/10 dark:border dark:border-white/10 shadow-md transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-orange-500/40 active:scale-95 cursor-pointer"
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-base font-extrabold shrink-0 shadow-md ring-2 ring-amber-300/30">
+          {initials}
+        </span>
+        <span className="hidden sm:flex flex-col text-left leading-tight min-w-0 pr-1">
+          <span className="text-sm font-extrabold truncate max-w-[140px] text-white">{displayName}</span>
+          <span className="text-[10px] uppercase tracking-wider text-orange-400 font-bold truncate">{role}</span>
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-stone-400 transition-transform duration-200 hidden sm:block",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+10px)] z-[200] w-80 rounded-3xl bg-white dark:bg-[#1f232d] shadow-[0_8px_40px_rgba(0,0,0,0.18)] ring-1 ring-stone-200/70 dark:ring-white/10 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-gradient-to-r from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] px-5 py-4 relative overflow-hidden">
+            <svg aria-hidden viewBox="0 0 320 80" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-10 w-full text-amber-400/10">
+              <path fill="currentColor" d="M0,40 C80,80 160,0 240,40 C280,60 300,30 320,40 L320,80 L0,80 Z" />
+            </svg>
+            <div className="relative flex items-center gap-3">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-xl font-extrabold shrink-0 shadow-lg ring-2 ring-amber-300/30">
+                {initials}
+              </span>
+              <div className="min-w-0 flex-1 text-left">
+                <p className="text-base font-extrabold text-white leading-tight truncate">{displayName}</p>
+                <p className="text-xs text-stone-400 font-mono mt-0.5 truncate">{username}</p>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold mt-1.5 ${statusMeta.cls}`}>
+                  <BadgeCheck className="h-3 w-3" />
+                  {statusMeta.label}
+                </span>
+              </div>
+              <button onClick={() => setOpen(false)} className="text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="px-4 pt-2 pb-1 max-h-[340px] overflow-y-auto [scrollbar-width:thin] text-left">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">Account Profile</p>
+            <UserProfileDetailRow icon={User} label="Login ID" value={username} copyKey="lid" copiedField={copiedField} onCopy={copyField} />
+            <UserProfileDetailRow icon={Briefcase} label="Role" value={role} copyKey="role" copiedField={copiedField} onCopy={copyField} />
+            <UserProfileDetailRow icon={Building2} label="Department" value={department} copyKey="dept" copiedField={copiedField} onCopy={copyField} />
+            <UserProfileDetailRow icon={Mail} label="Email" value={email} copyKey="email" copiedField={copiedField} onCopy={copyField} />
+            <UserProfileDetailRow icon={Phone} label="Mobile" value={mobile} copyKey="mob" copiedField={copiedField} onCopy={copyField} />
+          </div>
+
+          <div className="p-3 border-t border-stone-100 dark:border-white/5 space-y-1.5">
+            <button
+              onClick={() => { setOpen(false); onChangePassword(); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-orange-50 dark:hover:bg-orange-400/10 hover:text-orange-700 dark:hover:text-orange-300 transition-colors cursor-pointer text-left"
+            >
+              <KeyRound className="h-4 w-4 shrink-0" />
+              Change Password
+            </button>
+            <button
+              onClick={() => { setOpen(false); onLogout(); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors cursor-pointer text-left"
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AdminLayout({ children }) {
   const router = useRouter();
@@ -69,6 +200,43 @@ export default function AdminLayout({ children }) {
   const [modalLoading, setModalLoading] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const reloadKey = "admin-chunk-reload-path";
+    const reloadOnStaleChunk = (reason) => {
+      const message =
+        typeof reason === "string"
+          ? reason
+          : reason?.message || reason?.toString?.() || "";
+
+      if (!/ChunkLoadError|Loading chunk .* failed/i.test(message)) return;
+
+      const path = window.location.pathname;
+      if (sessionStorage.getItem(reloadKey) === path) return;
+
+      sessionStorage.setItem(reloadKey, path);
+      window.location.reload();
+    };
+
+    const handleError = (event) => reloadOnStaleChunk(event.error || event.message);
+    const handleRejection = (event) => reloadOnStaleChunk(event.reason);
+    const clearReloadMarker = window.setTimeout(() => {
+      if (sessionStorage.getItem(reloadKey) === window.location.pathname) {
+        sessionStorage.removeItem(reloadKey);
+      }
+    }, 5000);
+
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
+
+    return () => {
+      window.clearTimeout(clearReloadMarker);
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, []);
 
   // Dark-mode state (persisted in localStorage). Toggling adds/removes the
   // `dark` class on the layout wrapper; Tailwind v4's `dark:` variant is
@@ -131,6 +299,10 @@ export default function AdminLayout({ children }) {
         router.push("/");
         return;
       }
+      if (!isAdmin && pathname?.startsWith("/admin/reports")) {
+        router.push("/admin/vendor_pass");
+        return;
+      }
       const timer = setTimeout(() => {
         setUser(parsedUser);
         if (parsedUser.isPasswordChanged === false) {
@@ -141,7 +313,7 @@ export default function AdminLayout({ children }) {
     } else {
       router.push("/");
     }
-  }, [router]);
+  }, [router, pathname]);
 
   const handlePasswordChangeSubmit = async (e) => {
     e.preventDefault();
@@ -330,6 +502,7 @@ export default function AdminLayout({ children }) {
     { name: "Material Approvals", href: "/admin/material-pass", icon: FileText},
     { name: "All Passes", href: "/admin/all-passes", icon: FileText },
     { name: "Bulk Pass", href: "/admin/bulk_pass", icon: Users },
+    ...(isAdmin ? [{ name: "Reports", href: "/admin/reports", icon: BarChart3 }] : []),
   ];
 
   const SidebarContent = () => (
@@ -356,8 +529,10 @@ export default function AdminLayout({ children }) {
         </p>
         {navigationItems.map((item) => {
           const isActive = pathname === item.href;
+          const isReports = item.href.startsWith("/admin/reports");
+          const NavItem = isReports ? "a" : Link;
           return (
-            <Link
+            <NavItem
               key={item.name}
               href={item.href}
               className={cn(
@@ -376,7 +551,7 @@ export default function AdminLayout({ children }) {
                 )}
               />
               <span className="flex-1">{item.name}</span>
-            </Link>
+            </NavItem>
           );
         })}
       </nav>
@@ -471,8 +646,10 @@ export default function AdminLayout({ children }) {
         <div className={cn("flex flex-col gap-2", expanded ? "items-stretch" : "items-center")}>
           {navigationItems.map((item) => {
             const isActive = pathname === item.href;
+            const isReports = item.href.startsWith("/admin/reports");
+            const NavItem = isReports ? "a" : Link;
             return (
-              <Link
+              <NavItem
                 key={item.name}
                 href={item.href}
                 title={item.name}
@@ -489,7 +666,7 @@ export default function AdminLayout({ children }) {
               >
                 <item.icon className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")} strokeWidth={2.5} />
                 {expanded && <span className="flex-1 truncate">{item.name}</span>}
-              </Link>
+              </NavItem>
             );
           })}
         </div>
@@ -509,143 +686,6 @@ export default function AdminLayout({ children }) {
       </div>
     </div>
   );
-
-  // ─── User Profile Panel (replaces old UserNameCard) ────────────────────────
-  function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) {
-    const [open, setOpen] = useState(false);
-    const panelRef = useRef(null);
-    const [copiedField, setCopiedField] = useState(null);
-
-    useEffect(() => {
-      if (!open) return;
-      const handler = (e) => {
-        if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false);
-      };
-      document.addEventListener("mousedown", handler);
-      return () => document.removeEventListener("mousedown", handler);
-    }, [open]);
-
-    const copyField = (val, key) => {
-      navigator.clipboard.writeText(String(val || "")).then(() => {
-        setCopiedField(key);
-        setTimeout(() => setCopiedField(null), 2000);
-      });
-    };
-
-    const username = user?.username || "Port Admin";
-    const displayName = user?.name || username.split("@")[0] || "Port Admin";
-    const role = user?.role || "Officer";
-    const department = user?.departmentName || departmentName || "Admin Department";
-    const email = user?.email || "—";
-    const mobile = user?.mobile || user?.mobileNo || "—";
-    const initials = displayName.substring(0, 2).toUpperCase();
-
-    const statusMeta = { label: "Active", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300" };
-
-    const DetailRow = ({ icon: Icon, label, value, copyKey }) => (
-      <div className="flex items-start gap-3 py-2.5 border-b border-stone-100 dark:border-white/5 last:border-0">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-stone-100 dark:bg-white/5 text-stone-500 dark:text-stone-400 shrink-0 mt-0.5">
-          <Icon className="h-4 w-4" />
-        </span>
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">{label}</p>
-          <p className="text-sm font-semibold text-stone-800 dark:text-stone-100 truncate">{value || "—"}</p>
-        </div>
-        {value && value !== "—" && (
-          <button
-            onClick={() => copyField(value, copyKey)}
-            className="shrink-0 p-1 rounded text-stone-400 hover:text-amber-600 transition-colors"
-            title="Copy"
-          >
-            {copiedField === copyKey ? <CheckCheck className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-          </button>
-        )}
-      </div>
-    );
-
-    return (
-      <div className="relative" ref={panelRef}>
-        {/* Trigger button */}
-        <button
-          onClick={() => setOpen((p) => !p)}
-          className="flex items-center gap-2.5 rounded-2xl px-3 py-2 bg-black/90 hover:bg-black text-white dark:bg-white/5 dark:hover:bg-white/10 dark:border dark:border-white/10 shadow-md transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-orange-500/40 active:scale-95 cursor-pointer"
-        >
-          {/* Avatar */}
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-base font-extrabold shrink-0 shadow-md ring-2 ring-amber-300/30">
-            {initials}
-          </span>
-          {/* Name + role */}
-          <span className="hidden sm:flex flex-col text-left leading-tight min-w-0 pr-1">
-            <span className="text-sm font-extrabold truncate max-w-[140px] text-white">{displayName}</span>
-            <span className="text-[10px] uppercase tracking-wider text-orange-400 font-bold truncate">{role}</span>
-          </span>
-          <ChevronDown
-            className={cn(
-              "h-4 w-4 text-stone-400 transition-transform duration-200 hidden sm:block",
-              open && "rotate-180"
-            )}
-          />
-        </button>
-
-        {/* Dropdown panel */}
-        {open && (
-          <div className="absolute right-0 top-[calc(100%+10px)] z-[200] w-80 rounded-3xl bg-white dark:bg-[#1f232d] shadow-[0_8px_40px_rgba(0,0,0,0.18)] ring-1 ring-stone-200/70 dark:ring-white/10 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            {/* Panel header */}
-            <div className="bg-gradient-to-r from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] px-5 py-4 relative overflow-hidden">
-              {/* Wave decoration */}
-              <svg aria-hidden viewBox="0 0 320 80" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-10 w-full text-amber-400/10">
-                <path fill="currentColor" d="M0,40 C80,80 160,0 240,40 C280,60 300,30 320,40 L320,80 L0,80 Z" />
-              </svg>
-              <div className="relative flex items-center gap-3">
-                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-xl font-extrabold shrink-0 shadow-lg ring-2 ring-amber-300/30">
-                  {initials}
-                </span>
-                <div className="min-w-0 flex-1 text-left">
-                  <p className="text-base font-extrabold text-white leading-tight truncate">{displayName}</p>
-                  <p className="text-xs text-stone-400 font-mono mt-0.5 truncate">{username}</p>
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold mt-1.5 ${statusMeta.cls}`}>
-                    <BadgeCheck className="h-3 w-3" />
-                    {statusMeta.label}
-                  </span>
-                </div>
-                <button onClick={() => setOpen(false)} className="text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Detail rows */}
-            <div className="px-4 pt-2 pb-1 max-h-[340px] overflow-y-auto [scrollbar-width:thin] text-left">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">Account Profile</p>
-              <DetailRow icon={User} label="Login ID" value={username} copyKey="lid" />
-              <DetailRow icon={Briefcase} label="Role" value={role} copyKey="role" />
-              <DetailRow icon={Building2} label="Department" value={department} copyKey="dept" />
-              <DetailRow icon={Mail} label="Email" value={email} copyKey="email" />
-              <DetailRow icon={Phone} label="Mobile" value={mobile} copyKey="mob" />
-            </div>
-
-            {/* Actions */}
-            <div className="p-3 border-t border-stone-100 dark:border-white/5 space-y-1.5">
-              <button
-                onClick={() => { setOpen(false); onChangePassword(); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-orange-50 dark:hover:bg-orange-400/10 hover:text-orange-700 dark:hover:text-orange-300 transition-colors cursor-pointer text-left"
-              >
-                <KeyRound className="h-4 w-4 shrink-0" />
-                Change Password
-              </button>
-              <button
-                onClick={() => { setOpen(false); onLogout(); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors cursor-pointer text-left"
-              >
-                <LogOut className="h-4 w-4 shrink-0" />
-                Sign Out
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
 
   return (
     <div
@@ -709,7 +749,7 @@ export default function AdminLayout({ children }) {
                 </h1>
                 <p className="text-stone-500 dark:text-stone-400 text-sm mt-1 hidden sm:block">
                   {navigationItems.find((item) => item.href === pathname)
-                    ?.name || "System Configuration Portal"}
+                    ?.name || ""}
                 </p>
               </div>
             </div>

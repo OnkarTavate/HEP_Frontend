@@ -35,8 +35,8 @@ import { Button } from "@/components/ui/button";
 import PaginationBar from "@/components/ui/PaginationBar";
 import { toast } from "sonner";
 
-const BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API;
-const AUTH_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API
+const BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
+const AUTH_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5006/api";
 
 export default function AdminDashboard() {
   const router = useRouter();

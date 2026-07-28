@@ -563,6 +563,8 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
 
         if (role === "admin" || role === "administrator") {
           router.push("/admin");
+        } else if (role === "hod") {
+          router.push("/hod");
         } else if (role === "atm") {
           router.push("/atm_dashboard");
         } else if (TRAFFIC_APPROVAL_ROLES.includes(role) && TRAFFIC_DEPT_IDS.includes(deptId)) {

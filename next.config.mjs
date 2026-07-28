@@ -21,6 +21,7 @@ const connectSrc = isDev
   : "'self'";
 
 const nextConfig = {
+  outputFileTracingRoot: process.cwd(),
   allowedDevOrigins: ['10.184.3.133', '14.139.180.41', '127.0.0.1'],
 
   // Remove the "X-Powered-By: Next.js" header from all responses
@@ -52,17 +53,7 @@ const nextConfig = {
   },
 
   async headers() {
-    return [
-      // Cache static Next.js assets aggressively (they are content-hashed)
-      {
-        source: "/_next/static/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
+    const headers = [
       // Cache public folder assets (images, icons, etc.)
       // Next.js route patterns don't support regex groups — use separate entries
       {
@@ -147,6 +138,23 @@ const nextConfig = {
         ],
       },
     ];
+
+    if (process.env.NODE_ENV !== "development") {
+      headers.unshift({
+        // Cache static Next.js assets aggressively in production (they are content-hashed).
+        // In development, forcing immutable cache headers can make HMR/page chunks go stale
+        // and cause ChunkLoadError when routes like /admin/reports are rebuilt.
+        source: "/_next/static/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      });
+    }
+
+    return headers;
   },
 };
 
