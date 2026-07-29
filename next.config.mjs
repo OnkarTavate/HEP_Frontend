@@ -1,4 +1,21 @@
 /** @type {import('next').NextConfig} */
+
+const isDev = process.env.NODE_ENV === "development";
+
+// In development, the frontend (port 3000) calls backend services on different
+// ports (5001, 5005, 5006) and needs ws:// for Next.js HMR.  In production
+// everything should go through the same origin via a reverse proxy.
+const connectSrc = isDev
+  ? [
+      "'self'",
+      "http://localhost:5001",
+      "http://localhost:5005",
+      "http://localhost:5006",
+      "ws://localhost:*",     // Next.js HMR websocket
+      "wss://localhost:*",
+    ].join(" ")
+  : "'self'";
+
 const nextConfig = {
   allowedDevOrigins: ['10.184.3.133', '14.139.180.41'],
 
@@ -93,10 +110,13 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-              "style-src 'self' 'unsafe-inline'",
+              // Allow Google Fonts stylesheets (the @import in the HTML head)
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob:",
-              "font-src 'self' data:",
-              "connect-src 'self'",
+              // Allow Google Fonts to serve the actual font files
+              "font-src 'self' data: https://fonts.gstatic.com",
+              // Backend API calls + HMR websocket in dev; tightened in prod
+              `connect-src ${connectSrc}`,
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",

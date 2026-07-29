@@ -35,6 +35,7 @@ import {
   uploadZipPhotos,
   submitRowsDirectly,
   checkBulkPassBlacklist,
+  checkVehicleValidity,
 } from "@/lib/bulkPassApi";
 import { processPhoto } from "@/lib/photoProcessor";
 
@@ -1117,6 +1118,29 @@ function VehicleModal({ vehicle, onSave, onClose }) {
   const [vehicleBlacklist, setVehicleBlacklist] = useState(null); // null | { isBlacklisted, reason }
   const [driverBlacklist, setDriverBlacklist] = useState(null);
 
+  // ULIP validity check state
+  // null = not checked yet, "loading" = in progress
+  // object = { found, allValid, rcActive, rcStatus, validityChecks[], expired[], makerModel, vehicleClass }
+  // "error" = service unavailable
+  const [ulipValidity, setUlipValidity] = useState(null);
+  const [ulipLoading, setUlipLoading] = useState(false);
+
+  // Ref for the Registration Number input — used to trap focus when verification
+  // is incomplete or has failed, so the user cannot proceed to the next field.
+  const regNoRef = useRef(null);
+
+  // Derived: is the reg-number field "cleared" to allow tab-out?
+  // true  → check passed (or service unavailable — soft pass)
+  // false → still loading, or check found blocking issues
+  const regNoCleared =
+    isValidRegNo(form.regNo) &&
+    !ulipLoading &&
+    (
+      ulipValidity === "error" ||                                   // service down → soft pass
+      (ulipValidity && ulipValidity !== "error" && ulipValidity.found && ulipValidity.allValid && ulipValidity.rcActive) ||
+      (ulipValidity && ulipValidity !== "error" && !ulipValidity.found) // not in DB → soft pass
+    );
+
   // Real-time blacklist check: vehicle reg number
   useEffect(() => {
     const reg = form.regNo.replace(/[\s\-]/g, "").toUpperCase();
@@ -1139,6 +1163,23 @@ function VehicleModal({ vehicle, onSave, onClose }) {
     return () => { cancelled = true; };
   }, [form.driverAadhaar]);
 
+  // ULIP real-time validity check: triggered when reg number becomes valid
+  useEffect(() => {
+    if (!isValidRegNo(form.regNo)) { setUlipValidity(null); return; }
+    let cancelled = false;
+    setUlipLoading(true);
+    setUlipValidity(null);
+    checkVehicleValidity(form.regNo)
+      .then((res) => {
+        if (cancelled) return;
+        if (!res.success) { setUlipValidity("error"); }
+        else { setUlipValidity(res); }
+      })
+      .catch(() => { if (!cancelled) setUlipValidity("error"); })
+      .finally(() => { if (!cancelled) setUlipLoading(false); });
+    return () => { cancelled = true; };
+  }, [form.regNo]);
+
   // Pure validator — computes the full error map for the current form.
   const getVehicleErrors = (f) => {
     const e = {};
@@ -1157,6 +1198,13 @@ function VehicleModal({ vehicle, onSave, onClose }) {
     // Vehicle
     if (!f.regNo.trim()) e.regNo = "Registration number is required";
     else if (!isValidRegNo(f.regNo)) e.regNo = "Enter a valid registration number (e.g. TN01AB1234 or 22BH1234AA)";
+    // Block save when ULIP check is still running or found a blocking issue
+    else if (ulipLoading) e.regNo = "Vehicle verification in progress — please wait";
+    else if (ulipValidity && ulipValidity !== "error" && ulipValidity.found && !ulipValidity.rcActive) e.regNo = "RC status is not ACTIVE — vehicle cannot be entered";
+    else if (ulipValidity && ulipValidity !== "error" && ulipValidity.found && ulipValidity.expired?.length > 0) {
+      const labels = ulipValidity.expired.map((ex) => ex.label).join(", ");
+      e.regNo = `Expired certificate(s): ${labels}`;
+    }
     // Mandatory docs
     if (!f.rc) e.rc = "Registration Certificate is mandatory";
     if (!f.insurance) e.insurance = "Insurance document is mandatory";
@@ -1178,6 +1226,22 @@ function VehicleModal({ vehicle, onSave, onClose }) {
     }
     if (driverBlacklist?.isBlacklisted) {
       toast.error("The driver is blacklisted and cannot be added. Reason: " + (driverBlacklist.reason || "Blacklisted at Chennai Port."));
+      return;
+    }
+    // Block if ULIP check returned expired validities
+    if (ulipValidity && ulipValidity !== "error" && ulipValidity.found) {
+      if (!ulipValidity.rcActive) {
+        toast.error("This vehicle's RC status is not ACTIVE and cannot be entered.");
+        return;
+      }
+      if (ulipValidity.expired && ulipValidity.expired.length > 0) {
+        const labels = ulipValidity.expired.map((e) => `${e.label} (expired ${e.date})`).join(", ");
+        toast.error(`Vehicle cannot be added — expired: ${labels}`);
+        return;
+      }
+    }
+    if (ulipLoading) {
+      toast.warning("Please wait for vehicle verification to complete.");
       return;
     }
     if (hasErrors) { toast.error("Please fix the errors before saving."); return; }
@@ -1279,8 +1343,52 @@ function VehicleModal({ vehicle, onSave, onClose }) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1">Registration Number <span className="text-red-500">*</span></label>
-                <input {...inp("regNo")} placeholder="e.g. TN01AB1234" maxLength={11}
-                  onChange={(e) => { setForm((p) => ({ ...p, regNo: formatRegNo(e.target.value) })); markTouched("regNo"); }} />
+                <input
+                  {...inp("regNo")}
+                  ref={regNoRef}
+                  placeholder="e.g. TN01AB1234"
+                  maxLength={11}
+                  onChange={(e) => {
+                    setForm((p) => ({ ...p, regNo: formatRegNo(e.target.value) }));
+                    markTouched("regNo");
+                  }}
+                  onBlur={(e) => {
+                    markTouched("regNo");
+                    // Only intercept if the reg number looks complete (valid format)
+                    if (!isValidRegNo(form.regNo)) return;
+                    // Still loading — snap focus back and warn
+                    if (ulipLoading) {
+                      e.preventDefault();
+                      setTimeout(() => regNoRef.current?.focus(), 0);
+                      toast.warning("Please wait — verifying vehicle registration…");
+                      return;
+                    }
+                    // Blocking failures — snap focus back
+                    if (ulipValidity && ulipValidity !== "error" && ulipValidity.found) {
+                      if (!ulipValidity.rcActive) {
+                        e.preventDefault();
+                        setTimeout(() => regNoRef.current?.focus(), 0);
+                        toast.error("RC status is not ACTIVE — correct the registration number.");
+                        return;
+                      }
+                      if (ulipValidity.expired && ulipValidity.expired.length > 0) {
+                        e.preventDefault();
+                        setTimeout(() => regNoRef.current?.focus(), 0);
+                        const labels = ulipValidity.expired.map((ex) => ex.label).join(", ");
+                        toast.error(`Vehicle has expired certificate(s): ${labels} — correct the registration number.`);
+                        return;
+                      }
+                    }
+                    // Blacklisted vehicle — snap focus back
+                    if (vehicleBlacklist?.isBlacklisted) {
+                      e.preventDefault();
+                      setTimeout(() => regNoRef.current?.focus(), 0);
+                      toast.error("This vehicle is blacklisted — correct the registration number.");
+                      return;
+                    }
+                    // All good (or service unavailable) — allow normal tab-out
+                  }}
+                />
                 {shownError("regNo") && <p className="text-xs text-red-500 mt-1">{shownError("regNo")}</p>}
                 {vehicleBlacklist?.isBlacklisted && (
                   <div className="mt-1.5 flex items-start gap-1.5 px-2.5 py-2 rounded-xl bg-red-50 border border-red-300">
@@ -1290,19 +1398,80 @@ function VehicleModal({ vehicle, onSave, onClose }) {
                 {vehicleBlacklist && !vehicleBlacklist.isBlacklisted && isValidRegNo(form.regNo) && (
                   <p className="text-[11px] text-emerald-600 font-semibold mt-1">✓ Vehicle clear</p>
                 )}
+
+                {/* ULIP validity check feedback */}
+                {ulipLoading && isValidRegNo(form.regNo) && (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-stone-500 font-semibold px-2.5 py-2 rounded-xl bg-stone-50 border border-stone-200">
+                    <Loader2 className="h-3 w-3 animate-spin text-amber-500" /> Verifying vehicle registration — please wait…
+                  </div>
+                )}
+                {!ulipLoading && ulipValidity === "error" && (
+                  <p className="text-[11px] text-amber-600 mt-1">⚠ Vehicle verification service unavailable — you may still proceed.</p>
+                )}
+                {!ulipLoading && ulipValidity && ulipValidity !== "error" && !ulipValidity.found && (
+                  <p className="text-[11px] text-amber-600 mt-1">⚠ Vehicle not found in VAHAN database — verify the number.</p>
+                )}
+                {!ulipLoading && ulipValidity && ulipValidity !== "error" && ulipValidity.found && (
+                  <div className="mt-2 rounded-xl border overflow-hidden text-[11px]">
+                    {/* Vehicle info header */}
+                    {ulipValidity.makerModel && (
+                      <div className="px-3 py-2 bg-stone-50 border-b border-stone-100 text-stone-600 font-semibold">
+                        {ulipValidity.makerModel}{ulipValidity.vehicleClass ? ` · ${ulipValidity.vehicleClass}` : ""}
+                      </div>
+                    )}
+                    {/* RC status row */}
+                    {ulipValidity.rcStatus && (
+                      <div className={`flex items-center justify-between px-3 py-1.5 border-b border-stone-100 ${!ulipValidity.rcActive ? "bg-red-50" : "bg-white"}`}>
+                        <span className="text-stone-500">RC Status</span>
+                        <span className={`font-bold ${ulipValidity.rcActive ? "text-emerald-600" : "text-red-600"}`}>
+                          {ulipValidity.rcActive ? "✓" : "✗"} {ulipValidity.rcStatus}
+                        </span>
+                      </div>
+                    )}
+                    {/* Validity rows */}
+                    {ulipValidity.validityChecks.map((c, i) => (
+                      <div key={i} className={`flex items-center justify-between px-3 py-1.5 ${i < ulipValidity.validityChecks.length - 1 ? "border-b border-stone-100" : ""} ${c.expired ? "bg-red-50" : "bg-white"}`}>
+                        <span className="text-stone-500">{c.label}</span>
+                        <span className={`font-bold ${c.expired ? "text-red-600" : "text-emerald-600"}`}>
+                          {c.expired ? "✗ Expired" : "✓ Valid"} · {c.date}
+                        </span>
+                      </div>
+                    ))}
+                    {/* Overall banner */}
+                    {ulipValidity.allValid && ulipValidity.rcActive ? (
+                      <div className="px-3 py-2 bg-emerald-50 text-emerald-700 font-bold text-center">✓ All validities confirmed</div>
+                    ) : (
+                      <div className="px-3 py-2 bg-red-50 text-red-700 font-bold text-center">
+                        ✗ Vehicle cannot be entered — {!ulipValidity.rcActive ? "RC not active" : `${ulipValidity.expired.length} expired certificate(s)`}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1">Vehicle Type</label>
                 <select
                   value={form.vehicleType}
                   onChange={(e) => { setForm((p) => ({ ...p, vehicleType: e.target.value })); markTouched("vehicleType"); }}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none transition border-stone-200 bg-stone-50 focus:ring-2 focus:ring-amber-400/40"
+                  disabled={isValidRegNo(form.regNo) && !regNoCleared}
+                  title={isValidRegNo(form.regNo) && !regNoCleared ? "Complete vehicle registration verification first" : undefined}
+                  className={
+                    "w-full px-3 py-2 rounded-xl border text-sm outline-none transition " +
+                    (isValidRegNo(form.regNo) && !regNoCleared
+                      ? "border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed"
+                      : "border-stone-200 bg-stone-50 focus:ring-2 focus:ring-amber-400/40")
+                  }
                 >
                   <option value="">Select vehicle type…</option>
                   {VEHICLE_TYPES.map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
+                {isValidRegNo(form.regNo) && !regNoCleared && (
+                  <p className="text-[10px] text-amber-600 mt-1 font-semibold flex items-center gap-1">
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" /> Waiting for registration verification…
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -1312,7 +1481,13 @@ function VehicleModal({ vehicle, onSave, onClose }) {
           {/* Documents */}
           <div>
             <p className="text-xs font-bold text-stone-700 mb-3">Documents</p>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+            {isValidRegNo(form.regNo) && !regNoCleared && (
+              <div className="mb-3 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2 text-[11px] text-amber-700 font-semibold">
+                <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                Complete vehicle registration verification to upload documents.
+              </div>
+            )}
+            <div className={`grid grid-cols-2 gap-x-6 gap-y-4 ${isValidRegNo(form.regNo) && !regNoCleared ? "opacity-40 pointer-events-none select-none" : ""}`}>
               <DocUpload label="Registration Certificate" file={form.rc} required onChange={(f) => { setForm((p) => ({ ...p, rc: f })); markTouched("rc"); }} />
               {shownError("rc") && <p className="text-xs text-red-500 -mt-3 col-span-2">{shownError("rc")}</p>}
               <DocUpload label="Insurance" file={form.insurance} required onChange={(f) => { setForm((p) => ({ ...p, insurance: f })); markTouched("insurance"); }} />

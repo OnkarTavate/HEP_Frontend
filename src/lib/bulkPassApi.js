@@ -143,6 +143,19 @@ export async function checkBulkPassBlacklist(entityType, identifier) {
   return res.data; // { success, isBlacklisted, data }
 }
 
+/**
+ * Check RC / insurance / fitness validity via ULIP VAHAN database.
+ * Public — no auth required. Called from the vehicle modal in the bulk pass form.
+ * Returns: { success, found, rcActive, rcStatus, validityChecks[], expired[], allValid, makerModel, vehicleClass }
+ */
+export async function checkVehicleValidity(vehiclenumber) {
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/public/vehicle-check`,
+    { vehiclenumber }
+  );
+  return res.data;
+}
+
 export async function getPublicBatch(token) {
   const res = await axios.get(`${AGENT_API}/bulk-pass/public/${token}`);
   return res.data?.data;
