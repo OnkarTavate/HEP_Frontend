@@ -86,6 +86,7 @@ export default function ProfileUpdateModal({ isOpen, onClose, onSuccess }) {
     panNumber: "",
     tanNumber: "",
     licenseNumber: "",
+    isLifetimeLicense: false,
     licenseValidityDate: "",
     remarks: "",
   });
@@ -118,7 +119,7 @@ export default function ProfileUpdateModal({ isOpen, onClose, onSuccess }) {
   const profLicDate = profile?.licenseValidityDate ? String(profile.licenseValidityDate).substring(0, 10) : "";
 
   const licNumChanged = (formData.licenseNumber || "").trim() !== (profile?.licenseNumber || "").trim();
-  const licDateChanged = (formData.licenseValidityDate || "").trim() !== profLicDate.trim();
+  const licDateChanged = Boolean(formData.isLifetimeLicense) !== Boolean(profile?.isLifetimeLicense) || (formData.licenseValidityDate || "").trim() !== profLicDate.trim();
   const nameChanged = (formData.entityName || "").trim() !== (profile?.entityName || "").trim();
   const authPersonChanged = (formData.authorizedPersonName || "").trim() !== profAuthPerson.trim();
   const mobileChanged = (formData.mobileNo || "").trim() !== profMobile.trim();
@@ -227,6 +228,7 @@ export default function ProfileUpdateModal({ isOpen, onClose, onSuccess }) {
           panNumber: p.panNumber || "",
           tanNumber: p.tanNumber || "",
           licenseNumber: p.licenseNumber || "",
+          isLifetimeLicense: Boolean(p.isLifetimeLicense),
           licenseValidityDate: p.licenseValidityDate ? p.licenseValidityDate.substring(0, 10) : "",
           remarks: "",
         });
@@ -284,6 +286,7 @@ export default function ProfileUpdateModal({ isOpen, onClose, onSuccess }) {
 
     const licChanged =
       formData.licenseNumber !== (profile.licenseNumber || "") ||
+      Boolean(formData.isLifetimeLicense) !== Boolean(profile.isLifetimeLicense) ||
       formData.licenseValidityDate !== (profile.licenseValidityDate ? profile.licenseValidityDate.substring(0, 10) : "");
 
     const nameChanged = formData.entityName !== (profile.entityName || "");
@@ -774,18 +777,49 @@ export default function ProfileUpdateModal({ isOpen, onClose, onSuccess }) {
                       {fieldErrors.licenseNumber && <p className="text-[11px] font-semibold text-red-500 mt-1">{fieldErrors.licenseNumber}</p>}
                     </div>
 
-                    <div>
+                    {/* License Validity Type Toggle */}
+                    <div className="md:col-span-2 space-y-1.5">
                       <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
-                        License Expiry Date {requiredDocs.licenseDoc && <span className="text-amber-600 dark:text-amber-400 text-[11px] font-extrabold">* (Proof Required)</span>}
+                        License Validity Type
                       </label>
-                      <input
-                        type="date"
-                        name="licenseValidityDate"
-                        value={formData.licenseValidityDate}
-                        onChange={handleChange}
-                        className="w-full px-3.5 py-2.5 text-sm bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none text-stone-900 dark:text-white"
-                      />
+                      <div className="flex items-center gap-6 p-3 bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/10 rounded-xl">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-stone-700 dark:text-stone-300">
+                          <input
+                            type="radio"
+                            name="isLifetimeLicense"
+                            checked={!formData.isLifetimeLicense}
+                            onChange={() => setFormData((prev) => ({ ...prev, isLifetimeLicense: false }))}
+                            className="w-4 h-4 text-amber-500 focus:ring-amber-500"
+                          />
+                          Specify Expiry Date
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-stone-700 dark:text-stone-300">
+                          <input
+                            type="radio"
+                            name="isLifetimeLicense"
+                            checked={Boolean(formData.isLifetimeLicense)}
+                            onChange={() => setFormData((prev) => ({ ...prev, isLifetimeLicense: true, licenseValidityDate: "" }))}
+                            className="w-4 h-4 text-amber-500 focus:ring-amber-500"
+                          />
+                          Lifetime Validity (No Expiry)
+                        </label>
+                      </div>
                     </div>
+
+                    {!formData.isLifetimeLicense && (
+                      <div>
+                        <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                          License Expiry Date {requiredDocs.licenseDoc && <span className="text-amber-600 dark:text-amber-400 text-[11px] font-extrabold">* (Proof Required)</span>}
+                        </label>
+                        <input
+                          type="date"
+                          name="licenseValidityDate"
+                          value={formData.licenseValidityDate}
+                          onChange={handleChange}
+                          className="w-full px-3.5 py-2.5 text-sm bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none text-stone-900 dark:text-white"
+                        />
+                      </div>
+                    )}
 
                     {/* Contextual Inline Upload for License */}
                     {requiredDocs.licenseDoc && (

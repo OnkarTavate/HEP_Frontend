@@ -142,7 +142,7 @@ export default function TrafficPassesPage() {
         if (Array.isArray(parsed) && parsed.length === 3) {
           setCardOrder(parsed);
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }, []);
 
@@ -1037,19 +1037,17 @@ export default function TrafficPassesPage() {
               setProcessedByMe(false);
               setCurrentPage(1);
             }}
-            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${
-              activeTab === tab.id
+            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${activeTab === tab.id
                 ? "bg-[#0a1e4d] text-white shadow"
                 : "text-slate-500 hover:text-[#0a1e4d] hover:bg-slate-100"
-            }`}
+              }`}
           >
             {tab.label}
             <span
-              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
-                activeTab === tab.id
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${activeTab === tab.id
                   ? "bg-white/20 text-white"
                   : "bg-slate-200 text-slate-600"
-              }`}
+                }`}
             >
               {tab.count}
             </span>
@@ -1133,26 +1131,25 @@ export default function TrafficPassesPage() {
               <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
                 {(activeTab === "processed"
                   ? [
-                      "Ref No",
-                      "Company Details",
-                      "Entities Included",
-                      "Applied On",
-                      "Approved By",
-                      "Status",
-                    ]
+                    "Ref No",
+                    "Company Details",
+                    "Entities Included",
+                    "Applied On",
+                    "Approved By",
+                    "Status",
+                  ]
                   : [
-                      "Ref No",
-                      "Company Details",
-                      "Entities Included",
-                      "Applied On",
-                      "Status",
-                    ]
+                    "Ref No",
+                    "Company Details",
+                    "Entities Included",
+                    "Applied On",
+                    "Status",
+                  ]
                 ).map((h) => (
                   <th
                     key={h}
-                    className={`px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${
-                      h === "Status" ? "text-center" : ""
-                    }`}
+                    className={`px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${h === "Status" ? "text-center" : ""
+                      }`}
                   >
                     {h}
                   </th>
@@ -1437,9 +1434,9 @@ export default function TrafficPassesPage() {
                               });
                               setCurrentRemark(
                                 entityRemarks.persons[p.id] ||
-                                  p.revertReason ||
-                                  p.rejectedReason ||
-                                  "",
+                                p.revertReason ||
+                                p.rejectedReason ||
+                                "",
                               );
                             }
                           }}
@@ -1457,28 +1454,26 @@ export default function TrafficPassesPage() {
                               {isOilDockArea(
                                 p.accessAreaId || p.accessArea,
                               ) && (
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                    p.srDtmApproved ||
-                                    (userRole ===
-                                      "Senior Deputy Traffic Manager" &&
-                                      entityStatuses.persons[p.id] ===
-                                        "APPROVED")
-                                      ? "bg-emerald-100 text-emerald-700"
-                                      : "bg-amber-100 text-amber-700"
-                                  }`}
-                                >
-                                  {p.srDtmApproved ||
-                                  (userRole ===
-                                    "Senior Deputy Traffic Manager" &&
-                                    entityStatuses.persons[p.id] === "APPROVED")
-                                    ? "✓ Sr. DTM"
-                                    : "⏳ Pending Sr. DTM"}
-                                </span>
-                              )}
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${p.srDtmApproved ||
+                                        (userRole ===
+                                          "Senior Deputy Traffic Manager" &&
+                                          entityStatuses.persons[p.id] ===
+                                          "APPROVED")
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : "bg-amber-100 text-amber-700"
+                                      }`}
+                                  >
+                                    {p.srDtmApproved ||
+                                      (userRole ===
+                                        "Senior Deputy Traffic Manager" &&
+                                        entityStatuses.persons[p.id] === "APPROVED")
+                                      ? "✓ Sr. DTM"
+                                      : "⏳ Pending Sr. DTM"}
+                                  </span>
+                                )}
                               <span
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                  [
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${[
                                     "APPROVED",
                                     "REJECTED",
                                     "REVERTED",
@@ -1487,21 +1482,21 @@ export default function TrafficPassesPage() {
                                     "reverted",
                                   ].includes(
                                     selectedRequest?.status ||
-                                      selectedRequest?.decision,
+                                    selectedRequest?.decision,
                                   ) ||
-                                  [
-                                    "approved",
-                                    "rejected",
-                                    "reverted",
-                                    "APPROVED",
-                                    "REJECTED",
-                                    "REVERTED",
-                                  ].includes(p.status || p.decision) ||
-                                  (userRole === "Approval" &&
-                                    entityStatuses.persons[p.id] === "APPROVED")
+                                    [
+                                      "approved",
+                                      "rejected",
+                                      "reverted",
+                                      "APPROVED",
+                                      "REJECTED",
+                                      "REVERTED",
+                                    ].includes(p.status || p.decision) ||
+                                    (userRole === "Approval" &&
+                                      entityStatuses.persons[p.id] === "APPROVED")
                                     ? "bg-emerald-100 text-emerald-700"
                                     : "bg-amber-100 text-amber-700"
-                                }`}
+                                  }`}
                               >
                                 {[
                                   "APPROVED",
@@ -1512,18 +1507,18 @@ export default function TrafficPassesPage() {
                                   "reverted",
                                 ].includes(
                                   selectedRequest?.status ||
-                                    selectedRequest?.decision,
+                                  selectedRequest?.decision,
                                 ) ||
-                                [
-                                  "approved",
-                                  "rejected",
-                                  "reverted",
-                                  "APPROVED",
-                                  "REJECTED",
-                                  "REVERTED",
-                                ].includes(p.status || p.decision) ||
-                                (userRole === "Approval" &&
-                                  entityStatuses.persons[p.id] === "APPROVED")
+                                  [
+                                    "approved",
+                                    "rejected",
+                                    "reverted",
+                                    "APPROVED",
+                                    "REJECTED",
+                                    "REVERTED",
+                                  ].includes(p.status || p.decision) ||
+                                  (userRole === "Approval" &&
+                                    entityStatuses.persons[p.id] === "APPROVED")
                                   ? "✓ Pass Section"
                                   : "⏳ Pending Pass Section"}
                               </span>
@@ -1549,13 +1544,12 @@ export default function TrafficPassesPage() {
                                   <>
                                     {personStatus && (
                                       <span
-                                        className={`px-2 py-1 rounded text-[10px] font-bold ${
-                                          personStatus === "APPROVED"
+                                        className={`px-2 py-1 rounded text-[10px] font-bold ${personStatus === "APPROVED"
                                             ? "bg-emerald-100 text-emerald-700"
                                             : personStatus === "REVERTED"
                                               ? "bg-amber-100 text-amber-700"
                                               : "bg-red-100 text-red-700"
-                                        }`}
+                                          }`}
                                       >
                                         {personStatus}
                                       </span>
@@ -1565,11 +1559,10 @@ export default function TrafficPassesPage() {
                                       personStatus === "REVERTED") &&
                                       personRemark && (
                                         <div
-                                          className={`mt-1 text-[10px] p-1 rounded border inline-block ${
-                                            personStatus === "REVERTED"
+                                          className={`mt-1 text-[10px] p-1 rounded border inline-block ${personStatus === "REVERTED"
                                               ? "text-amber-600 bg-amber-50 border-amber-100"
                                               : "text-red-600 bg-red-50 border-red-100"
-                                          }`}
+                                            }`}
                                         >
                                           {personStatus === "REVERTED"
                                             ? "Revert: "
@@ -1596,8 +1589,8 @@ export default function TrafficPassesPage() {
                                   className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
                                 >
                                   {entityStatuses.persons[p.id] ||
-                                  p.status === "approved" ||
-                                  p.status === "rejected"
+                                    p.status === "approved" ||
+                                    p.status === "rejected"
                                     ? "Re-verify"
                                     : "Verify"}
                                 </button>
@@ -1649,9 +1642,9 @@ export default function TrafficPassesPage() {
                               });
                               setCurrentRemark(
                                 entityRemarks.vehicles[v.id] ||
-                                  v.revertReason ||
-                                  v.rejectedReason ||
-                                  "",
+                                v.revertReason ||
+                                v.rejectedReason ||
+                                "",
                               );
                             }
                           }}
@@ -1671,69 +1664,65 @@ export default function TrafficPassesPage() {
                               {["MONTHLY", "YEARLY", "ANNUAL"].includes(
                                 v.passType,
                               ) && (
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                    v.twistLockCertified ||
-                                    (userRole === "Safety Officer" &&
-                                      entityStatuses.vehicles[v.id] ===
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${v.twistLockCertified ||
+                                        (userRole === "Safety Officer" &&
+                                          entityStatuses.vehicles[v.id] ===
+                                          "APPROVED")
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : "bg-amber-100 text-amber-700"
+                                      }`}
+                                  >
+                                    {v.twistLockCertified ||
+                                      (userRole === "Safety Officer" &&
+                                        entityStatuses.vehicles[v.id] ===
                                         "APPROVED")
-                                      ? "bg-emerald-100 text-emerald-700"
-                                      : "bg-amber-100 text-amber-700"
-                                  }`}
-                                >
-                                  {v.twistLockCertified ||
-                                  (userRole === "Safety Officer" &&
-                                    entityStatuses.vehicles[v.id] ===
-                                      "APPROVED")
-                                    ? "✓ Safety"
-                                    : "⏳ Pending Safety"}
-                                </span>
-                              )}
+                                      ? "✓ Safety"
+                                      : "⏳ Pending Safety"}
+                                  </span>
+                                )}
                               {isOilDockArea(
                                 v.accessAreaId || v.accessArea,
                               ) && (
-                                <>
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                      v.sparkArresterCertified ||
-                                      (userRole === "Fire Safety Officer" &&
-                                        entityStatuses.vehicles[v.id] ===
+                                  <>
+                                    <span
+                                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${v.sparkArresterCertified ||
+                                          (userRole === "Fire Safety Officer" &&
+                                            entityStatuses.vehicles[v.id] ===
+                                            "APPROVED")
+                                          ? "bg-emerald-100 text-emerald-700"
+                                          : "bg-amber-100 text-amber-700"
+                                        }`}
+                                    >
+                                      {v.sparkArresterCertified ||
+                                        (userRole === "Fire Safety Officer" &&
+                                          entityStatuses.vehicles[v.id] ===
                                           "APPROVED")
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : "bg-amber-100 text-amber-700"
-                                    }`}
-                                  >
-                                    {v.sparkArresterCertified ||
-                                    (userRole === "Fire Safety Officer" &&
-                                      entityStatuses.vehicles[v.id] ===
-                                        "APPROVED")
-                                      ? "✓ Fire Safety"
-                                      : "⏳ Pending Fire Safety"}
-                                  </span>
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                      v.srDtmApproved ||
-                                      (userRole ===
-                                        "Senior Deputy Traffic Manager" &&
-                                        entityStatuses.vehicles[v.id] ===
+                                        ? "✓ Fire Safety"
+                                        : "⏳ Pending Fire Safety"}
+                                    </span>
+                                    <span
+                                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${v.srDtmApproved ||
+                                          (userRole ===
+                                            "Senior Deputy Traffic Manager" &&
+                                            entityStatuses.vehicles[v.id] ===
+                                            "APPROVED")
+                                          ? "bg-emerald-100 text-emerald-700"
+                                          : "bg-amber-100 text-amber-700"
+                                        }`}
+                                    >
+                                      {v.srDtmApproved ||
+                                        (userRole ===
+                                          "Senior Deputy Traffic Manager" &&
+                                          entityStatuses.vehicles[v.id] ===
                                           "APPROVED")
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : "bg-amber-100 text-amber-700"
-                                    }`}
-                                  >
-                                    {v.srDtmApproved ||
-                                    (userRole ===
-                                      "Senior Deputy Traffic Manager" &&
-                                      entityStatuses.vehicles[v.id] ===
-                                        "APPROVED")
-                                      ? "✓ Sr. DTM"
-                                      : "⏳ Pending Sr. DTM"}
-                                  </span>
-                                </>
-                              )}
+                                        ? "✓ Sr. DTM"
+                                        : "⏳ Pending Sr. DTM"}
+                                    </span>
+                                  </>
+                                )}
                               <span
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                  [
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${[
                                     "APPROVED",
                                     "REJECTED",
                                     "REVERTED",
@@ -1742,22 +1731,22 @@ export default function TrafficPassesPage() {
                                     "reverted",
                                   ].includes(
                                     selectedRequest?.status ||
-                                      selectedRequest?.decision,
+                                    selectedRequest?.decision,
                                   ) ||
-                                  [
-                                    "approved",
-                                    "rejected",
-                                    "reverted",
-                                    "APPROVED",
-                                    "REJECTED",
-                                    "REVERTED",
-                                  ].includes(v.status || v.decision) ||
-                                  (userRole === "Approval" &&
-                                    entityStatuses.vehicles[v.id] ===
+                                    [
+                                      "approved",
+                                      "rejected",
+                                      "reverted",
+                                      "APPROVED",
+                                      "REJECTED",
+                                      "REVERTED",
+                                    ].includes(v.status || v.decision) ||
+                                    (userRole === "Approval" &&
+                                      entityStatuses.vehicles[v.id] ===
                                       "APPROVED")
                                     ? "bg-emerald-100 text-emerald-700"
                                     : "bg-amber-100 text-amber-700"
-                                }`}
+                                  }`}
                               >
                                 {[
                                   "APPROVED",
@@ -1768,18 +1757,18 @@ export default function TrafficPassesPage() {
                                   "reverted",
                                 ].includes(
                                   selectedRequest?.status ||
-                                    selectedRequest?.decision,
+                                  selectedRequest?.decision,
                                 ) ||
-                                [
-                                  "approved",
-                                  "rejected",
-                                  "reverted",
-                                  "APPROVED",
-                                  "REJECTED",
-                                  "REVERTED",
-                                ].includes(v.status || v.decision) ||
-                                (userRole === "Approval" &&
-                                  entityStatuses.vehicles[v.id] === "APPROVED")
+                                  [
+                                    "approved",
+                                    "rejected",
+                                    "reverted",
+                                    "APPROVED",
+                                    "REJECTED",
+                                    "REVERTED",
+                                  ].includes(v.status || v.decision) ||
+                                  (userRole === "Approval" &&
+                                    entityStatuses.vehicles[v.id] === "APPROVED")
                                   ? "✓ Pass Section"
                                   : "⏳ Pending Pass Section"}
                               </span>
@@ -1802,13 +1791,12 @@ export default function TrafficPassesPage() {
                                   <>
                                     {vehicleStatus && (
                                       <span
-                                        className={`px-2 py-1 rounded text-[10px] font-bold ${
-                                          vehicleStatus === "APPROVED"
+                                        className={`px-2 py-1 rounded text-[10px] font-bold ${vehicleStatus === "APPROVED"
                                             ? "bg-emerald-100 text-emerald-700"
                                             : vehicleStatus === "REVERTED"
                                               ? "bg-amber-100 text-amber-700"
                                               : "bg-red-100 text-red-700"
-                                        }`}
+                                          }`}
                                       >
                                         {vehicleStatus}
                                       </span>
@@ -1818,11 +1806,10 @@ export default function TrafficPassesPage() {
                                       vehicleStatus === "REVERTED") &&
                                       vehicleRemark && (
                                         <div
-                                          className={`mt-1 text-[10px] p-1 rounded border inline-block ${
-                                            vehicleStatus === "REVERTED"
+                                          className={`mt-1 text-[10px] p-1 rounded border inline-block ${vehicleStatus === "REVERTED"
                                               ? "text-amber-600 bg-amber-50 border-amber-100"
                                               : "text-red-600 bg-red-50 border-red-100"
-                                          }`}
+                                            }`}
                                         >
                                           {vehicleStatus === "REVERTED"
                                             ? "Revert: "
@@ -1849,8 +1836,8 @@ export default function TrafficPassesPage() {
                                   className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
                                 >
                                   {entityStatuses.vehicles[v.id] ||
-                                  v.status === "approved" ||
-                                  v.status === "rejected"
+                                    v.status === "approved" ||
+                                    v.status === "rejected"
                                     ? "Re-verify"
                                     : "Verify"}
                                 </button>
@@ -2049,97 +2036,20 @@ export default function TrafficPassesPage() {
                   {/* Oil Dock Workflow Status */}
                   {isOilDockArea(
                     entityModal.data.accessAreaId ||
-                      entityModal.data.accessArea,
+                    entityModal.data.accessArea,
                   ) && (
-                    <div className="col-span-2 md:col-span-4 border-t border-slate-100 pt-4 mt-2">
-                      <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-                        Essential Entry Permit Certifications
-                      </h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {entityModal.type === "person" ? (
-                          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase">
-                              Sr. DTM Approval
-                            </span>
-                            <div className="flex items-center gap-2 mt-1">
-                              {entityModal.data.srDtmApproved ? (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                  AUTHORIZED
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                                  PENDING AUTHORIZATION
-                                </span>
-                              )}
-                            </div>
-                            {entityModal.data.srDtmRemarks && (
-                              <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
-                                Remarks: {entityModal.data.srDtmRemarks}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <>
-                            {/* Safety Officer badge — shown only for MONTHLY, YEARLY, ANNUAL oil dock vehicles */}
-                            {["MONTHLY", "YEARLY", "ANNUAL"].includes(
-                              entityModal.data.passType,
-                            ) && (
-                              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase">
-                                  Safety Officer (Twist Lock & Fitness)
-                                </span>
-                                <div className="flex items-center gap-2 mt-1">
-                                  {entityModal.data.twistLockCertified ? (
-                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                      APPROVED
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                                      PENDING APPROVAL
-                                    </span>
-                                  )}
-                                </div>
-                                {entityModal.data.twistLockRemarks && (
-                                  <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
-                                    Remarks: {entityModal.data.twistLockRemarks}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-
-                            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase">
-                                Fire Safety Officer (Spark Arrester)
-                              </span>
-                              <div className="flex items-center gap-2 mt-1">
-                                {entityModal.data.sparkArresterCertified ? (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                    CERTIFIED
-                                  </span>
-                                ) : (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                                    PENDING CERTIFICATION
-                                  </span>
-                                )}
-                              </div>
-                              {entityModal.data.sparkArresterRemarks && (
-                                <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
-                                  Remarks:{" "}
-                                  {entityModal.data.sparkArresterRemarks}
-                                </p>
-                              )}
-                            </div>
-
+                      <div className="col-span-2 md:col-span-4 border-t border-slate-100 pt-4 mt-2">
+                        <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
+                          Essential Entry Permit Certifications
+                        </h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {entityModal.type === "person" ? (
                             <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                               <span className="text-[10px] font-bold text-slate-500 uppercase">
                                 Sr. DTM Approval
                               </span>
                               <div className="flex items-center gap-2 mt-1">
-                                {entityModal.data.srDtmApproved ||
-                                (userRole === "Senior Deputy Traffic Manager" &&
-                                  entityStatuses.vehicles[
-                                    entityModal.data.id
-                                  ] === "APPROVED") ? (
+                                {entityModal.data.srDtmApproved ? (
                                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
                                     AUTHORIZED
                                   </span>
@@ -2155,11 +2065,88 @@ export default function TrafficPassesPage() {
                                 </p>
                               )}
                             </div>
-                          </>
-                        )}
+                          ) : (
+                            <>
+                              {/* Safety Officer badge — shown only for MONTHLY, YEARLY, ANNUAL oil dock vehicles */}
+                              {["MONTHLY", "YEARLY", "ANNUAL"].includes(
+                                entityModal.data.passType,
+                              ) && (
+                                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                      Safety Officer (Twist Lock & Fitness)
+                                    </span>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      {entityModal.data.twistLockCertified ? (
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                          APPROVED
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                          PENDING APPROVAL
+                                        </span>
+                                      )}
+                                    </div>
+                                    {entityModal.data.twistLockRemarks && (
+                                      <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                        Remarks: {entityModal.data.twistLockRemarks}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                  Fire Safety Officer (Spark Arrester)
+                                </span>
+                                <div className="flex items-center gap-2 mt-1">
+                                  {entityModal.data.sparkArresterCertified ? (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                      CERTIFIED
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                      PENDING CERTIFICATION
+                                    </span>
+                                  )}
+                                </div>
+                                {entityModal.data.sparkArresterRemarks && (
+                                  <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                    Remarks:{" "}
+                                    {entityModal.data.sparkArresterRemarks}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                  Sr. DTM Approval
+                                </span>
+                                <div className="flex items-center gap-2 mt-1">
+                                  {entityModal.data.srDtmApproved ||
+                                    (userRole === "Senior Deputy Traffic Manager" &&
+                                      entityStatuses.vehicles[
+                                      entityModal.data.id
+                                      ] === "APPROVED") ? (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                      AUTHORIZED
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                      PENDING AUTHORIZATION
+                                    </span>
+                                  )}
+                                </div>
+                                {entityModal.data.srDtmRemarks && (
+                                  <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                    Remarks: {entityModal.data.srDtmRemarks}
+                                  </p>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
                 </div>
               </div>
 
@@ -2328,7 +2315,7 @@ export default function TrafficPassesPage() {
                   ) : (
                     <>
                       <DocumentCard
-                        label="RC Document / Book"
+                        label="RC/NOC Document"
                         filePath={entityModal.data.scannedCopyFilePath}
                         documentType="vehicleRC"
                         passRequestId={selectedRequest.id}
@@ -2368,16 +2355,16 @@ export default function TrafficPassesPage() {
                           ["MONTHLY", "YEARLY", "ANNUAL"].includes(
                             entityModal.data.passType,
                           ))) && (
-                        <DocumentCard
-                          label="Twist Lock Certificate"
-                          filePath={entityModal.data.twistLockFilePath}
-                          documentType="twistLock"
-                          passRequestId={selectedRequest.id}
-                          onView={handleViewDoc}
-                          entityIndex={extractEntityIndex(entityModal.data.id)}
-                          isVendorPass={selectedRequest.originType === "VENDOR"}
-                        />
-                      )}
+                          <DocumentCard
+                            label="Twist Lock Certificate"
+                            filePath={entityModal.data.twistLockFilePath}
+                            documentType="twistLock"
+                            passRequestId={selectedRequest.id}
+                            onView={handleViewDoc}
+                            entityIndex={extractEntityIndex(entityModal.data.id)}
+                            isVendorPass={selectedRequest.originType === "VENDOR"}
+                          />
+                        )}
                       <DocumentCard
                         label="Request Letter"
                         filePath={entityModal.data.requestLetterPath}

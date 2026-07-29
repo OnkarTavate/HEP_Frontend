@@ -1206,24 +1206,26 @@ export default function VendorPassPublicPage() {
       !vehicleForm.regNo.trim() ||
       !(vehicleForm.rcDocument || vehicleForm.existingRcName) ||
       !(vehicleForm.insuranceDocument || vehicleForm.existingInsName) ||
-      !(vehicleForm.permit || vehicleForm.existingPermitName) ||
       !(vehicleForm.fitnessCert || vehicleForm.existingFitnessName) ||
       !vehicleForm.insuranceExpiry ||
       !vehicleForm.rcValidity
     ) {
       return toast.error(
-        "RC Book, Insurance, Permit, Fitness Certificate, and their Validity Dates are mandatory.",
+        "RC/NOC, Insurance, Fitness Certificate, and their Validity Dates are mandatory.",
       );
     }
     if (
       ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType))
     ) {
+      if (!(vehicleForm.permit || vehicleForm.existingPermitName)) {
+        return toast.error("Permit Document is mandatory for Monthly/Yearly passes.");
+      }
       if (
         !(vehicleForm.requestLetter || vehicleForm.existingReqName) ||
         !(vehicleForm.taxDoc || vehicleForm.existingTaxName) ||
         !(vehicleForm.emissionCert || vehicleForm.existingEmissionName)
       ) {
-        return toast.error("Request Letter, Tax Document, and Emission Certificate are mandatory for Monthly/Yearly passes.");
+        return toast.error("Request Letter, Tax Document, Emission Cert, and Permit are mandatory for Monthly/Yearly passes.");
       }
     }
 
@@ -2266,99 +2268,99 @@ export default function VendorPassPublicPage() {
                             "label",
                           )?.toUpperCase();
 
-                        const isForeignerVal = nationalityName === "FOREIGNER" || value === "2";
-                        const passportIdObj = (masterData.idProofTypes || []).find(
-                          (t) => (t.label || t.name || "").toLowerCase().includes("passport")
-                        );
-                        const passportTypeId = passportIdObj ? String(passportIdObj.id || passportIdObj.value) : "4";
+                          const isForeignerVal = nationalityName === "FOREIGNER" || value === "2";
+                          const passportIdObj = (masterData.idProofTypes || []).find(
+                            (t) => (t.label || t.name || "").toLowerCase().includes("passport")
+                          );
+                          const passportTypeId = passportIdObj ? String(passportIdObj.id || passportIdObj.value) : "4";
 
-                        const dlIdObj = (masterData.idProofTypes || []).find(
-                          (t) => (t.label || t.name || "").toLowerCase().includes("driver") || (t.label || t.name || "").toLowerCase().includes("licence")
-                        );
-                        const dlTypeId = dlIdObj ? String(dlIdObj.id || dlIdObj.value) : "1";
+                          const dlIdObj = (masterData.idProofTypes || []).find(
+                            (t) => (t.label || t.name || "").toLowerCase().includes("driver") || (t.label || t.name || "").toLowerCase().includes("licence")
+                          );
+                          const dlTypeId = dlIdObj ? String(dlIdObj.id || dlIdObj.value) : "1";
 
-                        const indiaObj = (masterData.countries || []).find(
-                          (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
-                        );
-                        const indiaId = indiaObj ? String(indiaObj.id || indiaObj.value) : "";
+                          const indiaObj = (masterData.countries || []).find(
+                            (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
+                          );
+                          const indiaId = indiaObj ? String(indiaObj.id || indiaObj.value) : "";
 
-                        const isInd = nationalityName === "INDIAN" || value === "1";
+                          const isInd = nationalityName === "INDIAN" || value === "1";
 
-                        setPersonForm((prev) => ({
-                          ...prev,
-                          nationality: value,
-                          country: isInd ? (indiaId || prev.country) : (prev.country === indiaId ? "" : prev.country),
-                          idProofType: prev.hepType === "1" ? dlTypeId : (isForeignerVal ? passportTypeId : prev.idProofType),
-                          aadharNo: prev.aadharNo,
-                          aadharFile: prev.aadharFile,
-                        }));
-                      }}
-                      className={inputClass}
-                    >
-                      <option value="">Select Nationality</option>
-                      {masterData.nationalities.map((n) => (
-                        <option key={n.id || n.value} value={n.id || n.value}>
-                          {n.label || n.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      Country <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={personForm.country}
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          country: e.target.value,
-                        })
-                      }
-                      className={inputClass}
-                      disabled={
-                        !isPersonForeigner(personForm.nationality)
-                      }
-                    >
-                      <option value="">Select Country</option>
-
-                      {masterData.countries
-                        .filter((c) => {
-                          const isForeigner = isPersonForeigner(personForm.nationality);
-                          if (!isForeigner) {
-                            return c.name && c.name.trim().toUpperCase() === "INDIA";
-                          } else {
-                            return c.name && c.name.trim().toUpperCase() !== "INDIA";
-                          }
-                        })
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
+                          setPersonForm((prev) => ({
+                            ...prev,
+                            nationality: value,
+                            country: isInd ? (indiaId || prev.country) : (prev.country === indiaId ? "" : prev.country),
+                            idProofType: prev.hepType === "1" ? dlTypeId : (isForeignerVal ? passportTypeId : prev.idProofType),
+                            aadharNo: prev.aadharNo,
+                            aadharFile: prev.aadharFile,
+                          }));
+                        }}
+                        className={inputClass}
+                      >
+                        <option value="">Select Nationality</option>
+                        {masterData.nationalities.map((n) => (
+                          <option key={n.id || n.value} value={n.id || n.value}>
+                            {n.label || n.name}
                           </option>
                         ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      Visa No. {isPersonForeigner(personForm.nationality) && <span className="text-red-500">*</span>}
-                    </label>
-                    <input
-                      type="text"
-                      value={personForm.visaNo}
-                      onChange={(e) => {
-                        const val = e.target.value.toUpperCase();
-                        setPersonForm({ ...personForm, visaNo: val });
-                        if (val) validatePersonField("visaNo", val);
-                      }}
-                      onBlur={(e) => {
-                        if (e.target.value)
-                          validatePersonField("visaNo", e.target.value);
-                      }}
-                      disabled={!isPersonForeigner(personForm.nationality)}
-                      placeholder="Visa number (5-20 alphanumeric)"
-                      maxLength={20}
-                      className={`disabled:bg-slate-100 disabled:cursor-not-allowed ${inputClass} ${personErrors.visaNo ? "border-red-400" : ""}`}
-                    />
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase">
+                        Country <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={personForm.country}
+                        onChange={(e) =>
+                          setPersonForm({
+                            ...personForm,
+                            country: e.target.value,
+                          })
+                        }
+                        className={inputClass}
+                        disabled={
+                          !isPersonForeigner(personForm.nationality)
+                        }
+                      >
+                        <option value="">Select Country</option>
+
+                        {masterData.countries
+                          .filter((c) => {
+                            const isForeigner = isPersonForeigner(personForm.nationality);
+                            if (!isForeigner) {
+                              return c.name && c.name.trim().toUpperCase() === "INDIA";
+                            } else {
+                              return c.name && c.name.trim().toUpperCase() !== "INDIA";
+                            }
+                          })
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase">
+                        Visa No. {isPersonForeigner(personForm.nationality) && <span className="text-red-500">*</span>}
+                      </label>
+                      <input
+                        type="text"
+                        value={personForm.visaNo}
+                        onChange={(e) => {
+                          const val = e.target.value.toUpperCase();
+                          setPersonForm({ ...personForm, visaNo: val });
+                          if (val) validatePersonField("visaNo", val);
+                        }}
+                        onBlur={(e) => {
+                          if (e.target.value)
+                            validatePersonField("visaNo", e.target.value);
+                        }}
+                        disabled={!isPersonForeigner(personForm.nationality)}
+                        placeholder="Visa number (5-20 alphanumeric)"
+                        maxLength={20}
+                        className={`disabled:bg-slate-100 disabled:cursor-not-allowed ${inputClass} ${personErrors.visaNo ? "border-red-400" : ""}`}
+                      />
                       {personErrors.visaNo && (
                         <p className="text-xs text-red-500 mt-0.5 font-medium">
                           {personErrors.visaNo}
@@ -3349,7 +3351,7 @@ export default function VendorPassPublicPage() {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                     <FileUploadBox
-                      label="RC Book"
+                      label="RC/NOC"
                       isRequired
                       file={vehicleForm.rcDocument}
                       existingFileName={vehicleForm.existingRcName}
@@ -3390,6 +3392,7 @@ export default function VendorPassPublicPage() {
                         })
                       }
                     />
+                  {String(vehicleForm.passType) !== "1" && (
                     <FileUploadBox
                       label="Permit"
                       isRequired
@@ -3411,6 +3414,7 @@ export default function VendorPassPublicPage() {
                         })
                       }
                     />
+                  )}
                     <FileUploadBox
                       label="Fitness Certificate"
                       isRequired

@@ -207,6 +207,7 @@ export default function RegisterPage() {
     email: "",
     entityName: "",
     licenseNumber: "",
+    isLifetimeLicense: false,
     licenseValidityDate: "",
     addressLine: "",
     pincode: "",
@@ -603,7 +604,8 @@ export default function RegisterPage() {
     formData.append("entityName", formElements.entityName.value || "");
     formData.append("email", formElements.email.value || "");
     formData.append("licenseNumber", fieldValues.licenseNumber || "");
-    formData.append("licenseValidityDate", fieldValues.licenseValidityDate || "");
+    formData.append("isLifetimeLicense", fieldValues.isLifetimeLicense ? "true" : "false");
+    formData.append("licenseValidityDate", fieldValues.isLifetimeLicense ? "" : (fieldValues.licenseValidityDate || ""));
 
     formData.append("addressLine", formElements.addressLine.value || "");
     formData.append("city", formElements.city.value || "");
@@ -942,37 +944,73 @@ export default function RegisterPage() {
                             <FieldError field="licenseNumber" />
                           </div>
 
-                          {/* License Validity Date */}
-                          <div className="space-y-1.5">
+                          {/* License Validity Type Toggle */}
+                          <div className="space-y-1.5 col-span-full">
                             <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
-                              License Validity Date{" "}
-                              {!isTransportUser && !isGovtUser && <span className="text-red-500">*</span>}
+                              License Validity Type
                             </label>
-                            <input
-                              name="licenseValidityDate"
-                              type="date"
-                              value={fieldValues.licenseValidityDate}
-                              className={inputCls("licenseValidityDate")}
-                              onChange={(e) =>
-                                handleFieldChange("licenseValidityDate", e.target.value)
-                              }
-                              onBlur={(e) =>
-                                validateField("licenseValidityDate", e.target.value)
-                              }
-                              required={!isTransportUser && !isGovtUser}
-                            />
-                            <FieldError field="licenseValidityDate" />
-                            {fieldValues.licenseValidityDate && (() => {
-                              const today = new Date();
-                              today.setHours(0, 0, 0, 0);
-                              const selected = new Date(fieldValues.licenseValidityDate);
-                              return selected < today ? (
-                                <p className="text-xs text-red-600 font-semibold mt-1 flex items-center gap-1 bg-red-50 px-2 py-1 rounded border border-red-200">
-                                  ⚠️ This license has expired. Your request may be reverted if the validity date does not match the submitted document.
-                                </p>
-                              ) : null;
-                            })()}
+                            <div className="flex items-center gap-6 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-stone-300">
+                                <input
+                                  type="radio"
+                                  name="isLifetimeLicense"
+                                  checked={!fieldValues.isLifetimeLicense}
+                                  onChange={() => {
+                                    handleFieldChange("isLifetimeLicense", false);
+                                  }}
+                                  className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                                />
+                                Specify Validity Expiry Date
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-stone-300">
+                                <input
+                                  type="radio"
+                                  name="isLifetimeLicense"
+                                  checked={Boolean(fieldValues.isLifetimeLicense)}
+                                  onChange={() => {
+                                    handleFieldChange("isLifetimeLicense", true);
+                                    handleFieldChange("licenseValidityDate", "");
+                                  }}
+                                  className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                                />
+                                Lifetime Validity (No Expiry)
+                              </label>
+                            </div>
                           </div>
+
+                          {/* License Validity Date (Only if not Lifetime) */}
+                          {!fieldValues.isLifetimeLicense && (
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider ml-1">
+                                License Validity Date{" "}
+                                {!isTransportUser && !isGovtUser && <span className="text-red-500">*</span>}
+                              </label>
+                              <input
+                                name="licenseValidityDate"
+                                type="date"
+                                value={fieldValues.licenseValidityDate}
+                                className={inputCls("licenseValidityDate")}
+                                onChange={(e) =>
+                                  handleFieldChange("licenseValidityDate", e.target.value)
+                                }
+                                onBlur={(e) =>
+                                  validateField("licenseValidityDate", e.target.value)
+                                }
+                                required={!isTransportUser && !isGovtUser}
+                              />
+                              <FieldError field="licenseValidityDate" />
+                              {fieldValues.licenseValidityDate && (() => {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const selected = new Date(fieldValues.licenseValidityDate);
+                                return selected < today ? (
+                                  <p className="text-xs text-red-600 font-semibold mt-1 flex items-center gap-1 bg-red-50 px-2 py-1 rounded border border-red-200">
+                                    ⚠️ This license has expired. Your request may be reverted if the validity date does not match the submitted document.
+                                  </p>
+                                ) : null;
+                              })()}
+                            </div>
+                          )}
 
                           {/* Entity Email */}
                           <div className="space-y-1.5">

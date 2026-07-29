@@ -687,7 +687,9 @@ export default function PassRequestPage() {
 
           let remainingDays = null;
           let isLicenseExpired = false;
-          if (agentData.licenseValidityDate) {
+          const isLifetimeLicense = Boolean(agentData.isLifetimeLicense);
+
+          if (!isLifetimeLicense && agentData.licenseValidityDate) {
             const datePart = String(agentData.licenseValidityDate).split('T')[0];
             const [yyyy, mm, dd] = datePart.split('-').map(Number);
             if (yyyy && mm && dd) {
@@ -706,7 +708,8 @@ export default function PassRequestPage() {
             companyName: agentData.entityName || "N/A",
             email: agentData.email || "N/A",
             mobile: agentData.mobileNo || "N/A",
-            licenseValidityDate: agentData.licenseValidityDate || null,
+            licenseValidityDate: isLifetimeLicense ? null : (agentData.licenseValidityDate || null),
+            isLifetimeLicense,
             remainingDays,
             isLicenseExpired,
           }));
@@ -1473,25 +1476,27 @@ export default function PassRequestPage() {
 
   const handleAddPerson = () => {
     // ---- License Expiry & Duration Lock Check ----
-    if (generalForm.isLicenseExpired) {
-      return toast.error("Pass generation is locked because your company license has expired.");
-    }
-    if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined) {
-      const pTypeStr = String(personForm.passType || "1");
-      if ((pTypeStr === "2" || pTypeStr === "MONTHLY") && generalForm.remainingDays < 30) {
-        return toast.error(`Cannot add Monthly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+    if (!generalForm.isLifetimeLicense) {
+      if (generalForm.isLicenseExpired) {
+        return toast.error("Pass generation is locked because your company license has expired.");
       }
-      if ((pTypeStr === "3" || pTypeStr === "YEARLY" || pTypeStr === "ANNUAL") && generalForm.remainingDays < 365) {
-        return toast.error(`Cannot add Yearly pass. Your company license expires in ${generalForm.remainingDays} days.`);
-      }
-      if (personForm.dateTo && generalForm.licenseValidityDate) {
-        const passEnd = new Date(personForm.dateTo);
-        const datePart = String(generalForm.licenseValidityDate).split('T')[0];
-        const [yyyy, mm, dd] = datePart.split('-').map(Number);
-        if (yyyy && mm && dd) {
-          const licExp = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
-          if (passEnd > licExp) {
-            return toast.error(`Cannot add pass. Pass end date (${formatDateGB(personForm.dateTo)}) exceeds company license expiry date (${formatDateLong(generalForm.licenseValidityDate)}).`);
+      if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined) {
+        const pTypeStr = String(personForm.passType || "1");
+        if ((pTypeStr === "2" || pTypeStr === "MONTHLY") && generalForm.remainingDays < 30) {
+          return toast.error(`Cannot add Monthly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+        }
+        if ((pTypeStr === "3" || pTypeStr === "YEARLY" || pTypeStr === "ANNUAL") && generalForm.remainingDays < 365) {
+          return toast.error(`Cannot add Yearly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+        }
+        if (personForm.dateTo && generalForm.licenseValidityDate) {
+          const passEnd = new Date(personForm.dateTo);
+          const datePart = String(generalForm.licenseValidityDate).split('T')[0];
+          const [yyyy, mm, dd] = datePart.split('-').map(Number);
+          if (yyyy && mm && dd) {
+            const licExp = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
+            if (passEnd > licExp) {
+              return toast.error(`Cannot add pass. Pass end date (${formatDateGB(personForm.dateTo)}) exceeds company license expiry date (${formatDateLong(generalForm.licenseValidityDate)}).`);
+            }
           }
         }
       }
@@ -1727,25 +1732,27 @@ export default function PassRequestPage() {
 
   const handleAddVehicle = () => {
     // ---- License Expiry & Duration Lock Check ----
-    if (generalForm.isLicenseExpired) {
-      return toast.error("Pass generation is locked because your company license has expired.");
-    }
-    if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined) {
-      const vTypeStr = String(vehicleForm.passType || "1");
-      if ((vTypeStr === "2" || vTypeStr === "MONTHLY") && generalForm.remainingDays < 30) {
-        return toast.error(`Cannot add Monthly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+    if (!generalForm.isLifetimeLicense) {
+      if (generalForm.isLicenseExpired) {
+        return toast.error("Pass generation is locked because your company license has expired.");
       }
-      if ((vTypeStr === "3" || vTypeStr === "YEARLY" || vTypeStr === "ANNUAL") && generalForm.remainingDays < 365) {
-        return toast.error(`Cannot add Yearly pass. Your company license expires in ${generalForm.remainingDays} days.`);
-      }
-      if (vehicleForm.dateTo && generalForm.licenseValidityDate) {
-        const passEnd = new Date(vehicleForm.dateTo);
-        const datePart = String(generalForm.licenseValidityDate).split('T')[0];
-        const [yyyy, mm, dd] = datePart.split('-').map(Number);
-        if (yyyy && mm && dd) {
-          const licExp = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
-          if (passEnd > licExp) {
-            return toast.error(`Cannot add pass. Pass end date (${formatDateGB(vehicleForm.dateTo)}) exceeds company license expiry date (${formatDateLong(generalForm.licenseValidityDate)}).`);
+      if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined) {
+        const vTypeStr = String(vehicleForm.passType || "1");
+        if ((vTypeStr === "2" || vTypeStr === "MONTHLY") && generalForm.remainingDays < 30) {
+          return toast.error(`Cannot add Monthly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+        }
+        if ((vTypeStr === "3" || vTypeStr === "YEARLY" || vTypeStr === "ANNUAL") && generalForm.remainingDays < 365) {
+          return toast.error(`Cannot add Yearly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+        }
+        if (vehicleForm.dateTo && generalForm.licenseValidityDate) {
+          const passEnd = new Date(vehicleForm.dateTo);
+          const datePart = String(generalForm.licenseValidityDate).split('T')[0];
+          const [yyyy, mm, dd] = datePart.split('-').map(Number);
+          if (yyyy && mm && dd) {
+            const licExp = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
+            if (passEnd > licExp) {
+              return toast.error(`Cannot add pass. Pass end date (${formatDateGB(vehicleForm.dateTo)}) exceeds company license expiry date (${formatDateLong(generalForm.licenseValidityDate)}).`);
+            }
           }
         }
       }
@@ -1793,25 +1800,27 @@ export default function PassRequestPage() {
       !vehicleForm.regNo.trim() ||
       !(vehicleForm.rcDocument || vehicleForm.existingRcName) ||
       !(vehicleForm.insuranceDocument || vehicleForm.existingInsName) ||
-      !(vehicleForm.permit || vehicleForm.existingPermitName) ||
       !(vehicleForm.fitnessCert || vehicleForm.existingFitnessName) ||
       !vehicleForm.insuranceExpiry ||
       !vehicleForm.rcValidity
     ) {
       return toast.error(
-        "RC Book, Insurance, Permit, Fitness Certificate, and their Validity Dates are mandatory.",
+        "RC/NOC, Insurance, Fitness Certificate, and their Validity Dates are mandatory.",
       );
     }
     if (
       ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType))
     ) {
+      if (!(vehicleForm.permit || vehicleForm.existingPermitName)) {
+        return toast.error("Permit Document is mandatory for Monthly/Yearly passes.");
+      }
       if (
         !(vehicleForm.requestLetter || vehicleForm.existingReqName) ||
         !(vehicleForm.taxDoc || vehicleForm.existingTaxName) ||
         !(vehicleForm.emissionCert || vehicleForm.existingEmissionName)
       ) {
         return toast.error(
-          "Request Letter, Tax, and Emission Cert are mandatory for Monthly/Yearly passes.",
+          "Request Letter, Tax, Emission Cert, and Permit are mandatory for Monthly/Yearly passes.",
         );
       }
     }
@@ -2239,8 +2248,8 @@ export default function PassRequestPage() {
           disabled={disabled}
           accept={fileType === "image" ? "image/*" : "application/pdf"}
           className={`absolute inset-0 w-full h-full opacity-0 z-10 ${disabled
-              ? "cursor-not-allowed"
-              : "cursor-pointer"
+            ? "cursor-not-allowed"
+            : "cursor-pointer"
             }`}
           required={isRequired && !existingFileName && !file}
           onChange={(e) => {
@@ -2259,10 +2268,10 @@ export default function PassRequestPage() {
         />
         <div
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${disabled
-              ? "bg-slate-100 border-slate-300 opacity-60"
-              : file
-                ? "border-orange-300 bg-orange-50"
-                : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
+            ? "bg-slate-100 border-slate-300 opacity-60"
+            : file
+              ? "border-orange-300 bg-orange-50"
+              : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
             } transition-colors`}
         >
           <Upload
@@ -2398,8 +2407,8 @@ export default function PassRequestPage() {
       // Resolve Designation
       const rawDesig = String(entity.designationId || entity.designation || entity.designationOther || '');
       let resolvedDesignation = rawDesig;
-      const desigMatch = masterData.designations.find(d => 
-        String(d.id) === rawDesig || 
+      const desigMatch = masterData.designations.find(d =>
+        String(d.id) === rawDesig ||
         String(d.name || '').toUpperCase() === rawDesig.toUpperCase()
       );
       if (desigMatch) {
@@ -2457,7 +2466,7 @@ export default function PassRequestPage() {
         cdcNumber: entity.cdcNumber || '',
         seafarerPassFor: entity.seafarerPassFor || 'Sign-On',
         seafarerIdType: resolvedSeafarerIdType,
-        
+
         // Preserve newly uploaded files
         photo: entity.newPhoto || null,
         aadharFile: entity.newAadhar || null,
@@ -2538,7 +2547,7 @@ export default function PassRequestPage() {
         dateFrom: entity.dateFrom ? (entity.dateFrom.includes('T') ? entity.dateFrom.split('T')[0] : entity.dateFrom) + 'T00:00' : '',
         dateTo: entity.dateTo ? (entity.dateTo.includes('T') ? entity.dateTo.split('T')[0] : entity.dateTo) + 'T00:00' : '',
         amount: entity.amount || '',
-        
+
         // Preserve newly uploaded files
         rcDocument: entity.newRc || null,
         insuranceDocument: entity.newInsurance || null,
@@ -2655,7 +2664,7 @@ export default function PassRequestPage() {
           idProofFilePath: personForm.existingIdProofPath || currentEntity.idProofFilePath,
           driverLicensePath: personForm.existingDlPath || currentEntity.driverLicensePath,
           entryAuthorizationFilePath: personForm.existingEntryAuthPath || currentEntity.entryAuthorizationFilePath,
-          
+
           // Carry File objects from personForm for resubmission
           newPhoto: personForm.photo || currentEntity.newPhoto || null,
           newAadhar: personForm.aadharFile || currentEntity.newAadhar || null,
@@ -3026,7 +3035,7 @@ export default function PassRequestPage() {
             </div>
           )}
 
-          {generalForm.isLicenseExpired ? (
+          {!generalForm.isLifetimeLicense && generalForm.isLicenseExpired ? (
             <div className="bg-white rounded-2xl border border-red-200 shadow-xl p-10 text-center max-w-2xl mx-auto my-8 animate-in zoom-in-95 duration-300">
               <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-200 shadow-sm animate-pulse">
                 <AlertCircle className="h-8 w-8 text-red-600" />
@@ -3048,65 +3057,65 @@ export default function PassRequestPage() {
             </div>
           ) : (
             <>
-          {!generalForm.isLicenseExpired && generalForm.remainingDays !== null && generalForm.remainingDays <= 30 && (
-            <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 border border-amber-400/30 text-[#4c2d00] rounded-2xl p-5 flex items-start gap-4 animate-in slide-in-from-top-2 duration-300 shadow-lg shadow-amber-950/10">
-              <div className="bg-white/20 text-[#4c2d00] p-3 rounded-xl border border-white/30 shadow-inner shrink-0">
-                <AlertCircle className="h-6 w-6" />
-              </div>
-              <div className="flex-1">
-                <h4 className="text-base font-extrabold tracking-wide uppercase">Company License Expiring Soon!</h4>
-                <p className="text-sm text-[#5c3c00] mt-1 leading-relaxed font-semibold">
-                  Your license expires in <span className="font-extrabold text-red-700 bg-red-100/50 px-1.5 py-0.5 rounded">{generalForm.remainingDays} days</span> (on {formatDateLong(generalForm.licenseValidityDate)}). Passes valid beyond this date cannot be created.
-                </p>
-                <button
-                  onClick={() => window.dispatchEvent(new Event("open-profile-update"))}
-                  className="mt-3.5 px-5 py-2.5 bg-stone-900 text-amber-400 hover:bg-stone-850 active:scale-95 transition-all text-xs font-black tracking-wider uppercase rounded-xl shadow-md flex items-center gap-1.5"
-                >
-                  Renew / Update License Now
-                </button>
-              </div>
-            </div>
-          )}
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-              <h3 className="font-black text-[#0a1e4d] flex items-center gap-2 uppercase text-sm tracking-wider">
-                <Info className="h-5 w-5 text-orange-500" /> General Details
-              </h3>
-              <button
-                onClick={() => toggleModal("rateCard", true)}
-                className="bg-white text-[#0a1e4d] px-4 py-2 rounded-lg border border-slate-200 text-xs font-bold hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm"
-              >
-                <Calculator className="h-4 w-4 text-orange-500" /> View Rate
-                Card
-              </button>
-            </div>
-            <div className="p-6">
-              <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-                <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Company Name
-                  </p>
-                  <p className="text-sm font-bold text-[#0a1e4d] mt-1">
-                    {generalForm.companyName}
-                  </p>
+              {!generalForm.isLifetimeLicense && !generalForm.isLicenseExpired && generalForm.remainingDays !== null && generalForm.remainingDays <= 30 && (
+                <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 border border-amber-400/30 text-[#4c2d00] rounded-2xl p-5 flex items-start gap-4 animate-in slide-in-from-top-2 duration-300 shadow-lg shadow-amber-950/10">
+                  <div className="bg-white/20 text-[#4c2d00] p-3 rounded-xl border border-white/30 shadow-inner shrink-0">
+                    <AlertCircle className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-base font-extrabold tracking-wide uppercase">Company License Expiring Soon!</h4>
+                    <p className="text-sm text-[#5c3c00] mt-1 leading-relaxed font-semibold">
+                      Your license expires in <span className="font-extrabold text-red-700 bg-red-100/50 px-1.5 py-0.5 rounded">{generalForm.remainingDays} days</span> (on {formatDateLong(generalForm.licenseValidityDate)}). Passes valid beyond this date cannot be created.
+                    </p>
+                    <button
+                      onClick={() => window.dispatchEvent(new Event("open-profile-update"))}
+                      className="mt-3.5 px-5 py-2.5 bg-stone-900 text-amber-400 hover:bg-stone-850 active:scale-95 transition-all text-xs font-black tracking-wider uppercase rounded-xl shadow-md flex items-center gap-1.5"
+                    >
+                      Renew / Update License Now
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Email ID
-                  </p>
-                  <p className="text-sm font-semibold text-slate-700 mt-1">
-                    {generalForm.email}
-                  </p>
+              )}
+              <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                  <h3 className="font-black text-[#0a1e4d] flex items-center gap-2 uppercase text-sm tracking-wider">
+                    <Info className="h-5 w-5 text-orange-500" /> General Details
+                  </h3>
+                  <button
+                    onClick={() => toggleModal("rateCard", true)}
+                    className="bg-white text-[#0a1e4d] px-4 py-2 rounded-lg border border-slate-200 text-xs font-bold hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm"
+                  >
+                    <Calculator className="h-4 w-4 text-orange-500" /> View Rate
+                    Card
+                  </button>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Mobile No
-                  </p>
-                  <p className="text-sm font-semibold text-slate-700 mt-1">
-                    +91 {generalForm.mobile}
-                  </p>
-                </div>
-                {/* <div>
+                <div className="p-6">
+                  <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        Company Name
+                      </p>
+                      <p className="text-sm font-bold text-[#0a1e4d] mt-1">
+                        {generalForm.companyName}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        Email ID
+                      </p>
+                      <p className="text-sm font-semibold text-slate-700 mt-1">
+                        {generalForm.email}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        Mobile No
+                      </p>
+                      <p className="text-sm font-semibold text-slate-700 mt-1">
+                        +91 {generalForm.mobile}
+                      </p>
+                    </div>
+                    {/* <div>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     Utilized Balance
                   </p>
@@ -3114,476 +3123,476 @@ export default function PassRequestPage() {
                     ₹ {generalForm.utilizedBalance}
                   </p>
                 </div> */}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Purpose of Visit <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={generalForm.purpose}
-                    onChange={(e) =>
-                      setGeneralForm({
-                        ...generalForm,
-                        purpose: e.target.value,
-                      })
-                    }
-                    className={inputClass}
-                  >
-                    <option value="">Select Purpose</option>
-                    {masterData.purposes.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                  {String(generalForm.purpose) === "6" && (
-                    <input
-                      type="text"
-                      onChange={(e) =>
-                        setGeneralForm({
-                          ...generalForm,
-                          purposeOther: e.target.value,
-                        })
-                      }
-                      className={`${inputClass} mt-3 animate-in fade-in`}
-                      placeholder="Specify other purpose..."
-                    />
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Licence / Work Order / Contract{" "}
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <label className="w-full h-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-lg px-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors group">
-                    <Upload className="h-4 w-4 text-slate-400 group-hover:text-orange-500" />
-                    <span className="text-sm text-slate-600 font-medium truncate group-hover:text-orange-600">
-                      {generalForm.authLetter
-                        ? generalForm.authLetter.name
-                        : "Upload PDF (Max 2MB)"}
-                    </span>
-                    <input
-                      className="hidden"
-                      type="file"
-                      accept="application/pdf" // 🔥 restrict file picker
-                      onChange={(e) => {
-                        const file = e.target.files[0];
-
-                        const error = validateFile(file, "pdf"); // 🔥 reuse your validator
-
-                        if (error) {
-                          toast.error(error);
-                          e.target.value = ""; // reset input
-                          return;
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Purpose of Visit <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={generalForm.purpose}
+                        onChange={(e) =>
+                          setGeneralForm({
+                            ...generalForm,
+                            purpose: e.target.value,
+                          })
                         }
-
-                        setGeneralForm({
-                          ...generalForm,
-                          authLetter: file,
-                        });
-                      }}
-                    />
-                  </label>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Requisition Letter <span className="text-red-500">*</span>
-                  </label>
-                  <label className="w-full h-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-lg px-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors group">
-                    <Upload className="h-4 w-4 text-slate-400 group-hover:text-orange-500" />
-                    <span className="text-sm text-slate-600 font-medium truncate group-hover:text-orange-600">
-                      {generalForm.requisitionLetter
-                        ? generalForm.requisitionLetter.name
-                        : "Upload PDF (Max 2MB)"}
-                    </span>
-                    <input
-                      className="hidden"
-                      type="file"
-                      accept="application/pdf"
-                      onChange={(e) => {
-                        const file = e.target.files[0];
-
-                        const error = validateFile(file, "pdf");
-
-                        if (error) {
-                          toast.error(error);
-                          e.target.value = "";
-                          return;
-                        }
-
-                        setGeneralForm({
-                          ...generalForm,
-                          requisitionLetter: file,
-                        });
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
-            <div className="px-6 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
-              <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wide flex items-center gap-2">
-                <Users className="h-5 w-5 text-orange-500" /> Detail of Persons:
-              </h3>
-              <span className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-[#0a1e4d] font-black shadow-sm">
-                Total: {persons.length}
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-[#0a1e4d] text-white">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                      SNo.
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                      Name & Desig.
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                      Pass Type
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                      Date From
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                      Date To
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider text-right">
-                      Amount
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold text-center">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {persons.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan="7"
-                        className="p-10 text-center text-sm text-slate-400 italic bg-white"
+                        className={inputClass}
                       >
-                        No persons added yet. Click "Add Person" below.
-                      </td>
-                    </tr>
-                  )}
-                  {persons.map((p, i) => (
-                    <tr
-                      key={i}
-                      onClick={() => editPersonRow(i)}
-                      className="hover:bg-orange-50/50 transition-colors cursor-pointer"
-                    >
-                      <td className="px-4 py-4 text-sm text-slate-500 font-medium border-r border-slate-100">
-                        {(i + 1).toString().padStart(2, "0")}
-                      </td>
-                      <td className="px-4 py-4 border-r border-slate-100">
-                        <div className="flex items-center gap-3">
-                          {p.photo || p.existingPhotoName ? (
-                            <img
+                        <option value="">Select Purpose</option>
+                        {masterData.purposes.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                      {String(generalForm.purpose) === "6" && (
+                        <input
+                          type="text"
+                          onChange={(e) =>
+                            setGeneralForm({
+                              ...generalForm,
+                              purposeOther: e.target.value,
+                            })
+                          }
+                          className={`${inputClass} mt-3 animate-in fade-in`}
+                          placeholder="Specify other purpose..."
+                        />
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Licence / Work Order / Contract{" "}
+                        <span className="text-red-500">*</span>
+                      </label>
+                      <label className="w-full h-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-lg px-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors group">
+                        <Upload className="h-4 w-4 text-slate-400 group-hover:text-orange-500" />
+                        <span className="text-sm text-slate-600 font-medium truncate group-hover:text-orange-600">
+                          {generalForm.authLetter
+                            ? generalForm.authLetter.name
+                            : "Upload PDF (Max 2MB)"}
+                        </span>
+                        <input
+                          className="hidden"
+                          type="file"
+                          accept="application/pdf" // 🔥 restrict file picker
+                          onChange={(e) => {
+                            const file = e.target.files[0];
 
-                              src={
-                                p.photo instanceof File
-                                  ? URL.createObjectURL(p.photo)
-                                  : p.existingPhotoPath
-                                    ? `${AGENT_API}/${p.existingPhotoPath}`
-                                    : `${AGENT_API}/pass-request/viewMasterDocument?masterId=${p.masterId}&entityType=person&documentType=personPhoto`
-                              }
+                            const error = validateFile(file, "pdf"); // 🔥 reuse your validator
 
-                              alt="Profile"
-                              className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-sm"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
-                              <Users className="h-5 w-5 text-slate-400" />
+                            if (error) {
+                              toast.error(error);
+                              e.target.value = ""; // reset input
+                              return;
+                            }
+
+                            setGeneralForm({
+                              ...generalForm,
+                              authLetter: file,
+                            });
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Requisition Letter <span className="text-red-500">*</span>
+                      </label>
+                      <label className="w-full h-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-lg px-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors group">
+                        <Upload className="h-4 w-4 text-slate-400 group-hover:text-orange-500" />
+                        <span className="text-sm text-slate-600 font-medium truncate group-hover:text-orange-600">
+                          {generalForm.requisitionLetter
+                            ? generalForm.requisitionLetter.name
+                            : "Upload PDF (Max 2MB)"}
+                        </span>
+                        <input
+                          className="hidden"
+                          type="file"
+                          accept="application/pdf"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+
+                            const error = validateFile(file, "pdf");
+
+                            if (error) {
+                              toast.error(error);
+                              e.target.value = "";
+                              return;
+                            }
+
+                            setGeneralForm({
+                              ...generalForm,
+                              requisitionLetter: file,
+                            });
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+                <div className="px-6 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
+                  <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wide flex items-center gap-2">
+                    <Users className="h-5 w-5 text-orange-500" /> Detail of Persons:
+                  </h3>
+                  <span className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-[#0a1e4d] font-black shadow-sm">
+                    Total: {persons.length}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-[#0a1e4d] text-white">
+                      <tr>
+                        <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                          SNo.
+                        </th>
+                        <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                          Name & Desig.
+                        </th>
+                        <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                          Pass Type
+                        </th>
+                        <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                          Date From
+                        </th>
+                        <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                          Date To
+                        </th>
+                        <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider text-right">
+                          Amount
+                        </th>
+                        <th className="px-4 py-3 text-xs font-semibold text-center">
+                          Action
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {persons.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan="7"
+                            className="p-10 text-center text-sm text-slate-400 italic bg-white"
+                          >
+                            No persons added yet. Click "Add Person" below.
+                          </td>
+                        </tr>
+                      )}
+                      {persons.map((p, i) => (
+                        <tr
+                          key={i}
+                          onClick={() => editPersonRow(i)}
+                          className="hover:bg-orange-50/50 transition-colors cursor-pointer"
+                        >
+                          <td className="px-4 py-4 text-sm text-slate-500 font-medium border-r border-slate-100">
+                            {(i + 1).toString().padStart(2, "0")}
+                          </td>
+                          <td className="px-4 py-4 border-r border-slate-100">
+                            <div className="flex items-center gap-3">
+                              {p.photo || p.existingPhotoName ? (
+                                <img
+
+                                  src={
+                                    p.photo instanceof File
+                                      ? URL.createObjectURL(p.photo)
+                                      : p.existingPhotoPath
+                                        ? `${AGENT_API}/${p.existingPhotoPath}`
+                                        : `${AGENT_API}/pass-request/viewMasterDocument?masterId=${p.masterId}&entityType=person&documentType=personPhoto`
+                                  }
+
+                                  alt="Profile"
+                                  className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-sm"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                                  <Users className="h-5 w-5 text-slate-400" />
+                                </div>
+                              )}
+                              <div>
+                                <p className="text-sm font-bold text-[#0a1e4d]">
+                                  {p.name}
+                                </p>
+                                <p className="text-xs text-slate-500 font-medium">
+                                  {p.designation === "Others"
+                                    ? p.designationOther
+                                    : getLabelById(
+                                      masterData.designations,
+                                      p.designation,
+                                    )}
+                                </p>
+                              </div>
                             </div>
-                          )}
-                          <div>
-                            <p className="text-sm font-bold text-[#0a1e4d]">
-                              {p.name}
+                          </td>
+                          <td className="px-4 py-4 border-r border-slate-100">
+                            <p className="text-sm font-semibold text-slate-800">
+                              {getLabelById(masterData.hepTypes, p.hepType)}
+                            </p>
+                            <p className="text-xs text-orange-600 font-bold capitalize">
+                              {getLabelById(masterData.passTypes, p.passType)} Pass
+                            </p>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
+                            {p.dateFrom}
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
+                            {p.dateTo || "-"}
+                          </td>
+                          <td className="px-4 py-4 text-sm font-black text-[#0a1e4d] border-r border-slate-100 text-right">
+                            ₹ {p.amount.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deletePersonRow(i);
+                              }}
+                              className="bg-red-50 text-red-600 hover:text-red-800 hover:bg-red-100 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {persons.length > 0 && (
+                        <tr className="bg-slate-50 border-t-2 border-slate-200">
+                          <td
+                            colSpan="5"
+                            className="px-4 py-3 text-right text-xs font-black text-slate-700 uppercase tracking-widest border-r border-slate-200"
+                          >
+                            Total Amount
+                          </td>
+                          <td className="px-4 py-3 text-base font-black text-orange-600 text-right border-r border-slate-200">
+                            ₹{" "}
+                            {persons
+                              .reduce((acc, curr) => acc + curr.amount, 0)
+                              .toFixed(2)}
+                          </td>
+                          <td></td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
+                  <button
+                    onClick={openAddPersonModal}
+                    disabled={companyBlacklisted}
+                    className="bg-orange-600 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-orange-700 disabled:cursor-not-allowed transition-all uppercase tracking-wider"
+                  >
+                    Add Person
+                  </button>
+                </div>
+              </section>
+
+              <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+                <div className="px-6 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
+                  <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wide flex items-center gap-2">
+                    <Truck className="h-5 w-5 text-orange-500" /> Detail of
+                    Vehicles:
+                  </h3>
+                  <span className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-[#0a1e4d] font-black shadow-sm">
+                    Total: {vehicles.length}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-[#0a1e4d] text-white">
+                      <tr>
+                        <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                          SNo.
+                        </th>
+                        <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                          Reg. No. & Type
+                        </th>
+                        <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                          Pass Details
+                        </th>
+                        <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                          Date From
+                        </th>
+                        <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
+                          Date To
+                        </th>
+                        <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider text-right">
+                          Amount
+                        </th>
+                        <th className="px-4 py-3 text-xs font-semibold text-center">
+                          Action
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {vehicles.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan="7"
+                            className="p-10 text-center text-sm text-slate-400 italic bg-white"
+                          >
+                            No vehicles added yet. Click "Add Vehicle" below.
+                          </td>
+                        </tr>
+                      )}
+                      {vehicles.map((v, i) => (
+                        <tr
+                          key={i}
+                          onClick={() => editVehicleRow(i)}
+                          className="hover:bg-orange-50/50 transition-colors cursor-pointer"
+                        >
+                          <td className="px-4 py-4 text-sm text-slate-500 font-medium border-r border-slate-100">
+                            {(i + 1).toString().padStart(2, "0")}
+                          </td>
+                          <td className="px-4 py-4 border-r border-slate-100">
+                            <p className="text-sm font-bold text-[#0a1e4d] uppercase">
+                              {v.regNo}
                             </p>
                             <p className="text-xs text-slate-500 font-medium">
-                              {p.designation === "Others"
-                                ? p.designationOther
-                                : getLabelById(
-                                  masterData.designations,
-                                  p.designation,
-                                )}
+                              {getLabelById(masterData.vehicleTypes, v.type)}
                             </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 border-r border-slate-100">
-                        <p className="text-sm font-semibold text-slate-800">
-                          {getLabelById(masterData.hepTypes, p.hepType)}
-                        </p>
-                        <p className="text-xs text-orange-600 font-bold capitalize">
-                          {getLabelById(masterData.passTypes, p.passType)} Pass
-                        </p>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
-                        {p.dateFrom}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
-                        {p.dateTo || "-"}
-                      </td>
-                      <td className="px-4 py-4 text-sm font-black text-[#0a1e4d] border-r border-slate-100 text-right">
-                        ₹ {p.amount.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deletePersonRow(i);
-                          }}
-                          className="bg-red-50 text-red-600 hover:text-red-800 hover:bg-red-100 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {persons.length > 0 && (
-                    <tr className="bg-slate-50 border-t-2 border-slate-200">
-                      <td
-                        colSpan="5"
-                        className="px-4 py-3 text-right text-xs font-black text-slate-700 uppercase tracking-widest border-r border-slate-200"
-                      >
-                        Total Amount
-                      </td>
-                      <td className="px-4 py-3 text-base font-black text-orange-600 text-right border-r border-slate-200">
-                        ₹{" "}
-                        {persons
-                          .reduce((acc, curr) => acc + curr.amount, 0)
-                          .toFixed(2)}
-                      </td>
-                      <td></td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
-              <button
-                onClick={openAddPersonModal}
-                disabled={companyBlacklisted}
-                className="bg-orange-600 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-orange-700 disabled:cursor-not-allowed transition-all uppercase tracking-wider"
-              >
-                Add Person
-              </button>
-            </div>
-          </section>
+                          </td>
+                          <td className="px-4 py-4 border-r border-slate-100">
+                            <p className="text-sm font-semibold text-slate-800 capitalize">
+                              {getLabelById(masterData.passTypes, v.passType)} Pass
+                            </p>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
+                            {v.dateFrom}
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
+                            {v.dateTo || "-"}
+                          </td>
+                          <td className="px-4 py-4 text-sm font-black text-[#0a1e4d] border-r border-slate-100 text-right">
+                            ₹ {v.amount.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteVehicleRow(i);
+                              }}
+                              className="bg-red-50 text-red-600 hover:text-red-800 hover:bg-red-100 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {vehicles.length > 0 && (
+                        <tr className="bg-slate-50 border-t-2 border-slate-200">
+                          <td
+                            colSpan="5"
+                            className="px-4 py-3 text-right text-xs font-black text-slate-700 uppercase tracking-widest border-r border-slate-200"
+                          >
+                            Total Amount
+                          </td>
+                          <td className="px-4 py-3 text-base font-black text-orange-600 text-right border-r border-slate-200">
+                            ₹{" "}
+                            {vehicles
+                              .reduce((sum, v) => sum + v.amount, 0)
+                              .toFixed(2)}
+                          </td>
+                          <td></td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
+                  <button
+                    onClick={openAddVehicleModal}
+                    disabled={companyBlacklisted}
+                    className="bg-orange-600 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-orange-700 disabled:bg-slate-350 disabled:text-slate-500 disabled:cursor-not-allowed transition-all uppercase tracking-wider"
+                  >
+                    Add Vehicle
+                  </button>
+                </div>
+              </section>
 
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
-            <div className="px-6 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
-              <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wide flex items-center gap-2">
-                <Truck className="h-5 w-5 text-orange-500" /> Detail of
-                Vehicles:
-              </h3>
-              <span className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-[#0a1e4d] font-black shadow-sm">
-                Total: {vehicles.length}
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-[#0a1e4d] text-white">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                      SNo.
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                      Reg. No. & Type
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                      Pass Details
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                      Date From
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                      Date To
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider text-right">
-                      Amount
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold text-center">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {vehicles.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan="7"
-                        className="p-10 text-center text-sm text-slate-400 italic bg-white"
-                      >
-                        No vehicles added yet. Click "Add Vehicle" below.
-                      </td>
-                    </tr>
-                  )}
-                  {vehicles.map((v, i) => (
-                    <tr
-                      key={i}
-                      onClick={() => editVehicleRow(i)}
-                      className="hover:bg-orange-50/50 transition-colors cursor-pointer"
-                    >
-                      <td className="px-4 py-4 text-sm text-slate-500 font-medium border-r border-slate-100">
-                        {(i + 1).toString().padStart(2, "0")}
-                      </td>
-                      <td className="px-4 py-4 border-r border-slate-100">
-                        <p className="text-sm font-bold text-[#0a1e4d] uppercase">
-                          {v.regNo}
-                        </p>
-                        <p className="text-xs text-slate-500 font-medium">
-                          {getLabelById(masterData.vehicleTypes, v.type)}
-                        </p>
-                      </td>
-                      <td className="px-4 py-4 border-r border-slate-100">
-                        <p className="text-sm font-semibold text-slate-800 capitalize">
-                          {getLabelById(masterData.passTypes, v.passType)} Pass
-                        </p>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
-                        {v.dateFrom}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
-                        {v.dateTo || "-"}
-                      </td>
-                      <td className="px-4 py-4 text-sm font-black text-[#0a1e4d] border-r border-slate-100 text-right">
-                        ₹ {v.amount.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteVehicleRow(i);
-                          }}
-                          className="bg-red-50 text-red-600 hover:text-red-800 hover:bg-red-100 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {vehicles.length > 0 && (
-                    <tr className="bg-slate-50 border-t-2 border-slate-200">
-                      <td
-                        colSpan="5"
-                        className="px-4 py-3 text-right text-xs font-black text-slate-700 uppercase tracking-widest border-r border-slate-200"
-                      >
-                        Total Amount
-                      </td>
-                      <td className="px-4 py-3 text-base font-black text-orange-600 text-right border-r border-slate-200">
-                        ₹{" "}
-                        {vehicles
-                          .reduce((sum, v) => sum + v.amount, 0)
-                          .toFixed(2)}
-                      </td>
-                      <td></td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
-              <button
-                onClick={openAddVehicleModal}
-                disabled={companyBlacklisted}
-                className="bg-orange-600 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-orange-700 disabled:bg-slate-350 disabled:text-slate-500 disabled:cursor-not-allowed transition-all uppercase tracking-wider"
-              >
-                Add Vehicle
-              </button>
-            </div>
-          </section>
-
-          <footer className="flex justify-end pt-2 pb-8">
-            <div className="bg-white p-8 w-full max-w-md shadow-2xl rounded-2xl border border-slate-200">
-              <div className="space-y-4 bg-slate-50 p-5 rounded-xl border border-slate-100">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-bold text-slate-500 uppercase tracking-wider text-xs">
-                    Base Total:
-                  </span>
-                  <span className="font-bold text-[#0a1e4d]">
-                    ₹ {totals.base}
-                  </span>
+              <footer className="flex justify-end pt-2 pb-8">
+                <div className="bg-white p-8 w-full max-w-md shadow-2xl rounded-2xl border border-slate-200">
+                  <div className="space-y-4 bg-slate-50 p-5 rounded-xl border border-slate-100">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider text-xs">
+                        Base Total:
+                      </span>
+                      <span className="font-bold text-[#0a1e4d]">
+                        ₹ {totals.base}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider text-xs">
+                        GST (0%):
+                      </span>
+                      <span className="font-bold text-[#0a1e4d]">
+                        ₹ {totals.gst}
+                      </span>
+                    </div>
+                    <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
+                      <span className="text-sm font-black text-[#0a1e4d] uppercase tracking-wider">
+                        Net Amount:
+                      </span>
+                      <span className="text-3xl font-black text-orange-600">
+                        ₹ {totals.net}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-center items-center gap-8 py-4">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm font-black text-slate-700 hover:text-orange-600 transition-colors">
+                      <input
+                        type="radio"
+                        name="paymentMode"
+                        value="Account"
+                        checked={paymentMode === "Account"}
+                        onChange={(e) => setPaymentMode(e.target.value)}
+                        className="w-4 h-4 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                      />
+                      ACCOUNT
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm font-black text-slate-700 hover:text-orange-600 transition-colors">
+                      <input
+                        type="radio"
+                        name="paymentMode"
+                        value="E-Cash"
+                        checked={paymentMode === "E-Cash"}
+                        onChange={(e) => setPaymentMode(e.target.value)}
+                        className="w-4 h-4 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                      />
+                      E-CASH
+                    </label>
+                  </div>
+                  <div className="bg-orange-50/50 p-5 rounded-xl border border-orange-100 space-y-3">
+                    <h4 className="text-xs font-black text-[#0a1e4d] uppercase flex items-center gap-2 tracking-wider">
+                      <ShieldCheck className="h-4 w-4 text-emerald-600" /> Terms &
+                      Conditions
+                    </h4>
+                    <p className="text-[10px] text-slate-600 text-justify leading-relaxed font-medium">
+                      I/We hereby certify that the above permits are required only
+                      for our official purpose. We hold responsibility for
+                      identification and all activities inside the port...
+                    </p>
+                    <label className="flex items-center gap-3 cursor-pointer pt-3 group">
+                      <input
+                        type="checkbox"
+                        checked={agreedToTerms}
+                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                        className="w-5 h-5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                      />
+                      <span className="text-xs font-black text-[#0a1e4d] group-hover:text-orange-600 transition-colors uppercase tracking-wider">
+                        I agree to the Terms & Conditions
+                      </span>
+                    </label>
+                  </div>
+                  <button
+                    onClick={handleSubmitRequest}
+                    disabled={loading || !agreedToTerms || companyBlacklisted}
+                    className="w-full mt-6 h-14 bg-[#0a1e4d] hover:bg-[#1a2f64] disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-black text-lg shadow-xl shadow-[#0a1e4d]/20 flex items-center justify-center gap-3 transition-all uppercase tracking-widest"
+                  >
+                    {loading ? "Processing..." : "Submit Request"}{" "}
+                    {!loading && <Send className="h-5 w-5" />}
+                  </button>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-bold text-slate-500 uppercase tracking-wider text-xs">
-                    GST (0%):
-                  </span>
-                  <span className="font-bold text-[#0a1e4d]">
-                    ₹ {totals.gst}
-                  </span>
-                </div>
-                <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
-                  <span className="text-sm font-black text-[#0a1e4d] uppercase tracking-wider">
-                    Net Amount:
-                  </span>
-                  <span className="text-3xl font-black text-orange-600">
-                    ₹ {totals.net}
-                  </span>
-                </div>
-              </div>
-              <div className="flex justify-center items-center gap-8 py-4">
-                <label className="flex items-center gap-2 cursor-pointer text-sm font-black text-slate-700 hover:text-orange-600 transition-colors">
-                  <input
-                    type="radio"
-                    name="paymentMode"
-                    value="Account"
-                    checked={paymentMode === "Account"}
-                    onChange={(e) => setPaymentMode(e.target.value)}
-                    className="w-4 h-4 text-orange-600 focus:ring-orange-500 cursor-pointer"
-                  />
-                  ACCOUNT
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer text-sm font-black text-slate-700 hover:text-orange-600 transition-colors">
-                  <input
-                    type="radio"
-                    name="paymentMode"
-                    value="E-Cash"
-                    checked={paymentMode === "E-Cash"}
-                    onChange={(e) => setPaymentMode(e.target.value)}
-                    className="w-4 h-4 text-orange-600 focus:ring-orange-500 cursor-pointer"
-                  />
-                  E-CASH
-                </label>
-              </div>
-              <div className="bg-orange-50/50 p-5 rounded-xl border border-orange-100 space-y-3">
-                <h4 className="text-xs font-black text-[#0a1e4d] uppercase flex items-center gap-2 tracking-wider">
-                  <ShieldCheck className="h-4 w-4 text-emerald-600" /> Terms &
-                  Conditions
-                </h4>
-                <p className="text-[10px] text-slate-600 text-justify leading-relaxed font-medium">
-                  I/We hereby certify that the above permits are required only
-                  for our official purpose. We hold responsibility for
-                  identification and all activities inside the port...
-                </p>
-                <label className="flex items-center gap-3 cursor-pointer pt-3 group">
-                  <input
-                    type="checkbox"
-                    checked={agreedToTerms}
-                    onChange={(e) => setAgreedToTerms(e.target.checked)}
-                    className="w-5 h-5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
-                  />
-                  <span className="text-xs font-black text-[#0a1e4d] group-hover:text-orange-600 transition-colors uppercase tracking-wider">
-                    I agree to the Terms & Conditions
-                  </span>
-                </label>
-              </div>
-              <button
-                onClick={handleSubmitRequest}
-                disabled={loading || !agreedToTerms || companyBlacklisted}
-                className="w-full mt-6 h-14 bg-[#0a1e4d] hover:bg-[#1a2f64] disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-black text-lg shadow-xl shadow-[#0a1e4d]/20 flex items-center justify-center gap-3 transition-all uppercase tracking-widest"
-              >
-                {loading ? "Processing..." : "Submit Request"}{" "}
-                {!loading && <Send className="h-5 w-5" />}
-              </button>
-            </div>
-          </footer>
+              </footer>
             </>
           )}
         </div>
@@ -4955,35 +4964,35 @@ export default function PassRequestPage() {
                     )}
                   </div>
                   {personForm.hepType !== "3" && (
-                  <div className="space-y-1.5 md:col-span-2 max-w-sm">
-                    <label className="text-xs font-bold text-slate-700 uppercase">
-                      Copy of{" "}
-                      {getLabelById(
-                        masterData.idProofTypes,
-                        personForm.idProofType,
-                        "label",
-                      ) || "ID Proof"}{" "}
-                      <span className="text-red-500">*</span>
-                    </label>
-                    <FileUploadBox
-                      file={personForm.idProofFile}
-                      existingFileName={personForm.existingIdProofName}
-                      onView={() =>
-                        handleViewDoc(
-                          personForm.existingPassRequestId,
-                          "personIdProof",
-                          personForm.existingIdProofName,
-                          personForm.editIndex
-                        )
-                      }
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          idProofFile: e.target.files[0],
-                        })
-                      }
-                    />
-                  </div>
+                    <div className="space-y-1.5 md:col-span-2 max-w-sm">
+                      <label className="text-xs font-bold text-slate-700 uppercase">
+                        Copy of{" "}
+                        {getLabelById(
+                          masterData.idProofTypes,
+                          personForm.idProofType,
+                          "label",
+                        ) || "ID Proof"}{" "}
+                        <span className="text-red-500">*</span>
+                      </label>
+                      <FileUploadBox
+                        file={personForm.idProofFile}
+                        existingFileName={personForm.existingIdProofName}
+                        onView={() =>
+                          handleViewDoc(
+                            personForm.existingPassRequestId,
+                            "personIdProof",
+                            personForm.existingIdProofName,
+                            personForm.editIndex
+                          )
+                        }
+                        onChange={(e) =>
+                          setPersonForm({
+                            ...personForm,
+                            idProofFile: e.target.files[0],
+                          })
+                        }
+                      />
+                    </div>
                   )}
                   {personForm.hepType === "3" && (
                     <div className="space-y-1.5 animate-in zoom-in">
@@ -5146,104 +5155,104 @@ export default function PassRequestPage() {
                 String(personForm.passType) === "3" ||
                 String(personForm.accessArea).toUpperCase().includes("OIL JETTY") ||
                 String(personForm.accessArea) === "1") && (
-              <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
-                  <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
-                  Mandatory Documents
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  {personForm.hepType === "1" && ( // 1 = Driver ID
-                    <FileUploadBox
-                      label="Driver Licence"
-                      isRequired
-                      file={personForm.driverLicence}
-                      existingFileName={personForm.existingDlName}
-                      onView={() =>
-                        handleViewDoc(
-                          personForm.existingPassRequestId,
-                          "driverLicense",
-                          personForm.existingDlName,
-                          personForm.editIndex
-                        )
-                      }
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          driverLicence: e.target.files[0],
-                        })
-                      }
-                    />
-                  )}
-                  {(String(personForm.passType) === "2" ||
-                    String(personForm.passType) === "3") && (
-                      <FileUploadBox
-                        label="Police Verification"
-                        isRequired
-                        file={personForm.policeVerification}
-                        existingFileName={personForm.existingPoliceName}
-                        onView={() =>
-                          handleViewDoc(
-                            personForm.existingPassRequestId,
-                            "policeVerification",
-                            personForm.existingPoliceName,
-                            personForm.editIndex
-                          )
-                        }
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            policeVerification: e.target.files[0],
-                          })
-                        }
-                      />
-                    )}
-                  {personForm.hepType === "3" && (
-                    <FileUploadBox
-                      label="Passport"
-                      isRequired
-                      file={personForm.passportDoc}
-                      existingFileName={personForm.existingPassportName}
-                      onView={() =>
-                        handleViewDoc(
-                          personForm.existingPassRequestId,
-                          "passportDoc",
-                          personForm.existingPassportName,
-                          personForm.editIndex
-                        )
-                      }
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          passportDoc: e.target.files[0],
-                        })
-                      }
-                    />
-                  )}
-                  {(String(personForm.accessArea).toUpperCase().includes("OIL JETTY") || String(personForm.accessArea) === "1") && (
-                    <FileUploadBox
-                      label="Entry Authorization Document"
-                      isRequired
-                      file={personForm.entryAuthorization}
-                      existingFileName={personForm.existingEntryAuthName}
-                      onView={() =>
-                        handleViewDoc(
-                          personForm.existingPassRequestId,
-                          "entryAuthorization",
-                          personForm.existingEntryAuthName,
-                          personForm.editIndex
-                        )
-                      }
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          entryAuthorization: e.target.files[0],
-                        })
-                      }
-                    />
-                  )}
-                </div>
-              </div>
-              )}
+                  <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
+                      <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
+                      Mandatory Documents
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                      {personForm.hepType === "1" && ( // 1 = Driver ID
+                        <FileUploadBox
+                          label="Driver Licence"
+                          isRequired
+                          file={personForm.driverLicence}
+                          existingFileName={personForm.existingDlName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "driverLicense",
+                              personForm.existingDlName,
+                              personForm.editIndex
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              driverLicence: e.target.files[0],
+                            })
+                          }
+                        />
+                      )}
+                      {(String(personForm.passType) === "2" ||
+                        String(personForm.passType) === "3") && (
+                          <FileUploadBox
+                            label="Police Verification"
+                            isRequired
+                            file={personForm.policeVerification}
+                            existingFileName={personForm.existingPoliceName}
+                            onView={() =>
+                              handleViewDoc(
+                                personForm.existingPassRequestId,
+                                "policeVerification",
+                                personForm.existingPoliceName,
+                                personForm.editIndex
+                              )
+                            }
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                policeVerification: e.target.files[0],
+                              })
+                            }
+                          />
+                        )}
+                      {personForm.hepType === "3" && (
+                        <FileUploadBox
+                          label="Passport"
+                          isRequired
+                          file={personForm.passportDoc}
+                          existingFileName={personForm.existingPassportName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "passportDoc",
+                              personForm.existingPassportName,
+                              personForm.editIndex
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              passportDoc: e.target.files[0],
+                            })
+                          }
+                        />
+                      )}
+                      {(String(personForm.accessArea).toUpperCase().includes("OIL JETTY") || String(personForm.accessArea) === "1") && (
+                        <FileUploadBox
+                          label="Entry Authorization Document"
+                          isRequired
+                          file={personForm.entryAuthorization}
+                          existingFileName={personForm.existingEntryAuthName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "entryAuthorization",
+                              personForm.existingEntryAuthName,
+                              personForm.editIndex
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              entryAuthorization: e.target.files[0],
+                            })
+                          }
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -5606,7 +5615,7 @@ export default function PassRequestPage() {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   <FileUploadBox
-                    label="RC Book"
+                    label="RC/NOC"
                     isRequired
                     file={vehicleForm.rcDocument}
                     existingFileName={vehicleForm.existingRcName}
@@ -5645,26 +5654,28 @@ export default function PassRequestPage() {
                       })
                     }
                   />
-                  <FileUploadBox
-                    label="Permit"
-                    isRequired
-                    file={vehicleForm.permit}
-                    existingFileName={vehicleForm.existingPermitName}
-                    onView={() =>
-                      handleViewDoc(
-                        vehicleForm.existingPassRequestId,
-                        "vehiclePermit",
-                        vehicleForm.existingPermitName,
-                        vehicleForm.editIndex
-                      )
-                    }
-                    onChange={(e) =>
-                      setVehicleForm({
-                        ...vehicleForm,
-                        permit: e.target.files[0],
-                      })
-                    }
-                  />
+                  {String(vehicleForm.passType) !== "1" && (
+                    <FileUploadBox
+                      label="Permit"
+                      isRequired
+                      file={vehicleForm.permit}
+                      existingFileName={vehicleForm.existingPermitName}
+                      onView={() =>
+                        handleViewDoc(
+                          vehicleForm.existingPassRequestId,
+                          "vehiclePermit",
+                          vehicleForm.existingPermitName,
+                          vehicleForm.editIndex
+                        )
+                      }
+                      onChange={(e) =>
+                        setVehicleForm({
+                          ...vehicleForm,
+                          permit: e.target.files[0],
+                        })
+                      }
+                    />
+                  )}
                   <FileUploadBox
                     label="Fitness Certificate"
                     isRequired
@@ -5732,73 +5743,73 @@ export default function PassRequestPage() {
 
                   {(["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) ||
                     ((String(vehicleForm.passType) === "1" || String(vehicleForm.passType).toUpperCase() === "DAILY") &&
-                     (String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") || String(vehicleForm.accessArea) === "1"))) && (
-                        <FileUploadBox
-                          label="Request Letters"
-                          isRequired
-                          file={vehicleForm.requestLetter}
-                          existingFileName={vehicleForm.existingReqName}
-                          onView={() =>
-                            handleViewDoc(
-                              vehicleForm.existingPassRequestId,
-                              "vehicleRequestLetter",
-                              vehicleForm.existingReqName,
-                              vehicleForm.editIndex
-                            )
-                          }
-                          onChange={(e) =>
-                            setVehicleForm({
-                              ...vehicleForm,
-                              requestLetter: e.target.files[0],
-                            })
-                          }
-                        />
-                  )}
+                      (String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") || String(vehicleForm.accessArea) === "1"))) && (
+                      <FileUploadBox
+                        label="Request Letters"
+                        isRequired
+                        file={vehicleForm.requestLetter}
+                        existingFileName={vehicleForm.existingReqName}
+                        onView={() =>
+                          handleViewDoc(
+                            vehicleForm.existingPassRequestId,
+                            "vehicleRequestLetter",
+                            vehicleForm.existingReqName,
+                            vehicleForm.editIndex
+                          )
+                        }
+                        onChange={(e) =>
+                          setVehicleForm({
+                            ...vehicleForm,
+                            requestLetter: e.target.files[0],
+                          })
+                        }
+                      />
+                    )}
 
                   {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) && (
-                      <>
-                        <FileUploadBox
-                          label="Tax Document"
-                          isRequired
-                          file={vehicleForm.taxDoc}
-                          existingFileName={vehicleForm.existingTaxName}
-                          onView={() =>
-                            handleViewDoc(
-                              vehicleForm.existingPassRequestId,
-                              "vehicleTax",
-                              vehicleForm.existingTaxName,
-                              vehicleForm.editIndex
-                            )
-                          }
-                          onChange={(e) =>
-                            setVehicleForm({
-                              ...vehicleForm,
-                              taxDoc: e.target.files[0],
-                            })
-                          }
-                        />
-                        <FileUploadBox
-                          label="Emission Certificate"
-                          isRequired
-                          file={vehicleForm.emissionCert}
-                          existingFileName={vehicleForm.existingEmissionName}
-                          onView={() =>
-                            handleViewDoc(
-                              vehicleForm.existingPassRequestId,
-                              "vehicleEmission",
-                              vehicleForm.existingEmissionName,
-                              vehicleForm.editIndex
-                            )
-                          }
-                          onChange={(e) =>
-                            setVehicleForm({
-                              ...vehicleForm,
-                              emissionCert: e.target.files[0],
-                            })
-                          }
-                        />
-                      </>
-                    )}
+                    <>
+                      <FileUploadBox
+                        label="Tax Document"
+                        isRequired
+                        file={vehicleForm.taxDoc}
+                        existingFileName={vehicleForm.existingTaxName}
+                        onView={() =>
+                          handleViewDoc(
+                            vehicleForm.existingPassRequestId,
+                            "vehicleTax",
+                            vehicleForm.existingTaxName,
+                            vehicleForm.editIndex
+                          )
+                        }
+                        onChange={(e) =>
+                          setVehicleForm({
+                            ...vehicleForm,
+                            taxDoc: e.target.files[0],
+                          })
+                        }
+                      />
+                      <FileUploadBox
+                        label="Emission Certificate"
+                        isRequired
+                        file={vehicleForm.emissionCert}
+                        existingFileName={vehicleForm.existingEmissionName}
+                        onView={() =>
+                          handleViewDoc(
+                            vehicleForm.existingPassRequestId,
+                            "vehicleEmission",
+                            vehicleForm.existingEmissionName,
+                            vehicleForm.editIndex
+                          )
+                        }
+                        onChange={(e) =>
+                          setVehicleForm({
+                            ...vehicleForm,
+                            emissionCert: e.target.files[0],
+                          })
+                        }
+                      />
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -6658,11 +6669,10 @@ export default function PassRequestPage() {
                         {(person.status === 'reverted' || person.status === 'updated') && (
                           <button
                             onClick={() => handleEditRevertedEntity('person', index, person)}
-                            className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
-                              person.status === 'updated'
+                            className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${person.status === 'updated'
                                 ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                                 : 'bg-amber-500 hover:bg-amber-600 text-white'
-                            }`}
+                              }`}
                           >
                             <Edit3 className="h-4 w-4" />
                             {person.status === 'updated' ? 'Edit Again' : 'Update Person'}
@@ -6722,11 +6732,10 @@ export default function PassRequestPage() {
                         {(vehicle.status === 'reverted' || vehicle.status === 'updated') && (
                           <button
                             onClick={() => handleEditRevertedEntity('vehicle', index, vehicle)}
-                            className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
-                              vehicle.status === 'updated'
+                            className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${vehicle.status === 'updated'
                                 ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                                 : 'bg-amber-500 hover:bg-amber-600 text-white'
-                            }`}
+                              }`}
                           >
                             <Edit3 className="h-4 w-4" />
                             {vehicle.status === 'updated' ? 'Edit Again' : 'Update Vehicle'}

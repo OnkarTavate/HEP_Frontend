@@ -50,7 +50,7 @@ export default function ProfileUpdateDiffModal({ request, isOpen, onClose, onAct
     state: request.currentState,
     pincode: request.currentPincode,
     licenseNumber: request.currentLicenseNumber,
-    licenseValidityDate: request.currentLicenseValidityDate,
+    licenseValidityDate: request.currentIsLifetimeLicense ? "Lifetime Validity" : request.currentLicenseValidityDate,
     gstinNumber: request.currentGstinNumber,
     panNumber: request.currentPanNumber,
     tanNumber: request.currentTanNumber,
@@ -66,7 +66,7 @@ export default function ProfileUpdateDiffModal({ request, isOpen, onClose, onAct
     state: request.state,
     pincode: request.pincode,
     licenseNumber: request.licenseNumber,
-    licenseValidityDate: request.licenseValidityDate,
+    licenseValidityDate: (request.isLifetimeLicense || request.requestedChanges?.isLifetimeLicense) ? "Lifetime Validity" : (request.requestedChanges?.licenseValidityDate || request.licenseValidityDate),
     gstinNumber: request.gstinNumber,
     panNumber: request.panNumber,
     tanNumber: request.tanNumber,
@@ -104,6 +104,7 @@ export default function ProfileUpdateDiffModal({ request, isOpen, onClose, onAct
 
   const formatVal = (val, isDate) => {
     if (!val) return "—";
+    if (val === "Lifetime Validity") return "Lifetime Validity (No Expiry)";
     if (isDate) {
       try {
         return new Date(val).toLocaleDateString("en-GB");

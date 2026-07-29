@@ -3016,7 +3016,7 @@ export default function VendorPassApprovedPage() {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   <FileUploadBox
-                    label="RC Book"
+                    label="RC/NOC"
                     isRequired
                     file={vehicleForm.rcDocument}
                     existingFileName={vehicleForm.existingRcName}
@@ -3057,27 +3057,29 @@ export default function VendorPassApprovedPage() {
                       })
                     }
                   />
-                  <FileUploadBox
-                    label="Permit"
-                    isRequired
-                    file={vehicleForm.permit}
-                    existingFileName={vehicleForm.existingPermitName}
-                    onView={() =>
-                      handleViewDoc(
-                        vehicleForm.existingPassRequestId,
-                        "vehiclePermit",
-                        vehicleForm.existingPermitName,
-                        editingRevertedEntity?.index ?? 0,
-                        true
-                      )
-                    }
-                    onChange={(e) =>
-                      setVehicleForm({
-                        ...vehicleForm,
-                        permit: e.target.files[0],
-                      })
-                    }
-                  />
+                  {String(vehicleForm.passType) !== "1" && (
+                    <FileUploadBox
+                      label="Permit"
+                      isRequired
+                      file={vehicleForm.permit}
+                      existingFileName={vehicleForm.existingPermitName}
+                      onView={() =>
+                        handleViewDoc(
+                          vehicleForm.existingPassRequestId,
+                          "vehiclePermit",
+                          vehicleForm.existingPermitName,
+                          editingRevertedEntity?.index ?? 0,
+                          true
+                        )
+                      }
+                      onChange={(e) =>
+                        setVehicleForm({
+                          ...vehicleForm,
+                          permit: e.target.files[0],
+                        })
+                      }
+                    />
+                  )}
                   <FileUploadBox
                     label="Fitness Certificate"
                     isRequired
