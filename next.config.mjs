@@ -112,7 +112,6 @@ const nextConfig = {
               "connect-src 'self' http://localhost:* http://127.0.0.1:* http://10.* http://14.139.180.41:* https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://tessdata.projectnaptha.com ws: wss:",
               "frame-src 'self' http://localhost:* http://127.0.0.1:* http://10.* http://14.139.180.41:* blob: data:",
               "object-src 'none'",
-              "frame-src 'self' blob:",
               "base-uri 'self'",
               "form-action 'self'",
               "frame-ancestors 'none'",
