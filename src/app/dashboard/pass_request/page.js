@@ -474,6 +474,12 @@ export default function PassRequestPage() {
     amount: 10.3,
   };
   const [personForm, setPersonForm] = useState(initialPersonForm);
+  const [dlVerification, setDlVerification] = useState({
+    loading: false,
+    verified: false,
+    message: "",
+    data: null,
+});
 
   // const personOptions = [
   //   { value: "", label: "-- Apply Fresh (Manual Entry) --" },
@@ -534,6 +540,12 @@ export default function PassRequestPage() {
     amount: 25.7,
   };
   const [vehicleForm, setVehicleForm] = useState(initialVehicleForm);
+  const [vehicleVerification, setVehicleVerification] = useState({
+    loading: false,
+    verified: false,
+    message: "",
+    data: null,
+});
   const selectedMasterVehicleIds = vehicles
     .filter((v) => v.masterId)
     .map((v) => String(v.masterId));
@@ -1633,6 +1645,22 @@ export default function PassRequestPage() {
       return;
     }
     setPersonErrors({});
+
+    //====================
+    // DL Verification
+    //====================
+
+    if (
+        personForm.idProofType === "1" &&
+        !dlVerification.verified
+    ) {
+
+        return toast.error(
+            "Please verify the Driving Licence before adding."
+        );
+
+    }
+
     if (
       !personForm.name.trim() ||
       !personForm.designation ||
@@ -1730,6 +1758,166 @@ export default function PassRequestPage() {
     setEditingPersonIndex(null);
   };
 
+  const verifyVehicle = async (vehicleNo) => {
+    try {
+      setVehicleVerification({
+        loading: true,
+        verified: false,
+        message: "",
+        data: null,
+      });
+
+      const token = localStorage.getItem("accessToken");
+
+      const res = await axios.post(
+        `${AGENT_API}/ulip/vahan`,
+        {
+          vehiclenumber: vehicleNo,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      const ulipData = res.data?.response?.[0]?.response;
+
+      const statusMessage = ulipData?.statusMessage || "";
+
+      const isVerified =
+          statusMessage === "Vehicle Details Found";
+
+      setVehicleVerification({
+
+          loading: false,
+
+          verified: isVerified,
+
+          message: statusMessage,
+
+          data: res.data
+
+      });
+
+      // ==========================
+      // Update Verification Status
+      // ==========================
+      // setVehicleVerification({
+      //   loading: false,
+      //   verified: true,
+      //   message: "Vehicle Verified Successfully",
+      //   data: res.data,
+      // });
+      console.log("ULIP Vehicle Response", res.data);
+
+      // ==========================
+      // OPTIONAL : Auto-fill fields
+      // ==========================
+      if (res.data?.data) {
+        setVehicleForm((prev) => ({
+          ...prev,
+
+          insuranceExpiry:
+            res.data.data.insuranceExpiry || prev.insuranceExpiry,
+
+          rcValidity:
+            res.data.data.rcValidity || prev.rcValidity,
+
+          type:
+            res.data.data.vehicleTypeId || prev.type,
+        }));
+      }
+    } catch (err) {
+      setVehicleVerification({
+        loading: false,
+        verified: false,
+        message:
+          err.response?.data?.message ||
+          "Vehicle not found",
+        data: null,
+      });
+    }
+  };
+
+  const verifyDL = async (dl) => {
+    try {
+      setDlVerification({
+        loading: true,
+        verified: false,
+        message: "",
+        data: null,
+      });
+
+      const token = localStorage.getItem("accessToken");
+
+      const res = await axios.post(
+        `${AGENT_API}/ulip/sarathi02`,
+        {
+          dlnumber: dl,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const ulipResponse = res.data?.response?.[0]?.response;
+
+      const errorMessage = ulipResponse?.errormessage;
+
+      const errorCode = ulipResponse?.errorcode;
+
+      setDlVerification({
+
+          loading:false,
+
+          verified:errorCode === 0,
+
+          message:errorMessage || "Driving Licence Verified Successfully",
+
+          data:res.data
+
+      });
+
+      // ==========================
+      // Update Verification Status
+      // ==========================
+      // setDlVerification({
+      //   loading: false,
+      //   verified: true,
+      //   message: "Driving Licence Verified Successfully",
+      //   data: res.data,
+      // });
+
+      console.log("ULIP DL Response", res.data);
+
+      // ==========================
+      // OPTIONAL : Auto-fill fields
+      // ==========================
+      if (res.data?.data) {
+        setPersonForm((prev) => ({
+          ...prev,
+
+          name:
+            res.data.data.name || prev.name,
+
+          mobile:
+            res.data.data.mobile || prev.mobile,
+        }));
+      }
+    } catch (err) {
+      setDlVerification({
+        loading: false,
+        verified: false,
+        message:
+          err.response?.data?.message ||
+          "Driving Licence Not Found",
+        data: null,
+      });
+    }
+  };
+
   const handleAddVehicle = () => {
     // ---- License Expiry & Duration Lock Check ----
     if (!generalForm.isLifetimeLicense) {
@@ -1795,6 +1983,18 @@ export default function PassRequestPage() {
       );
     }
     setVehicleErrors({});
+
+        //====================
+    // ULIP Verification
+    //====================
+
+    if (!vehicleVerification.verified) {
+
+        return toast.error(
+            "Please verify the Vehicle Registration Number before adding."
+        );
+
+    }
     // ---- End validation ----
     if (
       !vehicleForm.regNo.trim() ||
@@ -2770,6 +2970,153 @@ export default function PassRequestPage() {
       toast.error(error.response?.data?.message || 'Failed to update entity');
     }
   };
+
+  // const handleVehicleNumberChange=(e)=>{
+
+  //   const value=e.target.value.toUpperCase();
+
+  //   setVehicleForm(prev=>({
+
+  //   ...prev,
+
+  //   regNo:value
+
+  //   }));
+
+  //   if(!VALIDATORS.vehicleReg(value))
+  //   {
+
+  //   setVehicleVerification({
+
+  //   loading:false,
+
+  //   verified:false,
+
+  //   message:"",
+
+  //   data:null
+
+  //   });
+
+  //   return;
+
+  //   }
+
+  //   verifyVehicle(value);
+
+  //   }
+
+  const handleVehicleNumberChange = (e) => {
+
+      const value = e.target.value.toUpperCase();
+
+      setVehicleForm(prev => ({
+          ...prev,
+          regNo: value
+      }));
+
+      // NEW
+      setVehicleVerification({
+          loading: false,
+          verified: false,
+          message: "",
+          data: null
+      });
+
+      if (!VALIDATORS.vehicleReg(value)) {
+          return;
+      }
+
+      verifyVehicle(value);
+  }
+
+//   const handleDLChange=(e)=>{
+
+// const value=e.target.value.toUpperCase();
+
+// setPersonForm(prev=>({
+
+// ...prev,
+
+// idProofNumber:value
+
+// }));
+
+// if(personForm.idProofType!=="1")
+// return;
+
+// if(!VALIDATORS.drivingLicence(value))
+// {
+
+// setDlVerification({
+
+// loading:false,
+
+// verified:false,
+
+// message:"",
+
+// data:null
+
+// });
+
+// return;
+
+// }
+
+// verifyDL(value);
+
+// }
+
+  const handleDLChange = (e) => {
+
+    const value = e.target.value.toUpperCase();
+
+    // Update textbox
+    setPersonForm(prev => ({
+        ...prev,
+        idProofNumber: value
+    }));
+
+    // Clear previous verification
+    setDlVerification({
+        loading: false,
+        verified: false,
+        message: "",
+        data: null
+    });
+
+    // Validate field
+    validatePersonField(
+        "idProofNumber",
+        value,
+        {
+            idProofType: personForm.idProofType
+        }
+    );
+
+    // Only verify DL
+    if (personForm.idProofType !== "1") {
+        return;
+    }
+
+    // Wait until DL format is valid
+    if (!VALIDATORS.drivingLicence(value)) {
+
+          setDlVerification({
+              loading: false,
+              verified: false,
+              message: "",
+              data: null
+          });
+
+          return;
+      }
+
+    // Call backend
+    verifyDL(value);
+
+};
 
   const handleResubmitRevertedPass = async () => {
     if (!editingRevertedPass) return;
@@ -4850,12 +5197,30 @@ export default function PassRequestPage() {
                         </label>
                         <select
                           value={personForm.idProofType}
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              idProofType: e.target.value,
-                            })
-                          }
+                          // onChange={(e) =>
+                          //   setPersonForm({
+                          //     ...personForm,
+                          //     idProofType: e.target.value,
+                          //   })
+                          // }
+                          onChange={(e) => {
+
+                            const value = e.target.value;
+
+                            setPersonForm(prev => ({
+                                ...prev,
+                                idProofType: value,
+                                idProofNumber: ""
+                            }));
+
+                            setDlVerification({
+                                loading: false,
+                                verified: false,
+                                message: "",
+                                data: null
+                            });
+
+                        }}
                           className={inputClass}
                           disabled={isPersonForeigner(personForm.nationality) || personForm.hepType === "1"}
                         >
@@ -4873,21 +5238,67 @@ export default function PassRequestPage() {
                         </label>
                         <input
                           type="text"
+                          readOnly={dlVerification.loading}
                           value={personForm.idProofNumber}
+                          // onChange={(e) => {
+                          //   const val = e.target.value.toUpperCase();
+                          //   setPersonForm({ ...personForm, idProofNumber: val });
+                          //   if (val) {
+                          //     const isValid = validatePersonField("idProofNumber", val, {
+                          //       idProofType: personForm.idProofType,
+                          //     });
+                          //     if (isValid) {
+                          //       const valClean = val.replace(/[\s-]/g, "");
+                          //       checkBlacklistStatus("DRIVER", valClean);
+                          //       checkBlacklistStatus("PERSON", valClean);
+                          //     }
+                          //   }
+                          // }}
                           onChange={(e) => {
-                            const val = e.target.value.toUpperCase();
-                            setPersonForm({ ...personForm, idProofNumber: val });
-                            if (val) {
-                              const isValid = validatePersonField("idProofNumber", val, {
-                                idProofType: personForm.idProofType,
-                              });
-                              if (isValid) {
-                                const valClean = val.replace(/[\s-]/g, "");
+
+                            if (personForm.idProofType === "1") {
+
+                                handleDLChange(e);
+
+                                const valClean = e.target.value
+                                    .replace(/[\s-]/g, "")
+                                    .toUpperCase();
+
                                 checkBlacklistStatus("DRIVER", valClean);
                                 checkBlacklistStatus("PERSON", valClean);
-                              }
+
+                            } else {
+
+                                const val = e.target.value.toUpperCase();
+
+                                setPersonForm(prev => ({
+                                    ...prev,
+                                    idProofNumber: val
+                                }));
+
+                                if (val) {
+
+                                    const isValid = validatePersonField(
+                                        "idProofNumber",
+                                        val,
+                                        {
+                                            idProofType: personForm.idProofType
+                                        }
+                                    );
+
+                                    if (isValid) {
+
+                                        const valClean = val.replace(/[\s-]/g, "");
+
+                                        checkBlacklistStatus("DRIVER", valClean);
+                                        checkBlacklistStatus("PERSON", valClean);
+
+                                    }
+                                }
+
                             }
-                          }}
+
+                        }}
                           onBlur={(e) => {
                             if (e.target.value) {
                               validatePersonField("idProofNumber", e.target.value, {
@@ -4898,10 +5309,30 @@ export default function PassRequestPage() {
                           className={`${inputClass} ${personErrors.idProofNumber ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                           placeholder={idProofPlaceholder}
                         />
+                        {dlVerification.loading && (
+
+                            <Loader2
+                                className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-orange-500"
+                            />
+
+                        )}
                         {personErrors.idProofNumber && (
                           <p className="text-xs text-red-500 mt-0.5 font-medium">
                             {personErrors.idProofNumber}
                           </p>
+                        )}
+                        {dlVerification.message && (
+
+                            <p
+                                className={`text-xs mt-1 font-medium ${
+                                    dlVerification.verified
+                                        ? "text-green-600"
+                                        : "text-red-600"
+                                }`}
+                            >
+                                {dlVerification.message}
+                            </p>
+
                         )}
                         {!personErrors.idProofNumber && personForm.idProofNumber && (blacklistWarnings["DRIVER_" + personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase()] || blacklistWarnings["PERSON_" + personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase()]) && (
                           <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
@@ -5346,7 +5777,7 @@ export default function PassRequestPage() {
 
                       return (
                         <>
-                          <input
+                          {/* <input
                             type="text"
                             value={vehicleForm.regNo}
                             onChange={(e) => {
@@ -5364,7 +5795,39 @@ export default function PassRequestPage() {
                             className={`${baseInputClass} ${customBorderClass} uppercase font-bold text-[#0a1e4d] tracking-wider`}
                             placeholder="TN-XX-XX-XXXX"
                             maxLength={13}
-                          />
+                          /> */}
+                          <div className="relative">
+
+                            <input
+                              type="text"
+                              value={vehicleForm.regNo}
+                              readOnly={vehicleVerification.loading}
+                              onChange={handleVehicleNumberChange}
+
+                              // onChange={(e) => {
+                              //   const val = e.target.value.toUpperCase().slice(0, 13);
+                              //   setVehicleForm({ ...vehicleForm, regNo: val });
+                              //   if (val.length >= 8) validateVehicleField("regNo", val);
+                              //   // Real-time blacklist check — fires as soon as reg number format is valid
+                              //   if (/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(val)) {
+                              //     checkBlacklistStatus("VEHICLE", val.replace(/[\s-]/g, ""));
+                              //   }
+                              // }}
+                              onBlur={(e) => {
+                                validateVehicleField("regNo", e.target.value);
+                              }}
+                              className={`${baseInputClass} ${customBorderClass} uppercase font-bold text-[#0a1e4d] tracking-wider`}
+                              placeholder="TN-XX-XX-XXXX"
+                              maxLength={13}
+                            />
+                            {
+                            vehicleVerification.loading &&
+                            <Loader2
+                            className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin h-4 w-4 text-orange-500"
+                            />
+                            }
+
+                          </div>
                           {hasVal && (
                             <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all">
                               {hasError ? (
@@ -5375,7 +5838,7 @@ export default function PassRequestPage() {
                               ) : (
                                 <>
                                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                                  <span className="text-emerald-600">Valid vehicle registration format</span>
+                                  <span className="text-emerald-600">Vehicle number format is valid</span>
                                 </>
                               )}
                             </div>
@@ -5386,6 +5849,30 @@ export default function PassRequestPage() {
                               <span>PORT BLACKLISTED — {blacklistWarnings["VEHICLE_" + vehicleForm.regNo.replace(/[\s-]/g, "")]?.replace("⚠️ BLACKLISTED ", "")}</span>
                             </div>
                           )}
+                          {
+                            vehicleVerification.message &&
+
+                            <p
+
+                            className={`text-xs mt-1 ${
+                            vehicleVerification.verified
+                            ?
+                            "text-green-600"
+                            :
+                            "text-red-600"
+                            }`}
+
+                            >
+
+                            {
+
+                            vehicleVerification.message
+
+                            }
+
+                            </p>
+
+                            }
                         </>
                       );
                     })()}

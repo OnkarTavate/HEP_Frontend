@@ -83,6 +83,12 @@ const LoginPage = () => {
   const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
   const [showForgotConfirmPassword, setShowForgotConfirmPassword] = useState(false);
   const [isDeptUser, setIsDeptUser] = useState(false);
+  const [forgotCaptcha, setForgotCaptcha] = useState("");
+const [forgotCaptchaData, setForgotCaptchaData] = useState({
+  question: "",
+  token: "",
+});
+const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
 
   const handleForgotSubmit = async (e) => {
     e.preventDefault();
@@ -92,6 +98,32 @@ const LoginPage = () => {
         toast.warning(isDeptUser ? "Please enter your departmental email ID." : "Please enter your registered email or employee ID.");
         return;
       }
+      if (!forgotCaptcha.trim()) {
+    toast.warning("Please enter the security code.");
+    return;
+}
+
+    try {
+        const captchaRes = await axios.post(
+            `${AGENT_API}/captcha/verify-captcha`,
+            {
+                token: forgotCaptchaData.token,
+                value: forgotCaptcha,
+            }
+        );
+
+        if (!captchaRes.data.success) {
+            toast.error("Invalid security code");
+            fetchForgotCaptcha();
+            return;
+        }
+    } catch (err) {
+        toast.error("Invalid or expired security code");
+        fetchForgotCaptcha();
+        return;
+    }
+
+
       setForgotLoading(true);
       try {
         const res = await axios.post(
@@ -226,6 +258,27 @@ const LoginPage = () => {
       setIsCaptchaLoading(false);
     }
   };
+
+  const fetchForgotCaptcha = async () => {
+  setForgotCaptchaLoading(true);
+
+  try {
+    const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
+
+    if (res.data.success) {
+      setForgotCaptchaData({
+        question: res.data.captchaQuestion,
+        token: res.data.captchaToken,
+      });
+
+      setForgotCaptcha("");
+    }
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setForgotCaptchaLoading(false);
+  }
+};
 
   // const fetchCaptcha = async () => {
   //   setIsCaptchaLoading(true);
@@ -916,7 +969,10 @@ const LoginPage = () => {
                           <div className="flex flex-col gap-2.5 pt-2 text-center md:hidden border-t border-gray-100">
                             <button
                               type="button"
-                              onClick={() => setAuthMode("forgot")}
+                              onClick={() => {
+                                  fetchForgotCaptcha();
+                                  setAuthMode("forgot");
+                              }}
                               className="text-sm font-semibold text-orange-600 hover:text-orange-700 transition-colors focus:outline-none"
                             >
                               Forgot Password?
@@ -966,6 +1022,41 @@ const LoginPage = () => {
                                   className="w-full pl-11 pr-3 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
                                   required
                                 />
+                              </div>
+                              <div className="flex flex-col sm:flex-row gap-2.5 w-full">
+
+                                <input
+                                    type="text"
+                                    placeholder="Security Code"
+                                    value={forgotCaptcha}
+                                    onChange={(e)=>setForgotCaptcha(e.target.value)}
+                                    className="flex-1 min-w-0 px-4 py-3.5 text-base bg-stone-50 border border-stone-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
+                                />
+
+                                <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 w-full sm:w-[190px] shrink-0 justify-between">
+
+                                    <div className="flex-1 flex items-center justify-center">
+
+                                        {forgotCaptchaLoading ? (
+                                            <RefreshCw className="h-5 w-5 animate-spin text-orange-500"/>
+                                        ) : (
+                                            <div className="font-bold text-lg text-blue-700 tracking-wide">
+                                                {forgotCaptchaData.question}
+                                            </div>
+                                        )}
+
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={fetchForgotCaptcha}
+                                        className="bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100"
+                                    >
+                                        <RefreshCw className="h-4 w-4 text-orange-600"/>
+                                    </button>
+
+                                </div>
+
                               </div>
                               <div className="flex items-center space-x-2 mt-2 px-1">
                                 <input
@@ -1130,9 +1221,14 @@ const LoginPage = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
-                      setAuthMode(authMode === "forgot" ? "signin" : "forgot")
-                    }
+                    onClick={() => {
+                        if (authMode === "signin") {
+                            fetchForgotCaptcha();
+                            setAuthMode("forgot");
+                        } else {
+                            setAuthMode("signin");
+                        }
+                    }}
                     className="px-10 py-3 bg-white/10 border border-white/60 text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors"
                   >
                     {authMode === "forgot"
