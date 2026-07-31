@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import PaginationBar from "@/components/ui/PaginationBar";
 import axios from "axios";
 import { toast } from "sonner";
@@ -100,7 +101,14 @@ const DocumentCard = ({
 };
 
 export default function TrafficPassesPage() {
-  const [activeTab, setActiveTab] = useState("pending");
+  // Supports deep links from the dashboard, e.g. /traffic_approval/passes?tab=processed.
+  // Read during initial state setup rather than in an effect, so there's no
+  // extra render pass and no setState-in-effect.
+  const searchParams = useSearchParams();
+  const tabQuery = searchParams ? searchParams.get("tab") : null;
+  const [activeTab, setActiveTab] = useState(
+    tabQuery === "processed" ? "processed" : "pending"
+  );
   const [cardFilter, setCardFilter] = useState("ALL");
   const [isViewMode, setIsViewMode] = useState(false);
   // Search and Sort States

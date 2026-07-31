@@ -115,7 +115,7 @@ export default function TrafficOverstayExceptionsPage() {
         </div>
         <button
           onClick={fetchExceptions}
-          className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 font-semibold text-xs shadow-sm transition-all"
+          className="flex items-center gap-2 px-4 py-2 rounded-2xl border border-white/60 bg-white/55 backdrop-blur-xl backdrop-saturate-150 ring-1 ring-inset ring-white/50 hover:bg-white/75 font-semibold text-xs shadow-[0_8px_24px_-10px_rgba(10,30,77,0.25),inset_0_1px_0_0_rgba(255,255,255,0.7)] transition-all active:scale-95"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           Refresh
@@ -123,8 +123,9 @@ export default function TrafficOverstayExceptionsPage() {
       </div>
 
       {/* Search Bar */}
-      <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+      <div className="relative overflow-hidden flex justify-between items-center bg-white/55 backdrop-blur-2xl backdrop-saturate-150 p-4 rounded-2xl border border-white/60 ring-1 ring-inset ring-white/50 shadow-[0_8px_32px_-10px_rgba(10,30,77,0.18),inset_0_1px_0_0_rgba(255,255,255,0.7)]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent" />
+        <span className="relative text-xs font-bold text-slate-500 uppercase tracking-wider">
           Pending Appeals: {requests.length}
         </span>
         <div className="relative">
@@ -134,13 +135,13 @@ export default function TrafficOverstayExceptionsPage() {
             placeholder="Search company, ID, reason..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-[#0a1e4d]/20 w-72"
+            className="pl-9 pr-4 py-2 bg-white/50 backdrop-blur-md border border-white/60 ring-1 ring-inset ring-white/40 rounded-xl text-xs outline-none focus:ring-2 focus:ring-[#0a1e4d]/25 focus:bg-white/70 transition-all w-72"
           />
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="relative bg-white/55 backdrop-blur-2xl backdrop-saturate-150 rounded-2xl border border-white/60 ring-1 ring-inset ring-white/50 shadow-[0_8px_32px_-10px_rgba(10,30,77,0.18),inset_0_1px_0_0_rgba(255,255,255,0.7)] overflow-hidden">
         {loading ? (
           <div className="p-16 text-center text-slate-500 flex flex-col items-center gap-2">
             <RefreshCw className="h-8 w-8 animate-spin text-slate-400" />
@@ -155,7 +156,7 @@ export default function TrafficOverstayExceptionsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="bg-[#0a1e4d] text-white text-[11px] font-semibold uppercase tracking-wider">
+              <thead className="bg-gradient-to-r from-[#0a1e4d]/95 via-[#12275f]/92 to-[#1b1856]/95 backdrop-blur-xl text-white text-[11px] font-semibold uppercase tracking-wider">
                 <tr>
                   <th className="px-5 py-3.5">Ref #</th>
                   <th className="px-5 py-3.5">Company / Agent</th>
@@ -168,7 +169,7 @@ export default function TrafficOverstayExceptionsPage() {
                   <th className="px-5 py-3.5 text-center">Decisions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
+              <tbody className="divide-y divide-white/50 text-sm">
                 {filteredRequests.map((req) => {
                   const fmtD = (d) => {
                     if (!d) return "—";
@@ -176,7 +177,7 @@ export default function TrafficOverstayExceptionsPage() {
                   };
                   const daysNum = parseInt(req.overstay_days || 0, 10);
                   return (
-                    <tr key={req.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={req.id} className="hover:bg-white/55 hover:backdrop-blur-sm transition-colors">
                       <td className="px-5 py-4 font-mono font-bold text-slate-500 text-xs">#{req.id}</td>
                       <td className="px-5 py-4">
                         <p className="font-bold text-slate-800 text-xs">{req.company_name || "—"}</p>
@@ -206,7 +207,7 @@ export default function TrafficOverstayExceptionsPage() {
                         </p>
                       </td>
                       <td className="px-5 py-4 max-w-sm">
-                        <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 leading-relaxed font-medium">
+                        <div className="bg-gradient-to-br from-amber-100/70 via-white/40 to-amber-50/30 backdrop-blur-xl backdrop-saturate-150 border border-amber-200/60 ring-1 ring-inset ring-white/40 rounded-xl p-3 text-xs text-amber-900 leading-relaxed font-medium shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6)]">
                           &ldquo;{req.exception_reason}&rdquo;
                         </div>
                       </td>
@@ -215,7 +216,7 @@ export default function TrafficOverstayExceptionsPage() {
                           <button
                             disabled={processingId === req.id}
                             onClick={() => handleApprove(req.id)}
-                            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1 active:scale-95"
+                            className="px-3.5 py-2 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white rounded-xl text-xs font-bold ring-1 ring-inset ring-white/30 shadow-[0_8px_20px_-6px_rgba(16,185,129,0.55),inset_0_1px_0_0_rgba(255,255,255,0.4)] transition-all flex items-center gap-1 active:scale-95 disabled:opacity-60"
                           >
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             Approve
@@ -223,7 +224,7 @@ export default function TrafficOverstayExceptionsPage() {
                           <button
                             disabled={processingId === req.id}
                             onClick={() => handleReject(req.id)}
-                            className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1 active:scale-95"
+                            className="px-3.5 py-2 bg-gradient-to-br from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 text-white rounded-xl text-xs font-bold ring-1 ring-inset ring-white/30 shadow-[0_8px_20px_-6px_rgba(244,63,94,0.55),inset_0_1px_0_0_rgba(255,255,255,0.4)] transition-all flex items-center gap-1 active:scale-95 disabled:opacity-60"
                           >
                             <XCircle className="h-3.5 w-3.5" />
                             Reject

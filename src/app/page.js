@@ -563,7 +563,7 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
         } else if (role === "atm") {
           router.push("/atm_dashboard");
         } else if (TRAFFIC_APPROVAL_ROLES.includes(role) && TRAFFIC_DEPT_IDS.includes(deptId)) {
-          router.push("/traffic_approval");
+          router.push("/traffic_approval/dashboard");
         } else if (role === "approval" && deptId === MARINE_DEPT_ID) {
           router.push("/marine_approval");
         } else if (role === "approval" && VENDOR_ONLY_DEPT_IDS.includes(deptId)) {

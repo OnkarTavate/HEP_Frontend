@@ -25,6 +25,7 @@ import {
   Bell,
   Lock,
   FileText,
+  BarChart3,
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -159,11 +160,11 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
           {/* Detail rows */}
           <div className="px-4 pt-2 pb-1 max-h-[340px] overflow-y-auto [scrollbar-width:thin] text-left">
             <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">Account Profile</p>
-            <DetailRow icon={User}      label="Login ID"    value={username}   copyKey="lid" />
-            <DetailRow icon={Briefcase} label="Role"        value={role}       copyKey="role" />
-            <DetailRow icon={Building2} label="Department"  value={department} copyKey="dept" />
-            <DetailRow icon={Mail}      label="Email"       value={email}      copyKey="email" />
-            <DetailRow icon={Phone}     label="Mobile"      value={mobile}     copyKey="mob" />
+            <DetailRow icon={User} label="Login ID" value={username} copyKey="lid" />
+            <DetailRow icon={Briefcase} label="Role" value={role} copyKey="role" />
+            <DetailRow icon={Building2} label="Department" value={department} copyKey="dept" />
+            <DetailRow icon={Mail} label="Email" value={email} copyKey="email" />
+            <DetailRow icon={Phone} label="Mobile" value={mobile} copyKey="mob" />
           </div>
 
           {/* Actions */}
@@ -301,7 +302,8 @@ export default function TrafficLayout({ children }) {
   if (!user) return <div className="p-12 text-center">Loading...</div>;
 
   const navigationItems = [
-    { name: "Pass Approvals", href: "/traffic_approval", icon: FileText },
+    { name: "Dashboard", href: "/traffic_approval/dashboard", icon: BarChart3 },
+    { name: "Pass Approvals", href: "/traffic_approval/passes", icon: FileText },
     { name: "Company Approvals", href: "/traffic_approval/companies", icon: Building2 },
     { name: "Blacklist Management", href: "/traffic_approval/blacklist", icon: ShieldBan },
     { name: "Overstay Exceptions", href: "/traffic_approval/overstay", icon: ShieldCheck },
@@ -314,7 +316,7 @@ export default function TrafficLayout({ children }) {
         {/* Brand row — expanded: row with space-between. collapsed: logo centered, toggle below */}
         <div className="flex flex-col gap-2 px-4">
           <div className={cn("flex items-center", expanded ? "justify-between" : "justify-center")}>
-            <Link href="/traffic_approval" className="flex items-center gap-3 group min-w-0" onClick={onNavigate}>
+            <Link href="/traffic_approval/dashboard" className="flex items-center gap-3 group min-w-0" onClick={onNavigate}>
               <span className="flex items-center justify-center w-11 h-11 rounded-xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
                 <Image src="/logo1.png" alt="Chennai Port Logo" width={44} height={44} className="w-full h-full object-contain" />
               </span>
@@ -422,7 +424,7 @@ export default function TrafficLayout({ children }) {
         {/* Main layout wrapper */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           {/* Header */}
-          <header className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-3 shrink-0 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 transition-colors duration-300 relative z-50">
+          <header className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-3 shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/5 transition-colors duration-300 relative z-50">
             <div className="flex items-center gap-3 min-w-0">
               <Button
                 onClick={() => setIsMobileMenuOpen(true)}
@@ -435,7 +437,7 @@ export default function TrafficLayout({ children }) {
 
               <div className="min-w-0">
                 <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#1f1f1f] dark:text-stone-100 truncate">
-                  Traffic Manager
+                  Traffic Management
                 </h1>
                 <p className="text-stone-500 dark:text-stone-400 text-xs mt-1 hidden sm:block">Manage Permits and Company Registrations</p>
               </div>
@@ -463,8 +465,8 @@ export default function TrafficLayout({ children }) {
             </div>
           </header>
 
-          <main className="flex-1 p-4 lg:p-8 pb-6 min-h-0 overflow-y-auto scroll-smooth [scrollbar-width:thin] [scrollbar-color:theme(colors.stone.300)_transparent] dark:[scrollbar-color:theme(colors.stone.700)_transparent]">
-            {children}
+          <main className="relative flex-1 p-4 lg:p-8 pb-6 min-h-0 overflow-y-auto scroll-smooth [scrollbar-width:thin] [scrollbar-color:theme(colors.stone.300)_transparent] dark:[scrollbar-color:theme(colors.stone.700)_transparent]">
+            <div className="relative z-10">{children}</div>
           </main>
         </div>
       </div>

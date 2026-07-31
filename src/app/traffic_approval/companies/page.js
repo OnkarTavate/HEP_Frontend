@@ -375,55 +375,58 @@ export default function TrafficCompanyApprovals() {
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 lg:gap-4 shrink-0">
         {/* Total */}
-        <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-slate-200/60 dark:ring-white/5 shadow-lg flex flex-col gap-2">
-          <div className="flex items-center justify-between">
+        <div className="relative overflow-hidden bg-white/55 dark:bg-white/5 backdrop-blur-2xl backdrop-saturate-150 rounded-2xl p-4 sm:p-5 ring-1 ring-inset ring-white/50 dark:ring-white/10 border border-white/60 dark:border-white/10 shadow-[0_8px_32px_-10px_rgba(10,30,77,0.18),inset_0_1px_0_0_rgba(255,255,255,0.7)] flex flex-col gap-2 transition-all duration-300 hover:-translate-y-0.5">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent" />
+          <div className="relative flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
               Total
             </span>
-            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800">
+            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-slate-500/15 dark:bg-white/10 backdrop-blur-md ring-1 ring-inset ring-white/40 dark:ring-white/10">
               <Users
                 className="h-4 w-4 text-slate-600 dark:text-slate-300"
                 strokeWidth={2.5}
               />
             </span>
           </div>
-          <p className="text-3xl font-extrabold text-slate-900 dark:text-stone-100 tabular-nums">
+          <p className="relative text-3xl font-extrabold text-slate-900 dark:text-stone-100 tabular-nums">
             {globalCounts.total}
           </p>
         </div>
 
         {/* Pending */}
-        <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-amber-200/60 dark:ring-amber-500/10 shadow-lg flex flex-col gap-2">
-          <div className="flex items-center justify-between">
+        <div className="relative overflow-hidden bg-gradient-to-br from-amber-100/60 via-white/45 to-amber-50/25 dark:bg-white/5 dark:from-transparent dark:via-transparent dark:to-transparent backdrop-blur-2xl backdrop-saturate-150 rounded-2xl p-4 sm:p-5 ring-1 ring-inset ring-white/50 dark:ring-amber-500/15 border border-amber-200/50 dark:border-white/10 shadow-[0_8px_32px_-10px_rgba(217,119,6,0.22),inset_0_1px_0_0_rgba(255,255,255,0.7)] flex flex-col gap-2 transition-all duration-300 hover:-translate-y-0.5">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent" />
+          <div className="relative flex items-center justify-between">
             <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">
               Pending
             </span>
-            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-50 dark:bg-amber-500/10">
+            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-500/15 dark:bg-amber-500/10 backdrop-blur-md ring-1 ring-inset ring-white/40 dark:ring-white/10">
               <Clock
                 className="h-4 w-4 text-amber-600 dark:text-amber-400"
                 strokeWidth={2.5}
               />
             </span>
           </div>
-          <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-300 tabular-nums">
+          <p className="relative text-3xl font-extrabold text-amber-600 dark:text-amber-300 tabular-nums">
             {pendingCount}
           </p>
         </div>
 
         {/* Processed */}
-        <div className="col-span-2 sm:col-span-1 bg-white dark:bg-[#1e293b] rounded-2xl p-4 sm:p-5 ring-1 ring-emerald-200/60 dark:ring-emerald-500/10 shadow-lg flex flex-col gap-2">
-          <div className="flex items-center justify-between">
+        <div className="relative overflow-hidden col-span-2 sm:col-span-1 bg-gradient-to-br from-emerald-100/60 via-white/45 to-emerald-50/25 dark:bg-white/5 dark:from-transparent dark:via-transparent dark:to-transparent backdrop-blur-2xl backdrop-saturate-150 rounded-2xl p-4 sm:p-5 ring-1 ring-inset ring-white/50 dark:ring-emerald-500/15 border border-emerald-200/50 dark:border-white/10 shadow-[0_8px_32px_-10px_rgba(5,150,105,0.22),inset_0_1px_0_0_rgba(255,255,255,0.7)] flex flex-col gap-2 transition-all duration-300 hover:-translate-y-0.5">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent" />
+          <div className="relative flex items-center justify-between">
             <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
               Processed
             </span>
-            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-emerald-50 dark:bg-emerald-500/10">
+            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-emerald-500/15 dark:bg-emerald-500/10 backdrop-blur-md ring-1 ring-inset ring-white/40 dark:ring-white/10">
               <CheckCircle2
                 className="h-4 w-4 text-emerald-600 dark:text-emerald-400"
                 strokeWidth={2.5}
               />
             </span>
           </div>
-          <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-300 tabular-nums">
+          <p className="relative text-3xl font-extrabold text-emerald-600 dark:text-emerald-300 tabular-nums">
             {processedCount}
           </p>
         </div>
@@ -487,9 +490,10 @@ export default function TrafficCompanyApprovals() {
       </div>
 
       {/* ── Table card ── */}
-      <div className="bg-white dark:bg-[#1e293b] rounded-2xl ring-1 ring-slate-200/60 dark:ring-white/5 shadow-xl overflow-hidden">
+      <div className="relative bg-white/55 dark:bg-white/5 backdrop-blur-2xl backdrop-saturate-150 rounded-2xl ring-1 ring-inset ring-white/50 dark:ring-white/10 border border-white/60 dark:border-white/10 shadow-[0_12px_40px_-12px_rgba(10,30,77,0.22),inset_0_1px_0_0_rgba(255,255,255,0.7)] overflow-hidden">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent" />
         {/* Table toolbar */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/60 dark:bg-slate-800/30">
+        <div className="relative flex flex-col md:flex-row items-center justify-between gap-3 px-5 py-4 border-b border-white/50 dark:border-white/10 bg-white/30 dark:bg-white/5 backdrop-blur-xl">
           <h3 className="font-bold text-slate-800 dark:text-stone-100 uppercase text-xs tracking-widest flex items-center gap-2">
             {activeTab === "pending" ? (
               <>
@@ -505,7 +509,7 @@ export default function TrafficCompanyApprovals() {
           </h3>
           <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 items-center">
             {activeTab === "processed" && (
-              <label className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors select-none">
+              <label className="flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 ring-1 ring-inset ring-white/40 dark:ring-white/10 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-white/70 dark:hover:bg-white/10 transition-colors select-none">
                 <input
                   type="checkbox"
                   id="processed-by-me-filter"
@@ -526,7 +530,7 @@ export default function TrafficCompanyApprovals() {
                 placeholder="Search company or ref..."
                 value={searchVal}
                 onChange={(e) => setSearchVal(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-amber-400 dark:focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 transition"
+                className="w-full pl-9 pr-4 py-2 bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 ring-1 ring-inset ring-white/40 dark:ring-white/10 rounded-xl text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-amber-400/70 dark:focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:bg-white/70 transition"
               />
             </div>
           </div>
@@ -536,7 +540,7 @@ export default function TrafficCompanyApprovals() {
           {activeTab === "profile_updates" ? (
             <table className="w-full text-left">
               <thead>
-                <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
+                <tr className="bg-white/35 dark:bg-white/5 backdrop-blur-xl border-b border-white/50 dark:border-white/10">
                   {["Ref No", "Company / Agent Name", "Submitted Date", "Status", "Action"].map((h) => (
                     <th
                       key={h}
@@ -547,7 +551,7 @@ export default function TrafficCompanyApprovals() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50 dark:divide-slate-700/30">
+              <tbody className="divide-y divide-white/50 dark:divide-white/5">
                 {profileUpdateRequests.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-16 text-center text-slate-400 dark:text-slate-500">
@@ -559,7 +563,7 @@ export default function TrafficCompanyApprovals() {
                   profileUpdateRequests.map((req) => (
                     <tr
                       key={req.id}
-                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+                      className="hover:bg-white/55 dark:hover:bg-white/10 hover:backdrop-blur-sm transition-colors cursor-pointer"
                       onClick={() => {
                         setSelectedProfileUpdateRequest(req);
                         setIsProfileUpdateModalOpen(true);
@@ -617,7 +621,7 @@ export default function TrafficCompanyApprovals() {
           ) : (
             <table className="w-full text-left">
               <thead>
-                <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
+                <tr className="bg-white/35 dark:bg-white/5 backdrop-blur-xl border-b border-white/50 dark:border-white/10">
                   {(activeTab === "processed"
                     ? ["Ref No", "Company Name", "Operator Type", "Approved By", "Status"]
                     : ["Ref No", "Company Name", "Operator Type", activeTab === "pending" ? "Action" : "Status"]
@@ -631,7 +635,7 @@ export default function TrafficCompanyApprovals() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50 dark:divide-slate-700/30">
+              <tbody className="divide-y divide-white/50 dark:divide-white/5">
                 {displayedRequests.length === 0 ? (
                   <tr>
                     <td
@@ -661,7 +665,7 @@ export default function TrafficCompanyApprovals() {
 
                     const rowClass = isLocked
                       ? "bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group"
-                      : "hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group";
+                      : "hover:bg-white/55 dark:hover:bg-white/10 hover:backdrop-blur-sm transition-colors cursor-pointer group";
 
                     return (
                       <tr
@@ -735,7 +739,7 @@ export default function TrafficCompanyApprovals() {
         </div>
 
         {/* Pagination bar */}
-        <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-700/50 bg-slate-50/20 dark:bg-slate-800/10">
+        <div className="px-5 py-4 border-t border-white/50 dark:border-white/10 bg-white/25 dark:bg-white/5 backdrop-blur-xl">
           <PaginationBar
             currentPage={paginationMeta.currentPage || currentPage}
             totalPages={paginationMeta.totalPages || 1}

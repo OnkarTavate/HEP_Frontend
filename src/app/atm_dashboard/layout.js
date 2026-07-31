@@ -43,6 +43,7 @@ import {
   Phone,
   BarChart2,
   Settings,
+  IndianRupee,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -85,6 +86,13 @@ const navigationItems = [
     href: "/atm_dashboard/penalty_config",
     icon: Settings,
     description: "Configure default penalty amounts per reason code",
+  },
+  {
+    name: "HEP Rate Config",
+    short: "HEP Rates",
+    href: "/atm_dashboard/hep_rates",
+    icon: IndianRupee,
+    description: "Revise yearly Harbour Entry Permit charges (Individual / Vehicle / Cargo)",
   },
 ];
 
@@ -264,7 +272,7 @@ export default function ATMDashboardLayout({ children }) {
         if (role === "approval") {
           const deptId = Number(parsedUser.departmentId);
           if ([9, 10, 11, 12, 13, 14, 15].includes(deptId)) {
-            setTimeout(() => router.push("/traffic_approval"), 0);
+            setTimeout(() => router.push("/traffic_approval/dashboard"), 0);
             return;
           } else if (deptId === 7) {
             setTimeout(() => router.push("/marine_approval"), 0);
