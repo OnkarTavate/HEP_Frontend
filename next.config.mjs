@@ -11,6 +11,10 @@ const connectSrc = isDev
       "http://localhost:5001",
       "http://localhost:5005",
       "http://localhost:5006",
+      "http://localhost:5007", 
+      "http://localhost:5008", 
+      "http://localhost:5009", 
+      "http://localhost:5010", 
       "ws://localhost:*",     // Next.js HMR websocket
       "wss://localhost:*",
     ].join(" ")
@@ -118,6 +122,7 @@ const nextConfig = {
               // Backend API calls + HMR websocket in dev; tightened in prod
               `connect-src ${connectSrc}`,
               "object-src 'none'",
+              "frame-src 'self' blob:",
               "base-uri 'self'",
               "form-action 'self'",
               "frame-ancestors 'none'",

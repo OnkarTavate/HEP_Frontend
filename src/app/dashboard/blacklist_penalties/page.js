@@ -339,7 +339,10 @@ export default function BlacklistPenaltiesPage() {
                   Exception Requested: {overstayCharges.filter(c => c.status === "EXCEPTION_REQUESTED").length}
                 </span>
                 <span className="ml-auto font-black text-slate-700">
-                  Total Pending: ₹{overstayCharges.filter(c => c.status === "PENDING" || c.status === "EXCEPTION_REJECTED").reduce((s, c) => s + parseFloat(c.total_amount || 0), 0).toLocaleString("en-IN")}
+                  Total Pending: ₹{overstayCharges
+                    .filter(c => c.status === "PENDING" || c.status === "EXCEPTION_REJECTED")
+                    .reduce((s, c) => s + parseFloat(c.current_total_amount ?? c.total_amount ?? 0), 0)
+                    .toLocaleString("en-IN")}
                 </span>
               </div>
 
@@ -368,7 +371,9 @@ export default function BlacklistPenaltiesPage() {
                         if (!d) return "—";
                         return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
                       };
-                      const daysNum = parseInt(charge.overstay_days || 0, 10);
+                      const daysNum = ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status)
+                      ? parseInt(charge.current_overstay_days || 0, 10)
+                      : parseInt(charge.overstay_days || 0, 10);
                       const severityClass = daysNum >= 30 ? "bg-rose-100 text-rose-800 border-rose-300"
                         : daysNum >= 14 ? "bg-red-50 text-red-700 border-red-200"
                         : daysNum >= 7 ? "bg-amber-50 text-amber-700 border-amber-200"
@@ -394,12 +399,16 @@ export default function BlacklistPenaltiesPage() {
                           </td>
                           <td className="px-5 py-4 text-xs font-medium">
                             <span className={`font-extrabold px-2 py-0.5 rounded-md border text-[10px] ${severityClass}`}>
-                              {charge.overstay_days} day{daysNum !== 1 ? "s" : ""}
+                              {daysNum} day{daysNum !== 1 ? "s" : ""}
                             </span>
                             <p className="text-slate-400 mt-0.5">₹{charge.daily_rate}/day</p>
                           </td>
                           <td className="px-5 py-4 font-black text-slate-900 text-sm">
-                            ₹{parseFloat(charge.total_amount).toLocaleString("en-IN")}
+                            ₹{parseFloat(
+                              ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status)
+                                ? charge.current_total_amount
+                                : charge.total_amount
+                            ).toLocaleString("en-IN")}
                           </td>
                           <td className="px-5 py-4">
                             <span
@@ -653,7 +662,11 @@ export default function BlacklistPenaltiesPage() {
                 <div className="border-t border-slate-200/60 mt-3 pt-3 flex justify-between items-baseline">
                   <span className="text-xs font-bold text-slate-500">Fine/Penalty Amount:</span>
                   <span className="text-2xl font-black text-slate-800">
-                    ₹{parseFloat(selectedEntry.penalty_amount).toLocaleString("en-IN")}
+                    ₹{parseFloat(
+                      isOverstayTarget
+                        ? (selectedEntry.current_total_amount ?? selectedEntry.total_amount)
+                        : selectedEntry.penalty_amount
+                    ).toLocaleString("en-IN")}
                   </span>
                 </div>
               </div>
@@ -769,22 +782,25 @@ export default function BlacklistPenaltiesPage() {
                     : "bg-[#0a1e4d] hover:bg-[#0a1e4d]/90 shadow-blue-900/10"
                 }`}
               >
-                {paymentProcessing ? (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    Processing...
-                  </>
-                ) : paymentMethod === "gateway" ? (
-                  <>
-                    <CreditCard className="h-3.5 w-3.5" />
-                    Authorize ₹{parseFloat(selectedEntry.penalty_amount).toLocaleString("en-IN")}
-                  </>
-                ) : (
-                  <>
-                    <Wallet className="h-3.5 w-3.5" />
-                    Pay ₹{parseFloat(selectedEntry.penalty_amount).toLocaleString("en-IN")}
-                  </>
-                )}
+              {paymentMethod === "gateway" ? (
+                <>
+                  <CreditCard className="h-3.5 w-3.5" />
+                  Authorize ₹{parseFloat(
+                    isOverstayTarget
+                      ? (selectedEntry.current_total_amount ?? selectedEntry.total_amount)
+                      : selectedEntry.penalty_amount
+                  ).toLocaleString("en-IN")}
+                </>
+              ) : (
+                <>
+                  <Wallet className="h-3.5 w-3.5" />
+                  Pay ₹{parseFloat(
+                    isOverstayTarget
+                      ? (selectedEntry.current_total_amount ?? selectedEntry.total_amount)
+                      : selectedEntry.penalty_amount
+                  ).toLocaleString("en-IN")}
+                </>
+              )}
               </button>
             </div>
           </div>
@@ -798,7 +814,7 @@ export default function BlacklistPenaltiesPage() {
             <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-[#0a1e4d] text-white">
               <h3 className="font-bold text-base flex items-center gap-2">
                 <ShieldCheck className="text-emerald-400 h-5 w-5" />
-                Submit Reinstatement Appeal
+                Request Overstay Charge Exception
               </h3>
               <button
                 onClick={() => setUnblockModalOpen(false)}
@@ -811,20 +827,19 @@ export default function BlacklistPenaltiesPage() {
             <div className="p-6 space-y-4">
               <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
                 <p className="text-xs text-emerald-800 leading-relaxed font-medium">
-                  Use this workflow to request removal from the blacklist. 
-                  Your request will be routed to the <strong>ATM Pass Section</strong> for final approval.
+                  Use this form to request an exception for the overstay charge. Your request will be forwarded to the Traffic Department for review and approval. If approved, the overstay charge may be waived in accordance with APACS procedures.
                 </p>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Documented Justification / Appeal Remarks
+                  Reason for Exception Request
                 </label>
                 <textarea
                   rows={4}
                   value={unblockRemarks}
                   onChange={(e) => setUnblockRemarks(e.target.value)}
-                  placeholder="Provide detailed reasons or corrective actions taken (e.g. Paid vehicle release fee, updated driver training completed)"
+                  placeholder="Enter the reason for requesting an exception to the overstay charge. Include any supporting information or circumstances that should be considered during review."
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all shadow-sm"
                 />
               </div>

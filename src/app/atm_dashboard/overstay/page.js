@@ -39,6 +39,9 @@ import {
   Briefcase,
   Shield,
   Layers,
+  Mail,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -106,7 +109,10 @@ export default function ATMOverstayPage() {
   const [chargesList, setChargesList] = useState([]);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
-
+  const [autoEmailEnabled, setAutoEmailEnabled] = useState(false);
+  const [savingAutoEmail, setSavingAutoEmail] = useState(false);
+  const [passBlockEnabled, setPassBlockEnabled] = useState(true);
+  const [savingPassBlock, setSavingPassBlock] = useState(false);
   // Expandable row state
   const [expandedRowId, setExpandedRowId] = useState(null);
 
@@ -124,6 +130,12 @@ export default function ATMOverstayPage() {
   // Detail Modal
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailCharge, setDetailCharge] = useState(null);
+
+  // Notify loading state (keyed by charge id)
+  const [notifying, setNotifying] = useState({});
+  const [decidingException, setDecidingException] = useState({});  
+  // Waive-from-modal state
+  const [waivingFromModal, setWaivingFromModal] = useState(false);
 
   /* ─── FETCH DATA ─── */
   const fetchDetected = async () => {
@@ -147,6 +159,69 @@ export default function ATMOverstayPage() {
       console.error("Fetch overstay charges error:", err);
       toast.error(err.response?.data?.message || err.message || "Failed to load levied charges");
     } finally { setLoading(false); }
+  };
+
+  const fetchAutoEmailSetting = async () => {
+    try {
+      const res = await axios.get(`${ADMIN_API}/overstay/settings/auto-email`, { headers: getAuthHeaders() });
+      if (res.data?.success) setAutoEmailEnabled(!!res.data.data.value);
+    } catch (err) {
+      console.error("Failed to fetch auto-email setting:", err);
+    }
+  };
+  const fetchPassBlockSetting = async () => {
+    try {
+      const res = await axios.get(`${ADMIN_API}/overstay/settings/pass-block`, { headers: getAuthHeaders() });
+      if (res.data?.success) setPassBlockEnabled(!!res.data.data.value);
+    } catch (err) {
+      console.error("Failed to fetch pass-block setting:", err);
+    }
+  };
+  useEffect(() => {
+    fetchDetected();
+    fetchCharges();
+    fetchAutoEmailSetting();
+    fetchPassBlockSetting();
+  }, []);
+
+  const handleToggleAutoEmail = async () => {
+  const next = !autoEmailEnabled;
+  setSavingAutoEmail(true);
+  try {
+    const res = await axios.patch(
+      `${ADMIN_API}/overstay/settings/auto-email`,
+      { enabled: next },
+      { headers: getAuthHeaders() }
+    );
+    if (res.data?.success) {
+      setAutoEmailEnabled(next);
+      toast.success(res.data.message);
+    }
+  } catch (err) {
+    toast.error(err.response?.data?.message || "Failed to update setting");
+  } finally {
+    setSavingAutoEmail(false);
+  }
+};
+
+  const handleTogglePassBlock = async () => {
+    const next = !passBlockEnabled;
+    setSavingPassBlock(true);
+    try {
+      const res = await axios.patch(
+        `${ADMIN_API}/overstay/settings/pass-block`,
+        { enabled: next },
+        { headers: getAuthHeaders() }
+      );
+      if (res.data?.success) {
+        setPassBlockEnabled(next);
+        toast.success(res.data.message);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to update setting");
+    } finally {
+      setSavingPassBlock(false);
+    }
   };
 
   useEffect(() => {
@@ -196,6 +271,9 @@ export default function ATMOverstayPage() {
         toast.success(`Levied ${fmtMoney(total)} on ${selectedEntity.identifier}`);
         setLevyModalOpen(false);
         fetchDetected();
+        if (res.data.data?.id && autoEmailEnabled) {   // ← gated
+          handleNotify(res.data.data.id);
+        }
       }
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to levy charge");
@@ -203,7 +281,37 @@ export default function ATMOverstayPage() {
       setSubmitting(false);
     }
   };
+const handleApproveException = async (chargeId) => {
+  if (!confirm("Approve this exception request? This will resolve the charge (equivalent to a waiver) and cannot be undone.")) return;
+  setDecidingException((prev) => ({ ...prev, [chargeId]: "approving" }));
+  try {
+    const res = await axios.patch(`${ADMIN_API}/overstay/${chargeId}/approve-exception`, {}, { headers: getAuthHeaders() });
+    if (res.data?.success) {
+      toast.success("Exception approved — charge resolved");
+      fetchCharges();
+    }
+  } catch (err) {
+    toast.error(err.response?.data?.message || "Failed to approve exception");
+  } finally {
+    setDecidingException((prev) => ({ ...prev, [chargeId]: false }));
+  }
+};
 
+const handleRejectException = async (chargeId) => {
+  if (!confirm("Reject this exception request? The agent will be able to pay the original fine instead.")) return;
+  setDecidingException((prev) => ({ ...prev, [chargeId]: "rejecting" }));
+  try {
+    const res = await axios.patch(`${ADMIN_API}/overstay/${chargeId}/reject-exception`, {}, { headers: getAuthHeaders() });
+    if (res.data?.success) {
+      toast.success("Exception rejected — agent can now pay the fine");
+      fetchCharges();
+    }
+  } catch (err) {
+    toast.error(err.response?.data?.message || "Failed to reject exception");
+  } finally {
+    setDecidingException((prev) => ({ ...prev, [chargeId]: false }));
+  }
+};
   const handleWaive = async (chargeId) => {
     if (!confirm("Are you sure you want to manually waive this overstay charge?")) return;
     try {
@@ -214,6 +322,118 @@ export default function ATMOverstayPage() {
       }
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to waive charge");
+    }
+  };
+
+  // Waive from the levy modal — always active.
+  // If the entity has no levied charge yet, just dismiss (nothing in DB to waive).
+  // If it has a charge, patch waive and notify.
+  const handleWaiveFromModal = async () => {
+    if (!selectedEntity?.id) {
+      // Not yet levied — call the new waive-at-detection endpoint
+      if (!confirm("Mark this entity as resolved? This creates a WAIVED record so it won't reappear in Detected Overstays.")) return;
+      setWaivingFromModal(true);
+      try {
+        const res = await axios.post(
+          `${ADMIN_API}/overstay/waive-detected`,
+          {
+            entity_type: selectedEntity.entity_type,
+            entity_id: selectedEntity.entity_id,
+            pass_request_id: selectedEntity.pass_request_id,
+            agent_id: selectedEntity.agent_id,
+            identifier: selectedEntity.identifier,
+            entity_name: selectedEntity.entity_name,
+            pass_no: selectedEntity.pass_no,
+            date_from: selectedEntity.date_from,
+            date_to: selectedEntity.date_to,
+            overstay_days: selectedEntity.overstay_days,
+          },
+          { headers: getAuthHeaders() }
+        );
+        if (res.data?.success) {
+          toast.success(res.data.message || "Marked as resolved");
+          setLevyModalOpen(false);
+          fetchDetected();
+          fetchCharges();
+          setActiveTab("charges"); // jump to Charges log to show the new WAIVED row
+        }
+      } catch (err) {
+        toast.error(err.response?.data?.message || "Failed to mark as resolved");
+      } finally {
+        setWaivingFromModal(false);
+      }
+      return;
+    }
+
+    // Already levied — existing waive-by-id flow
+    if (!confirm("Are you sure you want to waive this overstay charge?")) return;
+    setWaivingFromModal(true);
+    try {
+      const res = await axios.patch(`${ADMIN_API}/overstay/${selectedEntity.id}/waive`, {}, { headers: getAuthHeaders() });
+      if (res.data?.success) {
+        toast.success("Charge waived successfully");
+        setLevyModalOpen(false);
+        fetchDetected();
+        fetchCharges();
+        if (autoEmailEnabled) {
+          handleNotify(selectedEntity.id);
+        }
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to waive charge");
+    } finally {
+      setWaivingFromModal(false);
+    }
+  };
+
+  const handleNotify = async (chargeId) => {
+    setNotifying((prev) => ({ ...prev, [chargeId]: true }));
+    try {
+      const res = await axios.post(`${ADMIN_API}/overstay/${chargeId}/notify`, {}, { headers: getAuthHeaders() });
+      if (res.data?.success) {
+        toast.success(res.data.message || "Notification email sent");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to send notification");
+    } finally {
+      setNotifying((prev) => ({ ...prev, [chargeId]: false }));
+    }
+  };
+
+  // Notify for a detected (un-levied) entity — no charge ID, sends reminder by agent_id
+  const handleNotifyDetected = async (item) => {
+    const key = `detected-${item.entity_id}-${item.entity_type}`;
+    setNotifying((prev) => ({ ...prev, [key]: true }));
+    try {
+      const res = await axios.post(`${ADMIN_API}/overstay/notify-detected`, {
+          entity_type: item.entity_type,
+          entity_id: item.entity_id,
+          pass_request_id: item.pass_request_id,
+          agent_id: item.agent_id,
+
+          company_name: item.company_name,
+          login_id: item.login_id,
+
+          identifier: item.identifier,
+          entity_name: item.entity_name,
+          pass_no: item.pass_no,
+
+          category: item.category,
+
+          date_from: item.date_from,
+          date_to: item.date_to,
+
+          overstay_days: item.overstay_days
+      }, {
+          headers: getAuthHeaders()
+      });
+      if (res.data?.success) {
+        toast.success(res.data.message || "Expiry reminder sent to agent");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to send notification");
+    } finally {
+      setNotifying((prev) => ({ ...prev, [key]: false }));
     }
   };
 
@@ -261,7 +481,13 @@ export default function ATMOverstayPage() {
   const chargeStats = useMemo(() => {
     const pending = filteredCharges.filter((c) => c.status === "PENDING");
     const paid = filteredCharges.filter((c) => c.status === "PAID");
-    const totalPending = pending.reduce((s, c) => s + parseFloat(c.total_amount || 0), 0);
+
+    const liveAmount = (c) =>
+      ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(c.status)
+        ? parseFloat(c.current_total_amount || 0)
+        : parseFloat(c.total_amount || 0);
+
+    const totalPending = pending.reduce((s, c) => s + liveAmount(c), 0);
     const totalCollected = paid.reduce((s, c) => s + parseFloat(c.total_amount || 0), 0);
     return { pending: pending.length, paid: paid.length, totalPending, totalCollected, total: filteredCharges.length };
   }, [filteredCharges]);
@@ -286,10 +512,34 @@ export default function ATMOverstayPage() {
               Overstay Charges Management
             </h2>
             <p className="text-xs md:text-sm text-blue-100/80 font-medium mt-1 max-w-2xl">
-              Real-time pass expiry detection, automated penalty assessment, and full audit control (§5.6.7)
+              Real-time pass expiry detection, automated penalty assessment, and full audit control 
             </p>
           </div>
+<label className="flex items-center gap-2 px-4 py-2.5 bg-white/10 rounded-xl border border-white/20 cursor-pointer select-none">
+  <input
+    type="checkbox"
+    checked={autoEmailEnabled}
+    onChange={handleToggleAutoEmail}
+    disabled={savingAutoEmail}
+    className="h-4 w-4 accent-emerald-400 cursor-pointer"
+  />
+  <span className="text-white text-xs font-bold">
+    Auto-Notify Emails {autoEmailEnabled ? "ON" : "OFF"}
+  </span>
+</label>
 
+<label className="flex items-center gap-2 px-4 py-2.5 bg-white/10 rounded-xl border border-white/20 cursor-pointer select-none">
+  <input
+    type="checkbox"
+    checked={passBlockEnabled}
+    onChange={handleTogglePassBlock}
+    disabled={savingPassBlock}
+    className="h-4 w-4 accent-red-400 cursor-pointer"
+  />
+  <span className="text-white text-xs font-bold">
+    Block New Passes on Unpaid Overstay {passBlockEnabled ? "ON" : "OFF"}
+  </span>
+</label>
           <button
             onClick={() => (activeTab === "detect" ? fetchDetected() : fetchCharges())}
             className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs shadow-inner backdrop-blur-md border border-white/20 transition-all active:scale-95 shrink-0"
@@ -329,7 +579,7 @@ export default function ATMOverstayPage() {
             }`}
           >
             <FileText className="h-3.5 w-3.5 text-blue-400" />
-            Levied Charges Log
+            Levied/Notified Charges Log
             <span className={`px-2 py-0.5 rounded-full text-[10px] ${
               activeTab === "charges" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
             }`}>{chargesList.length}</span>
@@ -444,8 +694,8 @@ export default function ATMOverstayPage() {
                   <th className="px-4 py-4">Expiry Date</th>
                   <th className="px-4 py-4">Duration</th>
                   <th className="px-4 py-4">Overstay</th>
-                  <th className="px-4 py-4">Severity</th>
-                  <th className="px-4 py-4">Daily Rate</th>
+                  {/* <th className="px-4 py-4">Severity</th> */}
+                  {/* <th className="px-4 py-4">Daily Rate</th> */}
                   <th className="px-4 py-4">Calculated Fine</th>
                   <th className="px-4 py-4 text-center">Action</th>
                 </tr>
@@ -454,12 +704,11 @@ export default function ATMOverstayPage() {
                 {paginatedData.map((item, idx) => {
                   const globalIdx = startIndex + idx + 1;
                   const sev = severityColor(item.overstay_days);
-                  const isExpanded = expandedRowId === `d-${idx}`;
 
                   return (
                     <React.Fragment key={idx}>
                       <tr
-                        onClick={() => setExpandedRowId(isExpanded ? null : `d-${idx}`)}
+                        onClick={() => openLevyModal(item)}
                         className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
                       >
                         <td className="px-4 py-3.5 font-mono font-bold text-slate-400 text-center">{globalIdx}</td>
@@ -535,67 +784,30 @@ export default function ATMOverstayPage() {
                         </td>
 
                         {/* Severity */}
-                        <td className="px-4 py-3.5">
+                        {/* <td className="px-4 py-3.5">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-extrabold text-[10px] border ${sev.bg}`}>
                             <span className={`h-1.5 w-1.5 rounded-full ${sev.dot}`} />
                             {sev.label}
                           </span>
-                        </td>
+                        </td> */}
 
                         {/* Daily Rate */}
-                        <td className="px-4 py-3.5 font-bold text-slate-600">{fmtMoney(item.daily_rate)}/day</td>
+                        {/* <td className="px-4 py-3.5 font-bold text-slate-600">{fmtMoney(item.daily_rate)}/day</td> */}
 
                         {/* Total Fine */}
                         <td className="px-4 py-3.5 font-black text-slate-900 text-sm">{fmtMoney(item.total_amount)}</td>
 
                         {/* Action Button */}
-                        <td className="px-4 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-4 py-3.5 text-center">
                           <button
-                            onClick={() => openLevyModal(item)}
+                            onClick={(e) => { e.stopPropagation(); openLevyModal(item); }}
                             className="px-3.5 py-1.5 bg-gradient-to-r from-red-600 to-rose-700 text-white rounded-xl font-bold shadow-md hover:from-red-700 hover:to-rose-800 transition-all flex items-center gap-1.5 mx-auto active:scale-95"
                           >
                             <PlusCircle className="h-3.5 w-3.5" />
-                            Levy Fine
+                            Review & Levy
                           </button>
                         </td>
                       </tr>
-
-                      {/* Expandable Detail Drawer Row */}
-                      {isExpanded && (
-                        <tr className="bg-slate-50/80 border-b border-slate-200">
-                          <td colSpan={13} className="px-6 py-4">
-                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-inner grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
-                              <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Pass Reference</p>
-                                <p className="font-mono font-bold text-[#0a1e4d]">{item.pass_no || "N/A"}</p>
-                                <p className="text-[10px] text-slate-500 mt-1">Pass Request ID: #{item.pass_request_id || "N/A"}</p>
-                              </div>
-
-                              <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Validity Timeline</p>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">{fmtDate(item.date_from)}</span>
-                                  <ArrowRight className="h-3 w-3 text-slate-400" />
-                                  <span className="font-mono font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200">{fmtDate(item.date_to)}</span>
-                                </div>
-                              </div>
-
-                              <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Calculation Breakdown</p>
-                                <p className="font-mono text-slate-700">
-                                  <span className="font-bold">{item.overstay_days}</span> days × <span className="font-bold">{fmtMoney(item.daily_rate)}</span> = <span className="font-black text-red-700 text-sm">{fmtMoney(item.total_amount)}</span>
-                                </p>
-                              </div>
-
-                              <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Port Firm</p>
-                                <p className="font-bold text-slate-800">{item.company_name || "Direct Holder"}</p>
-                                <p className="text-[10px] text-slate-400">Agent ID: #{item.agent_id}</p>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                     </React.Fragment>
                   );
                 })}
@@ -622,7 +834,11 @@ export default function ATMOverstayPage() {
               <tbody className="divide-y divide-slate-100 text-xs">
                 {paginatedData.map((charge) => {
                   const sc = statusConfig[charge.status] || statusConfig.PENDING;
-                  const sev = severityColor(charge.overstay_days);
+                  const sev = severityColor(
+                    ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status)
+                      ? charge.current_overstay_days
+                      : charge.overstay_days
+                  );
 
                   return (
                     <tr key={charge.id} className="hover:bg-blue-50/40 transition-colors">
@@ -682,13 +898,21 @@ export default function ATMOverstayPage() {
                       {/* Overstay / Rate */}
                       <td className="px-4 py-3.5">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-extrabold text-[10px] border ${sev.bg}`}>
-                          {charge.overstay_days}d
+                          {["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status)
+                            ? charge.current_overstay_days
+                            : charge.overstay_days}d
                         </span>
                         <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">{fmtMoney(charge.daily_rate)}/d</p>
                       </td>
 
                       {/* Total Penalty */}
-                      <td className="px-4 py-3.5 font-black text-slate-900 text-sm">{fmtMoney(charge.total_amount)}</td>
+                      <td className="px-4 py-3.5 font-black text-slate-900 text-sm">
+                        {fmtMoney(
+                          ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status)
+                            ? charge.current_total_amount
+                            : charge.total_amount
+                        )}
+                      </td>
 
                       {/* Status Badge */}
                       <td className="px-4 py-3.5">
@@ -699,26 +923,76 @@ export default function ATMOverstayPage() {
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-3.5 text-center">
-                        <div className="flex items-center gap-1.5 justify-center">
-                          <button
-                            onClick={() => { setDetailCharge(charge); setDetailModalOpen(true); }}
-                            className="p-1.5 border border-slate-200 hover:border-blue-300 bg-white hover:bg-blue-50 text-blue-600 rounded-lg transition-all shadow-sm"
-                            title="View Full Details"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </button>
+{/* Actions */}
+<td className="px-4 py-3.5 text-center">
+  <div className="flex items-center gap-1.5 justify-center">
+    <button
+      onClick={() => { setDetailCharge(charge); setDetailModalOpen(true); }}
+      className="p-1.5 border border-slate-200 hover:border-blue-300 bg-white hover:bg-blue-50 text-blue-600 rounded-lg transition-all shadow-sm"
+      title="View Full Details"
+    >
+      <Eye className="h-3.5 w-3.5" />
+    </button>
 
-                          {charge.status !== "PAID" && charge.status !== "WAIVED" && (
-                            <button
-                              onClick={() => handleWaive(charge.id)}
-                              className="px-3 py-1.5 border border-red-200 hover:border-red-300 bg-white hover:bg-red-50 text-red-600 rounded-lg text-[11px] font-bold transition-all shadow-sm"
-                            >
-                              Waive
-                            </button>
-                          )}
-                        </div>
-                      </td>
+    {charge.status === "EXCEPTION_REQUESTED" ? (
+      <>
+        <button
+          onClick={() => handleApproveException(charge.id)}
+          disabled={!!decidingException[charge.id]}
+          className="px-3 py-1.5 border border-emerald-200 hover:border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-600 disabled:opacity-60 rounded-lg text-[11px] font-bold transition-all shadow-sm inline-flex items-center gap-1"
+          title="Approve exception request (waives the charge)"
+        >
+          {decidingException[charge.id] === "approving" ? (
+            <RefreshCw className="h-3 w-3 animate-spin" />
+          ) : (
+            <ThumbsUp className="h-3 w-3" />
+          )}
+          Approve
+        </button>
+        <button
+          onClick={() => handleRejectException(charge.id)}
+          disabled={!!decidingException[charge.id]}
+          className="px-3 py-1.5 border border-rose-200 hover:border-rose-300 bg-white hover:bg-rose-50 text-rose-600 disabled:opacity-60 rounded-lg text-[11px] font-bold transition-all shadow-sm inline-flex items-center gap-1"
+          title="Reject exception request (agent can still pay the fine)"
+        >
+          {decidingException[charge.id] === "rejecting" ? (
+            <RefreshCw className="h-3 w-3 animate-spin" />
+          ) : (
+            <ThumbsDown className="h-3 w-3" />
+          )}
+          Reject
+        </button>
+      </>
+    ) : (
+      <>
+        {charge.status !== "PAID" && charge.status !== "WAIVED" && (
+          <button
+            onClick={() => handleWaive(charge.id)}
+            className="px-3 py-1.5 border border-red-200 hover:border-red-300 bg-white hover:bg-red-50 text-red-600 rounded-lg text-[11px] font-bold transition-all shadow-sm"
+          >
+            Waive
+          </button>
+        )}
+
+        {charge.status !== "PAID" && charge.status !== "WAIVED" && (
+          <button
+            onClick={() => handleNotify(charge.id)}
+            disabled={notifying[charge.id]}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-indigo-200 hover:border-indigo-300 bg-white hover:bg-indigo-50 text-indigo-600 disabled:opacity-60 rounded-lg text-[11px] font-bold transition-all shadow-sm"
+            title="Send overstay reminder email to agent"
+          >
+            {notifying[charge.id] ? (
+              <RefreshCw className="h-3 w-3 animate-spin" />
+            ) : (
+              <Mail className="h-3 w-3" />
+            )}
+            {notifying[charge.id] ? "…" : "Notify"}
+          </button>
+        )}
+      </>
+    )}
+  </div>
+</td>
                     </tr>
                   );
                 })}
@@ -902,36 +1176,12 @@ export default function ATMOverstayPage() {
                 return (
                   <div className="space-y-2">
                     <div className="bg-gradient-to-br from-red-50 to-rose-100/50 p-4 rounded-2xl border border-red-200">
-                      <p className="text-[10px] font-extrabold text-red-600 uppercase tracking-widest mb-1">Calculated Total Fine (incl. 18% GST)</p>
+                      <p className="text-[10px] font-extrabold text-red-600 uppercase tracking-widest mb-1">Calculated Total Fine</p>
                       <p className="text-xs text-red-700 font-mono mb-2">
                         {selectedEntity.overstay_days} days × {fmtMoney(customRate || selectedEntity.daily_rate)}/day
                       </p>
                       <p className="text-3xl font-black text-red-900">{fmtMoney(total)}</p>
                     </div>
-
-                    {total > 0 && (
-                      <div className="rounded-xl border border-orange-200 bg-orange-50/50 overflow-hidden animate-in fade-in duration-200">
-                        <div className="px-3 py-2 bg-orange-100/60 border-b border-orange-200">
-                          <span className="text-[10px] font-extrabold text-orange-700 uppercase tracking-wider">GST Breakdown (18% inclusive)</span>
-                        </div>
-                        <table className="w-full text-xs">
-                          <tbody>
-                            <tr className="border-b border-orange-100">
-                              <td className="px-3 py-1.5 text-slate-600">Amount excluding GST</td>
-                              <td className="px-3 py-1.5 text-right font-semibold text-slate-700">₹{base.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                            </tr>
-                            <tr className="border-b border-orange-100">
-                              <td className="px-3 py-1.5 text-slate-600">GST @ 18%</td>
-                              <td className="px-3 py-1.5 text-right font-semibold text-orange-700">₹{gst.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                            </tr>
-                            <tr className="bg-orange-100/40">
-                              <td className="px-3 py-2 font-extrabold text-slate-800">Total (incl. GST)</td>
-                              <td className="px-3 py-2 text-right font-extrabold text-red-700">₹{total.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
                   </div>
                 );
               })()}
@@ -945,31 +1195,72 @@ export default function ATMOverstayPage() {
                   rows={3}
                   value={levyNotes}
                   onChange={(e) => setLevyNotes(e.target.value)}
-                  placeholder="Provide reason or terminal location details..."
+                  placeholder="Provide reason or other details for levying this overstay fine (optional)"
                   className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-[#0a1e4d]/20 transition-all"
                 />
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 flex-wrap">
+              {/* Left: Cancel */}
               <button
                 onClick={() => setLevyModalOpen(false)}
                 className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition-colors"
               >
                 Cancel
               </button>
-              <button
-                disabled={submitting}
-                onClick={handleLevySubmit}
-                className="px-5 py-2 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-700 hover:to-rose-800 text-white font-bold rounded-xl text-xs shadow-md active:scale-95 transition-all flex items-center gap-1.5"
-              >
-                {submitting ? (
-                  <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Levying...</>
-                ) : (
-                  <><ShieldAlert className="h-3.5 w-3.5" /> Confirm &amp; Levy Fine</>
-                )}
-              </button>
+
+              {/* Right: action buttons */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Notify — sends expiry reminder to agent regardless of levy status */}
+                <button
+                  onClick={() => {
+                    if (selectedEntity?.id) {
+                      handleNotify(selectedEntity.id);
+                    } else {
+                      handleNotifyDetected(selectedEntity);
+                    }
+                  }}
+                  disabled={notifying[selectedEntity?.id] || notifying[`detected-${selectedEntity?.entity_id}-${selectedEntity?.entity_type}`]}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 border border-indigo-300 hover:border-indigo-400 bg-white hover:bg-indigo-50 text-indigo-700 disabled:opacity-60 rounded-xl text-xs font-bold transition-all shadow-sm"
+                >
+                  {(notifying[selectedEntity?.id] || notifying[`detected-${selectedEntity?.entity_id}-${selectedEntity?.entity_type}`]) ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Mail className="h-3.5 w-3.5" />
+                  )}
+                  {(notifying[selectedEntity?.id] || notifying[`detected-${selectedEntity?.entity_id}-${selectedEntity?.entity_type}`]) ? "Sending…" : "Notify"}
+                </button>
+
+                {/* Waive Fine — always active; if not levied yet, just dismiss (nothing to waive) */}
+                <button
+                  onClick={handleWaiveFromModal}
+                  disabled={waivingFromModal}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 border border-amber-300 hover:border-amber-400 bg-white hover:bg-amber-50 text-amber-700 disabled:opacity-60 rounded-xl text-xs font-bold transition-all shadow-sm"
+                  title={!selectedEntity?.id ? "Mark as resolved — no charge has been levied yet" : "Waive this overstay charge and notify agent"}
+                >
+                  {waivingFromModal ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Ban className="h-3.5 w-3.5" />
+                  )}
+                  {waivingFromModal ? "Waiving…" : "Waive Fine"}
+                </button>
+
+                {/* Levy Fine */}
+                <button
+                  disabled={submitting}
+                  onClick={handleLevySubmit}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-700 hover:to-rose-800 text-white font-bold rounded-xl text-xs shadow-md active:scale-95 transition-all"
+                >
+                  {submitting ? (
+                    <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Levying...</>
+                  ) : (
+                    <><ShieldAlert className="h-3.5 w-3.5" /> Levy Fine</>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1037,10 +1328,22 @@ export default function ATMOverstayPage() {
 
               <div className="bg-red-50 p-4 rounded-2xl border border-red-200 flex justify-between items-end">
                 <div>
-                  <p className="text-[10px] font-extrabold text-red-600 uppercase mb-1">Penalty Breakdown</p>
-                  <p className="text-xs text-red-700 font-mono">{detailCharge.overstay_days} days × {fmtMoney(detailCharge.daily_rate)}/day</p>
+                  <p className="text-[10px] font-extrabold text-red-600 uppercase mb-1">
+                    Penalty Breakdown {["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(detailCharge.status) && "(Live)"}
+                  </p>
+                  <p className="text-xs text-red-700 font-mono">
+                    {["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(detailCharge.status)
+                      ? detailCharge.current_overstay_days
+                      : detailCharge.overstay_days} days × {fmtMoney(detailCharge.daily_rate)}/day
+                  </p>
                 </div>
-                <p className="text-3xl font-black text-red-900">{fmtMoney(detailCharge.total_amount)}</p>
+                <p className="text-3xl font-black text-red-900">
+                  {fmtMoney(
+                    ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(detailCharge.status)
+                      ? detailCharge.current_total_amount
+                      : detailCharge.total_amount
+                  )}
+                </p>
               </div>
 
               {detailCharge.payment_method && (

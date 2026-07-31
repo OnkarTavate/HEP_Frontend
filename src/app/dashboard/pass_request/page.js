@@ -806,7 +806,31 @@ export default function PassRequestPage() {
     }
   };
 
+  const [feeMaster, setFeeMaster] = useState(null); // { INDIVIDUAL: {...}, VEHICLE: {...}, CARGO_HANDLING_EQUIPMENT: {...} }
+
   useEffect(() => {
+    const fetchFeeMaster = async () => {
+      try {
+        const res = await axios.get(`${ADMIN_API}/pass-fee-master`);
+        const feesByCategory = {};
+        (res.data?.data || []).forEach((row) => {
+          feesByCategory[row.category] = {
+            daily: parseFloat(row.daily_fee),
+            monthly: parseFloat(row.monthly_fee),
+            yearly: parseFloat(row.yearly_fee),
+          };
+        });
+        setFeeMaster(feesByCategory);
+      } catch (err) {
+        toast.error("Failed to load fee configuration. Please refresh.");
+      }
+    };
+    fetchFeeMaster();
+  }, []);
+
+  useEffect(() => {
+    if (!feeMaster) return; // wait until fee config is loaded
+
     let updatedPeriod = personForm.passPeriod;
 
     // Check license remaining days lock
@@ -839,13 +863,19 @@ export default function PassRequestPage() {
       updatedPeriod = "1";
     }
 
-    let amt = 10.3;
+    const feeConfig = feeMaster["INDIVIDUAL"];
+    if (!feeConfig) {
+      toast.error("Fee configuration missing for INDIVIDUAL category.");
+      return;
+    }
+
+    let amt = feeConfig.daily;
     if (String(personForm.passType) === "1") {
-      amt = 10.3 * parseInt(updatedPeriod || 1, 10);
+      amt = feeConfig.daily * parseInt(updatedPeriod || 1, 10);
     } else if (String(personForm.passType) === "2") {
-      amt = 154.0;
+      amt = feeConfig.monthly;
     } else if (String(personForm.passType) === "3") {
-      amt = 410.0;
+      amt = feeConfig.yearly;
     }
 
     const newDateTo = calculateDateTo(
@@ -860,9 +890,11 @@ export default function PassRequestPage() {
       amount: amt,
       dateTo: newDateTo,
     }));
-  }, [personForm.passType, personForm.passPeriod, personForm.dateFrom, generalForm.remainingDays, generalForm.isLicenseExpired]);
+  }, [personForm.passType, personForm.passPeriod, personForm.dateFrom, generalForm.remainingDays, generalForm.isLicenseExpired, feeMaster]);
 
   useEffect(() => {
+    if (!feeMaster) return; // wait until fee config is loaded
+
     let updatedPeriod = vehicleForm.passPeriod;
 
     // Check license remaining days lock
@@ -897,23 +929,22 @@ export default function PassRequestPage() {
     const typeName = selectedTypeObj ? String(selectedTypeObj.name).toUpperCase().trim() : "";
     const isCargoEquipment = ["CRANE", "DOZERS", "DUMPERS", "EXCAVATORS", "FORKLIFT", "JCB EARTHMOVER", "MOBILE CRANE", "PAY LOADER", "POCLAIN"].includes(typeName);
 
-    let amt = 25.7;
-    if (isCargoEquipment) {
-      if (String(vehicleForm.passType) === "1") {
-        amt = 41.0 * parseInt(updatedPeriod || 1, 10);
-      } else if (String(vehicleForm.passType) === "2") {
-        amt = 461.0;
-      } else if (String(vehicleForm.passType) === "3") {
-        amt = 3073.0;
-      }
-    } else {
-      if (String(vehicleForm.passType) === "1") {
-        amt = 25.7 * parseInt(updatedPeriod || 1, 10);
-      } else if (String(vehicleForm.passType) === "2") {
-        amt = 308.0;
-      } else if (String(vehicleForm.passType) === "3") {
-        amt = 2049.0;
-      }
+    const feeConfig = isCargoEquipment
+      ? feeMaster["CARGO_HANDLING_EQUIPMENT"]
+      : feeMaster["VEHICLE"];
+
+    if (!feeConfig) {
+      toast.error("Fee configuration missing for this category.");
+      return;
+    }
+
+    let amt = feeConfig.daily; // default fallback
+    if (String(vehicleForm.passType) === "1") {
+      amt = feeConfig.daily * parseInt(updatedPeriod || 1, 10);
+    } else if (String(vehicleForm.passType) === "2") {
+      amt = feeConfig.monthly;
+    } else if (String(vehicleForm.passType) === "3") {
+      amt = feeConfig.yearly;
     }
 
     const newDateTo = calculateDateTo(
@@ -928,7 +959,7 @@ export default function PassRequestPage() {
       amount: amt,
       dateTo: newDateTo,
     }));
-  }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom, vehicleForm.type, masterData.vehicleTypes, generalForm.remainingDays, generalForm.isLicenseExpired]);
+  }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom, vehicleForm.type, masterData.vehicleTypes, generalForm.remainingDays, generalForm.isLicenseExpired, feeMaster]);
 
   // Live running time: update dateFrom every 30s while person modal is open
   useEffect(() => {
@@ -6662,201 +6693,69 @@ export default function PassRequestPage() {
 
               <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
                 <table className="w-full text-left border-collapse bg-white">
-                  <thead className="bg-slate-100 border-b border-slate-200">
-                    <tr>
-                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider border-r border-slate-200 w-12 text-center">
-                        SNo
-                      </th>
-                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider border-r border-slate-200 whitespace-nowrap">
-                        Type Of Hep
-                      </th>
-                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider border-r border-slate-200">
-                        Description
-                      </th>
-                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider text-right border-r border-slate-200 whitespace-nowrap">
-                        Daily ₹
-                      </th>
-                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider text-right border-r border-slate-200 whitespace-nowrap">
-                        Monthly ₹
-                      </th>
-                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider text-right border-r border-slate-200 whitespace-nowrap">
-                        Annual ₹
-                      </th>
-                      <th className="p-3 text-xs font-bold text-slate-700 uppercase tracking-wider text-right whitespace-nowrap">
-                        Auction ₹
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    <tr className="hover:bg-slate-50">
-                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
-                        1
-                      </td>
-                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
-                        Driver
-                      </td>
-                      <td className="p-3 text-sm text-slate-600 border-r border-slate-100">
-                        Person
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        10.30
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        154.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        410.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right">
-                        100.00
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-slate-50">
-                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
-                        2
-                      </td>
-                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
-                        Personal
-                      </td>
-                      <td className="p-3 text-sm text-slate-600 border-r border-slate-100">
-                        Person
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        10.30
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        154.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        410.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right">
-                        100.00
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-slate-50">
-                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
-                        3
-                      </td>
-                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
-                        Seafarers
-                      </td>
-                      <td className="p-3 text-sm text-slate-600 border-r border-slate-100">
-                        Person
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        10.30
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
-                        0.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
-                        0.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-400 text-right">
-                        0.00
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-slate-50">
-                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
-                        4
-                      </td>
-                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
-                        Vehicle
-                      </td>
-                      <td className="p-3 text-xs text-slate-600 border-r border-slate-100 leading-relaxed">
-                        ARTICULATED, BACK-HOES, Bus, CAR, CEMENT MIXER, CONCRETE
-                        MIXER LORRY, CYCLE RICKSHAW, DEFENCE TANK, Four wheeler,
-                        INDIVIDUAL ONLY, JEEP, LIGHT VEHICLE, LORRY, OPEN LORRY,
-                        OPEN TRACTOR, OPEN TRUCK, PFS VEHICLE, RECOVERY,
-                        ROADROLLER, Tanker, Tarus, TAURUS TIPPER, TAXI, Tipper,
-                        TRACTOR TRAILER, TRAILER LORRY, Trailors, TRI CYCLE,
-                        Trucks, VAN
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        25.70
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        308.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        2049.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-400 text-right">
-                        0.00
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-slate-50">
-                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
-                        5
-                      </td>
-                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
-                        Vehicle
-                      </td>
-                      <td className="p-3 text-xs text-slate-600 border-r border-slate-100 leading-relaxed">
-                        (JCB)EARTHMOVER, CRANE, DOZERS, DUMPERS, EXCAVATORS,
-                        Forklift, MOBILE CRANE, PAY LOADER, Poclain
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        41.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        461.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        3073.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-400 text-right">
-                        0.00
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-slate-50">
-                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
-                        6
-                      </td>
-                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
-                        Visitor
-                      </td>
-                      <td className="p-3 text-sm text-slate-600 border-r border-slate-100">
-                        Person
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        10.30
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
-                        0.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
-                        0.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-400 text-right">
-                        0.00
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-slate-50">
-                      <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
-                        7
-                      </td>
-                      <td className="p-3 text-sm font-medium text-slate-800 border-r border-slate-100">
-                        Visitor
-                      </td>
-                      <td className="p-3 text-sm text-slate-600 border-r border-slate-100">
-                        Four wheeler
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-700 text-right border-r border-slate-100">
-                        25.70
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
-                        0.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-400 text-right border-r border-slate-100">
-                        0.00
-                      </td>
-                      <td className="p-3 text-sm font-bold text-slate-400 text-right">
-                        0.00
-                      </td>
-                    </tr>
-                  </tbody>
+<thead className="bg-slate-100 border-b border-slate-200">
+  <tr>
+    <th className="p-3 text-xs font-bold text-center border-r">S.No</th>
+    <th className="p-3 text-xs font-bold border-r">Category</th>
+    <th className="p-3 text-xs font-bold border-r">Description ₹</th>
+    <th className="p-3 text-xs font-bold text-right border-r">Daily ₹</th>
+    <th className="p-3 text-xs font-bold text-right border-r">Monthly ₹</th>
+    <th className="p-3 text-xs font-bold text-right">Yearly ₹</th>
+  </tr>
+</thead>
+
+<tbody className="divide-y divide-slate-100">
+  {[
+    {
+      key: "INDIVIDUAL",
+      name: "Individual",
+      description: "Driver, Personal, Seafarer, Visitor",
+    },
+    {
+      key: "VEHICLE",
+      name: "Vehicle",
+      description:
+        "Articulated, Back-Hoes, Bus, Car, Cement Mixer, Concrete Mixer Lorry, Cycle Rickshaw, Defence Tank, Jeep, Light Vehicle, Lorry, Open Lorry, Open Tractor, Open Truck, PFS Vehicle, Recovery, Road Roller, Tanker, Taurus, Taurus Tipper, Taxi, Tipper, Tractor Trailer, Trailer Lorry, Tri Cycle, Truck, Van",
+    },
+    {
+      key: "CARGO_HANDLING_EQUIPMENT",
+      name: "Cargo Handling Equipment",
+      description:
+        "Poclain, Dozers, Excavators, Forklift, Dumpers, JCB Earthmover, Crane, Mobile Crane, Payloader",
+    },
+  ].map((item, index) => {
+    const fee = feeMaster?.[item.key];
+    if (!fee) return null;
+
+    return (
+      <tr key={item.key} className="hover:bg-slate-50">
+        <td className="p-3 text-center border-r">
+          {index + 1}
+        </td>
+
+        <td className="p-3 font-medium border-r">
+          {item.name}
+        </td>
+
+        <td className="p-3 text-sm text-slate-600 border-r">
+          {item.description}
+        </td>
+
+        <td className="p-3 text-right border-r whitespace-nowrap">
+          ₹ {fee.daily.toFixed(2)}
+        </td>
+
+        <td className="p-3 text-right border-r whitespace-nowrap">
+          ₹ {fee.monthly.toFixed(2)}
+        </td>
+
+        <td className="p-3 text-right whitespace-nowrap">
+          ₹ {fee.yearly.toFixed(2)}
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
                 </table>
               </div>
             </div>
