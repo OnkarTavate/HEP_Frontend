@@ -28,6 +28,17 @@ const ADMIN_API =
 const AGENT_API =
   process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
+const formatISOToDDMMYYYY = (isoStr) => {
+  if (!isoStr) return "";
+  if (isoStr.includes("/")) return isoStr;
+  const parts = String(isoStr).split("T")[0].split("-");
+  if (parts.length === 3) {
+    const [yyyy, mm, dd] = parts;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return isoStr;
+};
+
 import { useSearchParams } from "next/navigation";
 
 export default function TrafficCompanyApprovals() {
@@ -36,7 +47,7 @@ export default function TrafficCompanyApprovals() {
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Search state
   const [searchVal, setSearchVal] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -193,7 +204,7 @@ export default function TrafficCompanyApprovals() {
             setProfileUpdatesCount(res.data.pagination.totalRecords || 0);
           }
         })
-        .catch(() => {});
+        .catch(() => { });
 
       if (activeTab === "profile_updates") {
         const response = await axios.get(`${ADMIN_API}/user/profile-update-requests`, {
@@ -469,19 +480,17 @@ export default function TrafficCompanyApprovals() {
               setProcessedByMe(false);
               setCurrentPage(1);
             }}
-            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${
-              activeTab === tab.id
-                ? "bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-900 shadow"
-                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-stone-200 hover:bg-slate-100 dark:hover:bg-slate-800/60"
-            }`}
+            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${activeTab === tab.id
+              ? "bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-900 shadow"
+              : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-stone-200 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+              }`}
           >
             {tab.label}
             <span
-              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
-                activeTab === tab.id
-                  ? "bg-white/20 text-white dark:bg-black/20 dark:text-slate-900"
-                  : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-              }`}
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${activeTab === tab.id
+                ? "bg-white/20 text-white dark:bg-black/20 dark:text-slate-900"
+                : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                }`}
             >
               {tab.count}
             </span>
@@ -587,15 +596,14 @@ export default function TrafficCompanyApprovals() {
                       </td>
                       <td className="px-5 py-4 text-center">
                         <span
-                          className={`px-3 py-1 rounded-full text-[11px] font-bold border uppercase ${
-                            req.status === "approved"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : req.status === "reverted"
+                          className={`px-3 py-1 rounded-full text-[11px] font-bold border uppercase ${req.status === "approved"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : req.status === "reverted"
                               ? "bg-amber-50 text-amber-700 border-amber-200"
                               : req.status === "rejected"
-                              ? "bg-red-50 text-red-700 border-red-200"
-                              : "bg-blue-50 text-blue-700 border-blue-200"
-                          }`}
+                                ? "bg-red-50 text-red-700 border-red-200"
+                                : "bg-blue-50 text-blue-700 border-blue-200"
+                            }`}
                         >
                           {req.status}
                         </span>
@@ -659,7 +667,7 @@ export default function TrafficCompanyApprovals() {
                     const statusClass =
                       statusColors[req.status] ||
                       "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
-                    
+
                     const lock = activeLocks.company?.find(l => String(l.applicationId) === String(req.id));
                     const isLocked = !!lock;
 
@@ -681,7 +689,22 @@ export default function TrafficCompanyApprovals() {
                               return;
                             }
                           }
-                          setSelectedRequest(req);
+
+                          // On-demand fetch of complete agent profile for verification modal
+                          try {
+                            const token = localStorage.getItem("accessToken");
+                            const profileRes = await axios.get(`${ADMIN_API}/user/agent/${req.id}`, {
+                              headers: { Authorization: `Bearer ${token}` },
+                            });
+                            if (profileRes.data?.data) {
+                              setSelectedRequest({ ...req, ...profileRes.data.data });
+                            } else {
+                              setSelectedRequest(req);
+                            }
+                          } catch (err) {
+                            setSelectedRequest(req);
+                          }
+
                           setIsViewMode(viewOnly);
                           setRemarks(req.rejectedReason || "");
                         }}
@@ -699,9 +722,11 @@ export default function TrafficCompanyApprovals() {
                               <div className="text-sm font-bold text-slate-800 dark:text-stone-100">
                                 {req.entityName || "—"}
                               </div>
-                              <div className="text-xs text-slate-500 dark:text-slate-400">
-                                {req.email || "—"}
-                              </div>
+                              {req.email && (
+                                <div className="text-xs text-slate-500 dark:text-slate-400">
+                                  {req.email}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -811,12 +836,12 @@ export default function TrafficCompanyApprovals() {
                       span: 1,
                     },
                     {
-                      label: "Contact Email",
+                      label: "Company Email",
                       value: selectedRequest.email,
                       span: 1,
                     },
                     {
-                      label: "Mobile No.",
+                      label: "Company Mobile No.",
                       value: selectedRequest.mobileNo,
                       span: 1,
                     },
@@ -826,6 +851,7 @@ export default function TrafficCompanyApprovals() {
                         selectedRequest.addressLine,
                         selectedRequest.city,
                         selectedRequest.state,
+                        selectedRequest.country,
                         selectedRequest.pincode,
                       ]
                         .filter(Boolean)
@@ -848,6 +874,50 @@ export default function TrafficCompanyApprovals() {
                 </div>
               </div>
 
+              {/* License & Authorized Contact */}
+              <div className="bg-white dark:bg-slate-800/60 p-5 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                <h3 className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100 dark:border-slate-700/50">
+                  License & Contact Details
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    {
+                      label: "License Number",
+                      value: selectedRequest.licenseNumber || "N/A",
+                    },
+                    {
+                      label: "License Expiry Date",
+                      value: selectedRequest.isLifetimeLicense
+                        ? "Lifetime Validity (No Expiry)"
+                        : formatISOToDDMMYYYY(selectedRequest.licenseValidityDate) || "N/A",
+                    },
+                    {
+                      label: "Contact Person",
+                      value: [selectedRequest.firstName, selectedRequest.lastName]
+                        .filter(Boolean)
+                        .join(" ") || "—",
+                    },
+                    {
+                      label: "Contact Person Email",
+                      value: selectedRequest.contactEmail || "—",
+                    },
+                    {
+                      label: "Contact Person Mobile No.",
+                      value: selectedRequest.contactMobile || "—",
+                    },
+                  ].map(({ label, value }) => (
+                    <div key={label}>
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
+                        {label}
+                      </label>
+                      <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
+                        {value || "—"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* Identification */}
               <div className="bg-white dark:bg-slate-800/60 p-5 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm">
                 <h3 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-100 dark:border-slate-700/50">
@@ -857,10 +927,10 @@ export default function TrafficCompanyApprovals() {
                   {[
                     {
                       label: "GSTIN Number",
-                      value: selectedRequest.gstinNumber,
+                      value: selectedRequest.gstinNumber || selectedRequest.gstinNo,
                     },
-                    { label: "PAN Number", value: selectedRequest.panNumber },
-                    { label: "TAN Number", value: selectedRequest.tanNumber },
+                    { label: "PAN Number", value: selectedRequest.panNumber || selectedRequest.panNo },
+                    { label: "TAN Number", value: selectedRequest.tanNumber || selectedRequest.tanNo },
                   ].map(({ label, value }) => (
                     <div key={label}>
                       <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
@@ -885,32 +955,32 @@ export default function TrafficCompanyApprovals() {
                     {
                       label: "Requisition Letter",
                       type: "requisitionLetter",
-                      show: !!selectedRequest.requisitionLetter && selectedRequest.requisitionLetter.trim() !== "",
+                      show: Boolean((selectedRequest.requisitionLetter || selectedRequest.requisitionLetterPath || "").trim()),
                     },
                     {
                       label: "Work Order",
                       type: "workOrder",
-                      show: !!selectedRequest.workOrder && selectedRequest.workOrder.trim() !== "",
+                      show: Boolean((selectedRequest.workOrder || selectedRequest.workOrderPath || "").trim()),
                     },
                     {
                       label: "License Copy",
                       type: "licenseDoc",
-                      show: !!selectedRequest.licenseDoc && selectedRequest.licenseDoc.trim() !== "",
+                      show: Boolean((selectedRequest.licenseDoc || selectedRequest.licenseDocPath || "").trim()),
                     },
                     {
                       label: "GSTIN Document",
                       type: "gst",
-                      show: !!selectedRequest.gstinDoc && selectedRequest.gstinDoc.trim() !== "",
+                      show: Boolean((selectedRequest.gstinDoc || selectedRequest.gstinDocPath || "").trim()),
                     },
                     {
                       label: "PAN Document",
                       type: "pan",
-                      show: !!selectedRequest.panDoc && selectedRequest.panDoc.trim() !== "",
+                      show: Boolean((selectedRequest.panDoc || selectedRequest.panDocPath || "").trim()),
                     },
                     {
                       label: "TAN Document",
                       type: "tan",
-                      show: !!selectedRequest.tanDoc && selectedRequest.tanDoc.trim() !== "",
+                      show: Boolean((selectedRequest.tanDoc || selectedRequest.tanDocPath || "").trim()),
                     },
                   ]
                     .filter((d) => d.show)
@@ -938,20 +1008,20 @@ export default function TrafficCompanyApprovals() {
               {(!isViewMode ||
                 selectedRequest?.status !== "approved" ||
                 remarks) && (
-                <div className="bg-amber-50 dark:bg-amber-500/5 p-5 rounded-xl border border-amber-200 dark:border-amber-500/20">
-                  <label className="block text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2">
-                    Authority Remarks / Reason for Rejection
-                  </label>
-                  <textarea
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    disabled={isViewMode}
-                    className="w-full border border-amber-200 dark:border-amber-500/20 bg-white dark:bg-slate-800 rounded-xl p-3 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 outline-none resize-none disabled:opacity-60"
-                    rows="3"
-                    placeholder="Enter specific remarks if rejecting or reverting..."
-                  />
-                </div>
-              )}
+                  <div className="bg-amber-50 dark:bg-amber-500/5 p-5 rounded-xl border border-amber-200 dark:border-amber-500/20">
+                    <label className="block text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2">
+                      Authority Remarks / Reason for Rejection
+                    </label>
+                    <textarea
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      disabled={isViewMode}
+                      className="w-full border border-amber-200 dark:border-amber-500/20 bg-white dark:bg-slate-800 rounded-xl p-3 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 outline-none resize-none disabled:opacity-60"
+                      rows="3"
+                      placeholder="Enter specific remarks if rejecting or reverting..."
+                    />
+                  </div>
+                )}
             </div>
 
             {/* Modal footer */}

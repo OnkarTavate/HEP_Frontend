@@ -113,20 +113,18 @@ const nextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-              // Allow Google Fonts stylesheets (the @import in the HTML head)
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:",
+              "worker-src 'self' blob: https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "img-src 'self' data: blob:",
-              // Allow Google Fonts to serve the actual font files
+              "img-src 'self' data: blob: http: https:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              // Backend API calls + HMR websocket in dev; tightened in prod
-              `connect-src ${connectSrc}`,
+              "connect-src 'self' http://localhost:* http://127.0.0.1:* http://10.* http://14.139.180.41:* https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://tessdata.projectnaptha.com ws: wss:",
+              "frame-src 'self' http://localhost:* http://127.0.0.1:* http://10.* http://14.139.180.41:* blob: data:",
               "object-src 'none'",
               "frame-src 'self' blob:",
               "base-uri 'self'",
               "form-action 'self'",
               "frame-ancestors 'none'",
-              "upgrade-insecure-requests",
             ].join("; "),
           },
           // VAPT Vuln #14 – Permissions-Policy
@@ -142,12 +140,10 @@ const nextConfig = {
               "usb=()",
             ].join(", "),
           },
-          // VAPT Vuln #15 – Cross-Origin-Embedder-Policy
-          { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
           // VAPT Vuln #16 – Cross-Origin-Resource-Policy
-          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
-          // Bonus: Cross-Origin-Opener-Policy (related isolation header)
-          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          { key: "Cross-Origin-Resource-Policy", value: "cross-origin" },
+          // Bonus: Cross-Origin-Opener-Policy
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
         ],
       },
     ];

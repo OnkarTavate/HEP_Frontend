@@ -24,8 +24,8 @@ import {
 } from "lucide-react";
 
 import { jwtDecode } from "jwt-decode";
-const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
-const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
+const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5006/api";
+const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
 // Typing animation constants (defined outside component to avoid dependency warnings and cascading renders)
 const HEADLINE_LINE1 = "Welcome to the";
@@ -238,7 +238,8 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
     setIsCaptchaLoading(true);
 
     try {
-      const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
+      const api = AGENT_API || "http://localhost:5001/api";
+      const res = await axios.get(`${api}/captcha/get-captcha`);
 
       if (res.data.success) {
         setCaptchaData({
@@ -303,15 +304,12 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
   useEffect(() => {
     let ignore = false;
 
-    const loadCaptcha = async () => {
+    const loadCaptcha = async (attempt = 0) => {
       setIsCaptchaLoading(true);
       try {
-        const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
-        if (!ignore && res.data.success) {
-          // setCaptchaData({
-          //   svg: res.data.captchaSvg,
-          //   token: res.data.captchaToken,
-          // });
+        const api = AGENT_API || "http://localhost:5001/api";
+        const res = await axios.get(`${api}/captcha/get-captcha`);
+        if (!ignore && res.data?.success) {
           setCaptchaData({
             question: res.data.captchaQuestion,
             token: res.data.captchaToken,
@@ -321,6 +319,11 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
       } catch (error) {
         if (!ignore) {
           console.error("Failed to fetch captcha", error);
+          if (attempt < 3) {
+            setTimeout(() => {
+              if (!ignore) loadCaptcha(attempt + 1);
+            }, 1500);
+          }
         }
       } finally {
         if (!ignore) {

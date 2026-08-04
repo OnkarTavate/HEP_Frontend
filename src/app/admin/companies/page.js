@@ -27,6 +27,17 @@ const ADMIN_API =
 const AGENT_API =
   process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
+const formatISOToDDMMYYYY = (isoStr) => {
+  if (!isoStr) return "";
+  if (isoStr.includes("/")) return isoStr;
+  const parts = String(isoStr).split("T")[0].split("-");
+  if (parts.length === 3) {
+    const [yyyy, mm, dd] = parts;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return isoStr;
+};
+
 export default function AdminCompanyApprovalsPage() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -554,7 +565,22 @@ export default function AdminCompanyApprovalsPage() {
                             return;
                           }
                         }
-                        setSelectedRequest(req);
+                        
+                        // On-demand fetch of complete agent profile for verification modal
+                        try {
+                          const token = localStorage.getItem("accessToken");
+                          const profileRes = await axios.get(`${ADMIN_API}/user/agent/${req.id}`, {
+                            headers: { Authorization: `Bearer ${token}` },
+                          });
+                          if (profileRes.data?.data) {
+                            setSelectedRequest({ ...req, ...profileRes.data.data });
+                          } else {
+                            setSelectedRequest(req);
+                          }
+                        } catch (err) {
+                          setSelectedRequest(req);
+                        }
+
                         setIsViewMode(viewOnly);
                         setRemarks(req.rejectedReason || "");
                       }}
@@ -572,9 +598,11 @@ export default function AdminCompanyApprovalsPage() {
                             <div className="text-sm font-bold text-slate-800 dark:text-stone-100 truncate">
                               {req.entityName || "—"}
                             </div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                              {req.email || "—"}
-                            </div>
+                            {req.email && (
+                              <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                {req.email}
+                              </div>
+                            )}
                             {/* Compact meta shown only on mobile where columns are hidden */}
                             <div className="sm:hidden mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
                               <span className="font-mono font-bold text-slate-600 dark:text-slate-300">
@@ -694,12 +722,12 @@ export default function AdminCompanyApprovalsPage() {
                       span: 1,
                     },
                     {
-                      label: "Contact Email",
+                      label: "Company Email",
                       value: selectedRequest.email,
                       span: 1,
                     },
                     {
-                      label: "Mobile No.",
+                      label: "Company Mobile No.",
                       value: selectedRequest.mobileNo,
                       span: 1,
                     },
@@ -709,6 +737,7 @@ export default function AdminCompanyApprovalsPage() {
                         selectedRequest.addressLine,
                         selectedRequest.city,
                         selectedRequest.state,
+                        selectedRequest.country,
                         selectedRequest.pincode,
                       ]
                         .filter(Boolean)
@@ -720,6 +749,50 @@ export default function AdminCompanyApprovalsPage() {
                       key={label}
                       className={span > 1 ? `md:col-span-${span}` : ""}
                     >
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
+                        {label}
+                      </label>
+                      <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm font-semibold text-slate-800 dark:text-slate-200">
+                        {value || "—"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* License & Authorized Contact */}
+              <div className="bg-white dark:bg-slate-800/60 p-5 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                <h3 className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100 dark:border-slate-700/50">
+                  License & Authorized Contact Details
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    {
+                      label: "License Number",
+                      value: selectedRequest.licenseNumber || "N/A",
+                    },
+                    {
+                      label: "License Expiry Date",
+                      value: selectedRequest.isLifetimeLicense
+                        ? "Lifetime Validity (No Expiry)"
+                        : formatISOToDDMMYYYY(selectedRequest.licenseValidityDate) || "N/A",
+                    },
+                    {
+                      label: "Authorized Contact Person",
+                      value: [selectedRequest.firstName, selectedRequest.lastName]
+                        .filter(Boolean)
+                        .join(" ") || "—",
+                    },
+                    {
+                      label: "Contact Person Email",
+                      value: selectedRequest.contactEmail || "—",
+                    },
+                    {
+                      label: "Contact Person Mobile No.",
+                      value: selectedRequest.contactMobile || "—",
+                    },
+                  ].map(({ label, value }) => (
+                    <div key={label}>
                       <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
                         {label}
                       </label>

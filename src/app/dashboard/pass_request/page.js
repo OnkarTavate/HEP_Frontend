@@ -38,7 +38,10 @@ import {
   Calendar,
   Filter,
   Clock,
+  Edit,
 } from "lucide-react";
+
+import { getPassRequestCategory, getItemCategoryTag } from "@/utils/passCategoryHelper";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
@@ -48,6 +51,72 @@ const getFileUrl = (path) => {
   if (!path) return "";
   if (path.startsWith("http")) return path;
   return `${AGENT_API}${path.startsWith("/") ? "" : "/"}${path}`;
+};
+
+// --- Date Format Helpers for DD/MM/YYYY ---
+const formatISOToDDMMYYYY = (isoStr) => {
+  if (!isoStr) return "";
+  if (isoStr.includes("/")) return isoStr; // Already in DD/MM/YYYY format
+  const parts = String(isoStr).split("T")[0].split("-");
+  if (parts.length === 3) {
+    const [yyyy, mm, dd] = parts;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return isoStr;
+};
+
+const formatDDMMYYYYToISO = (ddmmyyyy) => {
+  if (!ddmmyyyy) return "";
+  if (ddmmyyyy.includes("-")) return ddmmyyyy; // Already in YYYY-MM-DD format
+  const parts = String(ddmmyyyy).split("/");
+  if (parts.length === 3 && parts[2].length === 4) {
+    const [dd, mm, yyyy] = parts;
+    return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+  }
+  return "";
+};
+
+// --- DateTime Format Helpers for DD/MM/YYYY, hh:mm AM/PM ---
+const formatDateTimeISOToDisplay = (isoStr) => {
+  if (!isoStr) return "";
+  if (isoStr.includes("/")) return isoStr; // Already formatted
+  const [datePart, timePart] = String(isoStr).split("T");
+  if (!datePart) return isoStr;
+  const dateSubParts = datePart.split("-");
+  if (dateSubParts.length !== 3) return isoStr;
+  const [yyyy, mm, dd] = dateSubParts;
+  
+  if (!timePart) return `${dd}/${mm}/${yyyy}`;
+  const [hhStr, minStr] = timePart.split(":");
+  let hh = parseInt(hhStr, 10);
+  const ampm = hh >= 12 ? "PM" : "AM";
+  hh = hh % 12 || 12;
+  const formattedHH = String(hh).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy}, ${formattedHH}:${minStr || "00"} ${ampm}`;
+};
+
+const formatDateTimeDisplayToISO = (displayStr) => {
+  if (!displayStr) return "";
+  if (displayStr.includes("T")) return displayStr; // Already ISO
+  const parts = String(displayStr).split(",");
+  if (parts.length < 1) return "";
+  const dateParts = parts[0].trim().split("/");
+  if (dateParts.length !== 3 || dateParts[2].length !== 4) return "";
+  const [dd, mm, yyyy] = dateParts;
+  const isoDate = `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+  
+  if (parts.length >= 2) {
+    const timeStr = parts[1].trim();
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (match) {
+      let [_, hhStr, minStr, ampm] = match;
+      let hh = parseInt(hhStr, 10);
+      if (ampm.toUpperCase() === "PM" && hh < 12) hh += 12;
+      if (ampm.toUpperCase() === "AM" && hh === 12) hh = 0;
+      return `${isoDate}T${String(hh).padStart(2, "0")}:${minStr}`;
+    }
+  }
+  return `${isoDate}T00:00`;
 };
 
 const getCurrentDateTime = () => {
@@ -374,6 +443,10 @@ export default function PassRequestPage() {
   useEffect(() => {
     if (viewingDocUrl) {
       setIframeLoading(true);
+      // Fallback: dismiss the spinner after 5s even if onLoad doesn't fire
+      // (cross-origin iframes may not always trigger onLoad)
+      const timer = setTimeout(() => setIframeLoading(false), 5000);
+      return () => clearTimeout(timer);
     }
   }, [viewingDocUrl]);
 
@@ -394,6 +467,97 @@ export default function PassRequestPage() {
   const [persons, setPersons] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [submittedPasses, setSubmittedPasses] = useState([]);
+  const [twoWheelerRequests, setTwoWheelerRequests] = useState([]);
+
+  const fetchTwoWheelerRequests = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
+      if (!token) return;
+      const res = await axios.get(`${AGENT_API}/pass-request/two-wheeler-update-requests`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data?.success) {
+        setTwoWheelerRequests(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("fetchTwoWheelerRequests error:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTwoWheelerRequests();
+  }, [fetchTwoWheelerRequests]);
+
+  const [twoWheelerModal, setTwoWheelerModal] = useState({
+    isOpen: false,
+    person: null,
+    newVehicleNo: "",
+    reason: "",
+    loading: false,
+  });
+
+  const handleOpenTwoWheelerModal = (person) => {
+    const count = parseInt(person.twoWheelerChangeCount || 0, 10);
+    if (count >= 3) {
+      return toast.error(
+        "You have changed the two-wheeler number 3 times already this year, so you cannot change it again."
+      );
+    }
+    setTwoWheelerModal({
+      isOpen: true,
+      person,
+      newVehicleNo: "",
+      reason: "",
+      loading: false,
+    });
+  };
+
+  const handleSubmitTwoWheelerUpdate = async () => {
+    if (!twoWheelerModal.newVehicleNo.trim()) {
+      return toast.error("Please enter the new two-wheeler vehicle number.");
+    }
+    const cleanVehicleNo = twoWheelerModal.newVehicleNo.trim().toUpperCase();
+    const vehicleRegex = /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i;
+    if (!vehicleRegex.test(cleanVehicleNo)) {
+      return toast.error("Invalid vehicle registration number format. Valid examples: MH01AB1234, KA-02-C-5678.");
+    }
+    try {
+      setTwoWheelerModal((prev) => ({ ...prev, loading: true }));
+      const token =
+        localStorage.getItem("accessToken") || localStorage.getItem("hep_token") || sessionStorage.getItem("hep_token");
+      await axios.post(
+        `${AGENT_API}/pass-request/two-wheeler-update-request`,
+        {
+          personId: twoWheelerModal.person.id,
+          passRequestId:
+            selectedPassDetails?.id || twoWheelerModal.person.passRequestId,
+          newVehicleNo: twoWheelerModal.newVehicleNo.trim(),
+          reason: twoWheelerModal.reason,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(
+        "Two-wheeler vehicle number update request submitted successfully for approval!"
+      );
+      setTwoWheelerModal({
+        isOpen: false,
+        person: null,
+        newVehicleNo: "",
+        reason: "",
+        loading: false,
+      });
+      setEntityModal({ isOpen: false, data: null, type: null });
+      fetchSubmittedPasses();
+      fetchTwoWheelerRequests();
+    } catch (err) {
+      console.error("Two-wheeler update request failed:", err);
+      toast.error(
+        err?.response?.data?.message ||
+        "Failed to submit two-wheeler update request."
+      );
+      setTwoWheelerModal((prev) => ({ ...prev, loading: false }));
+    }
+  };
 
   // Pagination States
   const [pageSize, setPageSize] = useState(20);
@@ -1603,7 +1767,8 @@ export default function PassRequestPage() {
     if (!personForm.dob) {
       errors.dob = "Date of Birth is required";
     } else {
-      const dobDate = new Date(personForm.dob);
+      const isoDob = formatDDMMYYYYToISO(personForm.dob) || personForm.dob;
+      const dobDate = new Date(isoDob);
       if (isNaN(dobDate.getTime())) {
         errors.dob = "Enter a valid Date of Birth";
       } else {
@@ -4259,17 +4424,24 @@ export default function PassRequestPage() {
                         currentStatus === "APPROVED" ||
                         currentStatus === "ISSUED";
 
+                      const catInfo = getPassRequestCategory(pass);
+
                       return (
                         <tr
                           key={pass.id || idx}
                           onClick={() => setSelectedPassDetails(pass)}
-                          className="hover:bg-blue-50/50 transition-colors cursor-pointer"
+                          className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${catInfo.borderAccent}`}
                         >
                           <td className="px-6 py-4 text-sm font-bold text-slate-400 text-center border-r border-slate-100 tabular-nums">
                             {(viewPage - 1) * viewPageSize + idx + 1}
                           </td>
                           <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d] border-r border-slate-100">
-                            {passIdStr}
+                            <div className="flex flex-col gap-1">
+                              <span>{passIdStr}</span>
+                              <span className={`self-start px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${catInfo.badgeClass}`}>
+                                {catInfo.label}
+                              </span>
+                            </div>
                           </td>
                           <td className="px-6 py-4 text-sm text-slate-600 font-medium border-r border-slate-100">
                             {createdAtStr
@@ -5147,20 +5319,79 @@ export default function PassRequestPage() {
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Date of Birth (DOB) <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="date"
-                      value={personForm.dob || ""}
-                      onChange={(e) => {
-                        setPersonForm({
-                          ...personForm,
-                          dob: e.target.value,
-                        });
-                        if (personErrors.dob) {
-                          setPersonErrors((prev) => ({ ...prev, dob: null }));
-                        }
-                      }}
-                      className={`${inputClass} ${personErrors.dob ? "border-red-400 focus:border-red-500 focus:ring-red-500/20 bg-red-50/20" : ""}`}
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        placeholder="DD/MM/YYYY"
+                        maxLength={10}
+                        value={formatISOToDDMMYYYY(personForm.dob)}
+                        onChange={(e) => {
+                          let input = e.target.value.replace(/\D/g, "");
+                          if (input.length > 8) input = input.substring(0, 8);
+
+                          let formatted = "";
+                          if (input.length > 0) {
+                            formatted += input.substring(0, 2);
+                            if (input.length >= 3) {
+                              formatted += "/" + input.substring(2, 4);
+                              if (input.length >= 5) {
+                                formatted += "/" + input.substring(4, 8);
+                              }
+                            }
+                          }
+
+                          const iso = formatDDMMYYYYToISO(formatted);
+                          setPersonForm((prev) => ({
+                            ...prev,
+                            dob: iso || formatted,
+                          }));
+                          if (personErrors.dob) {
+                            setPersonErrors((prev) => ({ ...prev, dob: null }));
+                          }
+                        }}
+                        className={`${inputClass} pr-10 ${personErrors.dob ? "border-red-400 focus:border-red-500 focus:ring-red-500/20 bg-red-50/20" : ""}`}
+                      />
+                      <div className="absolute right-2 flex items-center">
+                        <input
+                          type="date"
+                          id="dob-hidden-picker"
+                          tabIndex={-1}
+                          value={
+                            personForm.dob && personForm.dob.includes("-")
+                              ? personForm.dob
+                              : formatDDMMYYYYToISO(personForm.dob)
+                          }
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              setPersonForm((prev) => ({
+                                ...prev,
+                                dob: e.target.value,
+                              }));
+                              if (personErrors.dob) {
+                                setPersonErrors((prev) => ({ ...prev, dob: null }));
+                              }
+                            }
+                          }}
+                          className="sr-only"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const picker = document.getElementById("dob-hidden-picker");
+                            if (picker && typeof picker.showPicker === "function") {
+                              picker.showPicker();
+                            } else if (picker) {
+                              picker.focus();
+                              picker.click();
+                            }
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                          title="Choose Date of Birth from calendar"
+                        >
+                          <Calendar className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
                     {personErrors.dob && (
                       <p className="text-[11px] font-semibold text-red-500 flex items-center gap-1 mt-1">
                         <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" /> {personErrors.dob}
@@ -5624,24 +5855,63 @@ export default function PassRequestPage() {
                         </div>
                       </td>
                       <td className="p-3 border-r border-slate-200">
-                        <input
-                          type="datetime-local"
-                          value={personForm.dateFrom}
-                          min={getCurrentDateTime()}
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              dateFrom: e.target.value,
-                            })
-                          }
-                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                        />
+                        <div className="relative flex items-center">
+                          <input
+                            type="text"
+                            placeholder="DD/MM/YYYY, hh:mm AM/PM"
+                            value={formatDateTimeISOToDisplay(personForm.dateFrom)}
+                            onChange={(e) => {
+                              const iso = formatDateTimeDisplayToISO(e.target.value);
+                              if (iso) {
+                                setPersonForm((prev) => ({
+                                  ...prev,
+                                  dateFrom: iso,
+                                }));
+                              }
+                            }}
+                            className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 pr-10 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-800"
+                          />
+                          <div className="absolute right-2 flex items-center">
+                            <input
+                              type="datetime-local"
+                              id="dateFrom-person-hidden-picker"
+                              tabIndex={-1}
+                              value={personForm.dateFrom || ""}
+                              min={getCurrentDateTime()}
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  setPersonForm((prev) => ({
+                                    ...prev,
+                                    dateFrom: e.target.value,
+                                  }));
+                                }
+                              }}
+                              className="sr-only"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const picker = document.getElementById("dateFrom-person-hidden-picker");
+                                if (picker && typeof picker.showPicker === "function") {
+                                  picker.showPicker();
+                                } else if (picker) {
+                                  picker.focus();
+                                  picker.click();
+                                }
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                              title="Choose Date & Time from calendar"
+                            >
+                              <Calendar className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
                       </td>
                       <td className="p-3 border-r border-slate-200 flex items-center gap-2">
                         <input
                           readOnly
-                          type="datetime-local"
-                          value={personForm.dateTo}
+                          type="text"
+                          value={formatDateTimeISOToDisplay(personForm.dateTo)}
                           className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
                         />
                         {String(personForm.passType) === "2" && (
@@ -6021,19 +6291,76 @@ export default function PassRequestPage() {
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Insurance Expiry Date
                     </label>
-                    <input
-                      type="date"
-                      value={vehicleForm.insuranceExpiry}
-                      min={new Date().toISOString().split("T")[0]}
-                      onChange={(e) => {
-                        setVehicleForm({
-                          ...vehicleForm,
-                          insuranceExpiry: e.target.value,
-                        });
-                        validateVehicleField("insuranceExpiry", e.target.value);
-                      }}
-                      className={`${inputClass} ${vehicleErrors.insuranceExpiry ? "border-red-400" : ""}`}
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        placeholder="DD/MM/YYYY"
+                        maxLength={10}
+                        value={formatISOToDDMMYYYY(vehicleForm.insuranceExpiry)}
+                        onChange={(e) => {
+                          let input = e.target.value.replace(/\D/g, "");
+                          if (input.length > 8) input = input.substring(0, 8);
+
+                          let formatted = "";
+                          if (input.length > 0) {
+                            formatted += input.substring(0, 2);
+                            if (input.length >= 3) {
+                              formatted += "/" + input.substring(2, 4);
+                              if (input.length >= 5) {
+                                formatted += "/" + input.substring(4, 8);
+                              }
+                            }
+                          }
+
+                          const iso = formatDDMMYYYYToISO(formatted);
+                          const val = iso || formatted;
+                          setVehicleForm((prev) => ({
+                            ...prev,
+                            insuranceExpiry: val,
+                          }));
+                          validateVehicleField("insuranceExpiry", val);
+                        }}
+                        className={`${inputClass} pr-10 ${vehicleErrors.insuranceExpiry ? "border-red-400" : ""}`}
+                      />
+                      <div className="absolute right-2 flex items-center">
+                        <input
+                          type="date"
+                          id="ins-hidden-picker"
+                          tabIndex={-1}
+                          value={
+                            vehicleForm.insuranceExpiry && vehicleForm.insuranceExpiry.includes("-")
+                              ? vehicleForm.insuranceExpiry
+                              : formatDDMMYYYYToISO(vehicleForm.insuranceExpiry)
+                          }
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              setVehicleForm((prev) => ({
+                                ...prev,
+                                insuranceExpiry: e.target.value,
+                              }));
+                              validateVehicleField("insuranceExpiry", e.target.value);
+                            }
+                          }}
+                          className="sr-only"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const picker = document.getElementById("ins-hidden-picker");
+                            if (picker && typeof picker.showPicker === "function") {
+                              picker.showPicker();
+                            } else if (picker) {
+                              picker.focus();
+                              picker.click();
+                            }
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                          title="Choose Insurance Expiry Date"
+                        >
+                          <Calendar className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
                     {vehicleErrors.insuranceExpiry && (
                       <p className="text-xs text-red-500 mt-0.5 font-medium">
                         {vehicleErrors.insuranceExpiry}
@@ -6044,19 +6371,76 @@ export default function PassRequestPage() {
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       RC Validity Date
                     </label>
-                    <input
-                      type="date"
-                      value={vehicleForm.rcValidity}
-                      min={new Date().toISOString().split("T")[0]}
-                      onChange={(e) => {
-                        setVehicleForm({
-                          ...vehicleForm,
-                          rcValidity: e.target.value,
-                        });
-                        validateVehicleField("rcValidity", e.target.value);
-                      }}
-                      className={`${inputClass} ${vehicleErrors.rcValidity ? "border-red-400" : ""}`}
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        placeholder="DD/MM/YYYY"
+                        maxLength={10}
+                        value={formatISOToDDMMYYYY(vehicleForm.rcValidity)}
+                        onChange={(e) => {
+                          let input = e.target.value.replace(/\D/g, "");
+                          if (input.length > 8) input = input.substring(0, 8);
+
+                          let formatted = "";
+                          if (input.length > 0) {
+                            formatted += input.substring(0, 2);
+                            if (input.length >= 3) {
+                              formatted += "/" + input.substring(2, 4);
+                              if (input.length >= 5) {
+                                formatted += "/" + input.substring(4, 8);
+                              }
+                            }
+                          }
+
+                          const iso = formatDDMMYYYYToISO(formatted);
+                          const val = iso || formatted;
+                          setVehicleForm((prev) => ({
+                            ...prev,
+                            rcValidity: val,
+                          }));
+                          validateVehicleField("rcValidity", val);
+                        }}
+                        className={`${inputClass} pr-10 ${vehicleErrors.rcValidity ? "border-red-400" : ""}`}
+                      />
+                      <div className="absolute right-2 flex items-center">
+                        <input
+                          type="date"
+                          id="rc-hidden-picker"
+                          tabIndex={-1}
+                          value={
+                            vehicleForm.rcValidity && vehicleForm.rcValidity.includes("-")
+                              ? vehicleForm.rcValidity
+                              : formatDDMMYYYYToISO(vehicleForm.rcValidity)
+                          }
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              setVehicleForm((prev) => ({
+                                ...prev,
+                                rcValidity: e.target.value,
+                              }));
+                              validateVehicleField("rcValidity", e.target.value);
+                            }
+                          }}
+                          className="sr-only"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const picker = document.getElementById("rc-hidden-picker");
+                            if (picker && typeof picker.showPicker === "function") {
+                              picker.showPicker();
+                            } else if (picker) {
+                              picker.focus();
+                              picker.click();
+                            }
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                          title="Choose RC Validity Date"
+                        >
+                          <Calendar className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
                     {vehicleErrors.rcValidity && (
                       <p className="text-xs text-red-500 mt-0.5 font-medium">
                         {vehicleErrors.rcValidity}
@@ -6150,24 +6534,63 @@ export default function PassRequestPage() {
                         </div>
                       </td>
                       <td className="p-3 border-r border-slate-200">
-                        <input
-                          type="datetime-local"
-                          value={vehicleForm.dateFrom}
-                          min={getCurrentDateTime()}
-                          onChange={(e) =>
-                            setVehicleForm({
-                              ...vehicleForm,
-                              dateFrom: e.target.value,
-                            })
-                          }
-                          className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                        />
+                        <div className="relative flex items-center">
+                          <input
+                            type="text"
+                            placeholder="DD/MM/YYYY, hh:mm AM/PM"
+                            value={formatDateTimeISOToDisplay(vehicleForm.dateFrom)}
+                            onChange={(e) => {
+                              const iso = formatDateTimeDisplayToISO(e.target.value);
+                              if (iso) {
+                                setVehicleForm((prev) => ({
+                                  ...prev,
+                                  dateFrom: iso,
+                                }));
+                              }
+                            }}
+                            className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 pr-10 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-800"
+                          />
+                          <div className="absolute right-2 flex items-center">
+                            <input
+                              type="datetime-local"
+                              id="dateFrom-vehicle-hidden-picker"
+                              tabIndex={-1}
+                              value={vehicleForm.dateFrom || ""}
+                              min={getCurrentDateTime()}
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  setVehicleForm((prev) => ({
+                                    ...prev,
+                                    dateFrom: e.target.value,
+                                  }));
+                                }
+                              }}
+                              className="sr-only"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const picker = document.getElementById("dateFrom-vehicle-hidden-picker");
+                                if (picker && typeof picker.showPicker === "function") {
+                                  picker.showPicker();
+                                } else if (picker) {
+                                  picker.focus();
+                                  picker.click();
+                                }
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                              title="Choose Date & Time from calendar"
+                            >
+                              <Calendar className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
                       </td>
                       <td className="p-3 border-r border-slate-200">
                         <input
                           readOnly
-                          type="datetime-local"
-                          value={vehicleForm.dateTo}
+                          type="text"
+                          value={formatDateTimeISOToDisplay(vehicleForm.dateTo)}
                           className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
                         />
                       </td>
@@ -6424,9 +6847,19 @@ export default function PassRequestPage() {
 
             <div className="p-6 overflow-y-auto space-y-6 bg-slate-50">
               <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="font-black text-slate-800 mb-4 border-b border-slate-100 pb-2 text-sm uppercase tracking-wider">
-                  General Information
-                </h3>
+                <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
+                  <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">
+                    General Information
+                  </h3>
+                  {(() => {
+                    const catInfo = getPassRequestCategory(selectedPassDetails);
+                    return (
+                      <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${catInfo.badgeClass}`}>
+                        {catInfo.label}
+                      </span>
+                    );
+                  })()}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
@@ -6549,6 +6982,9 @@ export default function PassRequestPage() {
                             Name
                           </th>
                           <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                            Pass Type
+                          </th>
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             Status
                           </th>
                           <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">
@@ -6576,6 +7012,16 @@ export default function PassRequestPage() {
                               </td>
                               <td className="p-3 text-sm font-medium text-slate-800">
                                 {p.name || p.person_name}
+                              </td>
+                              <td className="p-3">
+                                {(() => {
+                                  const pCat = getItemCategoryTag(p, true);
+                                  return pCat ? (
+                                    <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}>
+                                      {pCat.label}
+                                    </span>
+                                  ) : "-";
+                                })()}
                               </td>
                               <td className="p-3">
                                 <span
@@ -6607,7 +7053,7 @@ export default function PassRequestPage() {
                         ) : (
                           <tr>
                             <td
-                              colSpan="4"
+                              colSpan="5"
                               className="p-4 text-sm text-slate-400 text-center italic"
                             >
                               No persons found.
@@ -6632,6 +7078,9 @@ export default function PassRequestPage() {
                           </th>
                           <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             Reg. No
+                          </th>
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                            Pass Type
                           </th>
                           <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             Status
@@ -6660,9 +7109,17 @@ export default function PassRequestPage() {
                                 {v.vehiclePassNo || "-"}
                               </td>
                               <td className="p-3 text-sm font-bold text-[#0a1e4d] uppercase">
-                                {v.registrationNo ||
-                                  v.registration_no ||
-                                  v.regNo}
+                                {v.registrationNo || v.registration_no || v.regNo}
+                              </td>
+                              <td className="p-3">
+                                {(() => {
+                                  const vCat = getItemCategoryTag(v, false);
+                                  return vCat ? (
+                                    <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}>
+                                      {vCat.label}
+                                    </span>
+                                  ) : "-";
+                                })()}
                               </td>
                               <td className="p-3">
                                 <span
@@ -6872,12 +7329,56 @@ export default function PassRequestPage() {
                 )}
 
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-3 bg-slate-100 border-b border-slate-200">
+                <div className="px-5 py-3 bg-slate-100 border-b border-slate-200 flex justify-between items-center">
                   <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest">
-                    Submitted Data
+                    Full Submitted Preview (Read-Only)
                   </h4>
+                  {entityModal.type === "person" &&
+                    (String(entityModal.data.passType).toUpperCase() === "YEARLY" ||
+                      String(entityModal.data.passType).toUpperCase() === "ANNUAL" ||
+                      String(entityModal.data.passType) === "3") &&
+                    (entityModal.data.withTwoWheeler === true ||
+                      String(entityModal.data.withTwoWheeler) === "true") &&
+                    String(entityModal.data.status).toUpperCase() === "APPROVED" && (
+                      (() => {
+                        const count = parseInt(entityModal.data.twoWheelerChangeCount || 0, 10);
+                        if (count >= 3) {
+                          return (
+                            <button
+                              onClick={() => {
+                                toast.error("Change Limit Reached: You have already changed the two-wheeler vehicle number 3 times this year. Further changes are not allowed.");
+                              }}
+                              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Edit className="h-3.5 w-3.5 text-red-200" />
+                              Change Two-Wheeler No.
+                            </button>
+                          );
+                        }
+                        const pendingReq = twoWheelerRequests.find(
+                          (r) => String(r.personId) === String(entityModal.data.id) && r.status === "PENDING"
+                        );
+                        if (pendingReq) {
+                          return (
+                            <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 border border-amber-300 shadow-sm">
+                              <Clock className="h-3.5 w-3.5 text-amber-600 animate-pulse" />
+                              Update Pending ({pendingReq.newVehicleNo})
+                            </span>
+                          );
+                        }
+                        return (
+                          <button
+                            onClick={() => handleOpenTwoWheelerModal(entityModal.data)}
+                            className="bg-[#0a1e4d] hover:bg-blue-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow flex items-center gap-1.5"
+                          >
+                            <Edit className="h-3.5 w-3.5 text-orange-400" />
+                            Change Two-Wheeler No.
+                          </button>
+                        );
+                      })()
+                    )}
                 </div>
-                <div className="p-5 grid grid-cols-2 gap-y-6 gap-x-4">
+                <div className="p-5 grid grid-cols-2 md:grid-cols-3 gap-y-6 gap-x-4">
                   {entityModal.type === "person" ? (
                     <>
                       <DetailItem
@@ -6891,16 +7392,53 @@ export default function PassRequestPage() {
                         highlight
                       />
                       <DetailItem
+                        label="Category / HEP Type"
+                        value={
+                          String(entityModal.data.hepType) === "1"
+                            ? "Driver"
+                            : "Personnel"
+                        }
+                      />
+                      <DetailItem
+                        label="Designation"
+                        value={
+                          entityModal.data.designationOther ||
+                          entityModal.data.designationId ||
+                          entityModal.data.designation ||
+                          "-"
+                        }
+                      />
+                      <DetailItem
+                        label="Access Area"
+                        value={entityModal.data.accessArea || "OTHER GATES ONLY"}
+                      />
+                      <DetailItem
                         label="Aadhar No."
-                        value={entityModal.data.aadharNo}
+                        value={entityModal.data.aadharNo || "-"}
                       />
                       <DetailItem
                         label="Mobile No."
-                        value={entityModal.data.mobile}
+                        value={entityModal.data.mobile || "-"}
+                      />
+                      <DetailItem
+                        label="Email ID"
+                        value={entityModal.data.email || "-"}
                       />
                       <DetailItem
                         label="Nationality"
-                        value={entityModal.data.nationality}
+                        value={entityModal.data.nationality || "INDIAN"}
+                      />
+                      <DetailItem
+                        label="Country"
+                        value={entityModal.data.country || "India"}
+                      />
+                      <DetailItem
+                        label="ID Proof Type"
+                        value={entityModal.data.idProofType || "-"}
+                      />
+                      <DetailItem
+                        label="ID Proof Number"
+                        value={entityModal.data.idProofNumber || "-"}
                       />
                       <DetailItem
                         label="Pass Type"
@@ -6911,21 +7449,31 @@ export default function PassRequestPage() {
                         label="Valid From"
                         value={
                           entityModal.data.dateFrom
-                            ? new Date(
-                              entityModal.data.dateFrom,
-                            ).toLocaleDateString()
-                            : ""
+                            ? new Date(entityModal.data.dateFrom).toLocaleDateString("en-GB")
+                            : "-"
                         }
                       />
                       <DetailItem
                         label="Valid To"
                         value={
                           entityModal.data.dateTo
-                            ? new Date(
-                              entityModal.data.dateTo,
-                            ).toLocaleDateString()
-                            : ""
+                            ? new Date(entityModal.data.dateTo).toLocaleDateString("en-GB")
+                            : "-"
                         }
+                      />
+                      <DetailItem
+                        label="Two-Wheeler Availed"
+                        value={
+                          entityModal.data.withTwoWheeler === true ||
+                            String(entityModal.data.withTwoWheeler) === "true"
+                            ? "Yes"
+                            : "No"
+                        }
+                      />
+                      <DetailItem
+                        label="Two-Wheeler Reg No."
+                        value={entityModal.data.vehicleNo || "-"}
+                        highlight
                       />
                       <DetailItem
                         label="Calculated Amount"
@@ -6948,6 +7496,24 @@ export default function PassRequestPage() {
                         highlight
                       />
                       <DetailItem
+                        label="Vehicle Type"
+                        value={
+                          entityModal.data.vehicleTypeName ||
+                          entityModal.data.vehicle_type_name ||
+                          (masterData?.vehicleTypes && getLabelById(masterData.vehicleTypes, entityModal.data.vehicleTypeId || entityModal.data.vehicle_type_id || entityModal.data.vehicleType || entityModal.data.type, "name")) ||
+                          (masterData?.vehicleTypes && getLabelById(masterData.vehicleTypes, entityModal.data.vehicleTypeId || entityModal.data.vehicle_type_id || entityModal.data.vehicleType || entityModal.data.type, "label")) ||
+                          (entityModal.data.vehicleType && isNaN(entityModal.data.vehicleType) ? entityModal.data.vehicleType : null) ||
+                          (entityModal.data.type && isNaN(entityModal.data.type) ? entityModal.data.type : null) ||
+                          entityModal.data.vehicleTypeId ||
+                          entityModal.data.type ||
+                          "-"
+                        }
+                      />
+                      <DetailItem
+                        label="Access Area"
+                        value={entityModal.data.accessArea || "OTHER GATES ONLY"}
+                      />
+                      <DetailItem
                         label="Pass Type"
                         value={entityModal.data.passType}
                         highlight
@@ -6956,46 +7522,146 @@ export default function PassRequestPage() {
                         label="Valid From"
                         value={
                           entityModal.data.dateFrom
-                            ? new Date(
-                              entityModal.data.dateFrom,
-                            ).toLocaleDateString()
-                            : ""
+                            ? new Date(entityModal.data.dateFrom).toLocaleDateString("en-GB")
+                            : "-"
                         }
                       />
                       <DetailItem
                         label="Valid To"
                         value={
                           entityModal.data.dateTo
-                            ? new Date(
-                              entityModal.data.dateTo,
-                            ).toLocaleDateString()
-                            : ""
+                            ? new Date(entityModal.data.dateTo).toLocaleDateString("en-GB")
+                            : "-"
                         }
                       />
                       <DetailItem
                         label="Insurance Expiry"
                         value={
                           entityModal.data.insuranceExpiry
-                            ? new Date(
-                              entityModal.data.insuranceExpiry,
-                            ).toLocaleDateString()
-                            : ""
+                            ? new Date(entityModal.data.insuranceExpiry).toLocaleDateString("en-GB")
+                            : "-"
                         }
                       />
                       <DetailItem
                         label="RC Validity"
                         value={
                           entityModal.data.rcValidity
-                            ? new Date(
-                              entityModal.data.rcValidity,
-                            ).toLocaleDateString()
-                            : ""
+                            ? new Date(entityModal.data.rcValidity).toLocaleDateString("en-GB")
+                            : "-"
                         }
                       />
                       <DetailItem
                         label="Calculated Amount"
                         value={`₹${parseFloat(entityModal.data.amount || 0).toFixed(2)}`}
                       />
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* UPLOADED DOCUMENTS SECTION */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-3 bg-slate-100 border-b border-slate-200">
+                  <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest">
+                    Uploaded Documents
+                  </h4>
+                </div>
+                <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {entityModal.type === "person" ? (
+                    <>
+                      {entityModal.data.photoFileName && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "personPhoto", entityModal.data.photoFileName)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Photo</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                      {(entityModal.data.aadharPDFFileName || entityModal.data.aadharFileName) && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "personAadhar", entityModal.data.aadharPDFFileName || entityModal.data.aadharFileName)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Aadhar PDF</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                      {(entityModal.data.idProofFileName || entityModal.data.idProofName) && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "personIdProof", entityModal.data.idProofFileName || entityModal.data.idProofName)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> ID Proof</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                      {(entityModal.data.driverLicenseName || entityModal.data.dlName) && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "personDrivingLicense", entityModal.data.driverLicenseName || entityModal.data.dlName)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Driving Licence</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                      {(entityModal.data.policeVerificationName || entityModal.data.policeName) && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "policeVerification", entityModal.data.policeVerificationName || entityModal.data.policeName)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Police Verification</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                      {(entityModal.data.employmentProofName || entityModal.data.empName) && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "employmentProof", entityModal.data.employmentProofName || entityModal.data.empName)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Employment Proof</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {(entityModal.data.scannedCopyFileName || entityModal.data.rcName) && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "vehicleRC", entityModal.data.scannedCopyFileName || entityModal.data.rcName)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> RC / NOC</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                      {(entityModal.data.insuranceFileName || entityModal.data.insName) && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "vehicleInsurance", entityModal.data.insuranceFileName || entityModal.data.insName)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Insurance</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                      {(entityModal.data.fitnessFileName || entityModal.data.fitnessName) && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "vehicleFitness", entityModal.data.fitnessFileName || entityModal.data.fitnessName)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Fitness Cert</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                      {(entityModal.data.permitFileName || entityModal.data.permitName) && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "vehiclePermit", entityModal.data.permitFileName || entityModal.data.permitName)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Permit</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
@@ -7009,7 +7675,99 @@ export default function PassRequestPage() {
                 }
                 className="bg-slate-200 text-slate-800 px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-300 transition-colors"
               >
-                Close
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TWO WHEELER UPDATE MODAL */}
+      {twoWheelerModal.isOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200">
+            <div className="flex justify-between items-center px-6 py-4 bg-[#0a1e4d] text-white">
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <Edit className="h-5 w-5 text-orange-400" />
+                Change Two-Wheeler Vehicle No.
+              </h3>
+              <button
+                onClick={() => setTwoWheelerModal({ isOpen: false, person: null, newVehicleNo: "", reason: "", loading: false })}
+                className="text-white/70 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4 bg-slate-50">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Person Name</label>
+                <input readOnly type="text" value={twoWheelerModal.person?.name || ""} className="w-full mt-1 bg-slate-100 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold text-slate-700 cursor-not-allowed" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Current Vehicle No.</label>
+                <input readOnly type="text" value={twoWheelerModal.person?.vehicleNo || "N/A"} className="w-full mt-1 bg-slate-100 border border-slate-200 rounded-lg h-10 px-3 text-sm font-mono font-bold text-slate-700 cursor-not-allowed" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">New Two-Wheeler Vehicle No. <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={twoWheelerModal.newVehicleNo}
+                  onChange={(e) => setTwoWheelerModal({ ...twoWheelerModal, newVehicleNo: e.target.value.toUpperCase() })}
+                  placeholder="e.g. MH01AB1234, KA-02-C-5678"
+                  className={`w-full mt-1 border rounded-lg h-10 px-3 text-sm font-mono font-bold focus:outline-none transition-all ${twoWheelerModal.newVehicleNo.trim().length === 0
+                      ? "border-slate-300 focus:ring-2 focus:ring-[#0a1e4d] text-[#0a1e4d]"
+                      : /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(twoWheelerModal.newVehicleNo.trim())
+                        ? "border-emerald-500 bg-emerald-50/50 text-emerald-800 focus:ring-2 focus:ring-emerald-500"
+                        : "border-red-400 bg-red-50/50 text-red-700 focus:ring-2 focus:ring-red-500"
+                    }`}
+                />
+                {twoWheelerModal.newVehicleNo.trim().length > 0 && (
+                  <p className={`text-[11px] font-semibold mt-1 flex items-center gap-1 ${/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(twoWheelerModal.newVehicleNo.trim())
+                      ? "text-emerald-600"
+                      : "text-red-500"
+                    }`}>
+                    {/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(twoWheelerModal.newVehicleNo.trim()) ? (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Valid vehicle registration number format
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        Invalid format. Valid examples: MH01AB1234, KA-02-C-5678
+                      </>
+                    )}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Reason for Change (Optional)</label>
+                <textarea
+                  rows={2}
+                  value={twoWheelerModal.reason}
+                  onChange={(e) => setTwoWheelerModal({ ...twoWheelerModal, reason: e.target.value })}
+                  placeholder="Reason for changing two-wheeler vehicle..."
+                  className="w-full mt-1 border border-slate-300 rounded-lg p-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0a1e4d]"
+                />
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-200 bg-white flex justify-end gap-3">
+              <button
+                onClick={() => setTwoWheelerModal({ isOpen: false, person: null, newVehicleNo: "", reason: "", loading: false })}
+                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={
+                  twoWheelerModal.loading ||
+                  !twoWheelerModal.newVehicleNo.trim() ||
+                  !/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(twoWheelerModal.newVehicleNo.trim())
+                }
+                onClick={handleSubmitTwoWheelerUpdate}
+                className="px-5 py-2 rounded-xl bg-[#0a1e4d] hover:bg-blue-900 text-white text-sm font-bold shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {twoWheelerModal.loading ? "Submitting..." : "Submit Request"}
               </button>
             </div>
           </div>
@@ -7076,7 +7834,17 @@ export default function PassRequestPage() {
                                 }`} />
                             </div>
                             <div>
-                              <p className="font-semibold text-slate-800">{person.name}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-slate-800">{person.name}</p>
+                                {(() => {
+                                  const pCat = getItemCategoryTag(person, true);
+                                  return pCat ? (
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}>
+                                      {pCat.label}
+                                    </span>
+                                  ) : null;
+                                })()}
+                              </div>
                               <p className="text-xs text-slate-500">{person.id}</p>
                             </div>
                           </div>
@@ -7101,8 +7869,8 @@ export default function PassRequestPage() {
                           <button
                             onClick={() => handleEditRevertedEntity('person', index, person)}
                             className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${person.status === 'updated'
-                                ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                                : 'bg-amber-500 hover:bg-amber-600 text-white'
+                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                              : 'bg-amber-500 hover:bg-amber-600 text-white'
                               }`}
                           >
                             <Edit3 className="h-4 w-4" />
@@ -7139,7 +7907,17 @@ export default function PassRequestPage() {
                                 }`} />
                             </div>
                             <div>
-                              <p className="font-semibold text-slate-800">{vehicle.registrationNo || vehicle.regNo}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-slate-800">{vehicle.registrationNo || vehicle.regNo}</p>
+                                {(() => {
+                                  const vCat = getItemCategoryTag(vehicle, false);
+                                  return vCat ? (
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}>
+                                      {vCat.label}
+                                    </span>
+                                  ) : null;
+                                })()}
+                              </div>
                               <p className="text-xs text-slate-500">{vehicle.id}</p>
                             </div>
                           </div>
@@ -7164,8 +7942,8 @@ export default function PassRequestPage() {
                           <button
                             onClick={() => handleEditRevertedEntity('vehicle', index, vehicle)}
                             className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${vehicle.status === 'updated'
-                                ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                                : 'bg-amber-500 hover:bg-amber-600 text-white'
+                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                              : 'bg-amber-500 hover:bg-amber-600 text-white'
                               }`}
                           >
                             <Edit3 className="h-4 w-4" />

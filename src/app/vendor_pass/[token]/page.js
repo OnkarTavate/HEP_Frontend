@@ -51,6 +51,47 @@ const getCurrentDateTime = () => {
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 };
 
+// --- Date Format Helpers for DD/MM/YYYY ---
+const formatISOToDDMMYYYY = (isoStr) => {
+  if (!isoStr) return "";
+  if (isoStr.includes("/")) return isoStr; // Already in DD/MM/YYYY format
+  const parts = String(isoStr).split("T")[0].split("-");
+  if (parts.length === 3) {
+    const [yyyy, mm, dd] = parts;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return isoStr;
+};
+
+const formatDDMMYYYYToISO = (ddmmyyyy) => {
+  if (!ddmmyyyy) return "";
+  if (ddmmyyyy.includes("-")) return ddmmyyyy; // Already in YYYY-MM-DD format
+  const parts = String(ddmmyyyy).split("/");
+  if (parts.length === 3 && parts[2].length === 4) {
+    const [dd, mm, yyyy] = parts;
+    return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+  }
+  return "";
+};
+
+const formatDateTimeISOToDisplay = (isoStr) => {
+  if (!isoStr) return "";
+  if (isoStr.includes("/")) return isoStr;
+  const [datePart, timePart] = String(isoStr).split("T");
+  if (!datePart) return isoStr;
+  const dateSubParts = datePart.split("-");
+  if (dateSubParts.length !== 3) return isoStr;
+  const [yyyy, mm, dd] = dateSubParts;
+  
+  if (!timePart) return `${dd}/${mm}/${yyyy}`;
+  const [hhStr, minStr] = timePart.split(":");
+  let hh = parseInt(hhStr, 10);
+  const ampm = hh >= 12 ? "PM" : "AM";
+  hh = hh % 12 || 12;
+  const formattedHH = String(hh).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy}, ${formattedHH}:${minStr || "00"} ${ampm}`;
+};
+
 // All passes expire at 05:59 AM on the computed end date.
 const PASS_EXPIRY_TIME = "05:59";
 
@@ -2929,24 +2970,63 @@ export default function VendorPassPublicPage() {
                           </div>
                         </td>
                         <td className="p-3 border-r border-slate-200">
-                          <input
-                            type="datetime-local"
-                            value={personForm.dateFrom}
-                            min={getCurrentDateTime()}
-                            onChange={(e) =>
-                              setPersonForm({
-                                ...personForm,
-                                dateFrom: e.target.value,
-                              })
-                            }
-                            className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                          />
+                          <div className="relative flex items-center">
+                            <input
+                              type="text"
+                              placeholder="DD/MM/YYYY, hh:mm AM/PM"
+                              value={formatDateTimeISOToDisplay(personForm.dateFrom)}
+                              onChange={(e) => {
+                                const iso = formatDateTimeDisplayToISO(e.target.value);
+                                if (iso) {
+                                  setPersonForm((prev) => ({
+                                    ...prev,
+                                    dateFrom: iso,
+                                  }));
+                                }
+                              }}
+                              className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 pr-10 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-800"
+                            />
+                            <div className="absolute right-2 flex items-center">
+                              <input
+                                type="datetime-local"
+                                id="vendor-person-datefrom-picker"
+                                tabIndex={-1}
+                                value={personForm.dateFrom || ""}
+                                min={getCurrentDateTime()}
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    setPersonForm((prev) => ({
+                                      ...prev,
+                                      dateFrom: e.target.value,
+                                    }));
+                                  }
+                                }}
+                                className="sr-only"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const picker = document.getElementById("vendor-person-datefrom-picker");
+                                  if (picker && typeof picker.showPicker === "function") {
+                                    picker.showPicker();
+                                  } else if (picker) {
+                                    picker.focus();
+                                    picker.click();
+                                  }
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                                title="Choose Date & Time from calendar"
+                              >
+                                <Calendar className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
                         </td>
                         <td className="p-3 border-r border-slate-200 flex items-center gap-2">
                           <input
                             readOnly
-                            type="datetime-local"
-                            value={personForm.dateTo}
+                            type="text"
+                            value={formatDateTimeISOToDisplay(personForm.dateTo)}
                             className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
                           />
                           {String(personForm.passType) === "2" && (
@@ -3253,19 +3333,76 @@ export default function VendorPassPublicPage() {
                       <label className="text-xs font-bold text-slate-700 uppercase">
                         Insurance Expiry Date
                       </label>
-                      <input
-                        type="date"
-                        value={vehicleForm.insuranceExpiry}
-                        min={new Date().toISOString().split("T")[0]}
-                        onChange={(e) => {
-                          setVehicleForm({
-                            ...vehicleForm,
-                            insuranceExpiry: e.target.value,
-                          });
-                          validateVehicleField("insuranceExpiry", e.target.value);
-                        }}
-                        className={`${inputClass} ${vehicleErrors.insuranceExpiry ? "border-red-400" : ""}`}
-                      />
+                      <div className="relative flex items-center">
+                        <input
+                          type="text"
+                          placeholder="DD/MM/YYYY"
+                          maxLength={10}
+                          value={formatISOToDDMMYYYY(vehicleForm.insuranceExpiry)}
+                          onChange={(e) => {
+                            let input = e.target.value.replace(/\D/g, "");
+                            if (input.length > 8) input = input.substring(0, 8);
+
+                            let formatted = "";
+                            if (input.length > 0) {
+                              formatted += input.substring(0, 2);
+                              if (input.length >= 3) {
+                                formatted += "/" + input.substring(2, 4);
+                                if (input.length >= 5) {
+                                  formatted += "/" + input.substring(4, 8);
+                                }
+                              }
+                            }
+
+                            const iso = formatDDMMYYYYToISO(formatted);
+                            const val = iso || formatted;
+                            setVehicleForm((prev) => ({
+                              ...prev,
+                              insuranceExpiry: val,
+                            }));
+                            validateVehicleField("insuranceExpiry", val);
+                          }}
+                          className={`${inputClass} pr-10 ${vehicleErrors.insuranceExpiry ? "border-red-400" : ""}`}
+                        />
+                        <div className="absolute right-2 flex items-center">
+                          <input
+                            type="date"
+                            id="vendor-ins-hidden-picker"
+                            tabIndex={-1}
+                            value={
+                              vehicleForm.insuranceExpiry && vehicleForm.insuranceExpiry.includes("-")
+                                ? vehicleForm.insuranceExpiry
+                                : formatDDMMYYYYToISO(vehicleForm.insuranceExpiry)
+                            }
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                setVehicleForm((prev) => ({
+                                  ...prev,
+                                  insuranceExpiry: e.target.value,
+                                }));
+                                validateVehicleField("insuranceExpiry", e.target.value);
+                              }
+                            }}
+                            className="sr-only"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const picker = document.getElementById("vendor-ins-hidden-picker");
+                              if (picker && typeof picker.showPicker === "function") {
+                                picker.showPicker();
+                              } else if (picker) {
+                                picker.focus();
+                                picker.click();
+                              }
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                            title="Choose Insurance Expiry Date"
+                          >
+                            <Calendar className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
                       {vehicleErrors.insuranceExpiry && (
                         <p className="text-xs text-red-500 mt-0.5 font-medium">
                           {vehicleErrors.insuranceExpiry}
@@ -3276,19 +3413,76 @@ export default function VendorPassPublicPage() {
                       <label className="text-xs font-bold text-slate-700 uppercase">
                         RC Validity Date
                       </label>
-                      <input
-                        type="date"
-                        value={vehicleForm.rcValidity}
-                        min={new Date().toISOString().split("T")[0]}
-                        onChange={(e) => {
-                          setVehicleForm({
-                            ...vehicleForm,
-                            rcValidity: e.target.value,
-                          });
-                          validateVehicleField("rcValidity", e.target.value);
-                        }}
-                        className={`${inputClass} ${vehicleErrors.rcValidity ? "border-red-400" : ""}`}
-                      />
+                      <div className="relative flex items-center">
+                        <input
+                          type="text"
+                          placeholder="DD/MM/YYYY"
+                          maxLength={10}
+                          value={formatISOToDDMMYYYY(vehicleForm.rcValidity)}
+                          onChange={(e) => {
+                            let input = e.target.value.replace(/\D/g, "");
+                            if (input.length > 8) input = input.substring(0, 8);
+
+                            let formatted = "";
+                            if (input.length > 0) {
+                              formatted += input.substring(0, 2);
+                              if (input.length >= 3) {
+                                formatted += "/" + input.substring(2, 4);
+                                if (input.length >= 5) {
+                                  formatted += "/" + input.substring(4, 8);
+                                }
+                              }
+                            }
+
+                            const iso = formatDDMMYYYYToISO(formatted);
+                            const val = iso || formatted;
+                            setVehicleForm((prev) => ({
+                              ...prev,
+                              rcValidity: val,
+                            }));
+                            validateVehicleField("rcValidity", val);
+                          }}
+                          className={`${inputClass} pr-10 ${vehicleErrors.rcValidity ? "border-red-400" : ""}`}
+                        />
+                        <div className="absolute right-2 flex items-center">
+                          <input
+                            type="date"
+                            id="vendor-rc-hidden-picker"
+                            tabIndex={-1}
+                            value={
+                              vehicleForm.rcValidity && vehicleForm.rcValidity.includes("-")
+                                ? vehicleForm.rcValidity
+                                : formatDDMMYYYYToISO(vehicleForm.rcValidity)
+                            }
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                setVehicleForm((prev) => ({
+                                  ...prev,
+                                  rcValidity: e.target.value,
+                                }));
+                                validateVehicleField("rcValidity", e.target.value);
+                              }
+                            }}
+                            className="sr-only"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const picker = document.getElementById("vendor-rc-hidden-picker");
+                              if (picker && typeof picker.showPicker === "function") {
+                                picker.showPicker();
+                              } else if (picker) {
+                                picker.focus();
+                                picker.click();
+                              }
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                            title="Choose RC Validity Date"
+                          >
+                            <Calendar className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
                       {vehicleErrors.rcValidity && (
                         <p className="text-xs text-red-500 mt-0.5 font-medium">
                           {vehicleErrors.rcValidity}
@@ -3362,24 +3556,63 @@ export default function VendorPassPublicPage() {
                           </div>
                         </td>
                         <td className="p-3 border-r border-slate-200">
-                          <input
-                            type="datetime-local"
-                            value={vehicleForm.dateFrom}
-                            min={getCurrentDateTime()}
-                            onChange={(e) =>
-                              setVehicleForm({
-                                ...vehicleForm,
-                                dateFrom: e.target.value,
-                              })
-                            }
-                            className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                          />
+                          <div className="relative flex items-center">
+                            <input
+                              type="text"
+                              placeholder="DD/MM/YYYY, hh:mm AM/PM"
+                              value={formatDateTimeISOToDisplay(vehicleForm.dateFrom)}
+                              onChange={(e) => {
+                                const iso = formatDateTimeDisplayToISO(e.target.value);
+                                if (iso) {
+                                  setVehicleForm((prev) => ({
+                                    ...prev,
+                                    dateFrom: iso,
+                                  }));
+                                }
+                              }}
+                              className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 pr-10 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-800"
+                            />
+                            <div className="absolute right-2 flex items-center">
+                              <input
+                                type="datetime-local"
+                                id="vendor-vehicle-datefrom-picker"
+                                tabIndex={-1}
+                                value={vehicleForm.dateFrom || ""}
+                                min={getCurrentDateTime()}
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    setVehicleForm((prev) => ({
+                                      ...prev,
+                                      dateFrom: e.target.value,
+                                    }));
+                                  }
+                                }}
+                                className="sr-only"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const picker = document.getElementById("vendor-vehicle-datefrom-picker");
+                                  if (picker && typeof picker.showPicker === "function") {
+                                    picker.showPicker();
+                                  } else if (picker) {
+                                    picker.focus();
+                                    picker.click();
+                                  }
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                                title="Choose Date & Time from calendar"
+                              >
+                                <Calendar className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
                         </td>
                         <td className="p-3 border-r border-slate-200">
                           <input
                             readOnly
-                            type="datetime-local"
-                            value={vehicleForm.dateTo}
+                            type="text"
+                            value={formatDateTimeISOToDisplay(vehicleForm.dateTo)}
                             className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
                           />
                         </td>

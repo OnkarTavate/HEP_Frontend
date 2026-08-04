@@ -21,7 +21,31 @@ import {
   Minimize,
   XCircle,
   Eye,
+  Calendar,
 } from "lucide-react";
+
+// --- Date Format Helpers for DD/MM/YYYY ---
+const formatISOToDDMMYYYY = (isoStr) => {
+  if (!isoStr) return "";
+  if (isoStr.includes("/")) return isoStr;
+  const parts = String(isoStr).split("T")[0].split("-");
+  if (parts.length === 3) {
+    const [yyyy, mm, dd] = parts;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return isoStr;
+};
+
+const formatDDMMYYYYToISO = (ddmmyyyy) => {
+  if (!ddmmyyyy) return "";
+  if (ddmmyyyy.includes("-")) return ddmmyyyy;
+  const parts = String(ddmmyyyy).split("/");
+  if (parts.length === 3 && parts[2].length === 4) {
+    const [dd, mm, yyyy] = parts;
+    return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+  }
+  return "";
+};
 
 // identificationTypes is now computed dynamically inside the component
 // to support conditional required fields based on user type (e.g. Transport)
@@ -985,19 +1009,74 @@ export default function RegisterPage() {
                                 License Validity Date{" "}
                                 {!isTransportUser && !isGovtUser && <span className="text-red-500">*</span>}
                               </label>
-                              <input
-                                name="licenseValidityDate"
-                                type="date"
-                                value={fieldValues.licenseValidityDate}
-                                className={inputCls("licenseValidityDate")}
-                                onChange={(e) =>
-                                  handleFieldChange("licenseValidityDate", e.target.value)
-                                }
-                                onBlur={(e) =>
-                                  validateField("licenseValidityDate", e.target.value)
-                                }
-                                required={!isTransportUser && !isGovtUser}
-                              />
+                              <div className="relative flex items-center">
+                                <input
+                                  name="licenseValidityDate"
+                                  type="text"
+                                  placeholder="DD/MM/YYYY"
+                                  maxLength={10}
+                                  value={formatISOToDDMMYYYY(fieldValues.licenseValidityDate)}
+                                  className={`${inputCls("licenseValidityDate")} pr-10`}
+                                  onChange={(e) => {
+                                    let input = e.target.value.replace(/\D/g, "");
+                                    if (input.length > 8) input = input.substring(0, 8);
+
+                                    let formatted = "";
+                                    if (input.length > 0) {
+                                      formatted += input.substring(0, 2);
+                                      if (input.length >= 3) {
+                                        formatted += "/" + input.substring(2, 4);
+                                        if (input.length >= 5) {
+                                          formatted += "/" + input.substring(4, 8);
+                                        }
+                                      }
+                                    }
+
+                                    const iso = formatDDMMYYYYToISO(formatted);
+                                    const val = iso || formatted;
+                                    handleFieldChange("licenseValidityDate", val);
+                                  }}
+                                  onBlur={(e) =>
+                                    validateField("licenseValidityDate", fieldValues.licenseValidityDate)
+                                  }
+                                  required={!isTransportUser && !isGovtUser}
+                                />
+                                <div className="absolute right-2 flex items-center">
+                                  <input
+                                    type="date"
+                                    id="reg-lic-hidden-picker"
+                                    tabIndex={-1}
+                                    value={
+                                      fieldValues.licenseValidityDate && fieldValues.licenseValidityDate.includes("-")
+                                        ? fieldValues.licenseValidityDate
+                                        : formatDDMMYYYYToISO(fieldValues.licenseValidityDate)
+                                    }
+                                    onChange={(e) => {
+                                      if (e.target.value) {
+                                        handleFieldChange("licenseValidityDate", e.target.value);
+                                        validateField("licenseValidityDate", e.target.value);
+                                      }
+                                    }}
+                                    className="sr-only"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const picker = document.getElementById("reg-lic-hidden-picker");
+                                      if (picker && typeof picker.showPicker === "function") {
+                                        picker.showPicker();
+                                      } else if (picker) {
+                                        picker.focus();
+                                        picker.click();
+                                      }
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                                    title="Choose License Validity Date"
+                                  >
+                                    <Calendar className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
                               <FieldError field="licenseValidityDate" />
                               {fieldValues.licenseValidityDate && (() => {
                                 const today = new Date();

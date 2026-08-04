@@ -19,6 +19,29 @@ import { Button } from "@/components/ui/button";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 
+// --- Date Format Helpers for DD/MM/YYYY ---
+const formatISOToDDMMYYYY = (isoStr) => {
+  if (!isoStr) return "";
+  if (isoStr.includes("/")) return isoStr;
+  const parts = String(isoStr).split("T")[0].split("-");
+  if (parts.length === 3) {
+    const [yyyy, mm, dd] = parts;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return isoStr;
+};
+
+const formatDDMMYYYYToISO = (ddmmyyyy) => {
+  if (!ddmmyyyy) return "";
+  if (ddmmyyyy.includes("-")) return ddmmyyyy;
+  const parts = String(ddmmyyyy).split("/");
+  if (parts.length === 3 && parts[2].length === 4) {
+    const [dd, mm, yyyy] = parts;
+    return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+  }
+  return "";
+};
+
 const FIELD_VALIDATORS = {
   mobileNo: (v) => /^[6-9]\d{9}$/.test(String(v || "").replace(/\s/g, "")),
   pincode: (v) => /^\d{6}$/.test(String(v || "").trim()),
@@ -811,13 +834,69 @@ export default function ProfileUpdateModal({ isOpen, onClose, onSuccess }) {
                         <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
                           License Expiry Date {requiredDocs.licenseDoc && <span className="text-amber-600 dark:text-amber-400 text-[11px] font-extrabold">* (Proof Required)</span>}
                         </label>
-                        <input
-                          type="date"
-                          name="licenseValidityDate"
-                          value={formData.licenseValidityDate}
-                          onChange={handleChange}
-                          className="w-full px-3.5 py-2.5 text-sm bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none text-stone-900 dark:text-white"
-                        />
+                        <div className="relative flex items-center">
+                          <input
+                            type="text"
+                            name="licenseValidityDate"
+                            placeholder="DD/MM/YYYY"
+                            maxLength={10}
+                            value={formatISOToDDMMYYYY(formData.licenseValidityDate)}
+                            onChange={(e) => {
+                              let input = e.target.value.replace(/\D/g, "");
+                              if (input.length > 8) input = input.substring(0, 8);
+
+                              let formatted = "";
+                              if (input.length > 0) {
+                                formatted += input.substring(0, 2);
+                                if (input.length >= 3) {
+                                  formatted += "/" + input.substring(2, 4);
+                                  if (input.length >= 5) {
+                                    formatted += "/" + input.substring(4, 8);
+                                  }
+                                }
+                              }
+
+                              const iso = formatDDMMYYYYToISO(formatted);
+                              const val = iso || formatted;
+                              handleChange({ target: { name: "licenseValidityDate", value: val } });
+                            }}
+                            className="w-full px-3.5 py-2.5 pr-10 text-sm bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none text-stone-900 dark:text-white"
+                          />
+                          <div className="absolute right-2 flex items-center">
+                            <input
+                              type="date"
+                              id="prof-lic-hidden-picker"
+                              tabIndex={-1}
+                              value={
+                                formData.licenseValidityDate && formData.licenseValidityDate.includes("-")
+                                  ? formData.licenseValidityDate
+                                  : formatDDMMYYYYToISO(formData.licenseValidityDate)
+                              }
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  handleChange({ target: { name: "licenseValidityDate", value: e.target.value } });
+                                }
+                              }}
+                              className="sr-only"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const picker = document.getElementById("prof-lic-hidden-picker");
+                                if (picker && typeof picker.showPicker === "function") {
+                                  picker.showPicker();
+                                } else if (picker) {
+                                  picker.focus();
+                                  picker.click();
+                                }
+                              }}
+                              className="p-1.5 text-stone-400 hover:text-stone-600 transition-colors cursor-pointer"
+                              title="Choose License Expiry Date"
+                            >
+                              <Calendar className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     )}
 

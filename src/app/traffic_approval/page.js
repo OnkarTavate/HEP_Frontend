@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import PaginationBar from "@/components/ui/PaginationBar";
 import axios from "axios";
 import { toast } from "sonner";
@@ -35,6 +36,8 @@ import {
   RotateCcw,
   Zap,
 } from "lucide-react";
+
+import { getPassRequestCategory, getItemCategoryTag } from "@/utils/passCategoryHelper";
 
 const AGENT_API =
   process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
@@ -101,6 +104,16 @@ const DocumentCard = ({
 
 export default function TrafficPassesPage() {
   const [activeTab, setActiveTab] = useState("pending");
+
+  useEffect(() => {
+    const handleSwitchTab = (e) => {
+      if (e.detail) {
+        setActiveTab(e.detail);
+      }
+    };
+    window.addEventListener("switch_tab", handleSwitchTab);
+    return () => window.removeEventListener("switch_tab", handleSwitchTab);
+  }, []);
   const [cardFilter, setCardFilter] = useState("ALL");
   const [isViewMode, setIsViewMode] = useState(false);
   // Search and Sort States
@@ -177,6 +190,61 @@ export default function TrafficPassesPage() {
     pending: 0,
     processed: 0,
   });
+
+  // Two-Wheeler Update Request States
+  const [twoWheelerRequests, setTwoWheelerRequests] = useState([]);
+  const [passUpdatesCount, setPassUpdatesCount] = useState(0);
+  const [rejectModal, setRejectModal] = useState({ isOpen: false, requestId: null, reason: "" });
+
+  const fetchTwoWheelerRequests = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
+      const res = await axios.get(`${AGENT_API}/pass-request/two-wheeler-update-requests`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data && res.data.success) {
+        setTwoWheelerRequests(res.data.data || []);
+        const pendingCount = (res.data.data || []).filter(r => r.status === "PENDING").length;
+        setPassUpdatesCount(pendingCount);
+      }
+    } catch (err) {
+      console.error("fetchTwoWheelerRequests error:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTwoWheelerRequests();
+  }, [fetchTwoWheelerRequests]);
+
+  const handleApproveTwoWheeler = async (id) => {
+    try {
+      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
+      await axios.put(`${AGENT_API}/pass-request/two-wheeler-update-requests/${id}/approve`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success("Two-wheeler vehicle number update approved successfully!");
+      fetchTwoWheelerRequests();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to approve two-wheeler update.");
+    }
+  };
+
+  const handleRejectTwoWheeler = async () => {
+    if (!rejectModal.requestId) return;
+    try {
+      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
+      await axios.put(`${AGENT_API}/pass-request/two-wheeler-update-requests/${rejectModal.requestId}/reject`, {
+        rejectedReason: rejectModal.reason,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success("Two-wheeler update request rejected.");
+      setRejectModal({ isOpen: false, requestId: null, reason: "" });
+      fetchTwoWheelerRequests();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to reject update request.");
+    }
+  };
 
   // Main Modal & Profile States
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -969,6 +1037,11 @@ export default function TrafficPassesPage() {
             label: "Processed Passes",
             count: globalCounts.processed,
           },
+          {
+            id: "pass_updates",
+            label: "Pass Updates",
+            count: passUpdatesCount,
+          },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1073,7 +1146,9 @@ export default function TrafficPassesPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
-                {(activeTab === "processed"
+                {(activeTab === "pass_updates"
+                  ? ["Pass No.", "Person Name", "Company", "Old Vehicle No.", "New Vehicle No.", "Requested On", "Status", "Actions"]
+                  : activeTab === "processed"
                   ? [
                       "Ref No",
                       "Company Details",
@@ -1102,7 +1177,52 @@ export default function TrafficPassesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-slate-700/30">
-              {loading ? (
+              {activeTab === "pass_updates" ? (
+                twoWheelerRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-16 text-center text-slate-500">
+                      <Search className="h-10 w-10 mx-auto text-slate-200 mb-3" />
+                      <p className="text-sm font-medium">No two-wheeler update requests found.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  twoWheelerRequests.map((req) => (
+                    <tr key={req.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td className="px-6 py-4 text-sm font-bold font-mono text-[#0a1e4d]">{req.personPassNo || `REQ-${req.passRequestId || req.id}`}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-slate-800 dark:text-slate-200">{req.personName || "—"}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{req.companyName || "—"}</td>
+                      <td className="px-6 py-4 text-sm font-mono text-slate-500">{req.oldVehicleNo || "N/A"}</td>
+                      <td className="px-6 py-4 text-sm font-mono font-bold text-emerald-600">{req.newVehicleNo}</td>
+                      <td className="px-6 py-4 text-sm text-slate-500">{new Date(req.createdAt).toLocaleDateString("en-GB")}</td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : req.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                          {req.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {req.status === "PENDING" ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => handleApproveTwoWheeler(req.id)}
+                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => setRejectModal({ isOpen: true, requestId: req.id, reason: "" })}
+                              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )
+              ) : loading ? (
                 <tr>
                   <td
                     colSpan={activeTab === "processed" ? 6 : 5}
@@ -1148,9 +1268,11 @@ export default function TrafficPassesPage() {
                   );
                   const isLocked = !!lock;
 
+                  const catInfo = getPassRequestCategory(pass);
+
                   const rowClass = isLocked
-                    ? "bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group"
-                    : "hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group";
+                    ? `bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group ${catInfo.borderAccent}`
+                    : `hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group ${catInfo.borderAccent}`;
 
                   return (
                     <tr
@@ -1183,10 +1305,14 @@ export default function TrafficPassesPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200 dark:border-blue-500/20">
-                          {pass.persons?.length || 0} Persons |{" "}
-                          {pass.vehicles?.length || 0} Vehicles
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-slate-200 dark:border-slate-700">
+                            {pass.persons?.length || 0} Persons | {pass.vehicles?.length || 0} Vehicles
+                          </span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${catInfo.badgeClass}`}>
+                            {catInfo.label}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
                         {new Date(pass.createdAt).toLocaleDateString()}
@@ -1340,7 +1466,10 @@ export default function TrafficPassesPage() {
                           Pass No
                         </th>
                         <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
-                          Name & Role
+                          Name
+                        </th>
+                        <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                          Pass Type
                         </th>
                         <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
                           Aadhar / ID
@@ -1375,10 +1504,7 @@ export default function TrafficPassesPage() {
                             {p.personPassNo || "-"}
                           </td>
                           <td className="p-3 font-bold text-[#0a1e4d]">
-                            {p.name}
-                            <span className="block font-medium text-xs text-slate-500">
-                              {p.hepTypeId} • {p.passType}
-                            </span>
+                            <span>{p.name}</span>
                             <div className="flex flex-wrap gap-1 mt-1">
                               {isOilDockArea(
                                 p.accessAreaId || p.accessArea,
@@ -1455,6 +1581,16 @@ export default function TrafficPassesPage() {
                               </span>
                             </div>
                           </td>
+                          <td className="p-3">
+                            {(() => {
+                              const pCat = getItemCategoryTag(p, true);
+                              return pCat ? (
+                                <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}>
+                                  {pCat.label}
+                                </span>
+                              ) : "-";
+                            })()}
+                          </td>
                           <td className="p-3 text-slate-600 font-mono text-xs">
                             {p.aadharNo}
                           </td>
@@ -1519,7 +1655,7 @@ export default function TrafficPassesPage() {
                                       entityRemarks.persons[p.id] || "",
                                     );
                                   }}
-                                  className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                                  className={`${getItemCategoryTag(p, true)?.btnClass || "bg-blue-600 hover:bg-blue-700 text-white shadow-sm"} px-4 py-1.5 rounded-lg text-xs font-bold transition-colors`}
                                 >
                                   {entityStatuses.persons[p.id] ||
                                   p.status === "approved" ||
@@ -1555,6 +1691,9 @@ export default function TrafficPassesPage() {
                           Reg No
                         </th>
                         <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
+                          Pass Type
+                        </th>
+                        <th className="p-3 font-semibold text-slate-600 uppercase text-xs">
                           Type
                         </th>
                         <th className="p-3 font-semibold text-slate-600 uppercase text-xs text-right">
@@ -1588,6 +1727,16 @@ export default function TrafficPassesPage() {
                           </td>
                           <td className="p-3 font-bold text-[#0a1e4d] uppercase">
                             {v.registrationNo}
+                          </td>
+                          <td className="p-3">
+                            {(() => {
+                              const vCat = getItemCategoryTag(v, false);
+                              return vCat ? (
+                                <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}>
+                                  {vCat.label}
+                                </span>
+                              ) : "-";
+                            })()}
                           </td>
                           <td className="p-3 text-slate-600 text-xs font-medium">
                             <div>
@@ -1772,7 +1921,7 @@ export default function TrafficPassesPage() {
                                       entityRemarks.vehicles[v.id] || "",
                                     );
                                   }}
-                                  className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                                  className={`${getItemCategoryTag(v, false)?.btnClass || "bg-blue-600 hover:bg-blue-700 text-white shadow-sm"} px-4 py-1.5 rounded-lg text-xs font-bold transition-colors`}
                                 >
                                   {entityStatuses.vehicles[v.id] ||
                                   v.status === "approved" ||
@@ -1949,7 +2098,14 @@ export default function TrafficPassesPage() {
                       />
                       <DetailItem
                         label="Vehicle Type"
-                        value={entityModal.data.vehicleTypeName}
+                        value={
+                          entityModal.data.vehicleTypeName ||
+                          entityModal.data.vehicle_type_name ||
+                          entityModal.data.vehicleType ||
+                          entityModal.data.vehicleTypeId ||
+                          entityModal.data.type ||
+                          "-"
+                        }
                       />
                       {/* <DetailItem
                         label="RFID Card"
@@ -2472,6 +2628,52 @@ export default function TrafficPassesPage() {
                   onLoad={() => setIframeLoading(false)}
                 />
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REJECT UPDATE MODAL */}
+      {rejectModal.isOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700">
+            <div className="flex justify-between items-center px-6 py-4 bg-red-600 text-white">
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <XCircle className="h-5 w-5" />
+                Reject Two-Wheeler Update
+              </h3>
+              <button
+                onClick={() => setRejectModal({ isOpen: false, requestId: null, reason: "" })}
+                className="text-white/70 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-3 bg-slate-50 dark:bg-slate-900">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+                Reason for Rejection <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                value={rejectModal.reason}
+                onChange={(e) => setRejectModal({ ...rejectModal, reason: e.target.value })}
+                placeholder="Enter rejection reason..."
+                className="w-full border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500 bg-white dark:bg-slate-800"
+              />
+            </div>
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex justify-end gap-3">
+              <button
+                onClick={() => setRejectModal({ isOpen: false, requestId: null, reason: "" })}
+                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRejectTwoWheeler}
+                className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold shadow transition-all"
+              >
+                Reject Update
+              </button>
             </div>
           </div>
         </div>
