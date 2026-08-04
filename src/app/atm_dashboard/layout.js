@@ -43,6 +43,7 @@ import {
   Phone,
   BarChart2,
   Settings,
+  CheckCircle,
   IndianRupee,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -713,14 +714,73 @@ export default function ATMDashboardLayout({ children }) {
                 </button>
               </div>
 
-              <div className="bg-amber-500/5 rounded-2xl p-4 border border-amber-500/10 space-y-1 text-xs text-amber-700 dark:text-amber-400">
-                <p className="font-bold mb-1">Password Requirements:</p>
-                <p>• Must be between 8 and 15 characters long.</p>
-                <p>• Must contain at least one uppercase &amp; one lowercase letter.</p>
-                <p>• Must contain at least one number.</p>
-                <p>• Must contain at least one special character.</p>
-              </div>
+{/* Live password requirements checklist */}
+{(() => {
+  const pwd = newPassword;
 
+  const rules = [
+    { label: "8–15 characters", valid: pwd.length >= 8 && pwd.length <= 15 },
+    { label: "One uppercase letter", valid: /[A-Z]/.test(pwd) },
+    { label: "One lowercase letter", valid: /[a-z]/.test(pwd) },
+    { label: "One number", valid: /[0-9]/.test(pwd) },
+    { label: "One special character", valid: /[^A-Za-z0-9]/.test(pwd) },
+  ];
+
+  const passedCount = rules.filter((r) => r.valid).length;
+  const strengthPct = (passedCount / rules.length) * 100;
+
+  const strengthColor =
+    strengthPct === 100
+      ? "bg-emerald-500"
+      : strengthPct >= 60
+      ? "bg-amber-500"
+      : "bg-stone-300";
+
+  return (
+    <div className="rounded-xl border border-stone-200 bg-stone-50/80 px-4 py-3.5 space-y-3">
+      {/* Strength bar */}
+      <div className="h-1.5 w-full bg-stone-200 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-300 ease-out ${strengthColor}`}
+          style={{ width: `${strengthPct}%` }}
+        />
+      </div>
+
+      {/* Live checklist */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+        {rules.map((rule, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-1.5 text-xs transition-colors duration-200"
+          >
+            {rule.valid ? (
+              <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            ) : (
+              <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-stone-300 shrink-0" />
+            )}
+
+            <span
+              className={
+                rule.valid
+                  ? "text-stone-700 font-medium"
+                  : "text-stone-400"
+              }
+            >
+              {rule.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Backend-only rule */}
+      <div className="border-t border-stone-200 pt-2">
+        <p className="text-xs text-stone-500">
+          Your new password must also be different from your current password.
+        </p>
+      </div>
+    </div>
+  );
+})()}
               <div className="flex gap-3 pt-2">
                 {user?.isPasswordChanged !== false && (
                   <button

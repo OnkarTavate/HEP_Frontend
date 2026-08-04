@@ -95,7 +95,7 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
 
     if (forgotStep === 1) {
       if (!forgotEmail.trim()) {
-        toast.warning(isDeptUser ? "Please enter your departmental email ID." : "Please enter your registered email or employee ID.");
+        toast.warning(isDeptUser ? "Please enter your departmental email ID." : "Please enter your registered email or username.");
         return;
       }
       if (!forgotCaptcha.trim()) {
@@ -1000,7 +1000,7 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                             Reset Password
                           </h3>
                           <p className="text-sm text-gray-500 mt-2">
-                            {forgotStep === 1 && "Enter your registered email or employee ID to receive a verification OTP."}
+                            {forgotStep === 1 && "Enter your registered email or username to receive a verification OTP."}
                             {forgotStep === 2 && "Enter the OTP sent to your registered email address."}
                             {forgotStep === 3 && "Set your new password and confirm it below."}
                           </p>
@@ -1016,7 +1016,7 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                                 <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
                                 <input
                                   type="text"
-                                  placeholder={isDeptUser ? "Departmental Email ID" : "Email or Employee ID"}
+                                  placeholder={isDeptUser ? "Departmental Email ID" : "Email or Username"}
                                   value={forgotEmail}
                                   onChange={(e) => setForgotEmail(e.target.value)}
                                   className="w-full pl-11 pr-3 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
@@ -1112,7 +1112,47 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                                   {showForgotNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                                 </button>
                               </div>
+{/* Live password requirements checklist */}
+{(() => {
+  const pwd = forgotNewPassword;
+  const rules = [
+    { label: "8–15 characters", valid: pwd.length >= 8 && pwd.length <= 15 },
+    { label: "One uppercase letter", valid: /[A-Z]/.test(pwd) },
+    { label: "One lowercase letter", valid: /[a-z]/.test(pwd) },
+    { label: "One number", valid: /[0-9]/.test(pwd) },
+    { label: "One special character", valid: /[^A-Za-z0-9]/.test(pwd) },
+  ];
+  const passedCount = rules.filter((r) => r.valid).length;
+  const strengthPct = (passedCount / rules.length) * 100;
+  const strengthColor =
+    strengthPct === 100 ? "bg-emerald-500" : strengthPct >= 60 ? "bg-amber-500" : "bg-stone-300";
 
+  return (
+    <div className="rounded-xl border border-stone-200 bg-stone-50/80 px-4 py-3.5 space-y-3">
+      <div className="h-1.5 w-full bg-stone-200 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-300 ease-out ${strengthColor}`}
+          style={{ width: `${strengthPct}%` }}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+        {rules.map((rule, i) => (
+          <div key={i} className="flex items-center gap-1.5 text-xs transition-colors duration-200">
+            {rule.valid ? (
+              <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            ) : (
+              <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-stone-300 shrink-0" />
+            )}
+            <span className={rule.valid ? "text-stone-700 font-medium" : "text-stone-400"}>
+              {rule.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+})()}
                               <div className="relative group">
                                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
                                 <input
