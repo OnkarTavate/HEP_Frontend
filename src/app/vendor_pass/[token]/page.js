@@ -570,14 +570,28 @@ export default function VendorPassPublicPage() {
   useEffect(() => {
     const fetchFeeMaster = async () => {
       try {
-        const res = await axios.get(`${ADMIN_API}/pass-fee-master`);
+        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+        const res = await axios.get(`${ADMIN_API}/hep-rate`, { headers });
         const feesByCategory = {};
         (res.data?.data || []).forEach((row) => {
-          feesByCategory[row.category] = {
-            daily: parseFloat(row.daily_fee),
-            monthly: parseFloat(row.monthly_fee),
-            yearly: parseFloat(row.yearly_fee),
+          const category = String(row.category || "").toUpperCase();
+          const mappedCategory =
+            category === "CARGO" ? "CARGO_HANDLING_EQUIPMENT" : category;
+
+          const normalized = {
+            daily: parseFloat(row.daily_rate),
+            monthly: parseFloat(row.monthly_rate),
+            yearly: parseFloat(row.yearly_rate),
           };
+
+          feesByCategory[mappedCategory] = normalized;
+
+          // Keep alias for backward compatibility in any existing UI blocks.
+          if (category === "CARGO") {
+            feesByCategory.CARGO = normalized;
+          }
         });
         setFeeMaster(feesByCategory);
       } catch (err) {
