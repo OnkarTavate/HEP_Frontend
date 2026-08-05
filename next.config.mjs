@@ -21,7 +21,7 @@ const connectSrc = isDev
   : "'self'";
 
 const nextConfig = {
-  allowedDevOrigins: ['10.184.3.133', '14.139.180.41'],
+  allowedDevOrigins: ['10.184.3.133', '14.139.180.41', '127.0.0.1'],
 
   // Remove the "X-Powered-By: Next.js" header from all responses
   poweredByHeader: false,

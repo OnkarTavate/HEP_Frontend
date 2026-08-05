@@ -45,6 +45,7 @@ import {
   FileCode2,
   Briefcase,
   CheckCircle,
+  FileBox
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import axios from "axios";
@@ -66,6 +67,7 @@ const getNavigationItems = (role, departmentName) => {
     { name: "Apply Pass", href: "/dashboard/pass_request", icon: FileText },
     { name: "Master Record", href: "/dashboard/master_record", icon: Database },
     { name: "Blacklist & Penalties", href: "/dashboard/blacklist_penalties", icon: ShieldAlert },
+    { name: "Material Pass", href: "/dashboard/material_pass_request", icon: FileBox}
   ];
 
   const isTrafficDept = departmentName?.toLowerCase() === "traffic";
