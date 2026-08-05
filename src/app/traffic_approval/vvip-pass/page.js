@@ -50,11 +50,24 @@ const formatDate = (value) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+  });
+};
+
+const formatVisitDate = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   });
 };
 
@@ -326,7 +339,7 @@ export default function TrafficVvipPassPage() {
                       {item.departmentName || "-"}
                     </td>
                     <td className="px-5 py-4 text-sm font-semibold text-slate-700 dark:text-stone-300">
-                      {item.visitDate || "-"}
+                      {formatVisitDate(item.visitDate)}
                     </td>
                     <td className="px-5 py-4 text-sm font-semibold text-slate-700 dark:text-stone-300">
                       {item.personsCount ?? 0}

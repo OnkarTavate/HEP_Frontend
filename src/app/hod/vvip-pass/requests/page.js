@@ -41,11 +41,24 @@ const formatDate = (value) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+  });
+};
+
+const formatVisitDate = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   });
 };
 
@@ -325,7 +338,7 @@ export default function HodVvipPassRequestsPage() {
                         {request.referenceNo}
                       </td>
                       <td className="px-4 py-3 text-sm font-semibold text-slate-600 dark:text-stone-300">
-                        {formatDate(request.visitDate)}
+                        {formatVisitDate(request.visitDate)}
                       </td>
                       <td className="px-4 py-3 text-sm font-semibold text-slate-600 dark:text-stone-300">
                         {request.personsCount ?? 0}
