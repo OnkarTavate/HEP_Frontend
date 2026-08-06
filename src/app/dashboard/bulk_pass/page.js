@@ -113,12 +113,29 @@ function ActionBtn({ batch, downloadingId, onReturn, onEdit, onDownloadPdf }) {
   return <button onClick={() => onEdit(batch)} className={`${base} border-slate-200 text-slate-600 bg-white hover:bg-slate-50`}><ChevronRight className="h-3.5 w-3.5" />View</button>;
 }
 
+// Departments allowed to create bulk passes (General Administration = 6, Traffic = 9–15)
+const BULK_PASS_CREATOR_DEPT_IDS = [6, 9, 10, 11, 12, 13, 14, 15];
+
+function canCreateBulkPass(user) {
+  if (!user) return false;
+  const role = (user.role || "").toLowerCase();
+  if (role === "admin" || role === "administrator" || role === "super admin" || role === "superadmin") return true;
+  return BULK_PASS_CREATOR_DEPT_IDS.includes(Number(user.departmentId));
+}
+
 export default function BulkPassListPage() {
   const router = useRouter();
 
   const [batches, setBatches] = useState([]);
   const [allBatches, setAllBatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    try { const r = localStorage.getItem("user"); if (r) setUser(JSON.parse(r)); } catch {}
+  }, []);
+
+  const canCreate = canCreateBulkPass(user);
 
   const [activeTab, setActiveTab] = useState("ALL");
   const [search, setSearch] = useState("");
@@ -253,11 +270,13 @@ export default function BulkPassListPage() {
 
       {/* ── FILTER ROW ── */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* New Bulk Pass CTA — always visible */}
-        <button onClick={() => router.push(`${BASE}/create`)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 active:scale-95 text-[#1f1f1f] font-bold text-sm transition shadow-sm shrink-0">
-          <Plus className="h-4 w-4" strokeWidth={2.5} />New Bulk Pass
-        </button>
+        {/* New Bulk Pass CTA — only for allowed departments */}
+        {canCreate && (
+          <button onClick={() => router.push(`${BASE}/create`)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 active:scale-95 text-[#1f1f1f] font-bold text-sm transition shadow-sm shrink-0">
+            <Plus className="h-4 w-4" strokeWidth={2.5} />New Bulk Pass
+          </button>
+        )}
         <div className="h-8 w-px bg-slate-200 shrink-0" />
 
         {/* Search */}
@@ -313,7 +332,7 @@ export default function BulkPassListPage() {
             <p className="text-sm text-slate-400">
               {hasFilters || activeTab !== "ALL" ? "Try adjusting your search or filters." : "Create your first bulk pass to get started."}
             </p>
-            {!hasFilters && activeTab === "ALL" && (
+            {!hasFilters && activeTab === "ALL" && canCreate && (
               <button onClick={() => router.push(`${BASE}/create`)}
                 className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-[#1f1f1f] font-bold text-sm transition">
                 <Plus className="h-4 w-4" />New Bulk Pass

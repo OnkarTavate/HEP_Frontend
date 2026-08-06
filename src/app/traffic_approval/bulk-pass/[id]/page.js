@@ -12,6 +12,7 @@ import {
   getBulkBatchDetail,
   approvePersonInBatch,
   rejectPersonInBatch,
+  undoPersonInBatch,
   finalizeBulkBatch,
   rejectBulkBatch,
   returnBulkBatchByTraffic,
@@ -159,6 +160,7 @@ function ApprovalSummaryBar({ persons, canFinalize, onFinalize, finalizing }) {
 const DOC_LABELS = {
   rc: "RC", insurance: "Insurance", fitness: "Fitness",
   permit: "Permit", roadTax: "Road Tax", emission: "PUCC",
+  driverAadhaarCard: "Aadhaar", driverLicense: "DL",
 };
 
 function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonActioned }) {
@@ -193,6 +195,17 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
       toast.error(err?.response?.data?.message || "Failed to reject person.");
       throw err;
     }
+  };
+
+  const handleUndoPerson = async (personId) => {
+    setActioningId(personId);
+    try {
+      await undoPersonInBatch(batchId, personId);
+      toast.success("Decision undone — person reset to pending.");
+      onPersonActioned();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to undo decision.");
+    } finally { setActioningId(null); }
   };
 
   if (!persons?.length) {
@@ -248,9 +261,19 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
                         {isUnderReview && canApprove && (
                           <td className="px-3 py-3">
                             {alreadyActioned ? (
-                              personStatus === "REJECTED" && p.approvalReason
-                                ? <span className="text-[10px] text-slate-400 italic max-w-[140px] block truncate" title={p.approvalReason}>{p.approvalReason}</span>
-                                : <span className="text-[10px] text-slate-400">—</span>
+                              // Show the rejection reason (if any) + Undo button
+                              <div className="flex flex-col gap-1.5">
+                                {personStatus === "REJECTED" && p.approvalReason && (
+                                  <span className="text-[10px] text-slate-400 italic max-w-[160px] block truncate" title={p.approvalReason}>{p.approvalReason}</span>
+                                )}
+                                <button
+                                  onClick={() => handleUndoPerson(p.id)}
+                                  disabled={isActioning}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                >
+                                  {isActioning ? "…" : <><RotateCcw className="h-3 w-3" /> Undo</>}
+                                </button>
+                              </div>
                             ) : (
                               <div className="flex items-center gap-1.5">
                                 <button
@@ -291,7 +314,7 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
             <table className="w-full min-w-[700px] text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {["#", "Reg. Number", "Type", "Driver", "Aadhaar", "Mobile", "Documents"].map((h) => (
+                  {["#", "Reg. Number", "Type", "Driver", "Aadhaar", "Mobile", "DL Number", "Documents"].map((h) => (
                     <th key={h} className="px-3 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -308,6 +331,11 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
                       <td className="px-3 py-3 font-semibold text-slate-800">{v.name || "—"}</td>
                       <td className="px-3 py-3 font-mono text-xs text-slate-600">{v.aadhaar ? `XXXX XXXX ${String(v.aadhaar).slice(-4)}` : "—"}</td>
                       <td className="px-3 py-3 font-mono text-xs text-slate-600">{v.mobile || "—"}</td>
+                      <td className="px-3 py-3">
+                        {v.driverLicenseNumber
+                          ? <span className="font-mono text-xs font-semibold text-slate-700">{v.driverLicenseNumber}</span>
+                          : <span className="text-xs text-slate-400">—</span>}
+                      </td>
                       <td className="px-3 py-3">
                         <div className="flex flex-wrap gap-1">
                           {docs.length > 0
@@ -378,13 +406,13 @@ export default function TrafficBulkPassDetailPage() {
 
   const canApprove = Number(user?.departmentId) === 9 || Number(user?.department_id) === 9;
 
-  const fetchBatch = useCallback(() => {
+  const fetchBatch = useCallback((silent = false) => {
     if (!id) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     getBulkBatchDetail(id)
       .then((data) => setBatch(data))
       .catch(() => toast.error("Failed to load batch details."))
-      .finally(() => setLoading(false));
+      .finally(() => { if (!silent) setLoading(false); });
   }, [id]);
 
   useEffect(() => { fetchBatch(); }, [fetchBatch]);
@@ -561,6 +589,7 @@ export default function TrafficBulkPassDetailPage() {
           <AlertCircle className="h-4 w-4 text-sky-500 shrink-0 mt-0.5" />
           <p className="text-xs text-sky-700 leading-relaxed">
             <span className="font-bold">Individual review mode:</span> Approve or reject each person independently.
+            Changed your mind? Hit <span className="font-bold">Undo</span> on any actioned person to reset them back to pending.
             Passes are generated only for approved persons. Once all persons are actioned, click{" "}
             <span className="font-bold">Finalize &amp; Generate Passes</span> to complete the batch.
             Use <span className="font-bold">Reject Entire Batch</span> only when the whole submission is invalid.
@@ -662,7 +691,7 @@ export default function TrafficBulkPassDetailPage() {
           batchId={id}
           canApprove={canApprove}
           isUnderReview={isUnderReview}
-          onPersonActioned={fetchBatch}
+          onPersonActioned={() => fetchBatch(true)}
         />
       </div>
 

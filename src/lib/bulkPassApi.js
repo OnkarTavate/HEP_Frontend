@@ -286,6 +286,15 @@ export async function rejectPersonInBatch(batchId, personId, rejectionReason) {
   return res.data;
 }
 
+export async function undoPersonInBatch(batchId, personId) {
+  const res = await axios.post(
+    `${ADMIN_API}/bulk-pass/${batchId}/persons/${personId}/undo`,
+    {},
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
 export async function finalizeBulkBatch(id) {
   const res = await axios.post(
     `${ADMIN_API}/bulk-pass/${id}/finalize`,

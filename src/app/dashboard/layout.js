@@ -58,7 +58,9 @@ const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
 
 // Navigation items based on user role
-const getNavigationItems = (role, departmentName) => {
+const BULK_PASS_DEPT_IDS = [6, 9, 10, 11, 12, 13, 14, 15]; // General Admin + Traffic
+
+const getNavigationItems = (role, departmentName, departmentId) => {
   const baseItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   ];
@@ -71,6 +73,7 @@ const getNavigationItems = (role, departmentName) => {
   ];
 
   const isTrafficDept = departmentName?.toLowerCase() === "traffic";
+  const canSeeBulkPass = BULK_PASS_DEPT_IDS.includes(Number(departmentId));
 
   const roleItems = {
     user: applicantItems,
@@ -80,25 +83,25 @@ const getNavigationItems = (role, departmentName) => {
         ...baseItems,
         { name: "Traffic Approval", href: "/dashboard/approval_admin", icon: Truck },
         { name: "Gate Log", href: "/dashboard/gate-log", icon: FileText },
-        { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
+        ...(canSeeBulkPass ? [{ name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users }] : []),
       ]
       : [
         ...baseItems,
         { name: "Pass Approval", href: "/dashboard/pass-approval", icon: CheckSquare },
         { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
-        { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
+        ...(canSeeBulkPass ? [{ name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users }] : []),
       ],
     "Pass Officer": [
       ...baseItems,
       { name: "Pass Approval", href: "/dashboard/pass-approval", icon: CheckSquare },
       { name: "All Passes", href: "/dashboard/all-passes", icon: FileText },
-      { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
+      ...(canSeeBulkPass ? [{ name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users }] : []),
     ],
     "Traffic Officer": [
       ...baseItems,
       { name: "Traffic Approval", href: "/dashboard/approval_admin", icon: Truck },
       { name: "Gate Log", href: "/dashboard/gate-log", icon: FileText },
-      { name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users },
+      ...(canSeeBulkPass ? [{ name: "Bulk Pass", href: "/dashboard/bulk_pass", icon: Users }] : []),
     ],
     Admin: [...baseItems, { name: "All Passes", href: "/dashboard/all-passes", icon: FileText }],
     "Super Admin": [...baseItems, { name: "All Passes", href: "/dashboard/all-passes", icon: FileText }],
@@ -465,7 +468,7 @@ export default function DashboardLayout({ children }) {
     );
   }
 
-  const navigationItems = getNavigationItems(user.role, user.departmentName);
+  const navigationItems = getNavigationItems(user.role, user.departmentName, user.departmentId);
   const currentPageName = navigationItems.find((item) => item.href === pathname)?.name || "Port Gate Automation System";
 
   const SidebarContent = ({ onNavigate, expanded = sidebarExpanded, showCollapseToggle = true }) => (

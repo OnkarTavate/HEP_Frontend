@@ -130,6 +130,8 @@ const VEHICLE_DOC_LABELS = {
   permit: "Permit",
   roadTax: "Road Tax",
   emission: "PUCC",
+  driverAadhaarCard: "Aadhaar",
+  driverLicense: "DL",
 };
 
 function VehicleDocLinks({ vehicle }) {
@@ -219,7 +221,7 @@ function VehiclesTable({ vehicles }) {
           <table className="w-full min-w-[800px] text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                {["#", "Reg. Number", "Type", "Driver", "Aadhaar", "Mobile", "Documents"].map((h) => (
+                {["#", "Reg. Number", "Type", "Driver", "Aadhaar", "Mobile", "DL Number", "Documents"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -233,6 +235,11 @@ function VehiclesTable({ vehicles }) {
                   <td className="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">{v.name || "—"}</td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">{v.aadhaar ? `XXXX XXXX ${String(v.aadhaar).slice(-4)}` : "—"}</td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-600">{v.mobile || "—"}</td>
+                  <td className="px-4 py-3">
+                    {v.driverLicenseNumber
+                      ? <span className="font-mono text-xs font-semibold text-slate-700">{v.driverLicenseNumber}</span>
+                      : <span className="text-xs text-slate-400">—</span>}
+                  </td>
                   <td className="px-4 py-3"><VehicleDocLinks vehicle={v} /></td>
                 </tr>
               ))}

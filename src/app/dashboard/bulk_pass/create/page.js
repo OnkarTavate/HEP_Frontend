@@ -163,6 +163,21 @@ export default function CreateBulkPassPage() {
     remarks: "",
   });
 
+  // Split date/time state for validity fields — defaults: 06:00 start, 23:59 end
+  const DEFAULT_FROM_TIME = "06:00";
+  const DEFAULT_UPTO_TIME = "23:59";
+  const [validityFromDate, setValidityFromDate] = useState("");
+  const [validityFromTime, setValidityFromTime] = useState(DEFAULT_FROM_TIME);
+  const [validityUptoDate, setValidityUptoDate] = useState("");
+  const [validityUptoTime, setValidityUptoTime] = useState(DEFAULT_UPTO_TIME);
+
+  // Sync split date+time → form.validityFrom / form.validityUpto
+  const syncValidity = (fromDate, fromTime, uptoDate, uptoTime) => {
+    const from = fromDate ? `${fromDate}T${fromTime}` : "";
+    const upto = uptoDate ? `${uptoDate}T${uptoTime}` : "";
+    setForm((prev) => ({ ...prev, validityFrom: from, validityUpto: upto }));
+  };
+
   const [workOrderFile, setWorkOrderFile] = useState(null);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -442,28 +457,60 @@ export default function CreateBulkPassPage() {
               {/* Validity From */}
               <div>
                 <FieldLabel required>Validity From</FieldLabel>
-                <input
-                  type="datetime-local"
-                  value={form.validityFrom}
-                  onChange={(e) => set("validityFrom", e.target.value)}
-                  onBlur={() => touch("validityFrom")}
-                  min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
-                  className={inputCls(!!errors.validityFrom)}
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={validityFromDate}
+                    min={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => {
+                      setValidityFromDate(e.target.value);
+                      syncValidity(e.target.value, validityFromTime, validityUptoDate, validityUptoTime);
+                      if (touched.validityFrom) touch("validityFrom");
+                    }}
+                    onBlur={() => touch("validityFrom")}
+                    className={inputCls(!!errors.validityFrom) + " flex-1"}
+                  />
+                  <input
+                    type="time"
+                    value={validityFromTime}
+                    onChange={(e) => {
+                      setValidityFromTime(e.target.value);
+                      syncValidity(validityFromDate, e.target.value, validityUptoDate, validityUptoTime);
+                    }}
+                    className={inputCls(false) + " w-32"}
+                  />
+                </div>
+                <p className="text-[11px] text-stone-400 mt-1">Default start time: 06:00 AM</p>
                 <FieldError msg={errors.validityFrom} />
               </div>
 
               {/* Validity Upto */}
               <div>
                 <FieldLabel required>Validity Upto</FieldLabel>
-                <input
-                  type="datetime-local"
-                  value={form.validityUpto}
-                  onChange={(e) => set("validityUpto", e.target.value)}
-                  onBlur={() => touch("validityUpto")}
-                  min={form.validityFrom || new Date(Date.now() + 60000).toISOString().slice(0, 16)}
-                  className={inputCls(!!errors.validityUpto)}
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={validityUptoDate}
+                    min={validityFromDate || new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => {
+                      setValidityUptoDate(e.target.value);
+                      syncValidity(validityFromDate, validityFromTime, e.target.value, validityUptoTime);
+                      if (touched.validityUpto) touch("validityUpto");
+                    }}
+                    onBlur={() => touch("validityUpto")}
+                    className={inputCls(!!errors.validityUpto) + " flex-1"}
+                  />
+                  <input
+                    type="time"
+                    value={validityUptoTime}
+                    onChange={(e) => {
+                      setValidityUptoTime(e.target.value);
+                      syncValidity(validityFromDate, validityFromTime, validityUptoDate, e.target.value);
+                    }}
+                    className={inputCls(false) + " w-32"}
+                  />
+                </div>
+                <p className="text-[11px] text-stone-400 mt-1">Default end time: 11:59 PM</p>
                 <FieldError msg={errors.validityUpto} />
               </div>
 

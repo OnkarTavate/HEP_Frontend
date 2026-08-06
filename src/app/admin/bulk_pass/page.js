@@ -148,6 +148,15 @@ export default function AdminBulkPassListPage() {
 
   const isTrafficApprover =
     Number(user?.departmentId) === 9 || Number(user?.department_id) === 9;
+
+  // Departments allowed to create bulk passes (General Administration = 6, Traffic = 9–15)
+  const BULK_PASS_CREATOR_DEPT_IDS = [6, 9, 10, 11, 12, 13, 14, 15];
+  const canCreate = (() => {
+    if (!user) return false;
+    const role = (user.role || "").toLowerCase();
+    if (role === "admin" || role === "administrator" || role === "super admin" || role === "superadmin") return true;
+    return BULK_PASS_CREATOR_DEPT_IDS.includes(Number(user.departmentId));
+  })();
   const stats = useMemo(() => computeBulkPassStats(allBatches), [allBatches]);
   const summary = stats?.summary || {};
 
@@ -314,11 +323,13 @@ export default function AdminBulkPassListPage() {
 
       {/* ── FILTER ROW ── */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* New Bulk Pass — primary CTA, always visible */}
-        <button onClick={() => router.push(`${BASE}/create`)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 active:scale-95 text-[#1f1f1f] font-bold text-sm transition shadow-sm shrink-0">
-          <Plus className="h-4 w-4" strokeWidth={2.5} />New Bulk Pass
-        </button>
+        {/* New Bulk Pass — only for allowed departments */}
+        {canCreate && (
+          <button onClick={() => router.push(`${BASE}/create`)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 active:scale-95 text-[#1f1f1f] font-bold text-sm transition shadow-sm shrink-0">
+            <Plus className="h-4 w-4" strokeWidth={2.5} />New Bulk Pass
+          </button>
+        )}
 
         {/* Divider */}
         <div className="h-8 w-px bg-slate-200 shrink-0" />
@@ -374,7 +385,7 @@ export default function AdminBulkPassListPage() {
             <p className="text-sm text-slate-400">
               {hasFilters || activeTab !== "ALL" ? "Try adjusting your search or filters." : "Create your first bulk pass to get started."}
             </p>
-            {!hasFilters && activeTab === "ALL" && (
+            {!hasFilters && activeTab === "ALL" && canCreate && (
               <button onClick={() => router.push(`${BASE}/create`)}
                 className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-[#1f1f1f] font-bold text-sm transition">
                 <Plus className="h-4 w-4" />New Bulk Pass

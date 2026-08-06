@@ -36,6 +36,7 @@ import {
   submitRowsDirectly,
   checkBulkPassBlacklist,
   checkVehicleValidity,
+  fileUrl,
 } from "@/lib/bulkPassApi";
 import { processPhoto } from "@/lib/photoProcessor";
 
@@ -115,6 +116,24 @@ function validateDobField(s) {
   today.setHours(0, 0, 0, 0);
   if (date > today) return "Invalid DOB: future date not allowed";
   return null;
+}
+
+// Convert a stored date value (ISO string, YYYY-MM-DD, or already DD/MM/YYYY)
+// into the DD/MM/YYYY format the form expects.
+function normaliseDob(value) {
+  const v = String(value ?? "").trim();
+  if (!v) return "";
+  // Already in DD/MM/YYYY
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return v;
+  // Parse via Date (handles ISO strings like 1981-10-15T18:30:00.000Z)
+  const d = new Date(v);
+  if (!isNaN(d.getTime())) {
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const yyyy = d.getUTCFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return v;
 }
 
 // Auto-format a DOB string into DD/MM/YYYY as the user types.
@@ -284,8 +303,33 @@ function ConfirmationScreen({ refNo, email }) {
 
 function IntakeCard({ batch }) {
   const [expanded, setExpanded] = useState(false);
+  const isReturned = batch?.status === "RETURNED_TO_APPLICANT";
   return (
-    <div className={card}>
+    <>
+      {/* Return reason banner (if returned for revision) */}
+      {isReturned && batch.returnReason && (
+        <div className={`${card} mb-6`}>
+          <div className="px-6 py-4 flex items-start gap-3 bg-orange-50/70">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500 text-white shrink-0">
+              <AlertCircle className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-orange-900 mb-1">
+                Returned for Revision — Traffic Department Remarks
+              </p>
+              <p className="text-sm text-orange-800 leading-relaxed">
+                {batch.returnReason}
+              </p>
+              <p className="text-xs text-orange-700 mt-2 leading-relaxed">
+                Your previously entered information is pre-filled below. Please correct any errors,
+                re-upload photos and Aadhaar cards for all persons, and submit again.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={card}>
       <div className="px-6 pt-6 pb-4 border-b border-stone-100">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -359,6 +403,7 @@ function IntakeCard({ batch }) {
         </div>
       )}
     </div>
+    </>
   );
 }
 
@@ -588,7 +633,7 @@ function ExcelUploadStep({ token, onParsed }) {
 
 // ── Photo thumbnail cell ──────────────────────────────────────────────────────
 
-function PhotoThumb({ src, onRemove, onUpload, disabled }) {
+function PhotoThumb({ src, existingPath, onRemove, onUpload, onClearKept, disabled }) {
   const inputRef = useRef(null);
   const [processing, setProcessing] = useState(false);
 
@@ -597,7 +642,6 @@ function PhotoThumb({ src, onRemove, onUpload, disabled }) {
     if (!f) return;
     e.target.value = "";
 
-    // Accept JPEG and PNG only
     if (!["image/jpeg", "image/png"].includes(f.type)) {
       toast.error("Only JPEG or PNG images are supported.");
       return;
@@ -606,14 +650,12 @@ function PhotoThumb({ src, onRemove, onUpload, disabled }) {
     setProcessing(true);
     try {
       const { dataUrl, finalSizeKB, wasCropped, wasResized } = await processPhoto(f);
-
       const msgs = [];
       if (wasCropped) msgs.push("ratio corrected");
       if (wasResized) msgs.push("resized");
       if (msgs.length) {
         toast.info("Photo auto-fixed: " + msgs.join(", ") + " (" + finalSizeKB + " KB)");
       }
-
       onUpload(dataUrl);
     } catch {
       toast.error("Could not process image. Please try a different file.");
@@ -622,6 +664,7 @@ function PhotoThumb({ src, onRemove, onUpload, disabled }) {
     }
   };
 
+  // Case 1: new photo uploaded
   if (src) {
     return (
       <div className="relative group h-12 w-12 shrink-0">
@@ -642,6 +685,41 @@ function PhotoThumb({ src, onRemove, onUpload, disabled }) {
     );
   }
 
+  // Case 2: no new photo but existing server-side photo kept from previous submission
+  if (existingPath) {
+    return (
+      <div className="flex flex-col gap-1 items-start">
+        <div className="relative group h-12 w-12 shrink-0">
+          <img
+            src={fileUrl(existingPath)}
+            alt="existing photo"
+            className="h-12 w-12 rounded-xl object-cover bg-stone-100 ring-2 ring-emerald-400"
+          />
+          {!disabled && !processing && (
+            <button
+              onClick={onClearKept}
+              title="Remove and upload a new photo"
+              className="absolute -top-1.5 -right-1.5 h-5 w-5 flex items-center justify-center rounded-full bg-orange-500 text-white opacity-0 group-hover:opacity-100 transition shadow"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+        {!disabled && (
+          <button
+            onClick={() => !processing && inputRef.current?.click()}
+            disabled={processing}
+            className="text-[9px] font-semibold text-amber-600 hover:text-amber-800 underline underline-offset-2 leading-snug disabled:opacity-50"
+          >
+            Replace
+          </button>
+        )}
+        <input ref={inputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleFileChange} />
+      </div>
+    );
+  }
+
+  // Case 3: nothing yet
   return (
     <>
       <button
@@ -672,11 +750,9 @@ function PhotoThumb({ src, onRemove, onUpload, disabled }) {
 // ── Editable Row ──────────────────────────────────────────────────────────────
 
 // ── Aadhaar card uploader (mandatory for every person) ───────────────────────
-function AadhaarCardUpload({ file, onChange, disabled }) {
+function AadhaarCardUpload({ file, existingPath, onChange, onClearKept, disabled }) {
   const inputRef = useRef(null);
   const MAX_MB = 10;
-  // image/jpg is not a standard MIME type — browsers send image/jpeg for .jpg files.
-  // The accept attribute uses extensions so the file picker shows all three.
   const ALLOWED = ["application/pdf", "image/jpeg", "image/png"];
 
   const handle = (e) => {
@@ -694,28 +770,66 @@ function AadhaarCardUpload({ file, onChange, disabled }) {
     onChange(f);
   };
 
+  // New file uploaded
+  if (file) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+          <CheckCircle2 className="h-3 w-3" />
+          {file.name ? file.name.slice(0, 18) + (file.name.length > 18 ? "…" : "") : "Aadhaar added"}
+        </span>
+        {!disabled && (
+          <button type="button" onClick={() => onChange(null)} className="text-stone-400 hover:text-red-500 transition">
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // No new file but existing kept from previous submission
+  if (existingPath) {
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <a
+          href={fileUrl(existingPath)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200 transition"
+          title="View existing Aadhaar card"
+        >
+          <CheckCircle2 className="h-3 w-3" /> Aadhaar kept ↗
+        </a>
+        {!disabled && (
+          <>
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-700 border border-dashed border-amber-300 hover:bg-amber-100 transition"
+            >
+              <Upload className="h-3 w-3" /> Replace
+            </button>
+            <button type="button" onClick={onClearKept} className="text-stone-400 hover:text-red-500 transition" title="Remove kept Aadhaar">
+              <X className="h-3 w-3" />
+            </button>
+          </>
+        )}
+        <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handle} />
+      </div>
+    );
+  }
+
+  // Nothing — prompt upload
   return (
     <div className="flex items-center gap-1.5">
       <button
         type="button"
         onClick={() => !disabled && inputRef.current?.click()}
         disabled={disabled}
-        title={file ? file.name : "Upload Aadhaar card"}
-        className={
-          "inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition " +
-          (file
-            ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-            : "bg-red-50 text-red-600 border border-dashed border-red-300 hover:bg-red-100")
-        }
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition bg-red-50 text-red-600 border border-dashed border-red-300 hover:bg-red-100"
       >
-        {file ? <CheckCircle2 className="h-3 w-3" /> : <Upload className="h-3 w-3" />}
-        {file ? "Aadhaar added" : "Upload Aadhaar *"}
+        <Upload className="h-3 w-3" /> Upload Aadhaar *
       </button>
-      {file && !disabled && (
-        <button type="button" onClick={() => onChange(null)} className="text-stone-400 hover:text-red-500 transition">
-          <X className="h-3 w-3" />
-        </button>
-      )}
       <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handle} />
     </div>
   );
@@ -758,7 +872,7 @@ function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors =
   // parent and passed in, so they always reflect the latest state of all rows.
   const isPersonBlacklisted = blacklistStatus?.isBlacklisted === true;
   const hasErrors = derivedErrors.length > 0 || isPersonBlacklisted;
-  const hasPhoto = !!row.photoDataUrl;
+  const hasPhoto = !!row.photoDataUrl || !!row._keepPhotoPath;
 
   const saveEdit = () => {
     if (draftHasErrors) {
@@ -778,6 +892,8 @@ function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors =
 
   const rowBg = isPersonBlacklisted
     ? "bg-red-100/60"
+    : row._revisionRejected
+    ? "bg-red-50/60"
     : hasErrors
     ? "bg-red-50/40"
     : hasPhoto
@@ -787,21 +903,34 @@ function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors =
   return (
     <tr className={"border-b border-stone-50 last:border-b-0 " + rowBg}>
       {/* # */}
-      <td className="px-3 py-3 text-xs text-stone-400 tabular-nums font-mono">{index + 1}</td>
+      <td className="px-3 py-3 text-xs text-stone-400 tabular-nums font-mono">
+        {index + 1}
+        {row._revisionRejected && (
+          <span
+            title={row._revisionReason || "Rejected in previous review"}
+            className="ml-1 inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold bg-red-200 text-red-800 border border-red-300 cursor-help"
+          >
+            ✗ Rejected
+          </span>
+        )}
+      </td>
 
       {/* Photo */}
       <td className="px-3 py-3">
         <PhotoThumb
           src={row.photoDataUrl}
+          existingPath={!row.photoDataUrl ? row._keepPhotoPath : null}
           disabled={disabled}
           onUpload={(dataUrl) =>
             onChange(index, {
               ...row,
               photoDataUrl: dataUrl,
+              _keepPhotoPath: null,
               parseErrors: (row.parseErrors || []).filter((e) => !e.includes("Photo")),
             })
           }
           onRemove={() => onChange(index, { ...row, photoDataUrl: null })}
+          onClearKept={() => onChange(index, { ...row, _keepPhotoPath: null })}
         />
       </td>
 
@@ -931,11 +1060,12 @@ function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors =
 
       {/* Aadhaar Card (mandatory for every person) */}
       <td className="px-3 py-3 min-w-[140px]">
-        {/* Aadhaar card is mandatory for ALL persons */}
         <AadhaarCardUpload
           file={row.aadhaarCardFile}
+          existingPath={!row.aadhaarCardFile ? row._keepAadhaarPath : null}
           disabled={disabled}
-          onChange={(f) => onChange(index, { ...row, aadhaarCardFile: f })}
+          onChange={(f) => onChange(index, { ...row, aadhaarCardFile: f, _keepAadhaarPath: null })}
+          onClearKept={() => onChange(index, { ...row, _keepAadhaarPath: null })}
         />
       </td>
 
@@ -953,7 +1083,7 @@ function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors =
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 whitespace-nowrap">
             <Camera className="h-3 w-3" /> No photo
           </span>
-        ) : !row.aadhaarCardFile ? (
+        ) : !row.aadhaarCardFile && !row._keepAadhaarPath ? (
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200 whitespace-nowrap">
             <FileText className="h-3 w-3" /> No Aadhaar card
           </span>
@@ -1030,10 +1160,10 @@ function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors =
 // ── Step 2: Edit form + photo management ─────────────────────────────────────
 
 // Vehicle document upload button
-function DocUpload({ label, file, onChange, required, disabled }) {
+function DocUpload({ label, file, existingPath, onChange, onClearKept, required, disabled }) {
   const inputRef = useRef(null);
 
-  const MAX_DOC_MB = 10; // must match backend multer limit (10 MB per file)
+  const MAX_DOC_MB = 10;
   const ALLOWED_DOC_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 
   const handleFileSelect = (e) => {
@@ -1041,12 +1171,10 @@ function DocUpload({ label, file, onChange, required, disabled }) {
     e.target.value = "";
     if (!f) return;
 
-    // Validate type in real time
     if (!ALLOWED_DOC_TYPES.includes(f.type)) {
       toast.error(`"${label}": only PDF, JPEG or PNG files are allowed.`);
       return;
     }
-    // Validate size in real time (before submission)
     if (f.size > MAX_DOC_MB * 1024 * 1024) {
       const sizeMb = (f.size / (1024 * 1024)).toFixed(1);
       toast.error(`"${label}" is ${sizeMb} MB — exceeds the ${MAX_DOC_MB} MB limit. Please upload a smaller file.`);
@@ -1061,31 +1189,63 @@ function DocUpload({ label, file, onChange, required, disabled }) {
         {label}
         {required && <span className="text-red-500 ml-0.5">*</span>}
       </p>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => !disabled && inputRef.current?.click()}
-          disabled={disabled}
-          className={
-            "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition " +
-            (file
-              ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-              : required
-              ? "bg-red-50 text-red-600 border border-dashed border-red-300 hover:bg-red-100"
-              : "bg-stone-100 text-stone-600 border border-dashed border-stone-300 hover:bg-stone-200")
-          }
-        >
-          {file ? <CheckCircle2 className="h-3 w-3" /> : <Upload className="h-3 w-3" />}
-          {(() => {
-            const name = file && typeof file === "object" && typeof file.name === "string" ? file.name : null;
-            if (name) return name.slice(0, 18) + (name.length > 18 ? "…" : "");
-            if (file) return "Uploaded";
-            return "Upload";
-          })()}
-        </button>
-        {file && !disabled && (
-          <button type="button" onClick={() => onChange(null)} className="text-stone-400 hover:text-red-500 transition">
-            <X className="h-3.5 w-3.5" />
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Case 1: new file uploaded */}
+        {file ? (
+          <>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+              <CheckCircle2 className="h-3 w-3" />
+              {typeof file.name === "string"
+                ? file.name.slice(0, 18) + (file.name.length > 18 ? "…" : "")
+                : "Uploaded"}
+            </span>
+            {!disabled && (
+              <button type="button" onClick={() => onChange(null)} className="text-stone-400 hover:text-red-500 transition">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </>
+        ) : existingPath ? (
+          /* Case 2: no new file but kept from previous submission */
+          <>
+            <a
+              href={fileUrl(existingPath)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200 transition"
+              title={`View existing ${label}`}
+            >
+              <CheckCircle2 className="h-3 w-3" /> Kept ↗
+            </a>
+            {!disabled && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700 border border-dashed border-amber-300 hover:bg-amber-100 transition"
+                >
+                  <Upload className="h-3 w-3" /> Replace
+                </button>
+                <button type="button" onClick={onClearKept} className="text-stone-400 hover:text-red-500 transition" title="Remove kept file">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
+          </>
+        ) : (
+          /* Case 3: nothing */
+          <button
+            type="button"
+            onClick={() => !disabled && inputRef.current?.click()}
+            disabled={disabled}
+            className={
+              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition " +
+              (required
+                ? "bg-red-50 text-red-600 border border-dashed border-red-300 hover:bg-red-100"
+                : "bg-stone-100 text-stone-600 border border-dashed border-stone-300 hover:bg-stone-200")
+            }
+          >
+            <Upload className="h-3 w-3" /> Upload
           </button>
         )}
         <input
@@ -1106,11 +1266,15 @@ function VehicleModal({ vehicle, onSave, onClose }) {
   const emptyVehicle = {
     // Driver particulars
     driverName: "", driverAadhaar: "", driverMobile: "", driverDob: "",
-    driverAadhaarCard: null, // Aadhaar card document for the driver
+    driverLicenseNumber: "",
+    driverAadhaarCard: null,
+    driverLicense: null,
     // Vehicle details
     regNo: "", vehicleType: "",
     // Documents
     rc: null, insurance: null, fitness: null, permit: null, roadTax: null, emission: null,
+    // Kept docs from previous submission (revision mode)
+    _keepVehicleDocs: {},
   };
   const [form, setForm] = useState(vehicle || emptyVehicle);
   const [touched, setTouched] = useState({});
@@ -1187,7 +1351,7 @@ function VehicleModal({ vehicle, onSave, onClose }) {
     if (!f.driverName.trim()) e.driverName = "Driver name is required";
     if (!f.driverAadhaar.trim()) e.driverAadhaar = "Aadhaar number is required";
     else if (!/^\d{12}$/.test(f.driverAadhaar.replace(/\s+/g, ""))) e.driverAadhaar = "Aadhaar must be exactly 12 digits";
-    if (!f.driverAadhaarCard) e.driverAadhaarCard = "Driver Aadhaar card document is required";
+    if (!f.driverAadhaarCard && !(f._keepVehicleDocs && f._keepVehicleDocs.driverAadhaarCard)) e.driverAadhaarCard = "Driver Aadhaar card document is required";
     if (!f.driverMobile.trim()) e.driverMobile = "Mobile number is required";
     else if (!/^[6-9]\d{9}$/.test(f.driverMobile.replace(/\s+/g, ""))) e.driverMobile = "Enter a valid 10-digit mobile starting with 6–9";
     // DOB is optional, but if provided it must be a valid past date
@@ -1206,8 +1370,8 @@ function VehicleModal({ vehicle, onSave, onClose }) {
       e.regNo = `Expired certificate(s): ${labels}`;
     }
     // Mandatory docs
-    if (!f.rc) e.rc = "Registration Certificate is mandatory";
-    if (!f.insurance) e.insurance = "Insurance document is mandatory";
+    if (!f.rc && !(f._keepVehicleDocs && f._keepVehicleDocs.rc)) e.rc = "Registration Certificate is mandatory";
+    if (!f.insurance && !(f._keepVehicleDocs && f._keepVehicleDocs.insurance)) e.insurance = "Insurance document is mandatory";
     return e;
   };
 
@@ -1323,13 +1487,45 @@ function VehicleModal({ vehicle, onSave, onClose }) {
               <DocUpload
                 label="Aadhaar Card"
                 file={form.driverAadhaarCard}
+                existingPath={!form.driverAadhaarCard ? (form._keepVehicleDocs && form._keepVehicleDocs.driverAadhaarCard) : null}
                 required
                 disabled={false}
-                onChange={(f) => { setForm((p) => ({ ...p, driverAadhaarCard: f })); markTouched("driverAadhaarCard"); }}
+                onChange={(f) => { setForm((p) => ({ ...p, driverAadhaarCard: f, _keepVehicleDocs: { ...p._keepVehicleDocs, driverAadhaarCard: null } })); markTouched("driverAadhaarCard"); }}
+                onClearKept={() => setForm((p) => ({ ...p, _keepVehicleDocs: { ...p._keepVehicleDocs, driverAadhaarCard: null } }))}
               />
               {shownError("driverAadhaarCard") && (
                 <p className="text-xs text-red-500 mt-1">{shownError("driverAadhaarCard")}</p>
               )}
+            </div>
+
+            {/* Driver License Number + Document */}
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Driver License Number
+                </label>
+                <input
+                  value={form.driverLicenseNumber}
+                  onChange={(e) => setForm((p) => ({ ...p, driverLicenseNumber: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20) }))}
+                  placeholder="e.g. TN0120220012345"
+                  maxLength={20}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 focus:ring-2 focus:ring-amber-400/40 text-sm outline-none transition font-mono uppercase"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Driver License Document
+                </label>
+                <DocUpload
+                  label="Driver License"
+                  file={form.driverLicense}
+                  existingPath={!form.driverLicense ? (form._keepVehicleDocs && form._keepVehicleDocs.driverLicense) : null}
+                  required={false}
+                  disabled={false}
+                  onChange={(f) => setForm((p) => ({ ...p, driverLicense: f, _keepVehicleDocs: { ...p._keepVehicleDocs, driverLicense: null } }))}
+                  onClearKept={() => setForm((p) => ({ ...p, _keepVehicleDocs: { ...p._keepVehicleDocs, driverLicense: null } }))}
+                />
+              </div>
             </div>
           </div>
 
@@ -1413,36 +1609,29 @@ function VehicleModal({ vehicle, onSave, onClose }) {
                 )}
                 {!ulipLoading && ulipValidity && ulipValidity !== "error" && ulipValidity.found && (
                   <div className="mt-2 rounded-xl border overflow-hidden text-[11px]">
-                    {/* Vehicle info header */}
-                    {ulipValidity.makerModel && (
-                      <div className="px-3 py-2 bg-stone-50 border-b border-stone-100 text-stone-600 font-semibold">
-                        {ulipValidity.makerModel}{ulipValidity.vehicleClass ? ` · ${ulipValidity.vehicleClass}` : ""}
-                      </div>
-                    )}
-                    {/* RC status row */}
+                    {/* Validity rows — tick/cross only, no dates or sensitive details */}
                     {ulipValidity.rcStatus && (
                       <div className={`flex items-center justify-between px-3 py-1.5 border-b border-stone-100 ${!ulipValidity.rcActive ? "bg-red-50" : "bg-white"}`}>
                         <span className="text-stone-500">RC Status</span>
                         <span className={`font-bold ${ulipValidity.rcActive ? "text-emerald-600" : "text-red-600"}`}>
-                          {ulipValidity.rcActive ? "✓" : "✗"} {ulipValidity.rcStatus}
+                          {ulipValidity.rcActive ? "✓ Valid" : "✗ Invalid"}
                         </span>
                       </div>
                     )}
-                    {/* Validity rows */}
                     {ulipValidity.validityChecks.map((c, i) => (
                       <div key={i} className={`flex items-center justify-between px-3 py-1.5 ${i < ulipValidity.validityChecks.length - 1 ? "border-b border-stone-100" : ""} ${c.expired ? "bg-red-50" : "bg-white"}`}>
                         <span className="text-stone-500">{c.label}</span>
                         <span className={`font-bold ${c.expired ? "text-red-600" : "text-emerald-600"}`}>
-                          {c.expired ? "✗ Expired" : "✓ Valid"} · {c.date}
+                          {c.expired ? "✗ Expired" : "✓ Valid"}
                         </span>
                       </div>
                     ))}
                     {/* Overall banner */}
                     {ulipValidity.allValid && ulipValidity.rcActive ? (
-                      <div className="px-3 py-2 bg-emerald-50 text-emerald-700 font-bold text-center">✓ All validities confirmed</div>
+                      <div className="px-3 py-2 bg-emerald-50 text-emerald-700 font-bold text-center">✓ Vehicle documents verified</div>
                     ) : (
                       <div className="px-3 py-2 bg-red-50 text-red-700 font-bold text-center">
-                        ✗ Vehicle cannot be entered — {!ulipValidity.rcActive ? "RC not active" : `${ulipValidity.expired.length} expired certificate(s)`}
+                        ✗ {!ulipValidity.rcActive ? "RC not active" : `${ulipValidity.expired.length} expired certificate(s) — update before entering port`}
                       </div>
                     )}
                   </div>
@@ -1488,14 +1677,14 @@ function VehicleModal({ vehicle, onSave, onClose }) {
               </div>
             )}
             <div className={`grid grid-cols-2 gap-x-6 gap-y-4 ${isValidRegNo(form.regNo) && !regNoCleared ? "opacity-40 pointer-events-none select-none" : ""}`}>
-              <DocUpload label="Registration Certificate" file={form.rc} required onChange={(f) => { setForm((p) => ({ ...p, rc: f })); markTouched("rc"); }} />
+              <DocUpload label="Registration Certificate" file={form.rc} existingPath={!form.rc ? (form._keepVehicleDocs && form._keepVehicleDocs.rc) : null} required onChange={(f) => { setForm((p) => ({ ...p, rc: f, _keepVehicleDocs: { ...p._keepVehicleDocs, rc: null } })); markTouched("rc"); }} onClearKept={() => setForm((p) => ({ ...p, _keepVehicleDocs: { ...p._keepVehicleDocs, rc: null } }))} />
               {shownError("rc") && <p className="text-xs text-red-500 -mt-3 col-span-2">{shownError("rc")}</p>}
-              <DocUpload label="Insurance" file={form.insurance} required onChange={(f) => { setForm((p) => ({ ...p, insurance: f })); markTouched("insurance"); }} />
+              <DocUpload label="Insurance" file={form.insurance} existingPath={!form.insurance ? (form._keepVehicleDocs && form._keepVehicleDocs.insurance) : null} required onChange={(f) => { setForm((p) => ({ ...p, insurance: f, _keepVehicleDocs: { ...p._keepVehicleDocs, insurance: null } })); markTouched("insurance"); }} onClearKept={() => setForm((p) => ({ ...p, _keepVehicleDocs: { ...p._keepVehicleDocs, insurance: null } }))} />
               {shownError("insurance") && <p className="text-xs text-red-500 -mt-3 col-span-2">{shownError("insurance")}</p>}
-              <DocUpload label="Fitness Certificate" file={form.fitness} onChange={(f) => setForm((p) => ({ ...p, fitness: f }))} />
-              <DocUpload label="Permit" file={form.permit} onChange={(f) => setForm((p) => ({ ...p, permit: f }))} />
-              <DocUpload label="Road Tax" file={form.roadTax} onChange={(f) => setForm((p) => ({ ...p, roadTax: f }))} />
-              <DocUpload label="Emission Certificate (PUCC)" file={form.emission} onChange={(f) => setForm((p) => ({ ...p, emission: f }))} />
+              <DocUpload label="Fitness Certificate" file={form.fitness} existingPath={!form.fitness ? (form._keepVehicleDocs && form._keepVehicleDocs.fitness) : null} onChange={(f) => setForm((p) => ({ ...p, fitness: f, _keepVehicleDocs: { ...p._keepVehicleDocs, fitness: null } }))} onClearKept={() => setForm((p) => ({ ...p, _keepVehicleDocs: { ...p._keepVehicleDocs, fitness: null } }))} />
+              <DocUpload label="Permit" file={form.permit} existingPath={!form.permit ? (form._keepVehicleDocs && form._keepVehicleDocs.permit) : null} onChange={(f) => setForm((p) => ({ ...p, permit: f, _keepVehicleDocs: { ...p._keepVehicleDocs, permit: null } }))} onClearKept={() => setForm((p) => ({ ...p, _keepVehicleDocs: { ...p._keepVehicleDocs, permit: null } }))} />
+              <DocUpload label="Road Tax" file={form.roadTax} existingPath={!form.roadTax ? (form._keepVehicleDocs && form._keepVehicleDocs.roadTax) : null} onChange={(f) => setForm((p) => ({ ...p, roadTax: f, _keepVehicleDocs: { ...p._keepVehicleDocs, roadTax: null } }))} onClearKept={() => setForm((p) => ({ ...p, _keepVehicleDocs: { ...p._keepVehicleDocs, roadTax: null } }))} />
+              <DocUpload label="Emission Certificate (PUCC)" file={form.emission} existingPath={!form.emission ? (form._keepVehicleDocs && form._keepVehicleDocs.emission) : null} onChange={(f) => setForm((p) => ({ ...p, emission: f, _keepVehicleDocs: { ...p._keepVehicleDocs, emission: null } }))} onClearKept={() => setForm((p) => ({ ...p, _keepVehicleDocs: { ...p._keepVehicleDocs, emission: null } }))} />
             </div>
           </div>
         </div>
@@ -1558,15 +1747,15 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
   });
 
   const errorRows = rows.filter((_, i) => rowErrors[i].length > 0);
-  const noPhotoRows = rows.filter((r) => !r.photoDataUrl);
-  const readyRows = rows.filter((r, i) => r.photoDataUrl && rowErrors[i].length === 0);
+  const noPhotoRows = rows.filter((r) => !r.photoDataUrl && !r._keepPhotoPath);
+  const readyRows = rows.filter((r, i) => (r.photoDataUrl || r._keepPhotoPath) && rowErrors[i].length === 0);
 
   // Count limits: fewer than the max is fine, more than the max is not.
   const personsExceeded = maxPersons > 0 && rows.length > maxPersons;
   const vehiclesExceeded = maxVehicles > 0 && vehicles.length > maxVehicles;
 
-  // Aadhaar card required for EVERY person
-  const aadhaarCardsMissing = rows.filter((r) => !r.aadhaarCardFile).length;
+  // Aadhaar card satisfied if a new file is uploaded OR a previous path is being kept
+  const aadhaarCardsMissing = rows.filter((r) => !r.aadhaarCardFile && !r._keepAadhaarPath).length;
 
   // Persons must be valid + within limit; if vehicles are required, at least one
   // must be added and the count must not exceed the allowed maximum.
@@ -1576,8 +1765,10 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
     noPhotoRows.length === 0 &&
     !personsExceeded &&
     aadhaarCardsMissing === 0;
-  // Driver Aadhaar card is mandatory for every vehicle
-  const vehicleAadhaarCardsMissing = vehicles.filter((v) => !v.driverAadhaarCard).length;
+  // Driver Aadhaar card satisfied if a new file is uploaded OR a previous path is being kept
+  const vehicleAadhaarCardsMissing = vehicles.filter(
+    (v) => !v.driverAadhaarCard && !(v._keepVehicleDocs && v._keepVehicleDocs.driverAadhaarCard)
+  ).length;
 
   const vehiclesReady =
     (maxVehicles === 0 || vehicles.length > 0) &&
@@ -1795,6 +1986,21 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
           </button>
         </div>
 
+        {/* Revision mode notice — shown when data was pre-filled from a returned batch */}
+        {batch?.status === "RETURNED_TO_APPLICANT" && (
+          <div className="mb-5 px-4 py-4 rounded-2xl bg-orange-50 ring-1 ring-orange-200">
+            <p className="text-xs font-bold text-orange-800 mb-2 flex items-center gap-1.5">
+              <AlertCircle className="h-3.5 w-3.5" /> Revision Mode — Pre-filled Data
+            </p>
+            <ul className="space-y-1.5 text-xs text-orange-700 leading-relaxed">
+              <li>• All previously entered <strong>names, Aadhaar numbers, dates of birth and mobile numbers</strong> have been pre-filled.</li>
+              <li>• Previously uploaded <strong>photos and Aadhaar card documents are kept</strong> — you can view them and replace only the ones that need to change.</li>
+              <li>• Persons/vehicles marked <strong className="text-red-700">✗ Rejected</strong> were flagged in the previous review — please correct those entries.</li>
+              <li>• You may also click <strong>Re-upload Excel</strong> above to start fresh from a new spreadsheet.</li>
+            </ul>
+          </div>
+        )}
+
         {/* ── PERSONS SECTION ── */}
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-4">
@@ -1998,15 +2204,25 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
                 <table className="w-full min-w-[800px] text-sm">
                   <thead>
                     <tr className="bg-stone-50 border-b border-stone-100">
-                      {["#", "Driver Name", "Aadhaar", "Mobile", "Reg Number", "Type", "RC", "Insurance", "Driver Aadhaar Card *", "Other Docs", ""].map((h) => (
+                      {["#", "Driver Name", "Aadhaar", "Mobile", "Reg Number", "Type", "RC", "Insurance", "Driver Aadhaar Card *", "DL Number", "DL Doc", "Other Docs", ""].map((h) => (
                         <th key={h} className="px-3 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-stone-400 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {vehicles.map((v, i) => (
-                      <tr key={v.id || i} className="border-b border-stone-50 last:border-b-0 hover:bg-stone-50/50">
-                        <td className="px-3 py-3 text-xs text-stone-400 tabular-nums">{i + 1}</td>
+                      <tr key={v.id || i} className={"border-b border-stone-50 last:border-b-0 hover:bg-stone-50/50" + (v._revisionRejected ? " bg-red-50/60" : "")}>
+                        <td className="px-3 py-3 text-xs text-stone-400 tabular-nums">
+                          {i + 1}
+                          {v._revisionRejected && (
+                            <span
+                              title={v._revisionReason || "Rejected in previous review"}
+                              className="ml-1 inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold bg-red-200 text-red-800 border border-red-300 cursor-help"
+                            >
+                              ✗ Rejected
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-3 font-semibold text-stone-800 whitespace-nowrap">
                           {v.driverName || <span className="text-red-400 italic text-xs">Missing</span>}
                         </td>
@@ -2017,17 +2233,17 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
                         <td className="px-3 py-3 font-bold text-stone-800 font-mono whitespace-nowrap">{v.regNo || "—"}</td>
                         <td className="px-3 py-3 text-xs text-stone-600">{v.vehicleType || "—"}</td>
                         <td className="px-3 py-3">
-                          {v.rc ? (
+                          {(v.rc || (v._keepVehicleDocs && v._keepVehicleDocs.rc)) ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full"><CheckCircle2 className="h-3 w-3" /> Yes</span>
                           ) : <span className="text-red-400 text-[10px] font-semibold">Missing</span>}
                         </td>
                         <td className="px-3 py-3">
-                          {v.insurance ? (
+                          {(v.insurance || (v._keepVehicleDocs && v._keepVehicleDocs.insurance)) ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full"><CheckCircle2 className="h-3 w-3" /> Yes</span>
                           ) : <span className="text-red-400 text-[10px] font-semibold">Missing</span>}
                         </td>
                         <td className="px-3 py-3">
-                          {v.driverAadhaarCard ? (
+                          {(v.driverAadhaarCard || (v._keepVehicleDocs && v._keepVehicleDocs.driverAadhaarCard)) ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full"><CheckCircle2 className="h-3 w-3" /> Yes</span>
                           ) : (
                             <button
@@ -2040,9 +2256,23 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
                           )}
                         </td>
                         <td className="px-3 py-3">
+                          <span className="text-xs font-mono text-stone-600">
+                            {v.driverLicenseNumber || <span className="text-stone-400">—</span>}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          {(v.driverLicense || (v._keepVehicleDocs && v._keepVehicleDocs.driverLicense)) ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full"><CheckCircle2 className="h-3 w-3" /> Yes</span>
+                          ) : <span className="text-[10px] text-stone-400">—</span>}
+                        </td>
+                        <td className="px-3 py-3">
                           <span className="text-xs text-stone-500">
-                            {[v.fitness && "Fitness", v.permit && "Permit", v.roadTax && "Road Tax", v.emission && "PUCC"]
-                              .filter(Boolean).join(", ") || "—"}
+                            {[
+                              (v.fitness || (v._keepVehicleDocs && v._keepVehicleDocs.fitness)) && "Fitness",
+                              (v.permit || (v._keepVehicleDocs && v._keepVehicleDocs.permit)) && "Permit",
+                              (v.roadTax || (v._keepVehicleDocs && v._keepVehicleDocs.roadTax)) && "Road Tax",
+                              (v.emission || (v._keepVehicleDocs && v._keepVehicleDocs.emission)) && "PUCC",
+                            ].filter(Boolean).join(", ") || "—"}
                           </span>
                         </td>
                         <td className="px-3 py-3">
@@ -2203,7 +2433,66 @@ export default function BulkPassPublicPage() {
     (async () => {
       try {
         const data = await getPublicBatch(token);
-        if (alive) setBatch(data);
+        if (alive) {
+          setBatch(data);
+          // If this is a revision (returned), pre-populate previously submitted data
+          // so the applicant can correct and re-submit without starting from scratch.
+          if (
+            data?.status === "RETURNED_TO_APPLICANT" &&
+            Array.isArray(data.previousPersons) &&
+            data.previousPersons.length > 0
+          ) {
+            // Map stored person data back into the row format the edit step expects.
+            // Photos and Aadhaar card files can't be restored (they're server-side files),
+            // so we mark them null — the applicant must re-upload them.
+            const restoredRows = data.previousPersons.map((p) => ({
+              name: p.name || "",
+              aadhaar: p.aadhaar || "",
+              dob: normaliseDob(p.dob),
+              mobile: p.mobile || "",
+              photoDataUrl: null,
+              aadhaarCardFile: null,
+              // Keep references to previous server-side files so the applicant
+              // can reuse them without re-uploading. Set the _keep* flags to true
+              // by default — applicant can clear them by uploading a replacement.
+              _previousPhotoPath: p.photoPath || null,
+              _keepPhotoPath: p.photoPath || null,         // reuse unless replaced
+              _previousAadhaarPath: p.aadhaarCardPath || null,
+              _keepAadhaarPath: p.aadhaarCardPath || null, // reuse unless replaced
+              _revisionRejected: p.approvalStatus === "REJECTED",
+              _revisionReason: p.approvalReason || null,
+              parseErrors: [],
+            }));
+            setRows(restoredRows);
+
+            // Pre-populate vehicles too
+            if (Array.isArray(data.previousVehicles) && data.previousVehicles.length > 0) {
+              const restoredVehicles = data.previousVehicles.map((v) => ({
+                regNo: v.regNo || "",
+                vehicleType: v.vehicleType || "",
+                driverName: v.driverName || "",
+                driverAadhaar: v.driverAadhaar || "",
+                driverMobile: v.driverMobile || "",
+                driverDob: normaliseDob(v.driverDob),
+                driverLicenseNumber: v.driverLicenseNumber || "",
+                // All doc File slots start null — new uploads will fill them.
+                rc: null, insurance: null, fitness: null,
+                permit: null, roadTax: null, emission: null,
+                driverAadhaarCard: null, driverLicense: null,
+                // Previous server-side doc paths — kept by default so the applicant
+                // doesn't have to re-upload unchanged documents.
+                _previousVehicleDocs: v.vehicleDocs || {},
+                _keepVehicleDocs: { ...(v.vehicleDocs || {}) },
+                _revisionRejected: v.approvalStatus === "REJECTED",
+                _revisionReason: v.approvalReason || null,
+              }));
+              setVehicles(restoredVehicles);
+            }
+
+            // Skip the excel upload step — go straight to review/edit
+            setStep("edit");
+          }
+        }
       } catch (err) {
         if (!alive) return;
         const status = err?.response?.status;
@@ -2254,11 +2543,15 @@ export default function BulkPassPublicPage() {
       // Vehicle docs are File objects — upload them via FormData, persons as JSON
       const formData = new FormData();
       // Strip File objects (aadhaarCardFile) from the JSON; send them separately.
+      // Also pass keep-paths for revision reuse so the backend can skip re-processing.
       const rowsPayload = rows.map((r) => ({
         ...r,
         aadhaarCardFile: undefined,
         inCharge: false,
-        hasAadhaarCard: !!r.aadhaarCardFile,
+        hasAadhaarCard: !!r.aadhaarCardFile || !!r._keepAadhaarPath,
+        // Backend uses these to reuse existing server-side files
+        _keepPhotoPath: r.photoDataUrl ? undefined : (r._keepPhotoPath || undefined),
+        _keepAadhaarPath: r.aadhaarCardFile ? undefined : (r._keepAadhaarPath || undefined),
       }));
       formData.append("rows", JSON.stringify(rowsPayload));
 
@@ -2277,13 +2570,17 @@ export default function BulkPassPublicPage() {
         driverAadhaar: v.driverAadhaar || "",
         driverMobile: v.driverMobile || "",
         driverDob: v.driverDob || "",
-        hasRc: !!v.rc,
-        hasInsurance: !!v.insurance,
-        hasFitness: !!v.fitness,
-        hasPermit: !!v.permit,
-        hasRoadTax: !!v.roadTax,
-        hasEmission: !!v.emission,
-        hasDriverAadhaarCard: !!v.driverAadhaarCard,
+        driverLicenseNumber: v.driverLicenseNumber || "",
+        hasRc: !!v.rc || !!(v._keepVehicleDocs && v._keepVehicleDocs.rc),
+        hasInsurance: !!v.insurance || !!(v._keepVehicleDocs && v._keepVehicleDocs.insurance),
+        hasFitness: !!v.fitness || !!(v._keepVehicleDocs && v._keepVehicleDocs.fitness),
+        hasPermit: !!v.permit || !!(v._keepVehicleDocs && v._keepVehicleDocs.permit),
+        hasRoadTax: !!v.roadTax || !!(v._keepVehicleDocs && v._keepVehicleDocs.roadTax),
+        hasEmission: !!v.emission || !!(v._keepVehicleDocs && v._keepVehicleDocs.emission),
+        hasDriverAadhaarCard: !!v.driverAadhaarCard || !!(v._keepVehicleDocs && v._keepVehicleDocs.driverAadhaarCard),
+        hasDriverLicense: !!v.driverLicense || !!(v._keepVehicleDocs && v._keepVehicleDocs.driverLicense),
+        // Pass kept paths so backend can reuse without re-upload
+        _keepVehicleDocs: v._keepVehicleDocs || undefined,
       }));
       formData.append("vehicles", JSON.stringify(vehicleMeta));
 
@@ -2296,6 +2593,7 @@ export default function BulkPassPublicPage() {
         if (v.roadTax) formData.append(`vehicle_${i}_roadTax`, v.roadTax);
         if (v.emission) formData.append(`vehicle_${i}_emission`, v.emission);
         if (v.driverAadhaarCard) formData.append(`vehicle_${i}_driverAadhaarCard`, v.driverAadhaarCard);
+        if (v.driverLicense) formData.append(`vehicle_${i}_driverLicense`, v.driverLicense);
       });
 
       await submitRowsDirectly(token, rows, formData);
