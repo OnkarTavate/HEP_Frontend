@@ -364,9 +364,9 @@ const StatCard = memo(function StatCard({
             }>
               <span className={"h-1.5 w-1.5 rounded-full " + (
                 footnoteTone === "danger" ? "bg-red-500" :
-                footnoteTone === "warning" ? "bg-amber-500" :
-                footnoteTone === "success" ? "bg-emerald-500" :
-                footnoteTone === "info" ? "bg-blue-500" : "bg-stone-400"
+                  footnoteTone === "warning" ? "bg-amber-500" :
+                    footnoteTone === "success" ? "bg-emerald-500" :
+                      footnoteTone === "info" ? "bg-blue-500" : "bg-stone-400"
               )} />
               {footnote}
             </p>
@@ -667,11 +667,10 @@ const ApplicationTrendChart = memo(function ApplicationTrendChart({ data }) {
           </div>
           <div className="flex items-center gap-2">
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
-                trendUp
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
-                  : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
-              }`}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${trendUp
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
+                }`}
             >
               {trendUp ? "↑" : "↓"} {Math.abs(trendPct)}% MoM
             </span>
@@ -1065,7 +1064,7 @@ export default function DashboardPage() {
         if (Array.isArray(parsed) && parsed.length === 10) {
           setCardOrder(parsed);
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }, []);
 
@@ -1167,6 +1166,7 @@ export default function DashboardPage() {
 
       try {
         const passes = await fetchAllPasses(authHeaders);
+        console.log("%c[Dashboard] Raw passes from API — full data", "color:#f59e0b;font-weight:bold;font-size:13px", passes);
 
         const nowTs = new Date();
         const in7 = new Date(nowTs.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -1255,7 +1255,7 @@ export default function DashboardPage() {
         expItems.sort((a, b) => new Date(a.dateTo) - new Date(b.dateTo));
 
         const totalEntities = approved + pending + rejected + reverted;
-        setApiStats({
+        const computedStats = {
           activePasses: approved,
           pendingApprovals: pending,
           expiringSoon,
@@ -1266,7 +1266,10 @@ export default function DashboardPage() {
           todayVehicles,
           todayPersons,
           todayPassRequests,
-        });
+        };
+        console.log("%c[Dashboard] Computed apiStats", "color:#14b8a6;font-weight:bold", computedStats);
+        console.log("%c[Dashboard] Status counts", "color:#a855f7;font-weight:bold", { approved, pending, rejected, reverted });
+        setApiStats(computedStats);
         setStatusCounts({ approved, pending, rejected, reverted });
         setMonthlyData(months);
         setExpiringItems(expItems);
@@ -1306,7 +1309,10 @@ export default function DashboardPage() {
   const greeting = useMemo(() => getGreeting(now.getHours()), [now]);
 
   const oldestPendingDays = useMemo(() => {
-    if (apiStats.pendingApprovals === 0) return null;
+    if (apiStats.pendingApprovals === 0) {
+      console.log("%c[Dashboard] oldestPendingDays → null (no pending approvals)", "color:#6b7280");
+      return null;
+    }
     let max = null;
     for (const pr of allPasses) {
       const entities = [...(pr.persons || []), ...(pr.vehicles || [])];
@@ -1317,6 +1323,7 @@ export default function DashboardPage() {
         }
       }
     }
+    console.log("%c[Dashboard] oldestPendingDays", "color:#ef4444;font-weight:bold", max, "days | pendingApprovals:", apiStats.pendingApprovals);
     return max;
   }, [allPasses, apiStats.pendingApprovals]);
 
@@ -1362,10 +1369,10 @@ export default function DashboardPage() {
           <StatCard
             key="pendingAge"
             icon={Clock}
-            label="Pending Age"
+            label="Oldest Pending"
             value={statsLoading ? "—" : (oldestPendingDays !== null ? `${oldestPendingDays}d` : "N/A")}
             accent={oldestPendingDays !== null && oldestPendingDays > 7 ? "danger" : "warning"}
-            footnote={statsLoading ? "—" : (oldestPendingDays !== null ? "Oldest pending entity" : "No pending entities")}
+            footnote={statsLoading ? "—" : (oldestPendingDays !== null ? "Oldest awaiting review" : "No pending entities")}
             footnoteTone={oldestPendingDays !== null && oldestPendingDays > 7 ? "danger" : "warning"}
           />
         );
