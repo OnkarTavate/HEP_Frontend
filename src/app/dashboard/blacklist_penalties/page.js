@@ -289,7 +289,7 @@ export default function BlacklistPenaltiesPage() {
         >
           <Clock className="h-4 w-4 text-red-500" />
           Overstay Charges ({overstayCharges.length})
-          {overstayCharges.some(c => c.status === 'PENDING') && (
+          {overstayCharges.some(c => c.status === "PENDING" || c.status === "EXCEPTION_REJECTED") && (
             <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
           )}
         </button>
@@ -332,6 +332,9 @@ export default function BlacklistPenaltiesPage() {
                 <span className="font-bold text-red-500">
                   Pending: {overstayCharges.filter(c => c.status === "PENDING").length}
                 </span>
+                <span className="font-bold text-sky-600">
+                  Notified: {overstayCharges.filter(c => c.status === "NOTIFIED").length}
+                </span>
                 <span className="font-bold text-emerald-500">
                   Paid: {overstayCharges.filter(c => c.status === "PAID").length}
                 </span>
@@ -350,7 +353,7 @@ export default function BlacklistPenaltiesPage() {
                 <table className="w-full text-left">
                   <thead className="bg-[#0a1e4d] text-white text-[11px] font-semibold uppercase tracking-wider">
                     <tr>
-                      <th className="px-5 py-3.5">Ref #</th>
+                      <th className="px-5 py-3.5">SI No.</th>
                       <th className="px-5 py-3.5">Entity & Identifier</th>
                       <th className="px-5 py-3.5">Pass No</th>
                       <th className="px-5 py-3.5">
@@ -366,7 +369,7 @@ export default function BlacklistPenaltiesPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm">
-                    {overstayCharges.map((charge) => {
+                    {overstayCharges.map((charge, idx) => {
                       const fmtD = (d) => {
                         if (!d) return "—";
                         return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
@@ -374,13 +377,14 @@ export default function BlacklistPenaltiesPage() {
                       const daysNum = ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status)
                       ? parseInt(charge.current_overstay_days || 0, 10)
                       : parseInt(charge.overstay_days || 0, 10);
+                      const isNotifiedOnly = charge.status === "NOTIFIED";
                       const severityClass = daysNum >= 30 ? "bg-rose-100 text-rose-800 border-rose-300"
                         : daysNum >= 14 ? "bg-red-50 text-red-700 border-red-200"
                         : daysNum >= 7 ? "bg-amber-50 text-amber-700 border-amber-200"
                         : "bg-yellow-50 text-yellow-700 border-yellow-200";
                       return (
                         <tr key={charge.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-5 py-4 font-mono font-bold text-slate-500 text-xs">#{charge.id}</td>
+                          <td className="px-5 py-4 font-mono font-bold text-slate-500 text-xs">#{idx + 1}</td>
                           <td className="px-5 py-4">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
                               {charge.entity_type}
@@ -401,20 +405,30 @@ export default function BlacklistPenaltiesPage() {
                             <span className={`font-extrabold px-2 py-0.5 rounded-md border text-[10px] ${severityClass}`}>
                               {daysNum} day{daysNum !== 1 ? "s" : ""}
                             </span>
-                            <p className="text-slate-400 mt-0.5">₹{charge.daily_rate}/day</p>
+                            {isNotifiedOnly ? (
+                              <p className="text-sky-600 mt-0.5 font-semibold"> </p>
+                            ) : (
+                              <p className="text-slate-400 mt-0.5">₹{charge.daily_rate}/day</p>
+                            )}
                           </td>
                           <td className="px-5 py-4 font-black text-slate-900 text-sm">
-                            ₹{parseFloat(
-                              ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status)
-                                ? charge.current_total_amount
-                                : charge.total_amount
-                            ).toLocaleString("en-IN")}
+                            {isNotifiedOnly ? (
+                              <span className="text-slate-400 font-semibold text-xs">Not levied yet</span>
+                            ) : (
+                              <>₹{parseFloat(
+                                ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status)
+                                  ? charge.current_total_amount
+                                  : charge.total_amount
+                              ).toLocaleString("en-IN")}</>
+                            )}
                           </td>
                           <td className="px-5 py-4">
                             <span
                               className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
                                 charge.status === "PAID"
                                   ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : charge.status === "NOTIFIED"
+                                  ? "bg-sky-50 text-sky-700 border-sky-200"
                                   : charge.status === "EXCEPTION_REQUESTED"
                                   ? "bg-amber-50 text-amber-700 border-amber-200 animate-pulse"
                                   : charge.status === "EXCEPTION_APPROVED" || charge.status === "WAIVED"

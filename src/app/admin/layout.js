@@ -497,10 +497,6 @@ export default function AdminLayout({ children }) {
   const BULK_PASS_DEPT_IDS = [6, 9, 10, 11, 12, 13, 14, 15];
   const canSeeBulkPass = isAdmin || BULK_PASS_DEPT_IDS.includes(Number(user?.departmentId));
 
-  // Departments allowed to see Bulk Pass (General Administration = 6, Traffic = 9–15)
-  const BULK_PASS_DEPT_IDS = [6, 9, 10, 11, 12, 13, 14, 15];
-  const canSeeBulkPass = isAdmin || BULK_PASS_DEPT_IDS.includes(Number(user?.departmentId));
-
   // Strictly Admin Navigation Items
   const navigationItems = [
     { name: isAdmin ? "Admin Console" : "Vendor Pass", href: consoleHref, icon: ShieldCheck },

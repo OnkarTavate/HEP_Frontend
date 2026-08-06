@@ -3,12 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "sync:mediapipe": "node scripts/sync-mediapipe-assets.mjs",
+    "postinstall": "npm run sync:mediapipe",
     "dev": "next dev --hostname 0.0.0.0 --webpack",
-    "build": "next build --webpack",
+    "build": "npm run sync:mediapipe && next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@mediapipe/selfie_segmentation": "^0.1.1675465747",
+    "@mediapipe/tasks-vision": "^0.10.22-rc.20250304",
     "@vercel/analytics": "^2.0.1",
     "axios": "^1.14.0",
     "class-variance-authority": "^0.7.1",
@@ -23,6 +27,7 @@
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
     "react-select": "^5.10.2",
+    "react-webcam": "^7.2.0",
     "recharts": "^3.8.1",
     "shadcn": "^4.1.0",
     "sonner": "^2.0.7",
@@ -32,8 +37,12 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
-    "tailwindcss": "^4"
+    "tailwindcss": "^4",
+    "typescript": "^5.9.2"
   }
 }

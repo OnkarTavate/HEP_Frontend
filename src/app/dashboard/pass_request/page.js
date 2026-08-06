@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import PaginationBar from "@/components/ui/PaginationBar";
+import FaceCaptureDialog from "@/components/face/FaceCaptureDialog";
 import axios from "axios";
 import { toast } from "sonner";
 import Select from "react-select";
@@ -150,7 +151,7 @@ const PASS_EXPIRY_TIME = "05:59";
    this same table, so the quoted price can never drift from the charged
    price.
    ════════════════════════════════════════════════════════════════════════ */
-const HEP_RATES = {
+const DEFAULT_HEP_RATES = {
   INDIVIDUAL: { label: "Individual", daily: 13, monthly: 191, yearly: 508 },
   VEHICLE: { label: "Vehicle", daily: 32, monthly: 382, yearly: 2539 },
   CARGO: {
@@ -185,8 +186,8 @@ const isCargoEquipmentType = (typeName) =>
    Daily is multiplied by the number of days; monthly and yearly are flat
    rates for the single period, matching how calculateDateTo() derives the
    end date. */
-const getHepAmount = (category, passType, period = 1) => {
-  const rate = HEP_RATES[category] || HEP_RATES.INDIVIDUAL;
+const getHepAmount = (category, passType, period = 1, rateTable = DEFAULT_HEP_RATES) => {
+  const rate = rateTable[category] || rateTable.INDIVIDUAL || DEFAULT_HEP_RATES.INDIVIDUAL;
   const days = Math.max(1, parseInt(period, 10) || 1);
 
   switch (String(passType)) {
@@ -198,6 +199,32 @@ const getHepAmount = (category, passType, period = 1) => {
     default:
       return rate.daily * days;
   }
+};
+
+const resolveEffectiveHepRates = (feeMaster) => {
+  if (!feeMaster) return DEFAULT_HEP_RATES;
+
+  const toNum = (v, fallback) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  const buildRate = (key) => {
+    const source = feeMaster[key] || {};
+    const fallback = DEFAULT_HEP_RATES[key];
+    return {
+      ...fallback,
+      daily: toNum(source.daily, fallback.daily),
+      monthly: toNum(source.monthly, fallback.monthly),
+      yearly: toNum(source.yearly, fallback.yearly),
+    };
+  };
+
+  return {
+    INDIVIDUAL: buildRate("INDIVIDUAL"),
+    VEHICLE: buildRate("VEHICLE"),
+    CARGO: buildRate("CARGO"),
+  };
 };
 
 const calculateDateTo = (fromDate, period, type) => {
@@ -414,6 +441,7 @@ export default function PassRequestPage() {
   const [loading, setLoading] = useState(false);
   const [paymentMode, setPaymentMode] = useState("Account");
   const [loadingPasses, setLoadingPasses] = useState(false);
+  const [faceCaptureOpen, setFaceCaptureOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState({});
   const [selectedPassDetails, setSelectedPassDetails] = useState(null);
   const [modals, setModals] = useState({
@@ -702,7 +730,7 @@ export default function PassRequestPage() {
     dateFrom: getCurrentDateTime(),
     dateTo: "",
     validUptoTime: "",
-    amount: HEP_RATES.INDIVIDUAL.daily,
+    amount: DEFAULT_HEP_RATES.INDIVIDUAL.daily,
   };
   const [personForm, setPersonForm] = useState(initialPersonForm);
   const [dlVerification, setDlVerification] = useState({
@@ -768,7 +796,7 @@ export default function PassRequestPage() {
     passPeriod: "1",
     dateFrom: getCurrentDateTime(),
     dateTo: "",
-    amount: HEP_RATES.VEHICLE.daily,
+    amount: DEFAULT_HEP_RATES.VEHICLE.daily,
   };
   const [vehicleForm, setVehicleForm] = useState(initialVehicleForm);
   const [vehicleVerification, setVehicleVerification] = useState({
@@ -1037,18 +1065,23 @@ export default function PassRequestPage() {
     }
   };
 
-  const [feeMaster, setFeeMaster] = useState(null); // { INDIVIDUAL: {...}, VEHICLE: {...}, CARGO_HANDLING_EQUIPMENT: {...} }
+  const [feeMaster, setFeeMaster] = useState(null); // { INDIVIDUAL: {...}, VEHICLE: {...}, CARGO: {...} }
+  const effectiveHepRates = useMemo(() => resolveEffectiveHepRates(feeMaster), [feeMaster]);
 
   useEffect(() => {
     const fetchFeeMaster = async () => {
       try {
-        const res = await axios.get(`${ADMIN_API}/pass-fee-master`);
+        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+        const res = await axios.get(`${ADMIN_API}/hep-rate`, { headers });
         const feesByCategory = {};
         (res.data?.data || []).forEach((row) => {
-          feesByCategory[row.category] = {
-            daily: parseFloat(row.daily_fee),
-            monthly: parseFloat(row.monthly_fee),
-            yearly: parseFloat(row.yearly_fee),
+          const category = String(row.category || "").toUpperCase();
+          feesByCategory[category] = {
+            daily: parseFloat(row.daily_rate),
+            monthly: parseFloat(row.monthly_rate),
+            yearly: parseFloat(row.yearly_rate),
           };
         });
         setFeeMaster(feesByCategory);
@@ -1060,8 +1093,6 @@ export default function PassRequestPage() {
   }, []);
 
   useEffect(() => {
-    if (!feeMaster) return; // wait until fee config is loaded
-
     let updatedPeriod = personForm.passPeriod;
 
     // Check license remaining days lock
@@ -1095,7 +1126,7 @@ export default function PassRequestPage() {
     }
 
     // Individual HEP rate — ₹13/day, ₹191/month, ₹508/year (incl. GST)
-    const amt = getHepAmount("INDIVIDUAL", personForm.passType, updatedPeriod);
+    const amt = getHepAmount("INDIVIDUAL", personForm.passType, updatedPeriod, effectiveHepRates);
 
     const newDateTo = calculateDateTo(
       personForm.dateFrom,
@@ -1109,11 +1140,9 @@ export default function PassRequestPage() {
       amount: amt,
       dateTo: newDateTo,
     }));
-  }, [personForm.passType, personForm.passPeriod, personForm.dateFrom, generalForm.remainingDays, generalForm.isLicenseExpired, feeMaster]);
+  }, [personForm.passType, personForm.passPeriod, personForm.dateFrom, generalForm.remainingDays, generalForm.isLicenseExpired, effectiveHepRates]);
 
   useEffect(() => {
-    if (!feeMaster) return; // wait until fee config is loaded
-
     let updatedPeriod = vehicleForm.passPeriod;
 
     // Check license remaining days lock
@@ -1152,7 +1181,8 @@ export default function PassRequestPage() {
     const amt = getHepAmount(
       isCargoEquipmentType(typeName) ? "CARGO" : "VEHICLE",
       vehicleForm.passType,
-      updatedPeriod
+      updatedPeriod,
+      effectiveHepRates
     );
 
     const newDateTo = calculateDateTo(
@@ -1167,7 +1197,7 @@ export default function PassRequestPage() {
       amount: amt,
       dateTo: newDateTo,
     }));
-  }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom, vehicleForm.type, masterData.vehicleTypes, generalForm.remainingDays, generalForm.isLicenseExpired, feeMaster]);
+  }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom, vehicleForm.type, masterData.vehicleTypes, generalForm.remainingDays, generalForm.isLicenseExpired, effectiveHepRates]);
 
   // Live running time: update dateFrom every 30s while person modal is open
   useEffect(() => {
@@ -5662,6 +5692,35 @@ export default function PassRequestPage() {
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Upload Photo <span className="text-red-500">*</span>
                     </label>
+
+                    {!personForm.photo && !personForm.existingPhotoName && (
+                      <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <FileUploadBox
+                            label="Upload Photo"
+                            fileType="image"
+                            isRequired={true}
+                            file={personForm.photo}
+                            existingFileName={personForm.existingPhotoName}
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                photo: e.target.files[0],
+                              })
+                            }
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => setFaceCaptureOpen(true)}
+                            className="inline-flex h-10 items-center justify-center rounded-lg border border-[#0a1e4d] bg-white px-4 text-sm font-bold text-[#0a1e4d] transition-colors hover:bg-[#0a1e4d] hover:text-white"
+                          >
+                            Capture Photo
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {personForm.photo || personForm.existingPhotoName ? (
                       <div className="relative w-24 h-28 rounded-xl border border-slate-300 overflow-hidden shadow-sm group">
                         <img
@@ -5691,20 +5750,18 @@ export default function PassRequestPage() {
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                    ) : (
-                      <FileUploadBox
-                        label="Photo"
-                        fileType="image"
-                        isRequired={true}
-                        file={personForm.photo}
-                        existingFileName={personForm.existingPhotoName}
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            photo: e.target.files[0],
-                          })
-                        }
-                      />
+                    ) : null}
+
+                    {(personForm.photo || personForm.existingPhotoName) && (
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setFaceCaptureOpen(true)}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-[#0a1e4d] bg-white px-3 text-xs font-bold text-[#0a1e4d] transition-colors hover:bg-[#0a1e4d] hover:text-white"
+                        >
+                          Capture Photo
+                        </button>
+                      </div>
                     )}
                   </div>
                   {personForm.hepType !== "3" && (
@@ -7176,6 +7233,20 @@ export default function PassRequestPage() {
           </div>
         </div>
       )}
+      <FaceCaptureDialog
+        open={faceCaptureOpen}
+        onClose={() => setFaceCaptureOpen(false)}
+        passId={personForm.passId || personForm.personPassNo || personForm.passNo || personForm.cardNumber || null}
+        onUsePhoto={(file) => {
+          setPersonForm((prev) => ({
+            ...prev,
+            photo: file,
+            existingPhotoName: null,
+            existingPhotoPath: null,
+          }));
+          toast.success("Captured photo attached successfully.");
+        }}
+      />
       {/* RATE CARD MODAL */}
       {modals.rateCard && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
@@ -7223,9 +7294,9 @@ export default function PassRequestPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {[
-                      HEP_RATES.INDIVIDUAL,
-                      HEP_RATES.VEHICLE,
-                      HEP_RATES.CARGO,
+                      effectiveHepRates.INDIVIDUAL,
+                      effectiveHepRates.VEHICLE,
+                      effectiveHepRates.CARGO,
                     ].map((rate, idx) => (
                       <tr key={rate.label} className="hover:bg-slate-50">
                         <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
