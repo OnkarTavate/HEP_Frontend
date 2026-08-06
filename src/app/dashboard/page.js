@@ -662,7 +662,7 @@ const ApplicationTrendChart = memo(function ApplicationTrendChart({ data }) {
               Application Trend
             </CardTitle>
             <CardDescription className="text-base text-stone-500 dark:text-stone-400 mt-1">
-              Persons vs vehicles you submitted (last 6 months)
+              Persons vs vehicles you submitted (last 10 days)
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -672,10 +672,10 @@ const ApplicationTrendChart = memo(function ApplicationTrendChart({ data }) {
                 : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
                 }`}
             >
-              {trendUp ? "↑" : "↓"} {Math.abs(trendPct)}% MoM
+              {trendUp ? "↑" : "↓"} {Math.abs(trendPct)}% DoD
             </span>
             <Badge className="bg-stone-100 dark:bg-white/5 text-stone-600 dark:text-stone-300 border-0 font-semibold rounded-full">
-              6 months
+              10 days
             </Badge>
           </div>
         </div>
@@ -698,7 +698,7 @@ const ApplicationTrendChart = memo(function ApplicationTrendChart({ data }) {
             <p className="mt-1 text-2xl font-extrabold tabular-nums text-stone-900 dark:text-stone-100">{totalAll}</p>
           </div>
           <div className="rounded-2xl bg-stone-100/70 dark:bg-white/5 ring-1 ring-stone-200/60 dark:ring-white/10 p-3">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Peak month</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Peak day</p>
             <p className="mt-1 text-2xl font-extrabold tabular-nums text-stone-900 dark:text-stone-100">
               {peak.month}
               <span className="ml-1 text-sm font-semibold text-stone-500 dark:text-stone-400">({peak.total})</span>
@@ -1045,11 +1045,9 @@ export default function DashboardPage() {
     "todayPasses",
     "approvalRate",
     "pendingAge",
-    "expiryAlerts",
     "totalSubmitted",
     "activePasses",
     "pendingApprovals",
-    "expiringSoon",
     "totalEntities"
   ]);
   const [draggedIndex, setDraggedIndex] = useState(null);
@@ -1061,7 +1059,7 @@ export default function DashboardPage() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length === 10) {
+        if (Array.isArray(parsed) && parsed.length === 8) {
           setCardOrder(parsed);
         }
       } catch (e) { }
@@ -1101,11 +1099,9 @@ export default function DashboardPage() {
       "todayPasses",
       "approvalRate",
       "pendingAge",
-      "expiryAlerts",
       "totalSubmitted",
       "activePasses",
       "pendingApprovals",
-      "expiringSoon",
       "totalEntities"
     ];
     setCardOrder(defaultOrder);
@@ -1183,16 +1179,26 @@ export default function DashboardPage() {
         let todayPersons = 0;
         let todayPassRequests = 0;
 
-        // Monthly buckets
-        const base = new Date();
-        base.setDate(1);
-        const months = [];
-        const monthKey = (d) => `${d.getFullYear()}-${d.getMonth()}`;
-        for (let i = 5; i >= 0; i--) {
-          const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
-          months.push({ key: monthKey(d), month: d.toLocaleString("en-IN", { month: "short" }), persons: 0, vehicles: 0 });
+        // Daily buckets — last 10 days
+        const dayKey = (d) => {
+          const yy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, "0");
+          const dd = String(d.getDate()).padStart(2, "0");
+          return `${yy}-${mm}-${dd}`;
+        };
+        const days = [];
+        for (let i = 9; i >= 0; i--) {
+          const d = new Date(nowTs);
+          d.setDate(d.getDate() - i);
+          d.setHours(0, 0, 0, 0);
+          days.push({
+            key: dayKey(d),
+            month: `${d.toLocaleString("en-IN", { month: "short" })} ${d.getDate()}`,
+            persons: 0,
+            vehicles: 0,
+          });
         }
-        const monthIdx = new Map(months.map((m, idx) => [m.key, idx]));
+        const dayIdx = new Map(days.map((d, idx) => [d.key, idx]));
 
         const expItems = [];
 
@@ -1244,10 +1250,10 @@ export default function DashboardPage() {
           });
 
           if (!Number.isNaN(cd.getTime())) {
-            const idx = monthIdx.get(monthKey(cd));
+            const idx = dayIdx.get(dayKey(cd));
             if (idx !== undefined) {
-              months[idx].persons += persons.length;
-              months[idx].vehicles += vehicles.length;
+              days[idx].persons += persons.length;
+              days[idx].vehicles += vehicles.length;
             }
           }
         });
@@ -1271,7 +1277,7 @@ export default function DashboardPage() {
         console.log("%c[Dashboard] Status counts", "color:#a855f7;font-weight:bold", { approved, pending, rejected, reverted });
         setApiStats(computedStats);
         setStatusCounts({ approved, pending, rejected, reverted });
-        setMonthlyData(months);
+        setMonthlyData(days);
         setExpiringItems(expItems);
         setPassTypeData([
           { name: "Vehicle", value: vehicleCount, color: "#f59e0b" },
@@ -1318,7 +1324,9 @@ export default function DashboardPage() {
       const entities = [...(pr.persons || []), ...(pr.vehicles || [])];
       for (const e of entities) {
         if (String(e.status || "").toLowerCase() === "pending" || !e.status) {
-          const days = Math.floor((Date.now() - new Date(pr.createdAt || 0).getTime()) / (1000 * 60 * 60 * 24));
+          const ts = new Date(pr.submittedAt || pr.createdAt || null).getTime();
+          if (!ts || isNaN(ts)) continue;                  // skip if no valid date
+          const days = Math.max(0, Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24)));
           if (max === null || days > max) max = days;
         }
       }
@@ -1326,6 +1334,26 @@ export default function DashboardPage() {
     console.log("%c[Dashboard] oldestPendingDays", "color:#ef4444;font-weight:bold", max, "days | pendingApprovals:", apiStats.pendingApprovals);
     return max;
   }, [allPasses, apiStats.pendingApprovals]);
+
+  // ── Age formatter: days → "Today" / "3 days" / "2 wks 1d" / "1 mo 15d" / "1 yr 2mo" ──
+  const fmtAge = (days) => {
+    if (days === 0) return "Today";
+    if (days === 1) return "1 day";
+    if (days < 7)  return `${days} days`;
+    if (days < 30) {
+      const wks = Math.floor(days / 7);
+      const rem = days % 7;
+      return rem === 0 ? `${wks} wk${wks > 1 ? "s" : ""}` : `${wks} wk${wks > 1 ? "s" : ""} ${rem}d`;
+    }
+    if (days < 365) {
+      const mo = Math.floor(days / 30);
+      const rem = days % 30;
+      return rem === 0 ? `${mo} mo` : `${mo} mo ${rem}d`;
+    }
+    const yr = Math.floor(days / 365);
+    const mo = Math.floor((days % 365) / 30);
+    return mo === 0 ? `${yr} yr` : `${yr} yr ${mo}mo`;
+  };
 
   // ── Render functions for Drag & Drop ──────────────────────────────────────
   const renderCard = (cardKey) => {
@@ -1364,30 +1392,32 @@ export default function DashboardPage() {
             footnoteTone={appRate >= 70 ? "success" : "warning"}
           />
         );
-      case "pendingAge":
+      case "pendingAge": {
+        const pendingAccent =
+          oldestPendingDays === null ? "warning"
+          : oldestPendingDays === 0  ? "success"
+          : oldestPendingDays <= 14  ? "warning"
+          : "danger";
+        const pendingFootnote = statsLoading
+          ? "—"
+          : oldestPendingDays === null
+            ? "No pending entities"
+            : oldestPendingDays === 0
+              ? "Submitted today"
+              : `Awaiting review for ${fmtAge(oldestPendingDays)}`;
         return (
           <StatCard
             key="pendingAge"
             icon={Clock}
             label="Oldest Pending"
-            value={statsLoading ? "—" : (oldestPendingDays !== null ? `${oldestPendingDays}d` : "N/A")}
-            accent={oldestPendingDays !== null && oldestPendingDays > 7 ? "danger" : "warning"}
-            footnote={statsLoading ? "—" : (oldestPendingDays !== null ? "Oldest awaiting review" : "No pending entities")}
-            footnoteTone={oldestPendingDays !== null && oldestPendingDays > 7 ? "danger" : "warning"}
+            value={statsLoading ? "—" : (oldestPendingDays !== null ? fmtAge(oldestPendingDays) : "N/A")}
+            accent={pendingAccent}
+            footnote={pendingFootnote}
+            footnoteTone={pendingAccent}
           />
         );
-      case "expiryAlerts":
-        return (
-          <StatCard
-            key="expiryAlerts"
-            icon={AlertTriangle}
-            label="Expiry Alerts"
-            value={statsLoading ? "—" : apiStats.expiringSoon}
-            accent={apiStats.expiringSoon > 0 ? "danger" : "success"}
-            footnote={statsLoading ? "—" : (apiStats.expiringSoon > 0 ? `${apiStats.expiringSoon} expiring within 7d` : "No upcoming expirations")}
-            footnoteTone={apiStats.expiringSoon > 0 ? "danger" : "success"}
-          />
-        );
+      }
+
       case "totalSubmitted":
         return (
           <StatCard
@@ -1422,22 +1452,12 @@ export default function DashboardPage() {
             label="Pending Approvals"
             value={statsLoading ? "—" : apiStats.pendingApprovals}
             footnote={apiStats.pendingApprovals > 0
-              ? (oldestPendingDays !== null ? `Oldest: ${oldestPendingDays} day${oldestPendingDays !== 1 ? "s" : ""} ago` : "Awaiting review")
+              ? (oldestPendingDays !== null ? `Oldest: ${fmtAge(oldestPendingDays)} ago` : "Awaiting review")
               : "All up to date"}
             footnoteTone={apiStats.pendingApprovals > 0 ? "warning" : undefined}
           />
         );
-      case "expiringSoon":
-        return (
-          <StatCard
-            key="expiringSoon"
-            icon={AlertTriangle}
-            label="Expiring Soon"
-            value={statsLoading ? "—" : apiStats.expiringSoon}
-            footnote={apiStats.expiringSoon > 0 ? "Within 7 days — action needed" : "No upcoming expirations"}
-            footnoteTone={apiStats.expiringSoon > 0 ? "danger" : undefined}
-          />
-        );
+
       case "totalEntities":
         return (
           <StatCard
