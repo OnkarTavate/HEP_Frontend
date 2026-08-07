@@ -532,7 +532,7 @@ export default function VendorPassPublicPage() {
           authLetter: null,
         }));
         if (data.paymentMode === "FREE") setPaymentMode("E-Cash");
-        if (data.workOrderFilePath) {
+        if (data.workOrderFileName) {
           setGeneralForm((prev) => ({
             ...prev,
             workOrderFile: { name: data.workOrderFileName },

@@ -189,6 +189,12 @@ export default function AdminPassApprovalsPage() {
   // Pagination state
   const [pageSize, setPageSize] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
+  const [paginationMeta, setPaginationMeta] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalRecords: 0,
+    pageSize: 20,
+  });
   const [globalCounts, setGlobalCounts] = useState({ total: 0, pending: 0, processed: 0 });
 
   // Two-Wheeler Update Request States

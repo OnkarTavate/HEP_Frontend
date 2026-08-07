@@ -590,7 +590,11 @@ function ListView({ user, refreshKey }) {
   }, [currentPage]);
 
   const copyLink = (row) => {
-    const link = `${window.location.origin}/vendor_pass/${row.token}`;
+    const link = row.vendorLink || "";
+    if (!link) {
+      toast.error("Vendor link is unavailable for this intake");
+      return;
+    }
     navigator.clipboard.writeText(link);
     toast.success("Vendor link copied");
   };
