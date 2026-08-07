@@ -274,7 +274,7 @@ async function detectAndValidateFace(source: HTMLCanvasElement): Promise<{
   return { landmarks: primaryLandmarks, validation };
 }
 
-export function cropFace(source: CanvasImageSource, landmarks: LandmarkPoint[]): HTMLCanvasElement {
+export function cropFace(source: CanvasImageSource, landmarks: LandmarkPoint[]): HTMLCanvasElement {  
   const { width, height } = getSourceSize(source);
   if (!width || !height) {
     throw new Error("Captured photo has invalid dimensions.");
@@ -290,14 +290,25 @@ export function cropFace(source: CanvasImageSource, landmarks: LandmarkPoint[]):
   const cropHeight = faceHeight * 2.7;
   const cropSize = Math.max(cropWidth, cropHeight);
   const adjustedCenterY = centerY - faceHeight * 0.08;
-
-  let sx = centerX - cropSize / 2;
-  let sy = adjustedCenterY - cropSize / 2;
-
-  sx = clamp(sx, 0, Math.max(0, width - cropSize));
-  sy = clamp(sy, 0, Math.max(0, height - cropSize));
-
   const finalSize = Math.min(cropSize, width, height);
+
+  let sx = centerX - finalSize / 2;
+  let sy = adjustedCenterY - finalSize / 2;
+
+  sx = clamp(sx, 0, width - finalSize);
+  sy = clamp(sy, 0, height - finalSize);
+
+  console.log({
+    bbox,
+    centerX,
+    centerY,
+    width,
+    height,
+    cropSize,
+    sx,
+    sy,
+  });
+
   const canvas = createCanvas(finalSize, finalSize);
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -329,7 +340,7 @@ export async function removeBackground(source: HTMLCanvasElement): Promise<HTMLC
   const maskCtx = maskCanvas.getContext("2d")!;
 
   // Blur the segmentation mask
-  maskCtx.filter = "blur(4px)";
+  maskCtx.filter = "blur(1.5px)";
   maskCtx.drawImage(results.segmentationMask, 0, 0);
   
   maskCtx.globalAlpha = 0.35;
