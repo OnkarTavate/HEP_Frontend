@@ -725,6 +725,10 @@ export default function PassRequestPage() {
     driverLicence: null,
     entryAuthorization: null,
     existingEntryAuthName: "",
+    visaDoc: null,
+    immigrationDoc: null,
+    existingVisaDocName: "",
+    existingImmigrationDocName: "",
     passType: "1", // Default: 1 (Daily)
     passPeriod: "1",
     dateFrom: getCurrentDateTime(),
@@ -1960,6 +1964,18 @@ export default function PassRequestPage() {
     )
       return toast.error("Copy of Passport is mandatory for Foreigners.");
 
+    if (
+      isForeigner &&
+      !(personForm.visaDoc || personForm.existingVisaDocName)
+    )
+      return toast.error("Visa document is mandatory for Foreigners.");
+
+    if (
+      isForeigner &&
+      !(personForm.immigrationDoc || personForm.existingImmigrationDocName)
+    )
+      return toast.error("Immigration Clearance document is mandatory for Foreigners.");
+
     if (personForm.passType === "2" || personForm.passType === "3") {
       if (!(personForm.policeVerification || personForm.existingPoliceName)) {
         return toast.error(
@@ -2450,6 +2466,7 @@ export default function PassRequestPage() {
             "INDIAN",
           ),
           countryId: parseInt(p.country, 10) || 75,
+          visaNo: p.visaNo || "",
           designationId: desigIdVal,
           designationOther: desigOtherVal,
           cardNumber: p.cardNumber,
@@ -2560,6 +2577,8 @@ export default function PassRequestPage() {
           formData.append(`employmentProof_${idx}`, p.proofOfEmployment);
         if (p.copyOfLicence) formData.append(`chaLicenseCopy_${idx}`, p.copyOfLicence);
         if (p.passportDoc) formData.append(`passportDoc_${idx}`, p.passportDoc);
+        if (p.visaDoc) formData.append(`visaDoc_${idx}`, p.visaDoc);
+        if (p.immigrationDoc) formData.append(`immigrationDoc_${idx}`, p.immigrationDoc);
         if (p.cdcDocument) formData.append(`cdcDocument_${idx}`, p.cdcDocument);
         if (p.declarationForm)
           formData.append(`declarationForm_${idx}`, p.declarationForm);
@@ -2950,6 +2969,8 @@ export default function PassRequestPage() {
         driverLicence: entity.newDriverLicence || null,
         requisitionLetter: entity.newRequisitionLetter || null,
         passportDoc: entity.newPassport || null,
+        visaDoc: entity.newVisaDoc || null,
+        immigrationDoc: entity.newImmigrationDoc || null,
         policeVerification: entity.newPoliceVerification || null,
         proofOfEmployment: entity.newEmploymentProof || null,
         copyOfLicence: entity.newChaLicence || null,
@@ -2976,6 +2997,10 @@ export default function PassRequestPage() {
         existingReqName: entity.requisitionLetterName,
         existingPassportName: entity.passportName,
         existingPassportPath: entity.passportPath,
+        existingVisaDocName: entity.visaDocName,
+        existingVisaDocPath: entity.visaDocPath,
+        existingImmigrationDocName: entity.immigrationDocName,
+        existingImmigrationDocPath: entity.immigrationDocPath,
         existingPoliceName: entity.policeVerificationName,
         existingEmpName: entity.employmentProofName,
         existingChaName: entity.chaLicenseName,
@@ -3123,6 +3148,8 @@ export default function PassRequestPage() {
           chaLicenseName: personForm.existingChaName,
           idProofFileName: personForm.existingIdProofName,
           cdcDocumentName: personForm.existingCdcName,
+          visaDocName: personForm.visaDoc?.name || personForm.existingVisaDocName || currentEntity.visaDocName,
+          immigrationDocName: personForm.immigrationDoc?.name || personForm.existingImmigrationDocName || currentEntity.immigrationDocName,
           declarationFormName: personForm.existingDeclarationName,
           entryAuthorizationFileName: personForm.existingEntryAuthName,
         };
@@ -3140,6 +3167,8 @@ export default function PassRequestPage() {
           aadharPDFFilePath: personForm.existingAadharPath || currentEntity.aadharPDFFilePath || currentEntity.aadharPDFFilePATH,
           idProofFilePath: personForm.existingIdProofPath || currentEntity.idProofFilePath,
           driverLicensePath: personForm.existingDlPath || currentEntity.driverLicensePath,
+          visaDocPath: personForm.existingVisaDocPath || currentEntity.visaDocPath,
+          immigrationDocPath: personForm.existingImmigrationDocPath || currentEntity.immigrationDocPath,
           entryAuthorizationFilePath: personForm.existingEntryAuthPath || currentEntity.entryAuthorizationFilePath,
 
           // Carry File objects from personForm for resubmission
@@ -3151,6 +3180,8 @@ export default function PassRequestPage() {
           newEmploymentProof: personForm.proofOfEmployment || currentEntity.newEmploymentProof || null,
           newChaLicence: personForm.copyOfLicence || currentEntity.newChaLicence || null,
           newPassport: personForm.passportDoc || currentEntity.newPassport || null,
+          newVisaDoc: personForm.visaDoc || currentEntity.newVisaDoc || null,
+          newImmigrationDoc: personForm.immigrationDoc || currentEntity.newImmigrationDoc || null,
           newRequisitionLetter: personForm.requisitionLetter || currentEntity.newRequisitionLetter || null,
           newCdc: personForm.cdcDocument || currentEntity.newCdc || null,
           newDeclaration: personForm.declarationForm || currentEntity.newDeclaration || null,
@@ -3451,6 +3482,8 @@ export default function PassRequestPage() {
           formData.append('driverLicenseName', person.driverLicenseName || '');
           formData.append('requisitionLetterName', person.requisitionLetterName || '');
           formData.append('passportName', person.passportName || '');
+          formData.append('visaDocName', person.visaDocName || '');
+          formData.append('immigrationDocName', person.immigrationDocName || '');
           formData.append('policeVerificationName', person.policeVerificationName || '');
           formData.append('employmentProofName', person.employmentProofName || '');
           formData.append('chaLicenseName', person.chaLicenseName || '');
@@ -3468,6 +3501,8 @@ export default function PassRequestPage() {
           if (person.newEmploymentProof) formData.append('employmentProof', person.newEmploymentProof);
           if (person.newChaLicence) formData.append('chaLicenseCopy', person.newChaLicence);
           if (person.newPassport) formData.append('passportDoc', person.newPassport);
+          if (person.newVisaDoc) formData.append('visaDoc', person.newVisaDoc);
+          if (person.newImmigrationDoc) formData.append('immigrationDoc', person.newImmigrationDoc);
           if (person.newRequisitionLetter) formData.append('requisitionLetter', person.newRequisitionLetter);
           if (person.newCdc) formData.append('cdcDocument', person.newCdc);
           if (person.newDeclaration) formData.append('declarationForm', person.newDeclaration);
@@ -5795,6 +5830,56 @@ export default function PassRequestPage() {
                       />
                     </div>
                   )}
+                  {isPersonForeigner(personForm.nationality) && (
+                    <>
+                      <div className="space-y-1.5 md:col-span-2 max-w-sm">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          Visa <span className="text-red-500">*</span>
+                        </label>
+                        <FileUploadBox
+                          file={personForm.visaDoc}
+                          existingFileName={personForm.existingVisaDocName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "visaDoc",
+                              personForm.existingVisaDocName,
+                              personForm.editIndex
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              visaDoc: e.target.files[0],
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1.5 md:col-span-2 max-w-sm">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          Immigration Clearance <span className="text-red-500">*</span>
+                        </label>
+                        <FileUploadBox
+                          file={personForm.immigrationDoc}
+                          existingFileName={personForm.existingImmigrationDocName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "immigrationDoc",
+                              personForm.existingImmigrationDocName,
+                              personForm.editIndex
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              immigrationDoc: e.target.files[0],
+                            })
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
                   {personForm.hepType === "3" && (
                     <div className="space-y-1.5 animate-in zoom-in">
                       <label className="text-xs text-orange-600 font-black uppercase tracking-wider">
@@ -7691,6 +7776,33 @@ export default function PassRequestPage() {
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
                           <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Employment Proof</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                      {(entityModal.data.visaDocName || entityModal.data.visaDocPath) && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "visaDoc", entityModal.data.visaDocName || entityModal.data.visaDocPath)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Visa</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                      {(entityModal.data.immigrationDocName || entityModal.data.immigrationDocPath) && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "immigrationDoc", entityModal.data.immigrationDocName || entityModal.data.immigrationDocPath)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Immigration Clearance</span>
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        </button>
+                      )}
+                      {(entityModal.data.passportName || entityModal.data.passportPath) && (
+                        <button
+                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "passportDoc", entityModal.data.passportName || entityModal.data.passportPath)}
+                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                        >
+                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Passport</span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}

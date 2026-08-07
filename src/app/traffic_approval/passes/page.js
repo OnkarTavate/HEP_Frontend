@@ -59,18 +59,23 @@ const extractEntityIndex = (entityId) => {
 };
 
 // --- Reusable UI Components ---
-const DetailItem = ({ label, value, highlight = false }) => (
-  <div className="flex flex-col">
-    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-      {label}
-    </span>
-    <span
-      className={`text-sm font-semibold ${highlight ? "text-[#0a1e4d] font-black" : "text-slate-700"}`}
-    >
-      {value || "N/A"}
-    </span>
-  </div>
-);
+const DetailItem = ({ label, value, highlight = false, showIfEmpty = false }) => {
+  if (!showIfEmpty && (!value || value === "N/A" || value === "null" || value === "undefined" || String(value).trim() === "")) {
+    return null;
+  }
+  return (
+    <div className="flex flex-col">
+      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+        {label}
+      </span>
+      <span
+        className={`text-sm font-semibold ${highlight ? "text-[#0a1e4d] font-black" : "text-slate-700"}`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+};
 
 const DocumentCard = ({
   label,
@@ -2246,6 +2251,24 @@ export default function TrafficPassesPage() {
                         label="Passport Document"
                         filePath={entityModal.data.passportPath}
                         documentType="passportDoc"
+                        passRequestId={selectedRequest.id}
+                        onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
+                      />
+                      <DocumentCard
+                        label="Visa"
+                        filePath={entityModal.data.visaDocPath}
+                        documentType="visaDoc"
+                        passRequestId={selectedRequest.id}
+                        onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
+                      />
+                      <DocumentCard
+                        label="Immigration Clearance"
+                        filePath={entityModal.data.immigrationDocPath}
+                        documentType="immigrationDoc"
                         passRequestId={selectedRequest.id}
                         onView={handleViewDoc}
                         entityIndex={extractEntityIndex(entityModal.data.id)}

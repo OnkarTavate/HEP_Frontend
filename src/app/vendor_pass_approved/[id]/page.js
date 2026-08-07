@@ -307,6 +307,11 @@ export default function VendorPassApprovedPage() {
   };
   const [vehicleForm, setVehicleForm] = useState(initialVehicleForm);
 
+  const isPersonForeigner = (natValue) => {
+    const label = getLabelById(masterData.nationalities, natValue, "label")?.toUpperCase() || "";
+    return label === "FOREIGNER" || String(natValue) === "2" || String(natValue).toUpperCase() === "FOREIGNER";
+  };
+
   const validatePersonField = (field, value, extra = {}) => {
     const err = getValidationError(field, value, extra);
     setPersonErrors((prev) => ({ ...prev, [field]: err }));
@@ -1904,8 +1909,8 @@ export default function VendorPassApprovedPage() {
                     </div>
                   )}
 
-                  {/* Aadhaar Fields - Show for non-seafarers OR seafarers who selected aadhaar */}
-                  {(personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar") && (
+                  {/* Aadhaar Fields - Show for non-foreigners (non-seafarers OR seafarers who selected aadhaar) */}
+                  {!isPersonForeigner(personForm.nationality) && (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar") && (
                     <>
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700 uppercase">

@@ -31,6 +31,7 @@ import {
   Maximize,
   Minimize,
   XCircle,
+  Calendar,
 } from "lucide-react";
 import {
   getPublicIntake,
@@ -82,7 +83,7 @@ const formatDateTimeISOToDisplay = (isoStr) => {
   const dateSubParts = datePart.split("-");
   if (dateSubParts.length !== 3) return isoStr;
   const [yyyy, mm, dd] = dateSubParts;
-  
+
   if (!timePart) return `${dd}/${mm}/${yyyy}`;
   const [hhStr, minStr] = timePart.split(":");
   let hh = parseInt(hhStr, 10);
@@ -421,6 +422,10 @@ export default function VendorPassPublicPage() {
     driverLicence: null,
     entryAuthorization: null,
     existingEntryAuthName: "",
+    visaDoc: null,
+    immigrationDoc: null,
+    existingVisaDocName: "",
+    existingImmigrationDocName: "",
     passType: "1", // Default: 1 (Daily)
     passPeriod: "1",
     dateFrom: getCurrentDateTime(),
@@ -731,7 +736,7 @@ export default function VendorPassPublicPage() {
   };
 
   useEffect(() => {
-    if (!feeMaster) return; 
+    if (!feeMaster) return;
     let updatedPeriod = personForm.passPeriod;
 
     // ✅ Restrict DAILY to max 7 days
@@ -1177,6 +1182,14 @@ export default function VendorPassPublicPage() {
       return toast.error("Copy of Passport is mandatory for Foreigners.");
     }
 
+    if (isForeigner && !(personForm.visaDoc || personForm.existingVisaDocName)) {
+      return toast.error("Visa document is mandatory for Foreigners.");
+    }
+
+    if (isForeigner && !(personForm.immigrationDoc || personForm.existingImmigrationDocName)) {
+      return toast.error("Immigration Clearance document is mandatory for Foreigners.");
+    }
+
     if (personForm.hepType === "3" && personForm.seafarerIdType === "passport") {
       if (!(personForm.passportDoc || personForm.existingPassportName)) {
         return toast.error("Passport upload is mandatory for Seafarers with Passport.");
@@ -1512,6 +1525,8 @@ export default function VendorPassPublicPage() {
           formData.append("employmentProof", p.proofOfEmployment);
         if (p.copyOfLicence) formData.append("chaLicenseCopy", p.copyOfLicence);
         if (p.passportDoc) formData.append("passportDoc", p.passportDoc);
+        if (p.visaDoc) formData.append("visaDoc", p.visaDoc);
+        if (p.immigrationDoc) formData.append("immigrationDoc", p.immigrationDoc);
         if (p.entryAuthorization) formData.append("entryAuthorization", p.entryAuthorization);
       });
 
@@ -2880,6 +2895,58 @@ export default function VendorPassPublicPage() {
                         }}
                       />
                     </div>
+                    {isPersonForeigner(personForm.nationality) && (
+                      <>
+                        <div className="space-y-1.5 md:col-span-2 max-w-sm">
+                          <label className="text-xs font-bold text-slate-700 uppercase">
+                            Visa <span className="text-red-500">*</span>
+                          </label>
+                          <FileUploadBox
+                            file={personForm.visaDoc}
+                            existingFileName={personForm.existingVisaDocName}
+                            onView={() =>
+                              handleViewDoc(
+                                personForm.existingPassRequestId,
+                                "visaDoc",
+                                personForm.existingVisaDocName,
+                                personForm.editIndex || 0,
+                                true
+                              )
+                            }
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                visaDoc: e.target.files[0],
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1.5 md:col-span-2 max-w-sm">
+                          <label className="text-xs font-bold text-slate-700 uppercase">
+                            Immigration Clearance <span className="text-red-500">*</span>
+                          </label>
+                          <FileUploadBox
+                            file={personForm.immigrationDoc}
+                            existingFileName={personForm.existingImmigrationDocName}
+                            onView={() =>
+                              handleViewDoc(
+                                personForm.existingPassRequestId,
+                                "immigrationDoc",
+                                personForm.existingImmigrationDocName,
+                                personForm.editIndex || 0,
+                                true
+                              )
+                            }
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                immigrationDoc: e.target.files[0],
+                              })
+                            }
+                          />
+                        </div>
+                      </>
+                    )}
                     {personForm.hepType === "3" && (
                       <div className="space-y-1.5 animate-in zoom-in">
                         <label className="text-xs text-orange-600 font-black uppercase tracking-wider">
@@ -3669,29 +3736,29 @@ export default function VendorPassPublicPage() {
                         })
                       }
                     />
-                  {String(vehicleForm.passType) !== "1" && (
-                    <FileUploadBox
-                      label="Permit"
-                      isRequired
-                      file={vehicleForm.permit}
-                      existingFileName={vehicleForm.existingPermitName}
-                      onView={() =>
-                        handleViewDoc(
-                          vehicleForm.existingPassRequestId,
-                          "vehiclePermit",
-                          vehicleForm.existingPermitName,
-                          vehicleForm.editIndex || 0,
-                          true
-                        )
-                      }
-                      onChange={(e) =>
-                        setVehicleForm({
-                          ...vehicleForm,
-                          permit: e.target.files[0],
-                        })
-                      }
-                    />
-                  )}
+                    {String(vehicleForm.passType) !== "1" && (
+                      <FileUploadBox
+                        label="Permit"
+                        isRequired
+                        file={vehicleForm.permit}
+                        existingFileName={vehicleForm.existingPermitName}
+                        onView={() =>
+                          handleViewDoc(
+                            vehicleForm.existingPassRequestId,
+                            "vehiclePermit",
+                            vehicleForm.existingPermitName,
+                            vehicleForm.editIndex || 0,
+                            true
+                          )
+                        }
+                        onChange={(e) =>
+                          setVehicleForm({
+                            ...vehicleForm,
+                            permit: e.target.files[0],
+                          })
+                        }
+                      />
+                    )}
                     <FileUploadBox
                       label="Fitness Certificate"
                       isRequired
@@ -3907,69 +3974,69 @@ export default function VendorPassPublicPage() {
 
                 <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
                   <table className="w-full text-left border-collapse bg-white">
-<thead className="bg-slate-100 border-b border-slate-200">
-  <tr>
-    <th className="p-3 text-xs font-bold text-center border-r">S.No</th>
-    <th className="p-3 text-xs font-bold border-r">Category</th>
-    <th className="p-3 text-xs font-bold border-r">Description ₹</th>
-    <th className="p-3 text-xs font-bold text-right border-r">Daily ₹</th>
-    <th className="p-3 text-xs font-bold text-right border-r">Monthly ₹</th>
-    <th className="p-3 text-xs font-bold text-right">Yearly ₹</th>
-  </tr>
-</thead>
+                    <thead className="bg-slate-100 border-b border-slate-200">
+                      <tr>
+                        <th className="p-3 text-xs font-bold text-center border-r">S.No</th>
+                        <th className="p-3 text-xs font-bold border-r">Category</th>
+                        <th className="p-3 text-xs font-bold border-r">Description ₹</th>
+                        <th className="p-3 text-xs font-bold text-right border-r">Daily ₹</th>
+                        <th className="p-3 text-xs font-bold text-right border-r">Monthly ₹</th>
+                        <th className="p-3 text-xs font-bold text-right">Yearly ₹</th>
+                      </tr>
+                    </thead>
 
-<tbody className="divide-y divide-slate-100">
-  {[
-    {
-      key: "INDIVIDUAL",
-      name: "Individual",
-      description: "Driver, Personal, Seafarer, Visitor",
-    },
-    {
-      key: "VEHICLE",
-      name: "Vehicle",
-      description:
-        "Articulated, Back-Hoes, Bus, Car, Cement Mixer, Concrete Mixer Lorry, Cycle Rickshaw, Defence Tank, Jeep, Light Vehicle, Lorry, Open Lorry, Open Tractor, Open Truck, PFS Vehicle, Recovery, Road Roller, Tanker, Taurus, Taurus Tipper, Taxi, Tipper, Tractor Trailer, Trailer Lorry, Tri Cycle, Truck, Van",
-    },
-    {
-      key: "CARGO_HANDLING_EQUIPMENT",
-      name: "Cargo Handling Equipment",
-      description:
-        "Poclain, Dozers, Excavators, Forklift, Dumpers, JCB Earthmover, Crane, Mobile Crane, Payloader",
-    },
-  ].map((item, index) => {
-    const fee = feeMaster?.[item.key];
-    if (!fee) return null;
+                    <tbody className="divide-y divide-slate-100">
+                      {[
+                        {
+                          key: "INDIVIDUAL",
+                          name: "Individual",
+                          description: "Driver, Personal, Seafarer, Visitor",
+                        },
+                        {
+                          key: "VEHICLE",
+                          name: "Vehicle",
+                          description:
+                            "Articulated, Back-Hoes, Bus, Car, Cement Mixer, Concrete Mixer Lorry, Cycle Rickshaw, Defence Tank, Jeep, Light Vehicle, Lorry, Open Lorry, Open Tractor, Open Truck, PFS Vehicle, Recovery, Road Roller, Tanker, Taurus, Taurus Tipper, Taxi, Tipper, Tractor Trailer, Trailer Lorry, Tri Cycle, Truck, Van",
+                        },
+                        {
+                          key: "CARGO_HANDLING_EQUIPMENT",
+                          name: "Cargo Handling Equipment",
+                          description:
+                            "Poclain, Dozers, Excavators, Forklift, Dumpers, JCB Earthmover, Crane, Mobile Crane, Payloader",
+                        },
+                      ].map((item, index) => {
+                        const fee = feeMaster?.[item.key];
+                        if (!fee) return null;
 
-    return (
-      <tr key={item.key} className="hover:bg-slate-50">
-        <td className="p-3 text-center border-r">
-          {index + 1}
-        </td>
+                        return (
+                          <tr key={item.key} className="hover:bg-slate-50">
+                            <td className="p-3 text-center border-r">
+                              {index + 1}
+                            </td>
 
-        <td className="p-3 font-medium border-r">
-          {item.name}
-        </td>
+                            <td className="p-3 font-medium border-r">
+                              {item.name}
+                            </td>
 
-        <td className="p-3 text-sm text-slate-600 border-r">
-          {item.description}
-        </td>
+                            <td className="p-3 text-sm text-slate-600 border-r">
+                              {item.description}
+                            </td>
 
-        <td className="p-3 text-right border-r whitespace-nowrap">
-          ₹ {fee.daily.toFixed(2)}
-        </td>
+                            <td className="p-3 text-right border-r whitespace-nowrap">
+                              ₹ {fee.daily.toFixed(2)}
+                            </td>
 
-        <td className="p-3 text-right border-r whitespace-nowrap">
-          ₹ {fee.monthly.toFixed(2)}
-        </td>
+                            <td className="p-3 text-right border-r whitespace-nowrap">
+                              ₹ {fee.monthly.toFixed(2)}
+                            </td>
 
-        <td className="p-3 text-right whitespace-nowrap">
-          ₹ {fee.yearly.toFixed(2)}
-        </td>
-      </tr>
-    );
-  })}
-</tbody>
+                            <td className="p-3 text-right whitespace-nowrap">
+                              ₹ {fee.yearly.toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
                   </table>
                 </div>
               </div>

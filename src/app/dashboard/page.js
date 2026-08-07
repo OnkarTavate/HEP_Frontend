@@ -1944,6 +1944,8 @@ const PassDetailModal = memo(function PassDetailModal({ pass, hepTypes, onClose 
                         { label: "Employment Proof", path: p.employmentProofPath },
                         { label: "CHA Licence", path: p.chaLicensePath },
                         { label: "Passport", path: p.passportPath },
+                        { label: "Visa", path: p.visaDocPath },
+                        { label: "Immigration Clearance", path: p.immigrationDocPath },
                       ]} />
                     </div>
                   </div>

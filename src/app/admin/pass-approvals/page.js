@@ -1850,6 +1850,24 @@ export default function AdminPassApprovalsPage() {
                         isVendorPass={selectedRequest.originType === "VENDOR"}
                       />
                       <DocumentCard
+                        label="Visa"
+                        filePath={entityModal.data.visaDocPath}
+                        documentType="visaDoc"
+                        passRequestId={selectedRequest.id}
+                        onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
+                      />
+                      <DocumentCard
+                        label="Immigration Clearance"
+                        filePath={entityModal.data.immigrationDocPath}
+                        documentType="immigrationDoc"
+                        passRequestId={selectedRequest.id}
+                        onView={handleViewDoc}
+                        entityIndex={extractEntityIndex(entityModal.data.id)}
+                        isVendorPass={selectedRequest.originType === "VENDOR"}
+                      />
+                      <DocumentCard
                         label="CDC Document"
                         filePath={entityModal.data.cdcDocumentPath}
                         documentType="cdcDocument"
