@@ -53,6 +53,12 @@ const inputClass =
 const fileLabelClass =
   "flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 text-sm font-semibold text-slate-500 transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600 dark:border-white/10 dark:bg-slate-950 dark:text-stone-400 dark:hover:border-orange-400/60 dark:hover:bg-orange-400/10 dark:hover:text-orange-300";
 
+const visitorNamePattern = /^[A-Za-z][A-Za-z .'-]*$/;
+const designationPattern = /^[A-Za-z][A-Za-z .,'/&()-]*$/;
+const indianMobilePattern = /^[6-9]\d{9}$/;
+
+const removeNumbers = (value) => value.replace(/[0-9]/g, "");
+
 const toDateTimeLocalValue = (date) => {
   const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return offsetDate.toISOString().slice(0, 16);
@@ -114,6 +120,7 @@ export default function HodVvipPassPage() {
   const [personModalOpen, setPersonModalOpen] = useState(false);
   const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
   const [personForm, setPersonForm] = useState(emptyPerson);
+  const [personErrors, setPersonErrors] = useState({});
   const [vehicleForm, setVehicleForm] = useState(emptyVehicle);
   const [editingPersonIndex, setEditingPersonIndex] = useState(null);
   const [editingVehicleIndex, setEditingVehicleIndex] = useState(null);
@@ -251,6 +258,7 @@ export default function HodVvipPassPage() {
     }
 
     setPersonForm(emptyPerson);
+    setPersonErrors({});
     setEditingPersonIndex(null);
     setPersonModalOpen(true);
   };
@@ -260,6 +268,7 @@ export default function HodVvipPassPage() {
     const hasIdNumber = Boolean(personForm.idProofNo.trim());
     const hasIdProofFile = Boolean(personForm.idProofFile || personForm.idProofFilePath);
     const visitorMobile = personForm.mobile.trim();
+    const visitorName = personForm.name.trim();
     const hasPersonInfo = [
       personForm.name,
       personForm.designation,
@@ -275,8 +284,27 @@ export default function HodVvipPassPage() {
       return;
     }
 
-    if (visitorMobile && !/^\d{10}$/.test(visitorMobile)) {
-      toast.error("Visitor Mobile Number must be exactly 10 digits.");
+    const errors = {};
+
+    if (!visitorName) {
+      errors.name = "Visitor Name is required.";
+    } else if (!visitorNamePattern.test(visitorName)) {
+      errors.name = "Visitor Name should contain alphabets only.";
+    }
+
+    if (
+      personForm.designation.trim() &&
+      !designationPattern.test(personForm.designation.trim())
+    ) {
+      errors.designation = "Designation should contain alphabets only.";
+    }
+
+    if (visitorMobile && !indianMobilePattern.test(visitorMobile)) {
+      errors.mobile = "Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.";
+    }
+
+    if (Object.keys(errors).length) {
+      setPersonErrors(errors);
       return;
     }
 
@@ -302,11 +330,13 @@ export default function HodVvipPassPage() {
     }
     setPersonModalOpen(false);
     setPersonForm(emptyPerson);
+    setPersonErrors({});
     setEditingPersonIndex(null);
   };
 
   const editPerson = (index) => {
     setPersonForm(persons[index]);
+    setPersonErrors({});
     setEditingPersonIndex(index);
     setPersonModalOpen(true);
   };
@@ -859,50 +889,75 @@ export default function HodVvipPassPage() {
       </div>
 
       {personModalOpen && (
-        <Modal title={editingPersonIndex !== null ? "Edit Person" : "Add Person"} onClose={() => setPersonModalOpen(false)}>
+        <Modal title={editingPersonIndex !== null ? "Edit Person" : "Add Person"} onClose={() => {
+          setPersonModalOpen(false);
+          setPersonErrors({});
+        }}>
           <div className="space-y-6">
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-slate-900">
               <h4 className="mb-5 border-b border-slate-100 pb-3 text-sm font-black uppercase tracking-widest text-slate-800 dark:border-white/10 dark:text-stone-100">
                 1. VVIP Visitor Details
               </h4>
               <div className="grid grid-cols-1 gap-x-5 gap-y-5 md:grid-cols-2">
-                <Field label="Visitor Name">
+                <Field label="Visitor Name" error={personErrors.name}>
                   <input
-                    className={inputClass}
+                    className={`${inputClass} ${personErrors.name ? "border-red-400 focus:border-red-400 focus:ring-red-100 dark:border-red-400/60 dark:focus:ring-red-400/10" : ""}`}
                     maxLength={80}
                     placeholder="Enter visitor full name"
                     value={personForm.name}
-                    onChange={(e) =>
-                      {
-                        setPersonForm((prev) => ({ ...prev, name: e.target.value }));
-                      }
-                    }
+                    onChange={(e) => {
+                      const rawValue = e.target.value;
+                      const cleanedValue = removeNumbers(rawValue);
+                      setPersonErrors((prev) => ({
+                        ...prev,
+                        name: /\d/.test(rawValue)
+                          ? "Visitor Name should contain alphabets only."
+                          : "",
+                      }));
+                      setPersonForm((prev) => ({ ...prev, name: cleanedValue }));
+                    }}
                   />
                 </Field>
-                <Field label="Visitor Mobile Number">
+                <Field label="Visitor Mobile Number" error={personErrors.mobile}>
                   <input
-                    className={inputClass}
+                    className={`${inputClass} ${personErrors.mobile ? "border-red-400 focus:border-red-400 focus:ring-red-100 dark:border-red-400/60 dark:focus:ring-red-400/10" : ""}`}
                     inputMode="numeric"
                     maxLength={10}
                     placeholder="Enter 10-digit mobile"
                     value={personForm.mobile}
                     onChange={(e) => {
+                      const mobile = e.target.value.replace(/\D/g, "").slice(0, 10);
+                      setPersonErrors((prev) => ({
+                        ...prev,
+                        mobile:
+                          mobile && !indianMobilePattern.test(mobile)
+                            ? "Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9."
+                            : "",
+                      }));
                       setPersonForm((prev) => ({
                         ...prev,
-                        mobile: e.target.value.replace(/\D/g, "").slice(0, 10),
+                        mobile,
                       }));
                     }}
                   />
                 </Field>
-                <Field label="Visitor Designation / Role">
+                <Field label="Visitor Designation / Role" error={personErrors.designation}>
                   <input
-                    className={inputClass}
+                    className={`${inputClass} ${personErrors.designation ? "border-red-400 focus:border-red-400 focus:ring-red-100 dark:border-red-400/60 dark:focus:ring-red-400/10" : ""}`}
                     placeholder="e.g. Minister / Officer / Guest"
                     value={personForm.designation}
                     onChange={(e) => {
+                      const rawValue = e.target.value;
+                      const cleanedValue = removeNumbers(rawValue);
+                      setPersonErrors((prev) => ({
+                        ...prev,
+                        designation: /\d/.test(rawValue)
+                          ? "Designation should contain alphabets only."
+                          : "",
+                      }));
                       setPersonForm((prev) => ({
                         ...prev,
-                        designation: e.target.value,
+                        designation: cleanedValue,
                       }));
                     }}
                   />
@@ -1106,13 +1161,18 @@ export default function HodVvipPassPage() {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children, error }) {
   return (
     <div className="space-y-1.5">
       <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-stone-300">
         {label}
       </label>
       {children}
+      {error ? (
+        <p className="text-xs font-semibold text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
