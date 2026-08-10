@@ -9,9 +9,36 @@ const AGENT_API =
 
 const fallbackCompanyTypes = [
   "Steamer Agent",
-  "CHA",
-  "Stevedore",
+  "Stevedoring and Shore Handling License",
   "Importer/Exporter",
+  "Container Freight Station",
+  "Console Agents/Main Line Operators/Exporter",
+  "Transporting firms",
+  "Associations",
+  "Govt Departments",
+  "Chipping/Painting",
+  "Container/Operator",
+  "Contractor",
+  "Co-Operative Stores",
+  "Custom House and Steamer Agent",
+  "Custom House Agent",
+  "Labour Licence",
+  "Launch Operation",
+  "Lease and Plot holder",
+  "MLO or Consol Agent",
+  "Reg. Transport Association",
+  "Self Clearing(Customs)",
+  "Ship Chandlers",
+  "Ship Garbage Disposal",
+  "Sailors Society",
+  "Storage Tank",
+  "Surveyors",
+  "Unions",
+  "Water Supplier",
+  "Society",
+  "Terminal Operator",
+  "Ship repairer",
+  "Others",
 ];
 
 const passTypes = ["DAILY", "YEARLY"];
@@ -72,7 +99,9 @@ async function getCompanyTypesFromReportOptions() {
     .filter((value) => typeof value === "string" && value.trim())
     .map((value) => value.trim());
 
-  return companyTypes.length ? companyTypes : fallbackCompanyTypes;
+  return Array.from(new Set([...companyTypes, ...fallbackCompanyTypes])).sort((a, b) =>
+    a.localeCompare(b),
+  );
 }
 
 function formatDateTimeLocal(date) {
