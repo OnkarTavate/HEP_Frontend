@@ -305,6 +305,7 @@ export default function HodVvipPassPage() {
 
     if (Object.keys(errors).length) {
       setPersonErrors(errors);
+      toast.error(Object.values(errors).find(Boolean));
       return;
     }
 
@@ -922,11 +923,10 @@ export default function HodVvipPassPage() {
                   <input
                     className={`${inputClass} ${personErrors.mobile ? "border-red-400 focus:border-red-400 focus:ring-red-100 dark:border-red-400/60 dark:focus:ring-red-400/10" : ""}`}
                     inputMode="numeric"
-                    maxLength={10}
                     placeholder="Enter 10-digit mobile"
                     value={personForm.mobile}
                     onChange={(e) => {
-                      const mobile = e.target.value.replace(/\D/g, "").slice(0, 10);
+                      const mobile = e.target.value.replace(/\D/g, "");
                       setPersonErrors((prev) => ({
                         ...prev,
                         mobile:

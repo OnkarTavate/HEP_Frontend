@@ -41,8 +41,8 @@ const fallbackCompanyTypes = [
   "Others",
 ];
 
-const passTypes = ["DAILY", "YEARLY"];
-const passRequestTypes = ["Person", "Vehicle", "Both"];
+const passTypes = ["Person", "Driver", "Vehicle"];
+const passRequestTypes = ["Online Transporter", "On Gate pass", "Vendor Pass"];
 const registeredUsersReportContentId = "registered-users-report-content";
 
 const fieldClass =
@@ -107,6 +107,22 @@ async function getCompanyTypesFromReportOptions() {
 function formatDateTimeLocal(date) {
   const pad = (value) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function formatReportDateTime(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
 }
 
 function EmptyReportState({ children }) {
@@ -215,7 +231,7 @@ function PassTypeTable({ rows }) {
         <thead className="bg-slate-50 dark:bg-slate-800/70 text-left text-xs uppercase tracking-[0.14em] text-stone-400">
           <tr>
             <th className="px-4 py-3">Request No</th>
-            <th className="px-4 py-3">Type</th>
+            <th className="px-4 py-3">Pass Request Type</th>
             <th className="px-4 py-3">Vehicle/Person</th>
             <th className="px-4 py-3">Pass Type</th>
             <th className="px-4 py-3">Transporter</th>
@@ -232,8 +248,8 @@ function PassTypeTable({ rows }) {
               <td className="px-4 py-3">{row.vehicleOrPersonName || "—"}</td>
               <td className="px-4 py-3">{row.passType || "—"}</td>
               <td className="px-4 py-3">{row.transporterName || row.transporterCode || "—"}</td>
-              <td className="px-4 py-3">{row.dateFrom || "—"}</td>
-              <td className="px-4 py-3">{row.dateTo || "—"}</td>
+              <td className="px-4 py-3 whitespace-nowrap">{formatReportDateTime(row.dateFrom)}</td>
+              <td className="px-4 py-3 whitespace-nowrap">{formatReportDateTime(row.dateTo)}</td>
               <td className="px-4 py-3">{row.amount || "0.00"}</td>
             </tr>
           ))}

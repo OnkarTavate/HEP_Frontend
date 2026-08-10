@@ -200,14 +200,24 @@ export default function TrafficVvipPassPage() {
 
   const submitReasonAction = async () => {
     if (!selectedRequest || !reasonModal) return;
+    const reason = reasonText.trim();
+
+    if (!reason) {
+      setError(
+        reasonModal === "reject"
+          ? "Please enter rejection reason."
+          : "Please enter revert reason.",
+      );
+      return;
+    }
 
     try {
       setActionLoading(true);
       if (reasonModal === "reject") {
-        await rejectVvipPass(selectedRequest.id, reasonText);
+        await rejectVvipPass(selectedRequest.id, reason);
         setSuccessMessage("VVIP pass rejected successfully.");
       } else {
-        await returnVvipPass(selectedRequest.id, reasonText);
+        await returnVvipPass(selectedRequest.id, reason);
         setSuccessMessage("VVIP pass reverted to HOD successfully.");
       }
       setReasonModal(null);
