@@ -89,7 +89,7 @@ export async function returnVvipPass(id, reason = "") {
 }
 
 async function getVvipQrPdfBlob(id) {
-  const res = await axios.get(`${AGENT_API}/vvip-pass/${id}/pdf`, {
+  const res = await axios.get(`${ADMIN_API}/vvip-pass/${id}/pdf`, {
     headers: authHeaders(),
     responseType: "blob",
   });
