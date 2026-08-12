@@ -1809,15 +1809,13 @@ export default function VendorPassPublicPage() {
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Work Order Copy</span>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-slate-700">{generalForm.workOrderFile.name}</span>
-                          {intake?.workOrderFilePath && (
-                            <button
-                              type="button"
-                              onClick={() => handleViewDoc(intake.id, "workOrder", intake.workOrderFileName)}
-                              className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-white px-2 py-1 rounded shadow-sm border border-slate-200"
-                            >
-                              <Eye className="h-3 w-3" /> View
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleViewDoc(intake?.id || activeToken || token, "workOrder", generalForm.workOrderFile.name)}
+                            className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-white px-2 py-1 rounded shadow-sm border border-slate-200"
+                          >
+                            <Eye className="h-3 w-3" /> View
+                          </button>
                         </div>
                       </div>
                     )}

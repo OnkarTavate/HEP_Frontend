@@ -8,6 +8,7 @@ import { CheckCircle, User, Car, Download, AlertCircle, Loader2, ChevronLeft, Qr
 import { toast } from "sonner";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
+const QR_API = process.env.NEXT_PUBLIC_QR_API || "http://localhost:5007/api";
 
 
 const getCurrentDateTime = () => {
@@ -1040,7 +1041,7 @@ export default function VendorPassApprovedPage() {
     if (!selectedEntity || selectedIndex === null || !entityType) return;
     try {
       const response = await axios.get(
-        `http://localhost:5007/api/qr/vendor-generate-single-qr/${vendorPassId}/${entityType}/${selectedIndex}`,
+        `${QR_API}/qr/vendor-generate-single-qr/${vendorPassId}/${entityType}/${selectedIndex}`,
         { responseType: "blob" }
       );
       const blob = new Blob([response.data], { type: "application/pdf" });
@@ -1062,7 +1063,7 @@ export default function VendorPassApprovedPage() {
   const downloadSinglePDFByIndex = async (entity, type, index) => {
     try {
       const response = await axios.get(
-        `http://localhost:5007/api/qr/vendor-generate-single-qr/${vendorPassId}/${type}/${index}`,
+        `${QR_API}/qr/vendor-generate-single-qr/${vendorPassId}/${type}/${index}`,
         { responseType: "blob" }
       );
       const blob = new Blob([response.data], { type: "application/pdf" });
@@ -1084,7 +1085,7 @@ export default function VendorPassApprovedPage() {
   const downloadPDF = async () => {
     try {
       const response = await axios.get(
-        `http://localhost:5007/api/qr/vendor-generate-qr/${vendorPassId}`,
+        `${QR_API}/qr/vendor-generate-qr/${vendorPassId}`,
         { responseType: "blob" }
       );
       const blob = new Blob([response.data], { type: "application/pdf" });

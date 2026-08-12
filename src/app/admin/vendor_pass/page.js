@@ -14,7 +14,7 @@
  * so EDP users create EDP vendor passes, Traffic users create Traffic vendor passes, etc.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import PaginationBar from "@/components/ui/PaginationBar";
 import { toast } from "sonner";
 import {
@@ -63,6 +63,7 @@ const fmtDateTime = (iso) => {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Kolkata",
   });
 };
 
@@ -81,9 +82,8 @@ const STATUS_STYLES = {
 
 const StatusBadge = ({ status }) => (
   <span
-    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-      STATUS_STYLES[status] || "bg-slate-100 text-slate-700 border-slate-200"
-    }`}
+    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${STATUS_STYLES[status] || "bg-slate-100 text-slate-700 border-slate-200"
+      }`}
   >
     {status?.replace(/_/g, " ")}
   </span>
@@ -144,7 +144,18 @@ function CreateIntakeForm({ user, onCreated }) {
     return t?.name?.toLowerCase() === "others";
   }, [form.purposeOfVisitId, purposes]);
 
-  const reset = () => setForm(initialForm);
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  const isEmailTouched = form.vendorEmail.length > 0;
+  const isEmailValid = emailRegex.test(form.vendorEmail.trim());
+
+  const fileInputRef = useRef(null);
+
+  const reset = () => {
+    setForm(initialForm);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -156,8 +167,10 @@ function CreateIntakeForm({ user, onCreated }) {
     if (purposeIsOther && !form.purposeOther.trim())
       return toast.error("Please specify the purpose in 'Others'");
     if (!form.companyName.trim()) return toast.error("Company name is required");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.vendorEmail))
-      return toast.error("Invalid vendor email");
+    if (!/^[A-Z\s.&,'-]+$/.test(form.companyName.trim()))
+      return toast.error("Company name must contain capital letters only");
+    if (!form.vendorEmail.trim()) return toast.error("Vendor email is required");
+    if (!isEmailValid) return toast.error("Invalid vendor email");
     if (!/^\d{10}$/.test(String(form.vendorMobile)))
       return toast.error("Vendor mobile must be 10 digits");
     if (!form.validUpto) return toast.error("Validity date is required");
@@ -266,7 +279,12 @@ function CreateIntakeForm({ user, onCreated }) {
               type="text"
               className={inputCls}
               value={form.companyName}
-              onChange={(e) => update("companyName", e.target.value)}
+              onChange={(e) =>
+                update(
+                  "companyName",
+                  e.target.value.toUpperCase().replace(/[^A-Z\s.&,'-]/g, "")
+                )
+              }
             />
           </div>
 
@@ -274,10 +292,19 @@ function CreateIntakeForm({ user, onCreated }) {
             <Label required>Vendor Email</Label>
             <input
               type="email"
-              className={inputCls}
+              className={`${inputCls} ${isEmailTouched && !isEmailValid
+                ? "border-rose-500 focus:border-rose-500 focus:ring-rose-100"
+                : ""
+                }`}
               value={form.vendorEmail}
               onChange={(e) => update("vendorEmail", e.target.value)}
+              placeholder="e.g. abc@example.com"
             />
+            {isEmailTouched && !isEmailValid && (
+              <p className="text-xs text-rose-500 mt-1 font-medium">
+                Invalid email format (e.g. abc@example.com)
+              </p>
+            )}
           </div>
 
           {form.hasWorkOrder && (
@@ -295,10 +322,20 @@ function CreateIntakeForm({ user, onCreated }) {
               <div>
                 <Label>Work order copy</Label>
                 <input
+                  ref={fileInputRef}
                   type="file"
                   accept=".pdf,.png,.jpg,.jpeg"
                   className="block w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
-                  onChange={(e) => update("workOrderFile", e.target.files?.[0] || null)}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    if (file && file.size > 2 * 1024 * 1024) {
+                      toast.error("File size must be less than 2MB");
+                      e.target.value = "";
+                      update("workOrderFile", null);
+                      return;
+                    }
+                    update("workOrderFile", file);
+                  }}
                 />
               </div>
             </>
@@ -595,8 +632,31 @@ function ListView({ user, refreshKey }) {
       toast.error("Vendor link is unavailable for this intake");
       return;
     }
-    navigator.clipboard.writeText(link);
-    toast.success("Vendor link copied");
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(link).then(() => {
+        toast.success("Vendor link copied");
+      }).catch(() => {
+        fallbackCopy(link);
+      });
+    } else {
+      fallbackCopy(link);
+    }
+  };
+
+  const fallbackCopy = (text) => {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-9999px";
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+      document.execCommand("copy");
+      toast.success("Vendor link copied");
+    } catch (err) {
+      toast.error("Failed to copy link");
+    }
+    document.body.removeChild(textArea);
   };
 
   const doResend = async (row) => {
@@ -738,7 +798,7 @@ function ListView({ user, refreshKey }) {
             ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={17} className="text-center py-10 text-slate-500">
-                  No vendor pass intakes yet. Use the "Create" tab to issue one.
+                  No vendor pass intakes yet. Use the &quot;Create&quot; tab to issue one.
                 </td>
               </tr>
             ) : (
@@ -873,22 +933,20 @@ export default function VendorPassPage() {
         <div className="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
           <button
             onClick={() => setTab("create")}
-            className={`h-8 px-4 rounded-md text-sm font-medium inline-flex items-center gap-2 ${
-              tab === "create"
-                ? "bg-orange-500 text-white shadow"
-                : "text-slate-600 hover:bg-slate-50"
-            }`}
+            className={`h-8 px-4 rounded-md text-sm font-medium inline-flex items-center gap-2 ${tab === "create"
+              ? "bg-orange-500 text-white shadow"
+              : "text-slate-600 hover:bg-slate-50"
+              }`}
           >
             <Plus className="h-4 w-4" />
             Create
           </button>
           <button
             onClick={() => setTab("list")}
-            className={`h-8 px-4 rounded-md text-sm font-medium inline-flex items-center gap-2 ${
-              tab === "list"
-                ? "bg-orange-500 text-white shadow"
-                : "text-slate-600 hover:bg-slate-50"
-            }`}
+            className={`h-8 px-4 rounded-md text-sm font-medium inline-flex items-center gap-2 ${tab === "list"
+              ? "bg-orange-500 text-white shadow"
+              : "text-slate-600 hover:bg-slate-50"
+              }`}
           >
             <FileText className="h-4 w-4" />
             Vendor Pass List

@@ -483,13 +483,9 @@ export default function PassRequestPage() {
     const isImg = staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath);
     setIsImage(!!isImg);
 
-    if (documentType === "authLetter" || documentType === "requisitionLetter") {
-      setViewingDocUrl(getFileUrl(staticPath));
-    } else {
-      setViewingDocUrl(
-        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${passRequestId}&documentType=${documentType}&entityIndex=${entityIndex}&isVendorPass=${isVendorPass}`,
-      );
-    }
+    setViewingDocUrl(
+      `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${passRequestId}&documentType=${documentType}&entityIndex=${entityIndex}&isVendorPass=${isVendorPass}`,
+    );
   };
 
   const [persons, setPersons] = useState([]);

@@ -502,13 +502,9 @@ export default function TrafficPassesPage() {
     const isImg = staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath);
     setIsImage(!!isImg);
 
-    if (documentType === "authLetter") {
-      setViewingDocUrl(getFileUrl(staticPath));
-    } else {
-      setViewingDocUrl(
-        `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${passRequestId}&documentType=${documentType}&entityIndex=${entityIndex}&isVendorPass=${isVendorPass}`,
-      );
-    }
+    setViewingDocUrl(
+      `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${passRequestId}&documentType=${documentType}&entityIndex=${entityIndex}&isVendorPass=${isVendorPass}`,
+    );
   };
   const handleEntityDecision = (status) => {
     if (
@@ -1287,20 +1283,36 @@ export default function TrafficPassesPage() {
                       </p>
                     </div>
                   </div>
-                  {selectedRequest.authLetterFilePath && (
-                    <button
-                      onClick={() =>
-                        handleViewDoc(
-                          selectedRequest.id,
-                          "authLetter",
-                          selectedRequest.authLetterFilePath,
-                        )
-                      }
-                      className="bg-orange-50 text-orange-700 border border-orange-200 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-orange-100 transition-colors"
-                    >
-                      <FileCheck2 className="h-4 w-4" /> View Master Auth Letter
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {selectedRequest.requisitionLetterFilePath && (
+                      <button
+                        onClick={() =>
+                          handleViewDoc(
+                            selectedRequest.id,
+                            "passRequisitionLetter",
+                            selectedRequest.requisitionLetterFilePath,
+                          )
+                        }
+                        className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
+                      >
+                        <FileText className="h-4 w-4 text-blue-600" /> View Requisition Letter
+                      </button>
+                    )}
+                    {selectedRequest.authLetterFilePath && (
+                      <button
+                        onClick={() =>
+                          handleViewDoc(
+                            selectedRequest.id,
+                            "authLetter",
+                            selectedRequest.authLetterFilePath,
+                          )
+                        }
+                        className="bg-orange-50 text-orange-700 border border-orange-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-orange-100 transition-colors shadow-sm"
+                      >
+                        <FileCheck2 className="h-4 w-4 text-orange-600" /> View Licence / Work Order / Contract
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* {companyProfile ? ( */}
