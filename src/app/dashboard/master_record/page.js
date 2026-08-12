@@ -218,7 +218,7 @@ export default function MasterRecordsPage() {
       // 1. API Call to persist Block/Active status to DB
       await axios.put(
         `${AGENT_API}/pass-request/update-person-status`,
-        { personId: id, isActive: newStatus },
+        { masterPersonId: id, isActive: newStatus },
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
@@ -255,7 +255,7 @@ export default function MasterRecordsPage() {
       // 1. API Call to persist Block/Active status to DB
       await axios.put(
         `${AGENT_API}/pass-request/update-vehicle-status`,
-        { vehicleId: id, isActive: newStatus },
+        { masterVehicleId: id, isActive: newStatus },
         { headers: { Authorization: `Bearer ${token}` } },
       );
 

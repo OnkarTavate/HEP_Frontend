@@ -496,6 +496,10 @@ export default function PassRequestPage() {
   const [vehicles, setVehicles] = useState([]);
   const [submittedPasses, setSubmittedPasses] = useState([]);
   const [twoWheelerRequests, setTwoWheelerRequests] = useState([]);
+  const [disableModal, setDisableModal] = useState(false);
+  const [disableReason, setDisableReason] = useState("");
+  const [disableLoading, setDisableLoading] = useState(false);
+  const [enableLoading, setEnableLoading] = useState(false);
 
   const fetchTwoWheelerRequests = useCallback(async () => {
     try {
@@ -743,6 +747,130 @@ export default function PassRequestPage() {
     message: "",
     data: null,
 });
+
+  const isCurrentlyActive = (entity) => {
+    if (!entity?.dateFrom || !entity?.dateTo) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const from = new Date(entity.dateFrom);
+    from.setHours(0, 0, 0, 0);
+
+    const to = new Date(entity.dateTo);
+    to.setHours(23, 59, 59, 999);
+
+    const workflowStatus = String(entity.status || "").toUpperCase();
+    const passStatus = String(entity.passStatus || "ACTIVE").toUpperCase();
+
+    return (
+      workflowStatus === "APPROVED" &&
+      passStatus === "ACTIVE" &&
+      today >= from &&
+      today <= to
+    );
+  };
+
+const isPassDisabled = (entity) =>
+  String(entity?.passStatus || "").toUpperCase() === "DISABLED";
+
+const isPassApprovedAndActive = (entity) =>
+  String(entity?.status || "").trim().toUpperCase() === "APPROVED" &&
+  String(entity?.passStatus || "").trim().toUpperCase() === "ACTIVE" &&
+  isCurrentlyActive(entity);
+
+  const handleDisablePass = async () => {
+
+      if (!disableReason.trim()) {
+          toast.error("Please enter reason.");
+          return;
+      }
+
+      try {
+
+          setDisableLoading(true);
+
+          const token = localStorage.getItem("accessToken");
+
+          const url =
+              entityModal.type === "person"
+                  ? `${AGENT_API}/pass-request/disable-person-pass`
+                  : `${AGENT_API}/pass-request/disable-vehicle-pass`;
+
+          const payload =
+              entityModal.type === "person"
+                  ? {
+                        passPersonId: entityModal.data.id,
+                        reason: disableReason,
+                    }
+                  : {
+                        passVehicleId: entityModal.data.id,
+                        reason: disableReason,
+                    };
+
+          const res = await axios.put(url, payload, {
+              headers: {
+                  Authorization: `Bearer ${token}`,
+              },
+          });
+
+          if (res.data.success) {
+
+            toast.success(res.data.message);
+            const disabledId = String(entityModal.data.id);
+            const disabledType = entityModal.type;
+            setSelectedPassDetails((prev) => {
+              if (!prev) return prev;
+
+                const key =
+                  disabledType === "person"
+                    ? "persons"
+                    : "vehicles";
+
+                return {
+                  ...prev,
+                  [key]: (prev[key] || []).map((item) =>
+                    String(item.id) === disabledId
+                      ? {
+                          ...item,
+                          passStatus: "DISABLED",
+                        }
+                      : item
+                  ),
+                };
+              });
+
+              // =====================================================
+              // CLOSE DISABLE MODAL
+              // =====================================================
+
+              setDisableModal(false);
+              setDisableReason("");
+
+              setEntityModal({
+                isOpen: false,
+                data: null,
+                type: null
+              });
+
+              fetchSubmittedPasses();
+              fetchAllViewPasses();
+          }
+
+      } catch(err){
+
+          toast.error(
+              err.response?.data?.message ||
+              "Unable to disable pass."
+          );
+
+      } finally{
+
+          setDisableLoading(false);
+
+      }
+
+  };
 
   // const personOptions = [
   //   { value: "", label: "-- Apply Fresh (Manual Entry) --" },
@@ -2051,6 +2179,31 @@ export default function PassRequestPage() {
     setEditingPersonIndex(null);
   };
 
+  const convertDate = (dateStr) => {
+    if (!dateStr) return "";
+
+    const months = {
+        Jan: "01",
+        Feb: "02",
+        Mar: "03",
+        Apr: "04",
+        May: "05",
+        Jun: "06",
+        Jul: "07",
+        Aug: "08",
+        Sep: "09",
+        Oct: "10",
+        Nov: "11",
+        Dec: "12",
+    };
+
+    const parts = dateStr.split("-");
+
+    if (parts.length !== 3) return "";
+
+    return `${parts[2]}-${months[parts[1]]}-${parts[0]}`;
+};
+
   const verifyVehicle = async (vehicleNo) => {
     try {
       setVehicleVerification({
@@ -2073,12 +2226,19 @@ export default function PassRequestPage() {
           },
         }
       );
+      // const ulipData = res.data?.response?.[0]?.response;
       const ulipData = res.data?.response?.[0]?.response;
 
-      const statusMessage = ulipData?.statusMessage || "";
 
-      const isVerified =
-          statusMessage === "Vehicle Details Found";
+
+      const isVerified = res.data.vehicleStatus === "ACTIVE";
+
+      const statusMessage =res.data.vehicleStatus || "INACTIVE";
+
+      // const statusMessage = ulipData?.statusMessage || "";
+
+      // const isVerified =
+      //     statusMessage === "Vehicle Details Found";
 
       setVehicleVerification({
 
@@ -2091,6 +2251,20 @@ export default function PassRequestPage() {
           data: res.data
 
       });
+      if (ulipData) {
+
+    setVehicleForm(prev => ({
+        ...prev,
+        insuranceExpiry:
+            convertDate(ulipData.rcInsuranceUpto),
+
+        rcValidity:
+            convertDate(ulipData.rcRegnUpto),
+
+        // map your vehicle type if needed
+    }));
+
+}
 
       // ==========================
       // Update Verification Status
@@ -2280,7 +2454,7 @@ export default function PassRequestPage() {
         //====================
     // ULIP Verification
     //====================
-
+    console.log("vehicleVerification =", vehicleVerification);
     if (!vehicleVerification.verified) {
 
         return toast.error(
@@ -2339,14 +2513,48 @@ export default function PassRequestPage() {
       return;
     }
 
+    const vehicleData = {
+      ...vehicleForm,
+
+      ulipVerified: vehicleVerification.verified,
+
+      vehicleStatus:
+        vehicleVerification.verified
+          ? "ACTIVE"
+          : "INACTIVE",
+
+      ulipVerifiedAt: new Date().toISOString(),
+
+      ulipResponse: vehicleVerification.data
+    };
+
+    console.log("Vehicle Data");
+console.log(vehicleData);
+
+    // if (editingVehicleIndex !== null) {
+    //   const updated = [...vehicles];
+    //   updated[editingVehicleIndex] = vehicleForm;
+    //   setVehicles(updated);
+    //   setEditingVehicleIndex(null);
+    //   toast.success("Vehicle updated successfully.");
+    // } else {
+    //   setVehicles([...vehicles, vehicleForm]);
+    //   toast.success("Vehicle added successfully.");
+    // }
     if (editingVehicleIndex !== null) {
       const updated = [...vehicles];
-      updated[editingVehicleIndex] = vehicleForm;
+
+      // CHANGE HERE
+      updated[editingVehicleIndex] = vehicleData;
+
       setVehicles(updated);
       setEditingVehicleIndex(null);
       toast.success("Vehicle updated successfully.");
     } else {
-      setVehicles([...vehicles, vehicleForm]);
+
+      // CHANGE HERE
+      setVehicles([...vehicles, vehicleData]);
+
       toast.success("Vehicle added successfully.");
     }
 
@@ -2369,6 +2577,98 @@ export default function PassRequestPage() {
     });
     setEditingVehicleIndex(null);
     toggleModal("vehicle", true);
+  };
+
+  const handleEnablePass = async () => {
+    if (!entityModal?.data?.id) {
+      toast.error("Pass information is missing.");
+      return;
+    }
+
+    try {
+      setEnableLoading(true);
+
+      const token = localStorage.getItem("accessToken");
+
+      const url =
+        entityModal.type === "person"
+          ? `${AGENT_API}/pass-request/enable-person-pass`
+          : `${AGENT_API}/pass-request/enable-vehicle-pass`;
+
+      const payload =
+        entityModal.type === "person"
+          ? {
+              passPersonId: entityModal.data.id,
+            }
+          : {
+              passVehicleId: entityModal.data.id,
+            };
+
+      const response = await axios.put(url, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.data?.success) {
+        throw new Error(
+          response.data?.message || "Unable to enable pass."
+        );
+      }
+
+      toast.success(
+        response.data.message || "Pass enabled successfully."
+      );
+
+      // Update current entity immediately
+      setEntityModal((prev) => ({
+        ...prev,
+        data: {
+          ...prev.data,
+          passStatus: "ACTIVE",
+          disabledReason: null,
+          disabledAt: null,
+        },
+      }));
+
+      // Update selected pass details immediately
+      setSelectedPassDetails((prev) => {
+        if (!prev) return prev;
+
+        const key =
+          entityModal.type === "person"
+            ? "persons"
+            : "vehicles";
+
+        return {
+          ...prev,
+          [key]: (prev[key] || []).map((item) =>
+            String(item.id) === String(entityModal.data.id)
+              ? {
+                  ...item,
+                  passStatus: "ACTIVE",
+                  disabledReason: null,
+                  disabledAt: null,
+                }
+              : item
+          ),
+        };
+      });
+
+      // Refresh list so parent request also comes back normally
+      fetchAllViewPasses();
+
+    } catch (error) {
+      console.error("Enable pass error:", error);
+
+      toast.error(
+        error.response?.data?.message ||
+          error.message ||
+          "Unable to enable pass."
+      );
+    } finally {
+      setEnableLoading(false);
+    }
   };
 
   const deleteVehicleRow = (index) => {
@@ -2528,6 +2828,10 @@ export default function PassRequestPage() {
           dateFrom: v.dateFrom,
           dateTo: computedDateTo,
           amount: parseFloat(v.amount) || 0,
+           // ULIP
+          ulipVerified: v.ulipVerified,
+          vehicleStatus: v.vehicleStatus,
+          ulipVerifiedAt: v.ulipVerifiedAt
         };
       });
 
@@ -2546,6 +2850,11 @@ export default function PassRequestPage() {
         persons: formattedPersons,
         vehicles: formattedVehicles,
       };
+
+      console.log("REQUEST PAYLOAD");
+      console.log(requestPayload);
+      console.log("Vehicles Payload");
+      console.log(requestPayload.vehicles);
 
       formData.append("payload", JSON.stringify(requestPayload));
       formData.append("authLetter", generalForm.authLetter);
@@ -2628,6 +2937,23 @@ export default function PassRequestPage() {
 
         setPersons([]);
         setVehicles([]);
+        // setVehicles([
+        //     ...vehicles,
+        //     {
+        //         ...vehicleForm,
+
+        //         ulipVerified: vehicleVerification.verified,
+
+        //         vehicleStatus:
+        //             vehicleVerification.verified
+        //                 ? "ACTIVE"
+        //                 : "INACTIVE",
+
+        //         ulipVerifiedAt: new Date().toISOString(),
+
+        //         ulipResponse: vehicleVerification.data
+        //     }
+        // ]);
         setAgreedToTerms(false);
         setActiveTab("view");
       }
@@ -7166,15 +7492,28 @@ export default function PassRequestPage() {
                                 })()}
                               </td>
                               <td className="p-3">
-                                <span
-                                  className={`px-2 py-1 rounded-full text-[10px] font-bold ${String(p.status).toUpperCase() === "APPROVED" ? "bg-emerald-100 text-emerald-700" : String(p.status).toUpperCase() === "REJECTED" ? "bg-red-100 text-red-700" : String(p.status).toUpperCase() === "REVERTED" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}
-                                >
-                                  {(p.status || "PENDING").toUpperCase()}
-                                </span>
+                                {isPassDisabled(p) ? (
+                                  <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                                    DISABLED
+                                  </span>
+                                ) : (
+                                  <span
+                                    className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                                      String(p.status || "").toUpperCase() === "APPROVED"
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : String(p.status || "").toUpperCase() === "REJECTED"
+                                        ? "bg-red-100 text-red-700"
+                                        : String(p.status || "").toUpperCase() === "REVERTED"
+                                        ? "bg-amber-100 text-amber-700"
+                                        : "bg-blue-100 text-blue-700"
+                                    }`}
+                                  >
+                                    {(p.status || "PENDING").toUpperCase()}
+                                  </span>
+                                )}
                               </td>
                               <td className="p-3 text-center">
-                                {String(p.status).toUpperCase() ===
-                                  "APPROVED" ? (
+                                {isPassApprovedAndActive(p) ? (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -7264,15 +7603,28 @@ export default function PassRequestPage() {
                                 })()}
                               </td>
                               <td className="p-3">
-                                <span
-                                  className={`px-2 py-1 rounded-full text-[10px] font-bold ${String(v.status).toUpperCase() === "APPROVED" ? "bg-emerald-100 text-emerald-700" : String(v.status).toUpperCase() === "REJECTED" ? "bg-red-100 text-red-700" : String(v.status).toUpperCase() === "REVERTED" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}
-                                >
-                                  {(v.status || "PENDING").toUpperCase()}
-                                </span>
+                                {isPassDisabled(v) ? (
+                                  <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                                    DISABLED
+                                  </span>
+                                ) : (
+                                  <span
+                                    className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                                      String(v.status || "").toUpperCase() === "APPROVED"
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : String(v.status || "").toUpperCase() === "REJECTED"
+                                        ? "bg-red-100 text-red-700"
+                                        : String(v.status || "").toUpperCase() === "REVERTED"
+                                        ? "bg-amber-100 text-amber-700"
+                                        : "bg-blue-100 text-blue-700"
+                                    }`}
+                                  >
+                                    {(v.status || "PENDING").toUpperCase()}
+                                  </span>
+                                )}
                               </td>
                               <td className="p-3 text-center">
-                                {String(v.status).toUpperCase() ===
-                                  "APPROVED" ? (
+                                {isPassApprovedAndActive(v) ? (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -7287,7 +7639,7 @@ export default function PassRequestPage() {
                                     -
                                   </span>
                                 )}
-                              </td>
+                            </td>
                             </tr>
                           ))
                         ) : (
@@ -7489,6 +7841,37 @@ export default function PassRequestPage() {
                   <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest">
                     Full Submitted Preview (Read-Only)
                   </h4>
+                  <div className="flex items-center gap-4">
+
+                    <span
+                        className={`px-3 py-1 rounded-full text-xs font-bold
+                        ${
+                            entityModal.data.passStatus === "DISABLED"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-green-100 text-green-700"
+                        }`}
+                    >
+                        {entityModal.data.passStatus || "ACTIVE"}
+                    </span>
+
+                    {isPassApprovedAndActive(entityModal.data) ? (
+                      <button
+                        onClick={() => setDisableModal(true)}
+                        className="px-4 py-2 rounded-lg bg-red-600 text-white font-bold hover:bg-red-700"
+                      >
+                        Disable Pass
+                      </button>
+                    ) : isPassDisabled(entityModal.data) ? (
+                      <button
+                        onClick={handleEnablePass}
+                        disabled={enableLoading}
+                        className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {enableLoading ? "Enabling..." : "Enable Pass"}
+                      </button>
+                    ) : null}
+
+                </div>
                   {entityModal.type === "person" &&
                     (String(entityModal.data.passType).toUpperCase() === "YEARLY" ||
                       String(entityModal.data.passType).toUpperCase() === "ANNUAL" ||
@@ -7863,6 +8246,58 @@ export default function PassRequestPage() {
             </div>
           </div>
         </div>
+      )}
+      {disableModal && (
+
+        <div className="fixed inset-0 z-[120] bg-black/40 flex justify-center items-center">
+
+        <div className="bg-white rounded-xl w-[450px] p-6">
+
+        <h2 className="text-lg font-bold">
+        Disable Pass
+        </h2>
+
+        <p className="text-sm text-slate-500 mt-2">
+        Please enter the reason.
+        </p>
+
+        <textarea
+        rows={5}
+        className="w-full border rounded-lg mt-4 p-3"
+        value={disableReason}
+        onChange={(e)=>setDisableReason(e.target.value)}
+        />
+
+        <div className="flex justify-end gap-3 mt-6">
+
+        <button
+        className="px-5 py-2 bg-slate-300 rounded-lg"
+        onClick={()=>{
+        setDisableModal(false);
+        setDisableReason("");
+        }}
+        >
+        Cancel
+        </button>
+
+        <button
+        disabled={disableLoading}
+        onClick={handleDisablePass}
+        className="px-5 py-2 bg-red-600 text-white rounded-lg"
+        >
+
+        {disableLoading
+        ? "Disabling..."
+        : "Disable"}
+
+        </button>
+
+        </div>
+
+        </div>
+
+        </div>
+
       )}
 
       {/* TWO WHEELER UPDATE MODAL */}
