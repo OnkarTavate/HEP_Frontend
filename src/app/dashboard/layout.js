@@ -212,7 +212,7 @@ function CompanyProfilePanel({ user, profileData, onChangePassword, onUpdateProf
 
       {/* Dropdown panel */}
       {open && (
-        <div className="absolute right-0 top-[calc(100%+10px)] z-[200] w-80 rounded-3xl bg-white dark:bg-[#1f232d] shadow-[0_8px_40px_rgba(0,0,0,0.18)] ring-1 ring-stone-200/70 dark:ring-white/10 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 top-[calc(100%+10px)] z-[9999] w-80 rounded-3xl bg-white dark:bg-[#1f232d] shadow-[0_8px_40px_rgba(0,0,0,0.18)] ring-1 ring-stone-200/70 dark:ring-white/10 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
           {/* Panel header */}
           <div className="bg-gradient-to-r from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] px-5 py-4 relative overflow-hidden">
             {/* Wave decoration */}
@@ -603,7 +603,7 @@ export default function DashboardLayout({ children }) {
         {/* Main content */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           {/* ── Header ─────────────────────────────────────────────────────────── */}
-          <header className="px-4 sm:px-6 lg:px-8 pt-4 pb-3 flex items-center justify-between gap-3 shrink-0 relative z-50">
+          <header className="px-4 sm:px-6 lg:px-8 pt-4 pb-3 flex items-center justify-between gap-3 shrink-0 relative z-40">
             {/* Left: mobile menu trigger + page title only */}
             <div className="flex items-center gap-3 min-w-0">
               <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>

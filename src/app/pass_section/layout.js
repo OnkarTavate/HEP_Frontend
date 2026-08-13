@@ -108,7 +108,7 @@ function UserProfilePanel({ user, onChangePassword, onLogout }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+10px)] z-[200] w-80 rounded-2xl bg-white shadow-[0_8px_40px_rgba(0,0,0,0.15)] ring-1 ring-gray-200 overflow-hidden">
+        <div className="absolute right-0 top-[calc(100%+10px)] z-[9999] w-80 rounded-2xl bg-white shadow-[0_8px_40px_rgba(0,0,0,0.15)] ring-1 ring-gray-200 overflow-hidden">
           <div className="bg-gradient-to-r from-[#0a1e4d] to-[#1a3a8f] px-5 py-4 relative overflow-hidden">
             <div className="relative flex items-center gap-3">
               <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 text-white text-lg font-extrabold shrink-0 shadow-lg ring-2 ring-white/20">
@@ -365,7 +365,7 @@ export default function PassSectionLayout({ children }) {
         {/* Main content */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           {/* Header */}
-          <header className="px-4 sm:px-6 flex items-center justify-between gap-3 h-14 shrink-0 bg-white border-b border-gray-200 shadow-sm relative z-50">
+          <header className="px-4 sm:px-6 flex items-center justify-between gap-3 h-14 shrink-0 bg-white border-b border-gray-200 shadow-sm relative z-40">
             <div className="flex items-center gap-3 min-w-0">
               <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden text-gray-600 hover:text-gray-900 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                 <Menu className="h-5 w-5" />
