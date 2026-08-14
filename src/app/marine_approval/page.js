@@ -37,6 +37,8 @@ import {
   Zap,
 } from "lucide-react";
 
+import { getPassRequestCategory, getItemCategoryTag } from "@/utils/passCategoryHelper";
+
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
@@ -1003,9 +1005,11 @@ export default function TrafficPassesPage() {
                   const lock = activeLocks[lockType]?.find(l => String(l.applicationId) === String(pass.id));
                   const isLocked = !!lock;
 
+                  const catInfo = getPassRequestCategory(pass);
+
                   const rowClass = isLocked
-                    ? "bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group"
-                    : "hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group";
+                    ? `bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group ${catInfo.borderAccent}`
+                    : `hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group ${catInfo.borderAccent}`;
 
                   return (
                     <tr
@@ -1030,9 +1034,14 @@ export default function TrafficPassesPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200 dark:border-blue-500/20">
-                          {pass.persons?.length || 0} Persons | {pass.vehicles?.length || 0} Vehicles
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-slate-200 dark:border-slate-700">
+                            {pass.persons?.length || 0} Persons | {pass.vehicles?.length || 0} Vehicles
+                          </span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${catInfo.badgeClass}`}>
+                            {catInfo.label}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
                         {new Date(pass.createdAt).toLocaleDateString()}
