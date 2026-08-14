@@ -368,106 +368,174 @@ export default function BlacklistPenaltiesPage() {
                       <th className="px-5 py-3.5 text-center">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 text-sm">
-                    {overstayCharges.map((charge, idx) => {
-                      const fmtD = (d) => {
-                        if (!d) return "—";
-                        return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-                      };
-                      const daysNum = ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status)
-                      ? parseInt(charge.current_overstay_days || 0, 10)
-                      : parseInt(charge.overstay_days || 0, 10);
-                      const isNotifiedOnly = charge.status === "NOTIFIED";
-                      const severityClass = daysNum >= 30 ? "bg-rose-100 text-rose-800 border-rose-300"
-                        : daysNum >= 14 ? "bg-red-50 text-red-700 border-red-200"
-                        : daysNum >= 7 ? "bg-amber-50 text-amber-700 border-amber-200"
-                        : "bg-yellow-50 text-yellow-700 border-yellow-200";
-                      return (
-                        <tr key={charge.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-5 py-4 font-mono font-bold text-slate-500 text-xs">#{idx + 1}</td>
-                          <td className="px-5 py-4">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                              {charge.entity_type}
-                            </span>
-                            <p className="font-bold text-[#0a1e4d] uppercase text-xs">{charge.identifier}</p>
-                            {charge.entity_name && charge.entity_name !== charge.identifier && (
-                              <p className="text-[10px] text-slate-500 mt-0.5">{charge.entity_name}</p>
-                            )}
-                          </td>
-                          <td className="px-5 py-4 font-mono text-xs font-semibold text-slate-600">{charge.pass_no || "—"}</td>
-                          <td className="px-5 py-4 text-xs font-medium text-emerald-700">
-                            {fmtD(charge.date_from)}
-                          </td>
-                          <td className="px-5 py-4 text-xs font-medium text-red-600">
-                            {fmtD(charge.date_to)}
-                          </td>
-                          <td className="px-5 py-4 text-xs font-medium">
-                            <span className={`font-extrabold px-2 py-0.5 rounded-md border text-[10px] ${severityClass}`}>
-                              {daysNum} day{daysNum !== 1 ? "s" : ""}
-                            </span>
-                            {isNotifiedOnly ? (
-                              <p className="text-sky-600 mt-0.5 font-semibold"> </p>
-                            ) : (
-                              <p className="text-slate-400 mt-0.5">₹{charge.daily_rate}/day</p>
-                            )}
-                          </td>
-                          <td className="px-5 py-4 font-black text-slate-900 text-sm">
-                            {isNotifiedOnly ? (
-                              <span className="text-slate-400 font-semibold text-xs">Not levied yet</span>
-                            ) : (
-                              <>₹{parseFloat(
-                                ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status)
-                                  ? charge.current_total_amount
-                                  : charge.total_amount
-                              ).toLocaleString("en-IN")}</>
-                            )}
-                          </td>
-                          <td className="px-5 py-4">
-                            <span
-                              className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
-                                charge.status === "PAID"
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : charge.status === "NOTIFIED"
-                                  ? "bg-sky-50 text-sky-700 border-sky-200"
-                                  : charge.status === "EXCEPTION_REQUESTED"
-                                  ? "bg-amber-50 text-amber-700 border-amber-200 animate-pulse"
-                                  : charge.status === "EXCEPTION_APPROVED" || charge.status === "WAIVED"
-                                  ? "bg-blue-50 text-blue-700 border-blue-200"
-                                  : charge.status === "EXCEPTION_REJECTED"
-                                  ? "bg-rose-50 text-rose-700 border-rose-200"
-                                  : "bg-red-50 text-red-700 border-red-200"
-                              }`}
-                            >
-                              {charge.status.replace(/_/g, " ")}
-                            </span>
-                          </td>
-                          <td className="px-5 py-4 text-center">
-                            {charge.status === "PENDING" || charge.status === "EXCEPTION_REJECTED" ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  onClick={() => openPaymentModal(charge, true)}
-                                  className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1"
-                                >
-                                  <CreditCard className="h-3.5 w-3.5" />
-                                  Pay Fine
-                                </button>
-                                {charge.status === "PENDING" && (
-                                  <button
-                                    onClick={() => openUnblockModal(charge, true)}
-                                    className="px-3.5 py-2 border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 text-[#0a1e4d] rounded-xl text-xs font-bold transition-all flex items-center gap-1"
-                                  >
-                                    Request Exception
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-xs text-slate-400 font-semibold italic">No Action Needed</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
+<tbody className="divide-y divide-slate-100">
+  {overstayCharges.map((charge, idx) => {
+    const fmtD = (d) => {
+      if (!d) return "—";
+      return new Date(d).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    };
+
+    const daysNum = [
+      "PENDING",
+      "EXCEPTION_REQUESTED",
+      "EXCEPTION_REJECTED",
+    ].includes(charge.status)
+      ? parseInt(charge.current_overstay_days || 0, 10)
+      : parseInt(charge.overstay_days || 0, 10);
+
+    const isNotifiedOnly = charge.status === "NOTIFIED";
+
+    const severityClass =
+      daysNum >= 30
+        ? "bg-rose-100 text-rose-800 border-rose-300"
+        : daysNum >= 14
+        ? "bg-red-50 text-red-700 border-red-200"
+        : daysNum >= 7
+        ? "bg-amber-50 text-amber-700 border-amber-200"
+        : "bg-yellow-50 text-yellow-700 border-yellow-200";
+
+    return (
+      <tr
+        key={charge.id}
+        className="hover:bg-slate-50 transition-colors"
+      >
+        {/* SI No. */}
+        <td className="px-5 py-4 font-mono font-bold text-slate-500 text-sm">
+          #{idx + 1}
+        </td>
+
+        {/* Entity & Identifier */}
+        <td className="px-5 py-4">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
+            {charge.entity_type}
+          </span>
+
+          <p className="font-bold text-[#0a1e4d] uppercase text-sm">
+            {charge.identifier}
+          </p>
+
+          {charge.entity_name &&
+            charge.entity_name !== charge.identifier && (
+              <p className="text-xs text-slate-500 mt-0.5">
+                {charge.entity_name}
+              </p>
+            )}
+        </td>
+
+        {/* Pass No */}
+        <td className="px-5 py-4 font-mono text-sm font-semibold text-slate-600">
+          {charge.pass_no || "—"}
+        </td>
+
+        {/* Entry Date */}
+        <td className="px-5 py-4 text-sm font-medium text-emerald-700">
+          {fmtD(charge.date_from)}
+        </td>
+
+        {/* Expiry Date */}
+        <td className="px-5 py-4 text-sm font-medium text-red-600">
+          {fmtD(charge.date_to)}
+        </td>
+
+        {/* Overstay / Rate */}
+        <td className="px-5 py-4 text-sm font-medium">
+          <span
+            className={`font-extrabold px-2 py-0.5 rounded-md border text-xs ${severityClass}`}
+          >
+            {daysNum} day{daysNum !== 1 ? "s" : ""}
+          </span>
+
+          {isNotifiedOnly ? (
+            <p className="text-sky-600 mt-0.5 font-semibold">
+              {" "}
+            </p>
+          ) : (
+            <p className="text-slate-500 mt-0.5 text-sm">
+              ₹{charge.daily_rate}/day
+            </p>
+          )}
+        </td>
+
+        {/* Total Penalty */}
+        <td className="px-5 py-4 font-black text-slate-900 text-base">
+          {isNotifiedOnly ? (
+            <span className="text-slate-400 font-semibold text-sm">
+              Not levied yet
+            </span>
+          ) : (
+            <>
+              ₹
+              {parseFloat(
+                [
+                  "PENDING",
+                  "EXCEPTION_REQUESTED",
+                  "EXCEPTION_REJECTED",
+                ].includes(charge.status)
+                  ? charge.current_total_amount
+                  : charge.total_amount
+              ).toLocaleString("en-IN")}
+            </>
+          )}
+        </td>
+
+        {/* Status */}
+        <td className="px-5 py-4">
+          <span
+            className={`inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-1 rounded-full border ${
+              charge.status === "PAID"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : charge.status === "NOTIFIED"
+                ? "bg-sky-50 text-sky-700 border-sky-200"
+                : charge.status === "EXCEPTION_REQUESTED"
+                ? "bg-amber-50 text-amber-700 border-amber-200 animate-pulse"
+                : charge.status === "EXCEPTION_APPROVED" ||
+                  charge.status === "WAIVED"
+                ? "bg-blue-50 text-blue-700 border-blue-200"
+                : charge.status === "EXCEPTION_REJECTED"
+                ? "bg-rose-50 text-rose-700 border-rose-200"
+                : "bg-red-50 text-red-700 border-red-200"
+            }`}
+          >
+            {charge.status.replace(/_/g, " ")}
+          </span>
+        </td>
+
+        {/* Actions */}
+        <td className="px-5 py-4 text-center">
+          {charge.status === "PENDING" ||
+          charge.status === "EXCEPTION_REJECTED" ? (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => openPaymentModal(charge, true)}
+                className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-sm font-bold shadow-md transition-all flex items-center gap-1"
+              >
+                <CreditCard className="h-3.5 w-3.5" />
+                Pay Fine
+              </button>
+
+              {charge.status === "PENDING" && (
+                <button
+                  onClick={() => openUnblockModal(charge, true)}
+                  className="px-3.5 py-2 border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 text-[#0a1e4d] rounded-xl text-sm font-bold transition-all flex items-center gap-1"
+                >
+                  Request Exception
+                </button>
+              )}
+            </div>
+          ) : (
+            <span className="text-sm text-slate-400 font-semibold italic">
+              No Action Needed
+            </span>
+          )}
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
                 </table>
               </div>
             </div>

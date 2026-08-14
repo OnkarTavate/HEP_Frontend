@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
 import {
   Clock,
@@ -95,10 +95,19 @@ const statusConfig = {
   WAIVED: { bg: "bg-slate-100 text-slate-600 border-slate-200", icon: <Ban className="h-3.5 w-3.5 text-slate-400" />, dot: "bg-slate-400" },
 };
 
-const passDuration = (from, to) => {
-  if (!from || !to) return "—";
-  const diff = Math.ceil((new Date(to) - new Date(from)) / (1000 * 60 * 60 * 24));
-  return `${diff} day${diff !== 1 ? "s" : ""}`;
+const formatPassType = (passType, dateFrom, dateTo) => {
+  if (passType) {
+    const pt = String(passType).trim().toUpperCase();
+    if (pt === "DAILY" || pt === "1") return "Daily";
+    if (pt === "MONTHLY" || pt === "2") return "Monthly";
+    if (pt === "YEARLY" || pt === "ANNUAL" || pt === "3") return "Annual";
+    return pt.charAt(0).toUpperCase() + pt.slice(1).toLowerCase();
+  }
+  if (!dateFrom || !dateTo) return "—";
+  const diff = Math.ceil((new Date(dateTo) - new Date(dateFrom)) / (1000 * 60 * 60 * 24));
+  if (diff <= 7) return "Daily";
+  if (diff <= 90) return "Monthly";
+  return "Annual";
 };
 
 // An approved exception is functionally a waiver, and a rejected exception simply
@@ -148,8 +157,10 @@ const sortData = (data, key, direction) => {
       av = parseFloat(av) || 0;
       bv = parseFloat(bv) || 0;
     } else {
-      // Sort the "Identifier & Name" column by what is displayed
-      if (key === "identifier") {
+      if (key === "pass_type") {
+        av = formatPassType(a.pass_type || a.passType, a.date_from, a.date_to).toLowerCase();
+        bv = formatPassType(b.pass_type || b.passType, b.date_from, b.date_to).toLowerCase();
+      } else if (key === "identifier") {
         const getDisplayValue = (item) => {
           if (item.entity_type === "VEHICLE") {
             // Vehicles: sort by registration number
@@ -319,6 +330,7 @@ export default function ATMOverstayPage() {
   const [chargesList, setChargesList] = useState([]);
   const [appealsList, setAppealsList] = useState([]);
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [passTypeFilter, setPassTypeFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRangeFilter, setDateRangeFilter] = useState("ALL");
   // Draft values edited in the custom range inputs.
@@ -573,6 +585,7 @@ const handleTogglePassBlock = async () => {
         identifier: selectedEntity.identifier,
         entity_name: selectedEntity.entity_name || "",
         pass_no: selectedEntity.pass_no || "",
+        pass_type: selectedEntity.pass_type || selectedEntity.passType || null,
         date_from: selectedEntity.date_from || null,
         date_to: selectedEntity.date_to || null,
         overstay_days: days,
@@ -732,6 +745,7 @@ const handleTogglePassBlock = async () => {
         identifier: item.identifier,
         entity_name: item.entity_name,
         pass_no: item.pass_no,
+        pass_type: item.pass_type || item.passType || null,
         category: item.category,
         date_from: item.date_from,
         date_to: item.date_to,
@@ -825,6 +839,7 @@ const handleToggleCompanyPassBlock = async () => {
           identifier: item.identifier,
           entity_name: item.entity_name || "",
           pass_no: item.pass_no || "",
+          pass_type: item.pass_type || item.passType || null,
           date_from: item.date_from || null,
           date_to: item.date_to || null,
           overstay_days: days,
@@ -870,6 +885,7 @@ const handleToggleCompanyPassBlock = async () => {
             identifier: item.identifier,
             entity_name: item.entity_name,
             pass_no: item.pass_no,
+            pass_type: item.pass_type || item.passType || null,
             category: item.category,
             date_from: item.date_from,
             date_to: item.date_to,
@@ -985,7 +1001,7 @@ const handleToggleCompanyPassBlock = async () => {
     );
   }, [appealsList, searchQuery]);
 
-  const applyDateRange = (list) => {
+  const applyDateRange = useCallback((list) => {
     if (dateRangeFilter === "CUSTOM") {
       if (!appliedCustomDateFrom && !appliedCustomDateTo) return list;
 
@@ -1005,19 +1021,30 @@ const handleToggleCompanyPassBlock = async () => {
     const cutoff = dateRangeCutoff(dateRangeFilter);
     if (!cutoff) return list;
     return list.filter((i) => i.date_to && new Date(i.date_to) >= cutoff);
-  };
+  }, [dateRangeFilter, appliedCustomDateFrom, appliedCustomDateTo]);
+
+  const applyPassTypeFilter = useCallback((list) => {
+    if (passTypeFilter === "ALL") return list;
+    return list.filter((i) => {
+      const formatted = formatPassType(i.pass_type || i.passType, i.date_from, i.date_to);
+      if (passTypeFilter === "DAILY") return formatted === "Daily";
+      if (passTypeFilter === "MONTHLY") return formatted === "Monthly";
+      if (passTypeFilter === "ANNUAL" || passTypeFilter === "YEARLY") return formatted === "Annual";
+      return true;
+    });
+  }, [passTypeFilter]);
 
   const rangedDetected = useMemo(
-    () => applyDateRange(searchedDetected),
-    [searchedDetected, dateRangeFilter, appliedCustomDateFrom, appliedCustomDateTo]
+    () => applyPassTypeFilter(applyDateRange(searchedDetected)),
+    [searchedDetected, applyDateRange, applyPassTypeFilter]
   );
   const rangedCharges = useMemo(
-    () => applyDateRange(searchedCharges),
-    [searchedCharges, dateRangeFilter, appliedCustomDateFrom, appliedCustomDateTo]
+    () => applyPassTypeFilter(applyDateRange(searchedCharges)),
+    [searchedCharges, applyDateRange, applyPassTypeFilter]
   );
   const rangedAppeals = useMemo(
-    () => applyDateRange(searchedAppeals),
-    [searchedAppeals, dateRangeFilter, appliedCustomDateFrom, appliedCustomDateTo]
+    () => applyPassTypeFilter(applyDateRange(searchedAppeals)),
+    [searchedAppeals, applyDateRange, applyPassTypeFilter]
   );
 
   const filteredDetected = useMemo(() => sortData(rangedDetected, sortConfig.key, sortConfig.direction), [rangedDetected, sortConfig]);
@@ -1127,13 +1154,30 @@ const handleToggleCompanyPassBlock = async () => {
       <SortTh label="Pass No" sortKey="pass_no" sortConfig={sortConfig} onSort={onSort} />
       <SortTh label="Pass Entry Date" sortKey="date_from" sortConfig={sortConfig} onSort={onSort} />
       <SortTh label="Pass Expiry Date" sortKey="date_to" sortConfig={sortConfig} onSort={onSort} />
+      <SortTh label="Pass Type" sortKey="pass_type" sortConfig={sortConfig} onSort={onSort} />
       <SortTh label="Overstay / Rate" sortKey="overstay_days" sortConfig={sortConfig} onSort={onSort} />
       <SortTh label="Total Penalty" sortKey="total_amount" sortConfig={sortConfig} onSort={onSort} />
       <SortTh label="Status" sortKey="status" sortConfig={sortConfig} onSort={onSort} />
       <th className="px-3 py-2.5 text-center">Actions</th>
     </tr>
   );
+  const passTypeColor = (passType) => {
+    const type = String(passType || "").toLowerCase();
 
+    if (type.includes("daily")) {
+      return "bg-blue-50 text-blue-700 border-blue-200";
+    }
+
+    if (type.includes("monthly")) {
+      return "bg-purple-50 text-purple-700 border-purple-200";
+    }
+
+    if (type.includes("yearly") || type.includes("annual")) {
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    }
+
+    return "bg-slate-100 text-slate-700 border-slate-200";
+  };
   const renderChargeRow = (charge, idx) => {
     const eff = effectiveStatus(charge.status);
     const sc = statusConfig[eff] || statusConfig.PENDING;
@@ -1192,7 +1236,19 @@ const handleToggleCompanyPassBlock = async () => {
             {fmtDate(charge.date_to)}
           </span>
         </td>
-
+        <td className="px-3 py-2 font-bold text-slate-700">
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-extrabold text-[11px] ${passTypeColor(
+              charge.pass_type || charge.passType
+            )}`}
+          >
+            {formatPassType(
+              charge.pass_type || charge.passType,
+              charge.date_from,
+              charge.date_to
+            )}
+          </span>
+        </td>
         <td className="px-3 py-2">
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-extrabold text-[10px] border ${sev.bg}`}>
             {["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status)
@@ -1329,7 +1385,7 @@ const handleToggleCompanyPassBlock = async () => {
         <div className="flex items-center gap-2 flex-wrap">
           <DateRangeControl
             value={dateRangeFilter}
-            onChange={setDateRangeFilter}
+            onChange={(val) => { setDateRangeFilter(val); setPage(1); }}
             customFrom={customDateFrom}
             customTo={customDateTo} 
             onCustomFromChange={setCustomDateFrom}
@@ -1340,12 +1396,29 @@ const handleToggleCompanyPassBlock = async () => {
             resetDisabled={!customDateFrom && !customDateTo && !appliedCustomDateFrom && !appliedCustomDateTo}
           />
 
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+            <Filter className="h-3 w-3 text-slate-400" />
+            <select
+              value={passTypeFilter}
+              onChange={(e) => {
+                setPassTypeFilter(e.target.value);
+                setPage(1);
+              }}
+              className="bg-transparent text-[11px] font-bold text-slate-700 outline-none cursor-pointer"
+            >
+              <option value="ALL">All Pass Types</option>
+              <option value="DAILY">Daily Pass</option>
+              <option value="MONTHLY">Monthly Pass</option>
+              <option value="ANNUAL">Annual Pass</option>
+            </select>
+          </div>
+
           {activeTab === "charges" && (
             <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
               <Filter className="h-3 w-3 text-slate-400" />
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
                 className="bg-transparent text-[11px] font-bold text-slate-700 outline-none cursor-pointer"
               >
                 <option value="ALL">All Statuses</option>
@@ -1363,7 +1436,7 @@ const handleToggleCompanyPassBlock = async () => {
               type="text"
               placeholder="Search ID, Pass No, Company, Name..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
               className="w-full md:w-60 pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-medium outline-none focus:bg-white focus:ring-2 focus:ring-[#0a1e4d]/20 transition-all"
             />
           </div>
@@ -1508,7 +1581,7 @@ const handleToggleCompanyPassBlock = async () => {
                   <SortTh label="Pass Ref #" sortKey="pass_no" sortConfig={sortConfig} onSort={onSort} />
                   <SortTh label="Pass Entry Date" sortKey="date_from" sortConfig={sortConfig} onSort={onSort} />
                   <SortTh label="Pass Expiry Date" sortKey="date_to" sortConfig={sortConfig} onSort={onSort} />
-                  <th className="px-3 py-2.5">Duration</th>
+                  <SortTh label="Pass Type" sortKey="pass_type" sortConfig={sortConfig} onSort={onSort} />
                   <SortTh label="Overstay" sortKey="overstay_days" sortConfig={sortConfig} onSort={onSort} />
                   <SortTh label="Calculated Fine" sortKey="total_amount" sortConfig={sortConfig} onSort={onSort} />
                   <th className="px-3 py-2.5 text-center">Action</th>
@@ -1602,9 +1675,19 @@ const handleToggleCompanyPassBlock = async () => {
                           {fmtDate(item.date_to)}
                         </span>
                       </td>
-
-                      <td className="px-3 py-2 text-slate-500 font-medium">{passDuration(item.date_from, item.date_to)}</td>
-
+                      <td className="px-3 py-2 font-bold text-slate-700">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-extrabold text-[11px] ${passTypeColor(
+                            item.pass_type || item.passType
+                          )}`}
+                        >
+                          {formatPassType(
+                            item.pass_type || item.passType,
+                            item.date_from,
+                            item.date_to
+                          )}
+                        </span>
+                      </td>
                       <td className="px-3 py-2">
                         <span className="font-black text-red-700 bg-red-100/70 px-2 py-0.5 rounded-full border border-red-200">
                           {item.overstay_days} day{parseInt(item.overstay_days, 10) !== 1 ? "s" : ""}
@@ -1774,7 +1857,12 @@ const handleToggleCompanyPassBlock = async () => {
                 </div>
 
                 <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-1.5">
-                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Pass Validity Period</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Pass Validity &amp; Type</p>
+                    <span className="bg-blue-100 text-blue-800 text-[10px] font-extrabold px-2 py-0.5 rounded border border-blue-200">
+                      {formatPassType(selectedEntity.pass_type || selectedEntity.passType, selectedEntity.date_from, selectedEntity.date_to)} Pass
+                    </span>
+                  </div>
                   <div className="flex items-center justify-between gap-3 text-xs">
                     <div className="text-center flex-1 bg-emerald-50 p-2 rounded-lg border border-emerald-200">
                       <p className="text-[9px] font-bold text-emerald-600 uppercase">Entry</p>
@@ -1902,9 +1990,9 @@ const handleToggleCompanyPassBlock = async () => {
             <div className="px-6 py-4 bg-gradient-to-r from-[#0a1e4d] via-[#122b68] to-[#0a1e4d] text-white flex justify-between items-center border-b border-white/10">
               <h3 className="font-black text-base flex items-center gap-2">
                 {detailCharge.status === "EXCEPTION_REQUESTED" ? (
-                  <><Gavel className="h-5 w-5 text-amber-300" /> Appeal Review — Ref #{detailCharge.id}</>
+                  <><Gavel className="h-5 w-5 text-amber-300" /> Appeal Review — Ref</>
                 ) : (
-                  <><FileText className="h-5 w-5 text-blue-300" /> Charge Log Record #{detailCharge.id}</>
+                  <><FileText className="h-5 w-5 text-blue-300" /> Charge Log Record </>
                 )}
               </h3>
               <button onClick={() => setDetailModalOpen(false)} className="text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-1.5 rounded-lg transition-colors">
@@ -1961,7 +2049,12 @@ const handleToggleCompanyPassBlock = async () => {
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
-                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Validity Period</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Validity Period &amp; Type</p>
+                  <span className="bg-blue-100 text-blue-800 text-[10px] font-extrabold px-2 py-0.5 rounded border border-blue-200">
+                    {formatPassType(detailCharge.pass_type || detailCharge.passType, detailCharge.date_from, detailCharge.date_to)} Pass
+                  </span>
+                </div>
                 <div className="flex items-center justify-between text-xs">
                   <div className="bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 text-center flex-1">
                     <p className="text-[9px] font-bold text-emerald-600 uppercase">Entry</p>
