@@ -15,6 +15,7 @@ const connectSrc = isDev
       "http://localhost:5008", 
       "http://localhost:5009", 
       "http://localhost:5010", 
+      "http://localhost:5011",
       "ws://localhost:*",     // Next.js HMR websocket
       "wss://localhost:*",
     ].join(" ")
@@ -40,12 +41,126 @@ const nextConfig = {
 
   async rewrites() {
     return [
+      // ── Auth service (port 5006) ──────────────────────────────────────
+      {
+        source: "/api/auth/:path*",
+        destination: "http://localhost:5006/api/auth/:path*",
+      },
+      {
+        source: "/api/admin/:path*",
+        destination: "http://localhost:5006/api/admin/:path*",
+      },
+
+      // ── QR service (port 5007) ───────────────────────────────────────
+      {
+        source: "/api/qr/:path*",
+        destination: "http://localhost:5007/api/qr/:path*",
+      },
+
+      // ── Approval-admin service (port 5005) ───────────────────────────
+      {
+        source: "/api/user/:path*",
+        destination: "http://localhost:5005/api/user/:path*",
+      },
+      {
+        source: "/api/blacklist/:path*",
+        destination: "http://localhost:5005/api/blacklist/:path*",
+      },
+      {
+        source: "/api/overstay/:path*",
+        destination: "http://localhost:5005/api/overstay/:path*",
+      },
+      {
+        source: "/api/pass-fee-master/:path*",
+        destination: "http://localhost:5005/api/pass-fee-master/:path*",
+      },
+      {
+        source: "/api/hep-rate/:path*",
+        destination: "http://localhost:5005/api/hep-rate/:path*",
+      },
+      {
+        source: "/api/bulk-pass/queue",
+        destination: "http://localhost:5005/api/bulk-pass/queue",
+      },
+      {
+        source: "/api/bulk-pass/:id/approve",
+        destination: "http://localhost:5005/api/bulk-pass/:id/approve",
+      },
+      {
+        source: "/api/bulk-pass/:id/reject",
+        destination: "http://localhost:5005/api/bulk-pass/:id/reject",
+      },
+      {
+        source: "/api/bulk-pass/:id/return",
+        destination: "http://localhost:5005/api/bulk-pass/:id/return",
+      },
+      {
+        source: "/api/bulk-pass/:batchId/persons/:personId/approve",
+        destination:
+          "http://localhost:5005/api/bulk-pass/:batchId/persons/:personId/approve",
+      },
+      {
+        source: "/api/bulk-pass/:batchId/persons/:personId/reject",
+        destination:
+          "http://localhost:5005/api/bulk-pass/:batchId/persons/:personId/reject",
+      },
+      {
+        source: "/api/bulk-pass/:id/finalize",
+        destination: "http://localhost:5005/api/bulk-pass/:id/finalize",
+      },
+      {
+        source: "/api/pass-request/agent-pass-request-action",
+        destination:
+          "http://localhost:5005/api/pass-request/agent-pass-request-action",
+      },
+
+      // ── IPORTMAN service (port 5008) ──────────────────────────────────
+      {
+        source: "/api/cargo",
+        destination: "http://localhost:5008/api/cargo",
+      },
+      {
+        source: "/api/cargo/:path*",
+        destination: "http://localhost:5008/api/cargo/:path*",
+      },
+      {
+        source: "/api/operator",
+        destination: "http://localhost:5008/api/operator",
+      },
+      {
+        source: "/api/operator/:path*",
+        destination: "http://localhost:5008/api/operator/:path*",
+      },
+      // ── TOS service (port 5009) ───────────────────────────────────
+      {
+        source: "/api/tos",
+        destination: "http://localhost:5009/api/tos",
+      },
+      {
+        source: "/api/tos/:path*",
+        destination: "http://localhost:5009/api/tos/:path*",
+      },
+      // ── Customs service (port 5011) ───────────────────────────────────
+      {
+        source: "/api/customs",
+        destination: "http://localhost:5011/api/customs",
+      },
+      {
+        source: "/api/customs/:path*",
+        destination: "http://localhost:5011/api/customs/:path*",
+      },
+      {
+        source: "/api/payment/:path*",
+        destination: "http://localhost:5010/api/payment/:path*",
+      },
+      // ── User / Agent service (port 5001) — catch-all ─────────────────
       {
         source: "/api/:path*",
         destination: "http://localhost:5001/api/:path*",
       },
+
+      // ── Static uploads served by user_service ─────────────────────────
       {
-        // Proxy backend upload files (photos, PDFs stored by user_service)
         source: "/uploads/:path*",
         destination: "http://localhost:5001/uploads/:path*",
       },
