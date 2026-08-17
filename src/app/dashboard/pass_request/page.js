@@ -42,10 +42,14 @@ import {
   Edit,
 } from "lucide-react";
 
-import { getPassRequestCategory, getItemCategoryTag } from "@/utils/passCategoryHelper";
+import {
+  getPassRequestCategory,
+  getItemCategoryTag,
+} from "@/utils/passCategoryHelper";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
-const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
+const ADMIN_API =
+  process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 
 // --- URL Helper to reliably strip '/api' for static file fetching ---
 const getFileUrl = (path) => {
@@ -86,7 +90,7 @@ const formatDateTimeISOToDisplay = (isoStr) => {
   const dateSubParts = datePart.split("-");
   if (dateSubParts.length !== 3) return isoStr;
   const [yyyy, mm, dd] = dateSubParts;
-  
+
   if (!timePart) return `${dd}/${mm}/${yyyy}`;
   const [hhStr, minStr] = timePart.split(":");
   let hh = parseInt(hhStr, 10);
@@ -105,7 +109,7 @@ const formatDateTimeDisplayToISO = (displayStr) => {
   if (dateParts.length !== 3 || dateParts[2].length !== 4) return "";
   const [dd, mm, yyyy] = dateParts;
   const isoDate = `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
-  
+
   if (parts.length >= 2) {
     const timeStr = parts[1].trim();
     const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -180,14 +184,24 @@ const CARGO_EQUIPMENT_TYPES = [
 ];
 
 const isCargoEquipmentType = (typeName) =>
-  CARGO_EQUIPMENT_TYPES.includes(String(typeName || "").toUpperCase().trim());
+  CARGO_EQUIPMENT_TYPES.includes(
+    String(typeName || "")
+      .toUpperCase()
+      .trim(),
+  );
 
 /* passType: "1" = Daily, "2" = Monthly, "3" = Yearly.
    Daily is multiplied by the number of days; monthly and yearly are flat
    rates for the single period, matching how calculateDateTo() derives the
    end date. */
-const getHepAmount = (category, passType, period = 1, rateTable = DEFAULT_HEP_RATES) => {
-  const rate = rateTable[category] || rateTable.INDIVIDUAL || DEFAULT_HEP_RATES.INDIVIDUAL;
+const getHepAmount = (
+  category,
+  passType,
+  period = 1,
+  rateTable = DEFAULT_HEP_RATES,
+) => {
+  const rate =
+    rateTable[category] || rateTable.INDIVIDUAL || DEFAULT_HEP_RATES.INDIVIDUAL;
   const days = Math.max(1, parseInt(period, 10) || 1);
 
   switch (String(passType)) {
@@ -243,7 +257,12 @@ const calculateDateTo = (fromDate, period, type) => {
     d.setDate(d.getDate() + p); // +1 day for 1-day pass ✅
   } else if (type === "MONTHLY" || type === "2" || type === 2) {
     d.setMonth(d.getMonth() + p); // +1 month, same day ✅
-  } else if (type === "YEARLY" || type === "ANNUAL" || type === "3" || type === 3) {
+  } else if (
+    type === "YEARLY" ||
+    type === "ANNUAL" ||
+    type === "3" ||
+    type === 3
+  ) {
     d.setFullYear(d.getFullYear() + p); // +1 year, same day ✅
   }
 
@@ -269,8 +288,18 @@ const formatDateLong = (dateInput) => {
   if (!yyyy || !mm || !dd) return String(dateInput);
 
   const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
   ];
 
   const monthName = monthNames[mm - 1] || "";
@@ -341,7 +370,9 @@ const VALIDATORS = {
 
 const getValidationError = (field, value, extra = {}) => {
   if (field === "hepType") {
-    return value && String(value).trim() !== "" ? null : "Please select Type of HEP";
+    return value && String(value).trim() !== ""
+      ? null
+      : "Please select Type of HEP";
   }
   if (!value && value !== false) return null; // skip empty optional
   switch (field) {
@@ -403,8 +434,20 @@ const getValidationError = (field, value, extra = {}) => {
 
 // ============================================================
 
-const DetailItem = ({ label, value, highlight = false, showIfEmpty = false }) => {
-  if (!showIfEmpty && (!value || value === "N/A" || value === "null" || value === "undefined" || String(value).trim() === "")) {
+const DetailItem = ({
+  label,
+  value,
+  highlight = false,
+  showIfEmpty = false,
+}) => {
+  if (
+    !showIfEmpty &&
+    (!value ||
+      value === "N/A" ||
+      value === "null" ||
+      value === "undefined" ||
+      String(value).trim() === "")
+  ) {
     return null;
   }
   return (
@@ -478,7 +521,13 @@ export default function PassRequestPage() {
     }
   }, [viewingDocUrl]);
 
-  const handleViewDoc = (passRequestId, documentType, staticPath, entityIndex = 0, isVendorPass = false) => {
+  const handleViewDoc = (
+    passRequestId,
+    documentType,
+    staticPath,
+    entityIndex = 0,
+    isVendorPass = false,
+  ) => {
     // Check if the file is an image based on its extension
     const isImg = staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath);
     setIsImage(!!isImg);
@@ -499,11 +548,16 @@ export default function PassRequestPage() {
 
   const fetchTwoWheelerRequests = useCallback(async () => {
     try {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("hep_token");
       if (!token) return;
-      const res = await axios.get(`${AGENT_API}/pass-request/two-wheeler-update-requests`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get(
+        `${AGENT_API}/pass-request/two-wheeler-update-requests`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       if (res.data?.success) {
         setTwoWheelerRequests(res.data.data || []);
       }
@@ -528,7 +582,7 @@ export default function PassRequestPage() {
     const count = parseInt(person.twoWheelerChangeCount || 0, 10);
     if (count >= 3) {
       return toast.error(
-        "You have changed the two-wheeler number 3 times already this year, so you cannot change it again."
+        "You have changed the two-wheeler number 3 times already this year, so you cannot change it again.",
       );
     }
     setTwoWheelerModal({
@@ -545,14 +599,19 @@ export default function PassRequestPage() {
       return toast.error("Please enter the new two-wheeler vehicle number.");
     }
     const cleanVehicleNo = twoWheelerModal.newVehicleNo.trim().toUpperCase();
-    const vehicleRegex = /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i;
+    const vehicleRegex =
+      /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i;
     if (!vehicleRegex.test(cleanVehicleNo)) {
-      return toast.error("Invalid vehicle registration number format. Valid examples: MH01AB1234, KA-02-C-5678.");
+      return toast.error(
+        "Invalid vehicle registration number format. Valid examples: MH01AB1234, KA-02-C-5678.",
+      );
     }
     try {
       setTwoWheelerModal((prev) => ({ ...prev, loading: true }));
       const token =
-        localStorage.getItem("accessToken") || localStorage.getItem("hep_token") || sessionStorage.getItem("hep_token");
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("hep_token") ||
+        sessionStorage.getItem("hep_token");
       await axios.post(
         `${AGENT_API}/pass-request/two-wheeler-update-request`,
         {
@@ -562,10 +621,10 @@ export default function PassRequestPage() {
           newVehicleNo: twoWheelerModal.newVehicleNo.trim(),
           reason: twoWheelerModal.reason,
         },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
       toast.success(
-        "Two-wheeler vehicle number update request submitted successfully for approval!"
+        "Two-wheeler vehicle number update request submitted successfully for approval!",
       );
       setTwoWheelerModal({
         isOpen: false,
@@ -581,7 +640,7 @@ export default function PassRequestPage() {
       console.error("Two-wheeler update request failed:", err);
       toast.error(
         err?.response?.data?.message ||
-        "Failed to submit two-wheeler update request."
+          "Failed to submit two-wheeler update request.",
       );
       setTwoWheelerModal((prev) => ({ ...prev, loading: false }));
     }
@@ -590,7 +649,12 @@ export default function PassRequestPage() {
   // Pagination States
   const [pageSize, setPageSize] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
-  const [paginationMeta, setPaginationMeta] = useState({ totalRecords: 0, totalPages: 1, currentPage: 1, pageSize: 20 });
+  const [paginationMeta, setPaginationMeta] = useState({
+    totalRecords: 0,
+    totalPages: 1,
+    currentPage: 1,
+    pageSize: 20,
+  });
   const [globalCounts, setGlobalCounts] = useState({ total: 0, reverted: 0 });
 
   // Search States
@@ -635,21 +699,28 @@ export default function PassRequestPage() {
       process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
     if (!identifier || !identifier.trim() || !adminApi) return;
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("accessToken")
+          : null;
       const res = await axios.get(
         `${adminApi}/blacklist/check?entity_type=${entityType}&identifier=${encodeURIComponent(identifier.trim().toUpperCase())}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
       if (res.data.success && res.data.isBlacklisted) {
         const entry = res.data.data[0];
         setBlacklistWarnings((prev) => ({
           ...prev,
-          [entityType + "_" + identifier.trim().toUpperCase()]: `⚠️ BLACKLISTED (${entry.reason_code || "Code 007"}) — ${entry.reason}`
+          [entityType + "_" + identifier.trim().toUpperCase()]:
+            `⚠️ BLACKLISTED (${entry.reason_code || "Code 007"}) — ${entry.reason}`,
         }));
-        toast.warning(`${entityType === "VEHICLE" ? "Vehicle" : entityType === "DRIVER" ? "Driver" : "Person"} is currently BLACKLISTED at the Port!`, {
-          description: `Reason: ${entry.reason}. Pass request for this entity is blocked.`,
-          duration: 6000,
-        });
+        toast.warning(
+          `${entityType === "VEHICLE" ? "Vehicle" : entityType === "DRIVER" ? "Driver" : "Person"} is currently BLACKLISTED at the Port!`,
+          {
+            description: `Reason: ${entry.reason}. Pass request for this entity is blocked.`,
+            duration: 6000,
+          },
+        );
       } else {
         setBlacklistWarnings((prev) => {
           const next = { ...prev };
@@ -742,7 +813,143 @@ export default function PassRequestPage() {
     verified: false,
     message: "",
     data: null,
-});
+  });
+
+  // const isCurrentlyActive = (entity) => {
+  //   if (!entity?.dateFrom || !entity?.dateTo) return false;
+
+  //   const today = new Date();
+  //   today.setHours(0, 0, 0, 0);
+
+  //   const from = new Date(entity.dateFrom);
+  //   from.setHours(0, 0, 0, 0);
+
+  //   const to = new Date(entity.dateTo);
+  //   to.setHours(23, 59, 59, 999);
+
+  //   const workflowStatus = String(entity.status || "").toUpperCase();
+  //   const passStatus = String(entity.passStatus || "ACTIVE").toUpperCase();
+
+  //   return (
+  //     workflowStatus === "APPROVED" &&
+  //     passStatus === "ACTIVE" &&
+  //     today >= from &&
+  //     today <= to
+  //   );
+  // };
+
+  // const isPassDisabled = (entity) =>
+  //   String(entity?.passStatus || "").toUpperCase() === "DISABLED";
+
+  // const isPassApprovedAndActive = (entity) =>
+  //   String(entity?.status || "")
+  //     .trim()
+  //     .toUpperCase() === "APPROVED" &&
+  //   String(entity?.passStatus || "ACTIVE")
+  //     .trim()
+  //     .toUpperCase() === "ACTIVE" &&
+  //   isCurrentlyActive(entity);
+
+  // const handleDisablePass = async () => {
+  //   if (!disableReason.trim()) {
+  //     toast.error("Please enter reason.");
+  //     return;
+  //   }
+
+  //   try {
+  //     setDisableLoading(true);
+
+  //     const token = localStorage.getItem("accessToken");
+
+  //     const url =
+  //       entityModal.type === "person"
+  //         ? `${AGENT_API}/pass-request/disable-person-pass`
+  //         : `${AGENT_API}/pass-request/disable-vehicle-pass`;
+
+  //     const payload =
+  //       entityModal.type === "person"
+  //         ? {
+  //             passPersonId: entityModal.data.id,
+  //             reason: disableReason,
+  //           }
+  //         : {
+  //             passVehicleId: entityModal.data.id,
+  //             reason: disableReason,
+  //           };
+
+  //     const res = await axios.put(url, payload, {
+  //       headers: {
+  //         Authorization: `Bearer ${token}`,
+  //       },
+  //     });
+
+  //     if (res.data.success) {
+  //       toast.success(res.data.message);
+  //       const disabledId = String(entityModal.data.id);
+  //       const disabledType = entityModal.type;
+  //       setSelectedPassDetails((prev) => {
+  //         if (!prev) return prev;
+
+  //         const key = disabledType === "person" ? "persons" : "vehicles";
+
+  //         return {
+  //           ...prev,
+  //           [key]: (prev[key] || []).map((item) =>
+  //             String(item.id) === disabledId
+  //               ? {
+  //                   ...item,
+  //                   passStatus: "DISABLED",
+  //                 }
+  //               : item,
+  //           ),
+  //         };
+  //       });
+
+  //       // =====================================================
+  //       // CLOSE DISABLE MODAL
+  //       // =====================================================
+
+  //       setDisableModal(false);
+  //       setDisableReason("");
+
+  //       setEntityModal({
+  //         isOpen: false,
+  //         data: null,
+  //         type: null,
+  //       });
+
+  //       fetchSubmittedPasses();
+  //       fetchAllViewPasses();
+  //     }
+  //   } catch (err) {
+  //     toast.error(err.response?.data?.message || "Unable to disable pass.");
+  //   } finally {
+  //     setDisableLoading(false);
+  //   }
+  // };
+
+  // const personOptions = [
+  //   { value: "", label: "-- Apply Fresh (Manual Entry) --" },
+  //   ...Object.values(masterPersonsDB).map((p) => ({
+  //     value: String(p.id),
+  //     label: `${p.name} - Aadhar: ${p.aadhar || ""}`,
+  //   })),
+  // ];
+
+  const getPassStatus = (entity) => {
+    return String(
+      entity?.passStatus ??
+        entity?.pass_status ??
+        entity?.passstatus ??
+        "ACTIVE",
+    )
+      .trim()
+      .toUpperCase();
+  };
+
+  const isPassDisabled = (entity) => {
+    return getPassStatus(entity) === "DISABLED";
+  };
 
   const isCurrentlyActive = (entity) => {
     if (!entity?.dateFrom || !entity?.dateTo) return false;
@@ -756,8 +963,11 @@ export default function PassRequestPage() {
     const to = new Date(entity.dateTo);
     to.setHours(23, 59, 59, 999);
 
-    const workflowStatus = String(entity.status || "").toUpperCase();
-    const passStatus = String(entity.passStatus || "ACTIVE").toUpperCase();
+    const workflowStatus = String(entity?.status || "")
+      .trim()
+      .toUpperCase();
+
+    const passStatus = getPassStatus(entity);
 
     return (
       workflowStatus === "APPROVED" &&
@@ -767,114 +977,107 @@ export default function PassRequestPage() {
     );
   };
 
-const isPassDisabled = (entity) =>
-  String(entity?.passStatus || "").toUpperCase() === "DISABLED";
-
-const isPassApprovedAndActive = (entity) =>
-  String(entity?.status || "").trim().toUpperCase() === "APPROVED" &&
-  String(entity?.passStatus || "").trim().toUpperCase() === "ACTIVE" &&
-  isCurrentlyActive(entity);
-
-  const handleDisablePass = async () => {
-
-      if (!disableReason.trim()) {
-          toast.error("Please enter reason.");
-          return;
-      }
-
-      try {
-
-          setDisableLoading(true);
-
-          const token = localStorage.getItem("accessToken");
-
-          const url =
-              entityModal.type === "person"
-                  ? `${AGENT_API}/pass-request/disable-person-pass`
-                  : `${AGENT_API}/pass-request/disable-vehicle-pass`;
-
-          const payload =
-              entityModal.type === "person"
-                  ? {
-                        passPersonId: entityModal.data.id,
-                        reason: disableReason,
-                    }
-                  : {
-                        passVehicleId: entityModal.data.id,
-                        reason: disableReason,
-                    };
-
-          const res = await axios.put(url, payload, {
-              headers: {
-                  Authorization: `Bearer ${token}`,
-              },
-          });
-
-          if (res.data.success) {
-
-            toast.success(res.data.message);
-            const disabledId = String(entityModal.data.id);
-            const disabledType = entityModal.type;
-            setSelectedPassDetails((prev) => {
-              if (!prev) return prev;
-
-                const key =
-                  disabledType === "person"
-                    ? "persons"
-                    : "vehicles";
-
-                return {
-                  ...prev,
-                  [key]: (prev[key] || []).map((item) =>
-                    String(item.id) === disabledId
-                      ? {
-                          ...item,
-                          passStatus: "DISABLED",
-                        }
-                      : item
-                  ),
-                };
-              });
-
-              // =====================================================
-              // CLOSE DISABLE MODAL
-              // =====================================================
-
-              setDisableModal(false);
-              setDisableReason("");
-
-              setEntityModal({
-                isOpen: false,
-                data: null,
-                type: null
-              });
-
-              fetchSubmittedPasses();
-              fetchAllViewPasses();
-          }
-
-      } catch(err){
-
-          toast.error(
-              err.response?.data?.message ||
-              "Unable to disable pass."
-          );
-
-      } finally{
-
-          setDisableLoading(false);
-
-      }
-
+  const isPassApprovedAndActive = (entity) => {
+    return (
+      String(entity?.status || "")
+        .trim()
+        .toUpperCase() === "APPROVED" &&
+      getPassStatus(entity) === "ACTIVE" &&
+      isCurrentlyActive(entity)
+    );
   };
 
-  // const personOptions = [
-  //   { value: "", label: "-- Apply Fresh (Manual Entry) --" },
-  //   ...Object.values(masterPersonsDB).map((p) => ({
-  //     value: String(p.id),
-  //     label: `${p.name} - Aadhar: ${p.aadhar || ""}`,
-  //   })),
-  // ];
+  const handleDisablePass = async () => {
+    if (!disableReason.trim()) {
+      toast.error("Please enter reason.");
+      return;
+    }
+
+    if (!entityModal?.data?.id || !entityModal?.type) {
+      toast.error("Pass details are missing.");
+      return;
+    }
+
+    try {
+      setDisableLoading(true);
+
+      const token = localStorage.getItem("accessToken");
+
+      if (!token) {
+        toast.error("Authentication token missing. Please login again.");
+        return;
+      }
+
+      const url =
+        entityModal.type === "person"
+          ? `${AGENT_API}/pass-request/disable-person-pass`
+          : `${AGENT_API}/pass-request/disable-vehicle-pass`;
+
+      const payload =
+        entityModal.type === "person"
+          ? {
+              passPersonId: entityModal.data.id,
+              reason: disableReason.trim(),
+            }
+          : {
+              passVehicleId: entityModal.data.id,
+              reason: disableReason.trim(),
+            };
+
+      const res = await axios.put(url, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.data?.success) {
+        toast.success(res.data.message || "Pass disabled successfully.");
+
+        // Immediately update currently opened pass details
+        setSelectedPassDetails((prev) => {
+          if (!prev) return prev;
+
+          const key = entityModal.type === "person" ? "persons" : "vehicles";
+
+          return {
+            ...prev,
+            [key]: (prev[key] || []).map((item) =>
+              String(item.id) === String(entityModal.data.id)
+                ? {
+                    ...item,
+                    passStatus: "DISABLED",
+                    disabledReason: disableReason.trim(),
+                    disabledAt: new Date().toISOString(),
+                  }
+                : item,
+            ),
+          };
+        });
+
+        // Close disable modal
+        setDisableModal(false);
+        setDisableReason("");
+
+        // Close entity preview
+        setEntityModal({
+          isOpen: false,
+          data: null,
+          type: null,
+        });
+
+        // Refresh main lists
+        await fetchSubmittedPasses();
+        await fetchAllViewPasses();
+      }
+    } catch (err) {
+      console.error("Disable pass error:", err);
+
+      toast.error(err.response?.data?.message || "Unable to disable pass.");
+    } finally {
+      setDisableLoading(false);
+    }
+  };
+
   const selectedMasterPersonIds = persons
     .filter((p) => p.masterId)
     .map((p) => String(p.masterId));
@@ -885,7 +1088,7 @@ const isPassApprovedAndActive = (entity) =>
       .filter(
         (p) =>
           !selectedMasterPersonIds.includes(String(p.id)) ||
-          String(personForm.masterId) === String(p.id) // allow current edit
+          String(personForm.masterId) === String(p.id), // allow current edit
       )
       .map((p) => ({
         value: String(p.id),
@@ -932,7 +1135,14 @@ const isPassApprovedAndActive = (entity) =>
     verified: false,
     message: "",
     data: null,
-});
+  });
+  const ulipVehicleFetched = Boolean(vehicleVerification.data);
+
+  const ulipVehicleActive =
+    String(vehicleVerification.data?.vehicleStatus || "").toUpperCase() ===
+    "ACTIVE";
+
+  const ulipVehicleInactive = ulipVehicleFetched && !ulipVehicleActive;
   const selectedMasterVehicleIds = vehicles
     .filter((v) => v.masterId)
     .map((v) => String(v.masterId));
@@ -943,7 +1153,7 @@ const isPassApprovedAndActive = (entity) =>
       .filter(
         (v) =>
           !selectedMasterVehicleIds.includes(String(v.id)) ||
-          String(vehicleForm.masterId) === String(v.id)
+          String(vehicleForm.masterId) === String(v.id),
       )
       .map((v) => ({
         value: String(v.id),
@@ -999,30 +1209,37 @@ const isPassApprovedAndActive = (entity) =>
         const token = localStorage.getItem("accessToken");
         const config = { headers: { Authorization: `Bearer ${token}` } };
 
-        const [natRes, passRes, idRes, accessRes, desigRes, vehRes, countryRes] =
-          await Promise.all([
-            axios
-              .get(`${AGENT_API}/pass-request/get-nationality`, config)
-              .catch(() => ({ data: [] })),
-            axios
-              .get(`${AGENT_API}/pass-request/get-pass-types`, config)
-              .catch(() => ({ data: [] })),
-            axios
-              .get(`${AGENT_API}/pass-request/get-id-proof-types`, config)
-              .catch(() => ({ data: [] })),
-            axios
-              .get(`${AGENT_API}/pass-request/get-access-areas`, config)
-              .catch(() => ({ data: [] })),
-            axios
-              .get(`${AGENT_API}/pass-request/getDesignations`, config)
-              .catch(() => ({ data: [] })),
-            axios
-              .get(`${AGENT_API}/pass-request/getVehicleTypes`, config)
-              .catch(() => ({ data: [] })),
-            axios
-              .get(`${AGENT_API}/pass-request/get-countries`, config)
-              .catch(() => ({ data: [] })),
-          ]);
+        const [
+          natRes,
+          passRes,
+          idRes,
+          accessRes,
+          desigRes,
+          vehRes,
+          countryRes,
+        ] = await Promise.all([
+          axios
+            .get(`${AGENT_API}/pass-request/get-nationality`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/get-pass-types`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/get-id-proof-types`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/get-access-areas`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/getDesignations`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/getVehicleTypes`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/get-countries`, config)
+            .catch(() => ({ data: [] })),
+        ]);
 
         const extractArray = (res) =>
           Array.isArray(res?.data?.data)
@@ -1041,18 +1258,25 @@ const isPassApprovedAndActive = (entity) =>
           accessAreas: extractArray(accessRes),
           designations: extractArray(desigRes),
           vehicleTypes: extractArray(vehRes),
-          countries: fetchedCountries.length > 0 ? fetchedCountries : prev.countries,
+          countries:
+            fetchedCountries.length > 0 ? fetchedCountries : prev.countries,
         }));
 
         // Auto-set country to India's real DB ID when nationality is Indian
         if (fetchedCountries.length > 0) {
           const indiaEntry = fetchedCountries.find(
-            (c) => String(c.name || "").trim().toLowerCase() === "india"
+            (c) =>
+              String(c.name || "")
+                .trim()
+                .toLowerCase() === "india",
           );
           if (indiaEntry) {
             setPersonForm((prev) => {
               // Only set if nationality is Indian (default) and country is empty or stale
-              if (prev.nationality === "1" && (!prev.country || prev.country === "75")) {
+              if (
+                prev.nationality === "1" &&
+                (!prev.country || prev.country === "75")
+              ) {
                 return { ...prev, country: String(indiaEntry.id) };
               }
               return prev;
@@ -1089,8 +1313,10 @@ const isPassApprovedAndActive = (entity) =>
           const isLifetimeLicense = Boolean(agentData.isLifetimeLicense);
 
           if (!isLifetimeLicense && agentData.licenseValidityDate) {
-            const datePart = String(agentData.licenseValidityDate).split('T')[0];
-            const [yyyy, mm, dd] = datePart.split('-').map(Number);
+            const datePart = String(agentData.licenseValidityDate).split(
+              "T",
+            )[0];
+            const [yyyy, mm, dd] = datePart.split("-").map(Number);
             if (yyyy && mm && dd) {
               const today = new Date();
               today.setHours(0, 0, 0, 0);
@@ -1107,7 +1333,9 @@ const isPassApprovedAndActive = (entity) =>
             companyName: agentData.entityName || "N/A",
             email: agentData.email || "N/A",
             mobile: agentData.mobileNo || "N/A",
-            licenseValidityDate: isLifetimeLicense ? null : (agentData.licenseValidityDate || null),
+            licenseValidityDate: isLifetimeLicense
+              ? null
+              : agentData.licenseValidityDate || null,
             isLifetimeLicense,
             remainingDays,
             isLicenseExpired,
@@ -1116,7 +1344,9 @@ const isPassApprovedAndActive = (entity) =>
           // Set company blacklisting details if blacklisted
           if (agentData.isBlacklisted) {
             setCompanyBlacklisted(true);
-            setCompanyBlacklistReason(agentData.blacklistReason || "Company is blacklisted");
+            setCompanyBlacklistReason(
+              agentData.blacklistReason || "Company is blacklisted",
+            );
             setShowBlacklistPopup(true);
           }
         }
@@ -1170,14 +1400,18 @@ const isPassApprovedAndActive = (entity) =>
   };
 
   useEffect(() => {
-
-
     fetchMasterRecords();
   }, []);
 
   const toggleModal = (modalName, state) => {
-    if (state && generalForm.isLicenseExpired && (modalName === "person" || modalName === "vehicle")) {
-      toast.error("Pass generation is locked because your company license has expired.");
+    if (
+      state &&
+      generalForm.isLicenseExpired &&
+      (modalName === "person" || modalName === "vehicle")
+    ) {
+      toast.error(
+        "Pass generation is locked because your company license has expired.",
+      );
       return;
     }
     setModals({ ...modals, [modalName]: state });
@@ -1194,12 +1428,18 @@ const isPassApprovedAndActive = (entity) =>
   };
 
   const [feeMaster, setFeeMaster] = useState(null); // { INDIVIDUAL: {...}, VEHICLE: {...}, CARGO: {...} }
-  const effectiveHepRates = useMemo(() => resolveEffectiveHepRates(feeMaster), [feeMaster]);
+  const effectiveHepRates = useMemo(
+    () => resolveEffectiveHepRates(feeMaster),
+    [feeMaster],
+  );
 
   useEffect(() => {
     const fetchFeeMaster = async () => {
       try {
-        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+        const token =
+          typeof window !== "undefined"
+            ? localStorage.getItem("accessToken")
+            : null;
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
         const res = await axios.get(`${ADMIN_API}/hep-rate`, { headers });
@@ -1224,15 +1464,29 @@ const isPassApprovedAndActive = (entity) =>
     let updatedPeriod = personForm.passPeriod;
 
     // Check license remaining days lock
-    if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && !generalForm.isLicenseExpired) {
+    if (
+      generalForm.remainingDays !== null &&
+      generalForm.remainingDays !== undefined &&
+      !generalForm.isLicenseExpired
+    ) {
       const pTypeStr = String(personForm.passType);
-      if ((pTypeStr === "2" || pTypeStr === "MONTHLY") && generalForm.remainingDays < 30) {
-        toast.warning(`Monthly passes are locked because your license expires in ${generalForm.remainingDays} days.`);
+      if (
+        (pTypeStr === "2" || pTypeStr === "MONTHLY") &&
+        generalForm.remainingDays < 30
+      ) {
+        toast.warning(
+          `Monthly passes are locked because your license expires in ${generalForm.remainingDays} days.`,
+        );
         setPersonForm((prev) => ({ ...prev, passType: "1" }));
         return;
       }
-      if ((pTypeStr === "3" || pTypeStr === "YEARLY" || pTypeStr === "ANNUAL") && generalForm.remainingDays < 365) {
-        toast.warning(`Yearly passes are locked because your license expires in ${generalForm.remainingDays} days.`);
+      if (
+        (pTypeStr === "3" || pTypeStr === "YEARLY" || pTypeStr === "ANNUAL") &&
+        generalForm.remainingDays < 365
+      ) {
+        toast.warning(
+          `Yearly passes are locked because your license expires in ${generalForm.remainingDays} days.`,
+        );
         setPersonForm((prev) => ({ ...prev, passType: "1" }));
         return;
       }
@@ -1241,7 +1495,11 @@ const isPassApprovedAndActive = (entity) =>
     // ✅ Restrict DAILY to max 7 days or remaining license days
     if (String(personForm.passType) === "1") {
       let maxAllowed = 7;
-      if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && generalForm.remainingDays < 7) {
+      if (
+        generalForm.remainingDays !== null &&
+        generalForm.remainingDays !== undefined &&
+        generalForm.remainingDays < 7
+      ) {
         maxAllowed = Math.max(1, generalForm.remainingDays);
       }
       if (parseInt(updatedPeriod, 10) > maxAllowed) {
@@ -1254,7 +1512,12 @@ const isPassApprovedAndActive = (entity) =>
     }
 
     // Individual HEP rate — ₹13/day, ₹191/month, ₹508/year (incl. GST)
-    const amt = getHepAmount("INDIVIDUAL", personForm.passType, updatedPeriod, effectiveHepRates);
+    const amt = getHepAmount(
+      "INDIVIDUAL",
+      personForm.passType,
+      updatedPeriod,
+      effectiveHepRates,
+    );
 
     const newDateTo = calculateDateTo(
       personForm.dateFrom,
@@ -1268,21 +1531,42 @@ const isPassApprovedAndActive = (entity) =>
       amount: amt,
       dateTo: newDateTo,
     }));
-  }, [personForm.passType, personForm.passPeriod, personForm.dateFrom, generalForm.remainingDays, generalForm.isLicenseExpired, effectiveHepRates]);
+  }, [
+    personForm.passType,
+    personForm.passPeriod,
+    personForm.dateFrom,
+    generalForm.remainingDays,
+    generalForm.isLicenseExpired,
+    effectiveHepRates,
+  ]);
 
   useEffect(() => {
     let updatedPeriod = vehicleForm.passPeriod;
 
     // Check license remaining days lock
-    if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && !generalForm.isLicenseExpired) {
+    if (
+      generalForm.remainingDays !== null &&
+      generalForm.remainingDays !== undefined &&
+      !generalForm.isLicenseExpired
+    ) {
       const vTypeStr = String(vehicleForm.passType);
-      if ((vTypeStr === "2" || vTypeStr === "MONTHLY") && generalForm.remainingDays < 30) {
-        toast.warning(`Monthly passes are locked because your license expires in ${generalForm.remainingDays} days.`);
+      if (
+        (vTypeStr === "2" || vTypeStr === "MONTHLY") &&
+        generalForm.remainingDays < 30
+      ) {
+        toast.warning(
+          `Monthly passes are locked because your license expires in ${generalForm.remainingDays} days.`,
+        );
         setVehicleForm((prev) => ({ ...prev, passType: "1" }));
         return;
       }
-      if ((vTypeStr === "3" || vTypeStr === "YEARLY" || vTypeStr === "ANNUAL") && generalForm.remainingDays < 365) {
-        toast.warning(`Yearly passes are locked because your license expires in ${generalForm.remainingDays} days.`);
+      if (
+        (vTypeStr === "3" || vTypeStr === "YEARLY" || vTypeStr === "ANNUAL") &&
+        generalForm.remainingDays < 365
+      ) {
+        toast.warning(
+          `Yearly passes are locked because your license expires in ${generalForm.remainingDays} days.`,
+        );
         setVehicleForm((prev) => ({ ...prev, passType: "1" }));
         return;
       }
@@ -1290,7 +1574,11 @@ const isPassApprovedAndActive = (entity) =>
 
     if (String(vehicleForm.passType) === "1") {
       let maxAllowed = 7;
-      if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && generalForm.remainingDays < 7) {
+      if (
+        generalForm.remainingDays !== null &&
+        generalForm.remainingDays !== undefined &&
+        generalForm.remainingDays < 7
+      ) {
         maxAllowed = Math.max(1, generalForm.remainingDays);
       }
       if (parseInt(updatedPeriod, 10) > maxAllowed) {
@@ -1301,8 +1589,12 @@ const isPassApprovedAndActive = (entity) =>
       updatedPeriod = "1";
     }
 
-    const selectedTypeObj = masterData.vehicleTypes.find(t => String(t.id) === String(vehicleForm.type));
-    const typeName = selectedTypeObj ? String(selectedTypeObj.name).toUpperCase().trim() : "";
+    const selectedTypeObj = masterData.vehicleTypes.find(
+      (t) => String(t.id) === String(vehicleForm.type),
+    );
+    const typeName = selectedTypeObj
+      ? String(selectedTypeObj.name).toUpperCase().trim()
+      : "";
 
     // Cargo handling equipment is charged at a higher rate than a plain vehicle:
     // ₹51/day vs ₹32/day, ₹571 vs ₹382 monthly, ₹3807 vs ₹2539 yearly (incl. GST)
@@ -1310,7 +1602,7 @@ const isPassApprovedAndActive = (entity) =>
       isCargoEquipmentType(typeName) ? "CARGO" : "VEHICLE",
       vehicleForm.passType,
       updatedPeriod,
-      effectiveHepRates
+      effectiveHepRates,
     );
 
     const newDateTo = calculateDateTo(
@@ -1325,7 +1617,16 @@ const isPassApprovedAndActive = (entity) =>
       amount: amt,
       dateTo: newDateTo,
     }));
-  }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom, vehicleForm.type, masterData.vehicleTypes, generalForm.remainingDays, generalForm.isLicenseExpired, effectiveHepRates]);
+  }, [
+    vehicleForm.passType,
+    vehicleForm.passPeriod,
+    vehicleForm.dateFrom,
+    vehicleForm.type,
+    masterData.vehicleTypes,
+    generalForm.remainingDays,
+    generalForm.isLicenseExpired,
+    effectiveHepRates,
+  ]);
 
   // Live running time: update dateFrom every 30s while person modal is open
   useEffect(() => {
@@ -1359,23 +1660,39 @@ const isPassApprovedAndActive = (entity) =>
 
   useEffect(() => {
     const natObj = (masterData.nationalities || []).find(
-      (n) => String(n.id || n.value) === String(personForm.nationality)
+      (n) => String(n.id || n.value) === String(personForm.nationality),
     );
-    const selectedNationality = (natObj?.label || natObj?.name || "").toUpperCase();
+    const selectedNationality = (
+      natObj?.label ||
+      natObj?.name ||
+      ""
+    ).toUpperCase();
 
     const indiaObj = (masterData.countries || []).find(
-      (c) => String(c.name || "").trim().toLowerCase() === "india"
+      (c) =>
+        String(c.name || "")
+          .trim()
+          .toLowerCase() === "india",
     );
     const indiaId = indiaObj ? String(indiaObj.id) : "";
 
-    if ((selectedNationality === "INDIAN" || !personForm.nationality || String(personForm.nationality) === "1") && indiaId) {
+    if (
+      (selectedNationality === "INDIAN" ||
+        !personForm.nationality ||
+        String(personForm.nationality) === "1") &&
+      indiaId
+    ) {
       setPersonForm((prev) => {
         if (String(prev.country) !== indiaId) {
           return { ...prev, country: indiaId };
         }
         return prev;
       });
-    } else if (selectedNationality && selectedNationality !== "INDIAN" && String(personForm.nationality) !== "1") {
+    } else if (
+      selectedNationality &&
+      selectedNationality !== "INDIAN" &&
+      String(personForm.nationality) !== "1"
+    ) {
       // If switching from Indian → foreign, clear country if it was India
       if (String(personForm.country) === indiaId) {
         setPersonForm((prev) => ({
@@ -1389,12 +1706,19 @@ const isPassApprovedAndActive = (entity) =>
   const isPersonForeigner = useCallback(
     (natValue) => {
       const natObj = (masterData.nationalities || []).find(
-        (n) => String(n.id || n.value) === String(natValue) || (n.label || n.name || "").toUpperCase() === String(natValue).toUpperCase()
+        (n) =>
+          String(n.id || n.value) === String(natValue) ||
+          (n.label || n.name || "").toUpperCase() ===
+            String(natValue).toUpperCase(),
       );
       const label = (natObj?.label || natObj?.name || "").toUpperCase();
-      return label === "FOREIGNER" || String(natValue) === "2" || String(natValue).toUpperCase() === "FOREIGNER";
+      return (
+        label === "FOREIGNER" ||
+        String(natValue) === "2" ||
+        String(natValue).toUpperCase() === "FOREIGNER"
+      );
     },
-    [masterData.nationalities]
+    [masterData.nationalities],
   );
 
   const fetchSubmittedPasses = useCallback(async () => {
@@ -1452,10 +1776,13 @@ const isPassApprovedAndActive = (entity) =>
         return;
       }
       const headers = { Authorization: `Bearer ${token}` };
-      const first = await axios.get(`${AGENT_API}/pass-request/my-pass-requests`, {
-        headers,
-        params: { page: 1, limit: 100 },
-      });
+      const first = await axios.get(
+        `${AGENT_API}/pass-request/my-pass-requests`,
+        {
+          headers,
+          params: { page: 1, limit: 100 },
+        },
+      );
       if (!first.data?.success) {
         setAllViewPasses([]);
         setAllViewLoading(false);
@@ -1475,7 +1802,8 @@ const isPassApprovedAndActive = (entity) =>
         }
         const rest = await Promise.allSettled(reqs);
         rest.forEach((r) => {
-          if (r.status === "fulfilled" && r.value.data?.success) all = all.concat(r.value.data.data || []);
+          if (r.status === "fulfilled" && r.value.data?.success)
+            all = all.concat(r.value.data.data || []);
         });
       }
       setAllViewPasses(all);
@@ -1506,22 +1834,44 @@ const isPassApprovedAndActive = (entity) =>
   // Reset the client page whenever a filter/search changes
   useEffect(() => {
     setViewPage(1);
-  }, [viewStatusFilter, viewDateFilter, viewCustomFrom, viewCustomTo, debouncedSearch, allViewPasses.length]);
+  }, [
+    viewStatusFilter,
+    viewDateFilter,
+    viewCustomFrom,
+    viewCustomTo,
+    debouncedSearch,
+    allViewPasses.length,
+  ]);
 
   // Per-status counts over ALL passes (the "number system")
   const viewCounts = useMemo(() => {
-    const c = { total: allViewPasses.length, submitted: 0, underReview: 0, completed: 0, reverted: 0, rejected: 0, draft: 0, thisMonth: 0 };
+    const c = {
+      total: allViewPasses.length,
+      submitted: 0,
+      underReview: 0,
+      completed: 0,
+      reverted: 0,
+      rejected: 0,
+      draft: 0,
+      thisMonth: 0,
+    };
     const now = new Date();
     allViewPasses.forEach((p) => {
       const s = String(p.status || "").toUpperCase();
       if (s === "SUBMITTED") c.submitted++;
       else if (s === "UNDER_REVIEW") c.underReview++;
-      else if (s === "COMPLETED" || s === "APPROVED" || s === "ISSUED") c.completed++;
+      else if (s === "COMPLETED" || s === "APPROVED" || s === "ISSUED")
+        c.completed++;
       else if (s === "REVERTED") c.reverted++;
       else if (s === "REJECTED") c.rejected++;
       else if (s === "DRAFT") c.draft++;
       const d = new Date(p.createdAt || p.submittedAt);
-      if (!Number.isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) c.thisMonth++;
+      if (
+        !Number.isNaN(d.getTime()) &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear()
+      )
+        c.thisMonth++;
     });
     return c;
   }, [allViewPasses]);
@@ -1529,7 +1879,11 @@ const isPassApprovedAndActive = (entity) =>
   // Client-side filtered list (status + date range + search)
   const filteredViewPasses = useMemo(() => {
     const now = new Date();
-    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
     const q = (debouncedSearch || "").trim().toLowerCase();
 
     return allViewPasses.filter((p) => {
@@ -1537,7 +1891,8 @@ const isPassApprovedAndActive = (entity) =>
       if (viewStatusFilter !== "ALL") {
         const s = String(p.status || "").toUpperCase();
         if (viewStatusFilter === "COMPLETED") {
-          if (!(s === "COMPLETED" || s === "APPROVED" || s === "ISSUED")) return false;
+          if (!(s === "COMPLETED" || s === "APPROVED" || s === "ISSUED"))
+            return false;
         } else if (s !== viewStatusFilter) return false;
       }
       // Date
@@ -1551,7 +1906,11 @@ const isPassApprovedAndActive = (entity) =>
         } else if (viewDateFilter === "30days") {
           if (d < new Date(startToday.getTime() - 29 * 864e5)) return false;
         } else if (viewDateFilter === "month") {
-          if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) return false;
+          if (
+            d.getMonth() !== now.getMonth() ||
+            d.getFullYear() !== now.getFullYear()
+          )
+            return false;
         } else if (viewDateFilter === "custom") {
           if (viewCustomFrom) {
             const f = new Date(viewCustomFrom);
@@ -1567,19 +1926,44 @@ const isPassApprovedAndActive = (entity) =>
       }
       // Search
       if (q) {
-        const inRef = String(p.referenceNo || "").toLowerCase().includes(q);
+        const inRef = String(p.referenceNo || "")
+          .toLowerCase()
+          .includes(q);
         const inPerson = (p.persons || []).some(
-          (pp) => String(pp.name || "").toLowerCase().includes(q) || String(pp.aadharNo || "").toLowerCase().includes(q),
+          (pp) =>
+            String(pp.name || "")
+              .toLowerCase()
+              .includes(q) ||
+            String(pp.aadharNo || "")
+              .toLowerCase()
+              .includes(q),
         );
-        const inVeh = (p.vehicles || []).some((vv) => String(vv.registrationNo || "").toLowerCase().includes(q));
+        const inVeh = (p.vehicles || []).some((vv) =>
+          String(vv.registrationNo || "")
+            .toLowerCase()
+            .includes(q),
+        );
         if (!inRef && !inPerson && !inVeh) return false;
       }
       return true;
     });
-  }, [allViewPasses, viewStatusFilter, viewDateFilter, viewCustomFrom, viewCustomTo, debouncedSearch]);
+  }, [
+    allViewPasses,
+    viewStatusFilter,
+    viewDateFilter,
+    viewCustomFrom,
+    viewCustomTo,
+    debouncedSearch,
+  ]);
 
-  const viewTotalPages = Math.max(1, Math.ceil(filteredViewPasses.length / viewPageSize));
-  const viewPageSlice = filteredViewPasses.slice((viewPage - 1) * viewPageSize, (viewPage - 1) * viewPageSize + viewPageSize);
+  const viewTotalPages = Math.max(
+    1,
+    Math.ceil(filteredViewPasses.length / viewPageSize),
+  );
+  const viewPageSlice = filteredViewPasses.slice(
+    (viewPage - 1) * viewPageSize,
+    (viewPage - 1) * viewPageSize + viewPageSize,
+  );
 
   // Reset page to 1 and clear search when changing tabs
   useEffect(() => {
@@ -1688,7 +2072,7 @@ const isPassApprovedAndActive = (entity) =>
   const handleMasterPersonSelect = (e) => {
     const id = e.target.value;
     const alreadySelected = persons.some(
-      (p) => String(p.masterId) === String(id)
+      (p) => String(p.masterId) === String(id),
     );
 
     if (alreadySelected) {
@@ -1738,17 +2122,14 @@ const isPassApprovedAndActive = (entity) =>
             ? "3"
             : "1";
       console.log("MASTER PERSON DATA837", JSON.stringify(data, null, 2));
-      const dateFromValue =
-        data.dateFrom
-          ? new Date(data.dateFrom).toISOString().slice(0, 16)
-          : getCurrentDateTime();
+      const dateFromValue = data.dateFrom
+        ? new Date(data.dateFrom).toISOString().slice(0, 16)
+        : getCurrentDateTime();
 
       const dateToValue = calculateDateTo(
         dateFromValue,
-        data.passPeriod
-          ? String(data.passPeriod)
-          : "1",
-        passTypeVal
+        data.passPeriod ? String(data.passPeriod) : "1",
+        passTypeVal,
       );
       setPersonForm({
         ...initialPersonForm,
@@ -1804,7 +2185,7 @@ const isPassApprovedAndActive = (entity) =>
   const handleMasterVehicleSelect = (e) => {
     const id = e.target.value;
     const alreadySelected = vehicles.some(
-      (v) => String(v.masterId) === String(id)
+      (v) => String(v.masterId) === String(id),
     );
 
     if (alreadySelected) {
@@ -1839,17 +2220,14 @@ const isPassApprovedAndActive = (entity) =>
             ? "3"
             : "1";
       console.log("MASTER VEHICLE DATA918", JSON.stringify(data, null, 2));
-      const dateFromValue =
-        data.dateFrom
-          ? new Date(data.dateFrom).toISOString().slice(0, 16)
-          : getCurrentDateTime();
+      const dateFromValue = data.dateFrom
+        ? new Date(data.dateFrom).toISOString().slice(0, 16)
+        : getCurrentDateTime();
 
       const dateToValue = calculateDateTo(
         dateFromValue,
-        data.passPeriod
-          ? String(data.passPeriod)
-          : "1",
-        passTypeVal
+        data.passPeriod ? String(data.passPeriod) : "1",
+        passTypeVal,
       );
       setVehicleForm({
         ...initialVehicleForm,
@@ -1894,24 +2272,45 @@ const isPassApprovedAndActive = (entity) =>
     // ---- License Expiry & Duration Lock Check ----
     if (!generalForm.isLifetimeLicense) {
       if (generalForm.isLicenseExpired) {
-        return toast.error("Pass generation is locked because your company license has expired.");
+        return toast.error(
+          "Pass generation is locked because your company license has expired.",
+        );
       }
-      if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined) {
+      if (
+        generalForm.remainingDays !== null &&
+        generalForm.remainingDays !== undefined
+      ) {
         const pTypeStr = String(personForm.passType || "1");
-        if ((pTypeStr === "2" || pTypeStr === "MONTHLY") && generalForm.remainingDays < 30) {
-          return toast.error(`Cannot add Monthly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+        if (
+          (pTypeStr === "2" || pTypeStr === "MONTHLY") &&
+          generalForm.remainingDays < 30
+        ) {
+          return toast.error(
+            `Cannot add Monthly pass. Your company license expires in ${generalForm.remainingDays} days.`,
+          );
         }
-        if ((pTypeStr === "3" || pTypeStr === "YEARLY" || pTypeStr === "ANNUAL") && generalForm.remainingDays < 365) {
-          return toast.error(`Cannot add Yearly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+        if (
+          (pTypeStr === "3" ||
+            pTypeStr === "YEARLY" ||
+            pTypeStr === "ANNUAL") &&
+          generalForm.remainingDays < 365
+        ) {
+          return toast.error(
+            `Cannot add Yearly pass. Your company license expires in ${generalForm.remainingDays} days.`,
+          );
         }
         if (personForm.dateTo && generalForm.licenseValidityDate) {
           const passEnd = new Date(personForm.dateTo);
-          const datePart = String(generalForm.licenseValidityDate).split('T')[0];
-          const [yyyy, mm, dd] = datePart.split('-').map(Number);
+          const datePart = String(generalForm.licenseValidityDate).split(
+            "T",
+          )[0];
+          const [yyyy, mm, dd] = datePart.split("-").map(Number);
           if (yyyy && mm && dd) {
             const licExp = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
             if (passEnd > licExp) {
-              return toast.error(`Cannot add pass. Pass end date (${formatDateGB(personForm.dateTo)}) exceeds company license expiry date (${formatDateLong(generalForm.licenseValidityDate)}).`);
+              return toast.error(
+                `Cannot add pass. Pass end date (${formatDateGB(personForm.dateTo)}) exceeds company license expiry date (${formatDateLong(generalForm.licenseValidityDate)}).`,
+              );
             }
           }
         }
@@ -1933,15 +2332,25 @@ const isPassApprovedAndActive = (entity) =>
         const today = new Date();
         let age = today.getFullYear() - dobDate.getFullYear();
         const monthDiff = today.getMonth() - dobDate.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dobDate.getDate())) {
+        if (
+          monthDiff < 0 ||
+          (monthDiff === 0 && today.getDate() < dobDate.getDate())
+        ) {
           age--;
         }
-        const desigObj = (masterData.designations || []).find((d) => String(d.id) === String(personForm.designation));
-        const selectedDesigName = desigObj ? desigObj.name : personForm.designation;
-        const desigStr = String(selectedDesigName || personForm.designationOther || "").toLowerCase();
+        const desigObj = (masterData.designations || []).find(
+          (d) => String(d.id) === String(personForm.designation),
+        );
+        const selectedDesigName = desigObj
+          ? desigObj.name
+          : personForm.designation;
+        const desigStr = String(
+          selectedDesigName || personForm.designationOther || "",
+        ).toLowerCase();
         const isVisitor = desigStr.includes("visitor");
         if (age < 18 && !isVisitor) {
-          errors.dob = "Pass application is not allowed for persons below 18 years of age (except Visitor designation).";
+          errors.dob =
+            "Pass application is not allowed for persons below 18 years of age (except Visitor designation).";
         }
       }
     }
@@ -1957,26 +2366,46 @@ const isPassApprovedAndActive = (entity) =>
     }
 
     // ---- Blacklist validation checks ----
-    const cleanAadhaar = personForm.aadharNo ? personForm.aadharNo.replace(/\s/g, "").toUpperCase() : "";
-    const cleanIdProof = personForm.idProofNumber ? personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase() : "";
-    const cleanTwoWheeler = (personForm.withTwoWheeler && personForm.vehicleNo) ? personForm.vehicleNo.replace(/[\s-]/g, "").toUpperCase() : "";
+    const cleanAadhaar = personForm.aadharNo
+      ? personForm.aadharNo.replace(/\s/g, "").toUpperCase()
+      : "";
+    const cleanIdProof = personForm.idProofNumber
+      ? personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase()
+      : "";
+    const cleanTwoWheeler =
+      personForm.withTwoWheeler && personForm.vehicleNo
+        ? personForm.vehicleNo.replace(/[\s-]/g, "").toUpperCase()
+        : "";
 
-    const aadharWarning = blacklistWarnings["PERSON_" + cleanAadhaar] || blacklistWarnings["DRIVER_" + cleanAadhaar];
-    const idProofWarning = blacklistWarnings["DRIVER_" + cleanIdProof] || blacklistWarnings["PERSON_" + cleanIdProof];
-    const twoWheelerWarning = cleanTwoWheeler ? blacklistWarnings["VEHICLE_" + cleanTwoWheeler] : null;
+    const aadharWarning =
+      blacklistWarnings["PERSON_" + cleanAadhaar] ||
+      blacklistWarnings["DRIVER_" + cleanAadhaar];
+    const idProofWarning =
+      blacklistWarnings["DRIVER_" + cleanIdProof] ||
+      blacklistWarnings["PERSON_" + cleanIdProof];
+    const twoWheelerWarning = cleanTwoWheeler
+      ? blacklistWarnings["VEHICLE_" + cleanTwoWheeler]
+      : null;
 
     if (aadharWarning) {
-      return toast.error(`Cannot add/update person: Aadhaar Number is blacklisted! Reason: ${aadharWarning.replace("⚠️ BLACKLISTED ", "")}`);
+      return toast.error(
+        `Cannot add/update person: Aadhaar Number is blacklisted! Reason: ${aadharWarning.replace("⚠️ BLACKLISTED ", "")}`,
+      );
     }
     if (idProofWarning) {
-      return toast.error(`Cannot add/update person: Driving License / ID Number is blacklisted! Reason: ${idProofWarning.replace("⚠️ BLACKLISTED ", "")}`);
+      return toast.error(
+        `Cannot add/update person: Driving License / ID Number is blacklisted! Reason: ${idProofWarning.replace("⚠️ BLACKLISTED ", "")}`,
+      );
     }
     if (twoWheelerWarning) {
-      return toast.error(`Cannot add/update person: Two Wheeler is blacklisted! Reason: ${twoWheelerWarning.replace("⚠️ BLACKLISTED ", "")}`);
+      return toast.error(
+        `Cannot add/update person: Two Wheeler is blacklisted! Reason: ${twoWheelerWarning.replace("⚠️ BLACKLISTED ", "")}`,
+      );
     }
 
     if (!personForm.hepType || personForm.hepType.trim() === "") {
-      errors.hepType = "Please select Type of HEP (Drivers, Personnel, or Seafarers)";
+      errors.hepType =
+        "Please select Type of HEP (Drivers, Personnel, or Seafarers)";
     }
 
     if (!personForm.name.trim()) errors.name = "Full name is required";
@@ -1986,7 +2415,10 @@ const isPassApprovedAndActive = (entity) =>
     const isForeigner = isPersonForeigner(personForm.nationality);
 
     // Aadhaar validation - required for non-foreigners (non-seafarers OR seafarers who chose aadhaar)
-    if (!isForeigner && (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar")) {
+    if (
+      !isForeigner &&
+      (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar")
+    ) {
       if (!personForm.aadharNo) errors.aadharNo = "Aadhaar number is required";
       else if (!/^\d{12}$/.test(personForm.aadharNo.replace(/\s/g, "")))
         errors.aadharNo = "Aadhaar must be exactly 12 digits";
@@ -1997,14 +2429,23 @@ const isPassApprovedAndActive = (entity) =>
       if (!personForm.idProofNumber && !personForm.passportNo) {
         errors.idProofNumber = "Passport number is required for Foreigners";
       }
-    } else if (personForm.hepType === "3" && personForm.seafarerIdType === "passport") {
-      if (!personForm.passportNo) errors.passportNo = "Passport number is required";
+    } else if (
+      personForm.hepType === "3" &&
+      personForm.seafarerIdType === "passport"
+    ) {
+      if (!personForm.passportNo)
+        errors.passportNo = "Passport number is required";
       else if (!/^[A-Z0-9]{5,20}$/i.test(personForm.passportNo))
-        errors.passportNo = "Passport number must be 5-20 alphanumeric characters";
+        errors.passportNo =
+          "Passport number must be 5-20 alphanumeric characters";
     }
 
     // Seafarer must select ID type
-    if (personForm.hepType === "3" && !personForm.seafarerIdType && !isForeigner) {
+    if (
+      personForm.hepType === "3" &&
+      !personForm.seafarerIdType &&
+      !isForeigner
+    ) {
       errors.seafarerIdType = "Please select Aadhaar or Passport";
     }
 
@@ -2055,15 +2496,8 @@ const isPassApprovedAndActive = (entity) =>
     // DL Verification
     //====================
 
-    if (
-        personForm.idProofType === "1" &&
-        !dlVerification.verified
-    ) {
-
-        return toast.error(
-            "Please verify the Driving Licence before adding."
-        );
-
+    if (personForm.idProofType === "1" && !dlVerification.verified) {
+      return toast.error("Please verify the Driving Licence before adding.");
     }
 
     if (
@@ -2084,21 +2518,25 @@ const isPassApprovedAndActive = (entity) =>
     // Copy of Passport doc is required for Foreigners or Seafarers who selected "passport"
     if (
       isForeigner &&
-      !(personForm.idProofFile || personForm.existingIdProofName || personForm.passportDoc || personForm.existingPassportName)
+      !(
+        personForm.idProofFile ||
+        personForm.existingIdProofName ||
+        personForm.passportDoc ||
+        personForm.existingPassportName
+      )
     )
       return toast.error("Copy of Passport is mandatory for Foreigners.");
 
-    if (
-      isForeigner &&
-      !(personForm.visaDoc || personForm.existingVisaDocName)
-    )
+    if (isForeigner && !(personForm.visaDoc || personForm.existingVisaDocName))
       return toast.error("Visa document is mandatory for Foreigners.");
 
     if (
       isForeigner &&
       !(personForm.immigrationDoc || personForm.existingImmigrationDocName)
     )
-      return toast.error("Immigration Clearance document is mandatory for Foreigners.");
+      return toast.error(
+        "Immigration Clearance document is mandatory for Foreigners.",
+      );
 
     if (personForm.passType === "2" || personForm.passType === "3") {
       if (!(personForm.policeVerification || personForm.existingPoliceName)) {
@@ -2108,13 +2546,20 @@ const isPassApprovedAndActive = (entity) =>
       }
     }
 
-    const isPersonOilDock = String(personForm.accessArea).toUpperCase().includes("OIL JETTY") || String(personForm.accessArea) === "1";
-    if (isPersonOilDock && !(personForm.entryAuthorization || personForm.existingEntryAuthName)) {
-      return toast.error("Entry Authorization is mandatory for Oil Dock passes.");
+    const isPersonOilDock =
+      String(personForm.accessArea).toUpperCase().includes("OIL JETTY") ||
+      String(personForm.accessArea) === "1";
+    if (
+      isPersonOilDock &&
+      !(personForm.entryAuthorization || personForm.existingEntryAuthName)
+    ) {
+      return toast.error(
+        "Entry Authorization is mandatory for Oil Dock passes.",
+      );
     }
 
     // Check if we're editing a reverted entity
-    if (editingRevertedEntity && editingRevertedEntity.type === 'person') {
+    if (editingRevertedEntity && editingRevertedEntity.type === "person") {
       // Call API to update reverted person
       handleSaveRevertedEntity();
       return;
@@ -2144,7 +2589,10 @@ const isPassApprovedAndActive = (entity) =>
   const openAddPersonModal = () => {
     const now = getCurrentDateTime();
     const indiaObj = masterData.countries.find(
-      (c) => String(c.name || "").trim().toLowerCase() === "india"
+      (c) =>
+        String(c.name || "")
+          .trim()
+          .toLowerCase() === "india",
     );
     const indiaId = indiaObj ? String(indiaObj.id) : "";
 
@@ -2152,7 +2600,11 @@ const isPassApprovedAndActive = (entity) =>
       ...initialPersonForm,
       country: indiaId,
       dateFrom: now,
-      dateTo: calculateDateTo(now, initialPersonForm.passPeriod, initialPersonForm.passType),
+      dateTo: calculateDateTo(
+        now,
+        initialPersonForm.passPeriod,
+        initialPersonForm.passType,
+      ),
     });
     setEditingPersonIndex(null);
     toggleModal("person", true);
@@ -2170,7 +2622,11 @@ const isPassApprovedAndActive = (entity) =>
     setPersonForm({
       ...initialPersonForm,
       dateFrom: now,
-      dateTo: calculateDateTo(now, initialPersonForm.passPeriod, initialPersonForm.passType),
+      dateTo: calculateDateTo(
+        now,
+        initialPersonForm.passPeriod,
+        initialPersonForm.passType,
+      ),
     });
     setEditingPersonIndex(null);
   };
@@ -2179,18 +2635,18 @@ const isPassApprovedAndActive = (entity) =>
     if (!dateStr) return "";
 
     const months = {
-        Jan: "01",
-        Feb: "02",
-        Mar: "03",
-        Apr: "04",
-        May: "05",
-        Jun: "06",
-        Jul: "07",
-        Aug: "08",
-        Sep: "09",
-        Oct: "10",
-        Nov: "11",
-        Dec: "12",
+      Jan: "01",
+      Feb: "02",
+      Mar: "03",
+      Apr: "04",
+      May: "05",
+      Jun: "06",
+      Jul: "07",
+      Aug: "08",
+      Sep: "09",
+      Oct: "10",
+      Nov: "11",
+      Dec: "12",
     };
 
     const parts = dateStr.split("-");
@@ -2198,7 +2654,107 @@ const isPassApprovedAndActive = (entity) =>
     if (parts.length !== 3) return "";
 
     return `${parts[2]}-${months[parts[1]]}-${parts[0]}`;
-};
+  };
+
+  //   const verifyVehicle = async (vehicleNo) => {
+  //     try {
+  //       setVehicleVerification({
+  //         loading: true,
+  //         verified: false,
+  //         message: "",
+  //         data: null,
+  //       });
+
+  //       const token = localStorage.getItem("accessToken");
+
+  //       const res = await axios.post(
+  //         `${AGENT_API}/ulip/vahan`,
+  //         {
+  //           vehiclenumber: vehicleNo,
+  //         },
+  //         {
+  //           headers: {
+  //             Authorization: `Bearer ${token}`,
+  //           },
+  //         }
+  //       );
+  //       // const ulipData = res.data?.response?.[0]?.response;
+  //       const ulipData = res.data?.response?.[0]?.response;
+
+  //       const isVerified = res.data.vehicleStatus === "ACTIVE";
+
+  //       const statusMessage =res.data.vehicleStatus || "INACTIVE";
+
+  //       // const statusMessage = ulipData?.statusMessage || "";
+
+  //       // const isVerified =
+  //       //     statusMessage === "Vehicle Details Found";
+
+  //       setVehicleVerification({
+
+  //           loading: false,
+
+  //           verified: isVerified,
+
+  //           message: statusMessage,
+
+  //           data: res.data
+
+  //       });
+  //       if (ulipData) {
+
+  //     setVehicleForm(prev => ({
+  //         ...prev,
+  //         insuranceExpiry:
+  //             convertDate(ulipData.rcInsuranceUpto),
+
+  //         rcValidity:
+  //             convertDate(ulipData.rcRegnUpto),
+
+  //         // map your vehicle type if needed
+  //     }));
+
+  // }
+
+  //       // ==========================
+  //       // Update Verification Status
+  //       // ==========================
+  //       // setVehicleVerification({
+  //       //   loading: false,
+  //       //   verified: true,
+  //       //   message: "Vehicle Verified Successfully",
+  //       //   data: res.data,
+  //       // });
+  //       console.log("ULIP Vehicle Response", res.data);
+
+  //       // ==========================
+  //       // OPTIONAL : Auto-fill fields
+  //       // ==========================
+  //       if (res.data?.data) {
+  //         setVehicleForm((prev) => ({
+  //           ...prev,
+
+  //           insuranceExpiry:
+  //             res.data.data.insuranceExpiry || prev.insuranceExpiry,
+
+  //           rcValidity:
+  //             res.data.data.rcValidity || prev.rcValidity,
+
+  //           type:
+  //             res.data.data.vehicleTypeId || prev.type,
+  //         }));
+  //       }
+  //     } catch (err) {
+  //       setVehicleVerification({
+  //         loading: false,
+  //         verified: false,
+  //         message:
+  //           err.response?.data?.message ||
+  //           "Vehicle not found",
+  //         data: null,
+  //       });
+  //     }
+  //   };
 
   const verifyVehicle = async (vehicleNo) => {
     try {
@@ -2220,85 +2776,57 @@ const isPassApprovedAndActive = (entity) =>
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
-      // const ulipData = res.data?.response?.[0]?.response;
+
       const ulipData = res.data?.response?.[0]?.response;
 
+      const vehicleStatus = String(
+        res.data?.vehicleStatus || ulipData?.rcStatus || "INACTIVE",
+      ).toUpperCase();
 
-
-      const isVerified = res.data.vehicleStatus === "ACTIVE";
-
-      const statusMessage =res.data.vehicleStatus || "INACTIVE";
-
-      // const statusMessage = ulipData?.statusMessage || "";
-
-      // const isVerified =
-      //     statusMessage === "Vehicle Details Found";
+      const isVerified = vehicleStatus === "ACTIVE";
 
       setVehicleVerification({
-
-          loading: false,
-
-          verified: isVerified,
-
-          message: statusMessage,
-
-          data: res.data
-
+        loading: false,
+        verified: isVerified,
+        message: vehicleStatus,
+        data: res.data,
       });
+
+      /*
+       * ==========================================
+       * VAHAN DATE VALUES
+       * ==========================================
+       */
       if (ulipData) {
+        const insuranceExpiry = convertDate(ulipData.rcInsuranceUpto);
+        const rcValidity = convertDate(ulipData.rcRegnUpto);
 
-    setVehicleForm(prev => ({
-        ...prev,
-        insuranceExpiry:
-            convertDate(ulipData.rcInsuranceUpto),
-
-        rcValidity:
-            convertDate(ulipData.rcRegnUpto),
-
-        // map your vehicle type if needed
-    }));
-
-}
-
-      // ==========================
-      // Update Verification Status
-      // ==========================
-      // setVehicleVerification({
-      //   loading: false,
-      //   verified: true,
-      //   message: "Vehicle Verified Successfully",
-      //   data: res.data,
-      // });
-      console.log("ULIP Vehicle Response", res.data);
-
-      // ==========================
-      // OPTIONAL : Auto-fill fields
-      // ==========================
-      if (res.data?.data) {
         setVehicleForm((prev) => ({
           ...prev,
 
-          insuranceExpiry:
-            res.data.data.insuranceExpiry || prev.insuranceExpiry,
-
-          rcValidity:
-            res.data.data.rcValidity || prev.rcValidity,
-
-          type:
-            res.data.data.vehicleTypeId || prev.type,
+          // Always take these two dates from VAHAN
+          insuranceExpiry,
+          rcValidity,
         }));
       }
+
+      console.log("ULIP Vehicle Response:", res.data);
     } catch (err) {
       setVehicleVerification({
         loading: false,
         verified: false,
-        message:
-          err.response?.data?.message ||
-          "Vehicle not found",
+        message: err.response?.data?.message || "Vehicle not found",
         data: null,
       });
+
+      // Clear VAHAN dates when verification fails
+      setVehicleForm((prev) => ({
+        ...prev,
+        insuranceExpiry: "",
+        rcValidity: "",
+      }));
     }
   };
 
@@ -2322,54 +2850,54 @@ const isPassApprovedAndActive = (entity) =>
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
-      const ulipResponse = res.data?.response?.[0]?.response;
+      // ==========================================
+      // ACTUAL SARATHI RESPONSE STRUCTURE
+      // ==========================================
 
-      const errorMessage = ulipResponse?.errormessage;
+      const sarathiResult = res.data?.response?.[0];
 
-      const errorCode = ulipResponse?.errorcode;
+      const ulipResponse = sarathiResult?.response;
+
+      // responseStatus is sibling of response
+      const responseStatus = sarathiResult?.responseStatus;
+
+      // Actual DL status is inside DLInformation
+      const dlStatus =
+        ulipResponse?.DLInformation?.DL_status;
+
+      const normalizedDlStatus = String(dlStatus || "")
+        .trim()
+        .toUpperCase()
+        .replace(/[.\s]/g, "");
+
+      const isVerified =
+        String(responseStatus || "").trim().toUpperCase() === "SUCCESS" &&
+        normalizedDlStatus === "ACTIVE";
+
+      console.log("=================================");
+      console.log("ULIP DL Response:", res.data);
+      console.log("Sarathi Result:", sarathiResult);
+      console.log("Sarathi Response:", ulipResponse);
+      console.log("Sarathi responseStatus:", responseStatus);
+      console.log("Sarathi DL_status:", dlStatus);
+      console.log("DL Verified:", isVerified);
+      console.log("=================================");
 
       setDlVerification({
-
-          loading:false,
-
-          verified:errorCode === 0,
-
-          message:errorMessage || "Driving Licence Verified Successfully",
-
-          data:res.data
-
+        loading: false,
+        verified: isVerified,
+        message: isVerified
+          ? "Driving Licence Verified Successfully"
+          : "Driving Licence verification failed",
+        data: res.data,
       });
 
-      // ==========================
-      // Update Verification Status
-      // ==========================
-      // setDlVerification({
-      //   loading: false,
-      //   verified: true,
-      //   message: "Driving Licence Verified Successfully",
-      //   data: res.data,
-      // });
-
-      console.log("ULIP DL Response", res.data);
-
-      // ==========================
-      // OPTIONAL : Auto-fill fields
-      // ==========================
-      if (res.data?.data) {
-        setPersonForm((prev) => ({
-          ...prev,
-
-          name:
-            res.data.data.name || prev.name,
-
-          mobile:
-            res.data.data.mobile || prev.mobile,
-        }));
-      }
     } catch (err) {
+      console.error("DL Verification Error:", err);
+
       setDlVerification({
         loading: false,
         verified: false,
@@ -2385,24 +2913,45 @@ const isPassApprovedAndActive = (entity) =>
     // ---- License Expiry & Duration Lock Check ----
     if (!generalForm.isLifetimeLicense) {
       if (generalForm.isLicenseExpired) {
-        return toast.error("Pass generation is locked because your company license has expired.");
+        return toast.error(
+          "Pass generation is locked because your company license has expired.",
+        );
       }
-      if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined) {
+      if (
+        generalForm.remainingDays !== null &&
+        generalForm.remainingDays !== undefined
+      ) {
         const vTypeStr = String(vehicleForm.passType || "1");
-        if ((vTypeStr === "2" || vTypeStr === "MONTHLY") && generalForm.remainingDays < 30) {
-          return toast.error(`Cannot add Monthly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+        if (
+          (vTypeStr === "2" || vTypeStr === "MONTHLY") &&
+          generalForm.remainingDays < 30
+        ) {
+          return toast.error(
+            `Cannot add Monthly pass. Your company license expires in ${generalForm.remainingDays} days.`,
+          );
         }
-        if ((vTypeStr === "3" || vTypeStr === "YEARLY" || vTypeStr === "ANNUAL") && generalForm.remainingDays < 365) {
-          return toast.error(`Cannot add Yearly pass. Your company license expires in ${generalForm.remainingDays} days.`);
+        if (
+          (vTypeStr === "3" ||
+            vTypeStr === "YEARLY" ||
+            vTypeStr === "ANNUAL") &&
+          generalForm.remainingDays < 365
+        ) {
+          return toast.error(
+            `Cannot add Yearly pass. Your company license expires in ${generalForm.remainingDays} days.`,
+          );
         }
         if (vehicleForm.dateTo && generalForm.licenseValidityDate) {
           const passEnd = new Date(vehicleForm.dateTo);
-          const datePart = String(generalForm.licenseValidityDate).split('T')[0];
-          const [yyyy, mm, dd] = datePart.split('-').map(Number);
+          const datePart = String(generalForm.licenseValidityDate).split(
+            "T",
+          )[0];
+          const [yyyy, mm, dd] = datePart.split("-").map(Number);
           if (yyyy && mm && dd) {
             const licExp = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
             if (passEnd > licExp) {
-              return toast.error(`Cannot add pass. Pass end date (${formatDateGB(vehicleForm.dateTo)}) exceeds company license expiry date (${formatDateLong(generalForm.licenseValidityDate)}).`);
+              return toast.error(
+                `Cannot add pass. Pass end date (${formatDateGB(vehicleForm.dateTo)}) exceeds company license expiry date (${formatDateLong(generalForm.licenseValidityDate)}).`,
+              );
             }
           }
         }
@@ -2410,10 +2959,14 @@ const isPassApprovedAndActive = (entity) =>
     }
 
     // ---- Blacklist blocking check ----
-    const cleanRegNo = vehicleForm.regNo ? vehicleForm.regNo.replace(/[\s-]/g, "").toUpperCase() : "";
+    const cleanRegNo = vehicleForm.regNo
+      ? vehicleForm.regNo.replace(/[\s-]/g, "").toUpperCase()
+      : "";
     const regNoWarning = blacklistWarnings["VEHICLE_" + cleanRegNo];
     if (regNoWarning) {
-      return toast.error(`Cannot add/update vehicle: Registration Number is blacklisted! Reason: ${regNoWarning.replace("⚠️ BLACKLISTED ", "")}`);
+      return toast.error(
+        `Cannot add/update vehicle: Registration Number is blacklisted! Reason: ${regNoWarning.replace("⚠️ BLACKLISTED ", "")}`,
+      );
     }
 
     // ---- Full field validation before add ----
@@ -2447,16 +3000,14 @@ const isPassApprovedAndActive = (entity) =>
     }
     setVehicleErrors({});
 
-        //====================
+    //====================
     // ULIP Verification
     //====================
     console.log("vehicleVerification =", vehicleVerification);
     if (!vehicleVerification.verified) {
-
-        return toast.error(
-            "Please verify the Vehicle Registration Number before adding."
-        );
-
+      return toast.error(
+        "Please verify the Vehicle Registration Number before adding.",
+      );
     }
     // ---- End validation ----
     if (
@@ -2472,10 +3023,14 @@ const isPassApprovedAndActive = (entity) =>
       );
     }
     if (
-      ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType))
+      ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+        String(vehicleForm.passType),
+      )
     ) {
       if (!(vehicleForm.permit || vehicleForm.existingPermitName)) {
-        return toast.error("Permit Document is mandatory for Monthly/Yearly passes.");
+        return toast.error(
+          "Permit Document is mandatory for Monthly/Yearly passes.",
+        );
       }
       if (
         !(vehicleForm.requestLetter || vehicleForm.existingReqName) ||
@@ -2488,22 +3043,41 @@ const isPassApprovedAndActive = (entity) =>
       }
     }
 
-    const isVehicleOilDock = String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") || String(vehicleForm.accessArea) === "1";
+    const isVehicleOilDock =
+      String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") ||
+      String(vehicleForm.accessArea) === "1";
     if (isVehicleOilDock) {
-      if (!(vehicleForm.sparkArrester || vehicleForm.existingSparkArresterName)) {
-        return toast.error("Spark Arrester Certificate is mandatory for Oil Dock passes.");
+      if (
+        !(vehicleForm.sparkArrester || vehicleForm.existingSparkArresterName)
+      ) {
+        return toast.error(
+          "Spark Arrester Certificate is mandatory for Oil Dock passes.",
+        );
       }
     }
-    const isMonthlyYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType));
-    if (isMonthlyYearly && !(vehicleForm.twistLock || vehicleForm.existingTwistLockName)) {
-      return toast.error("Twist Lock Certificate is mandatory for Monthly/Yearly passes.");
+    const isMonthlyYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+      String(vehicleForm.passType),
+    );
+    if (
+      isMonthlyYearly &&
+      !(vehicleForm.twistLock || vehicleForm.existingTwistLockName)
+    ) {
+      return toast.error(
+        "Twist Lock Certificate is mandatory for Monthly/Yearly passes.",
+      );
     }
-    if (isVehicleOilDock && !isMonthlyYearly && !(vehicleForm.requestLetter || vehicleForm.existingReqName)) {
-      return toast.error("Request Letter is mandatory for Oil Dock Daily passes.");
+    if (
+      isVehicleOilDock &&
+      !isMonthlyYearly &&
+      !(vehicleForm.requestLetter || vehicleForm.existingReqName)
+    ) {
+      return toast.error(
+        "Request Letter is mandatory for Oil Dock Daily passes.",
+      );
     }
 
     // Check if we're editing a reverted entity
-    if (editingRevertedEntity && editingRevertedEntity.type === 'vehicle') {
+    if (editingRevertedEntity && editingRevertedEntity.type === "vehicle") {
       // Call API to update reverted vehicle
       handleSaveRevertedEntity();
       return;
@@ -2514,18 +3088,15 @@ const isPassApprovedAndActive = (entity) =>
 
       ulipVerified: vehicleVerification.verified,
 
-      vehicleStatus:
-        vehicleVerification.verified
-          ? "ACTIVE"
-          : "INACTIVE",
+      vehicleStatus: vehicleVerification.verified ? "ACTIVE" : "INACTIVE",
 
       ulipVerifiedAt: new Date().toISOString(),
 
-      ulipResponse: vehicleVerification.data
+      ulipResponse: vehicleVerification.data,
     };
 
     console.log("Vehicle Data");
-console.log(vehicleData);
+    console.log(vehicleData);
 
     // if (editingVehicleIndex !== null) {
     //   const updated = [...vehicles];
@@ -2547,7 +3118,6 @@ console.log(vehicleData);
       setEditingVehicleIndex(null);
       toast.success("Vehicle updated successfully.");
     } else {
-
       // CHANGE HERE
       setVehicles([...vehicles, vehicleData]);
 
@@ -2569,7 +3139,11 @@ console.log(vehicleData);
     setVehicleForm({
       ...initialVehicleForm,
       dateFrom: now,
-      dateTo: calculateDateTo(now, initialVehicleForm.passPeriod, initialVehicleForm.passType),
+      dateTo: calculateDateTo(
+        now,
+        initialVehicleForm.passPeriod,
+        initialVehicleForm.passType,
+      ),
     });
     setEditingVehicleIndex(null);
     toggleModal("vehicle", true);
@@ -2607,14 +3181,10 @@ console.log(vehicleData);
       });
 
       if (!response.data?.success) {
-        throw new Error(
-          response.data?.message || "Unable to enable pass."
-        );
+        throw new Error(response.data?.message || "Unable to enable pass.");
       }
 
-      toast.success(
-        response.data.message || "Pass enabled successfully."
-      );
+      toast.success(response.data.message || "Pass enabled successfully.");
 
       // Update current entity immediately
       setEntityModal((prev) => ({
@@ -2631,10 +3201,7 @@ console.log(vehicleData);
       setSelectedPassDetails((prev) => {
         if (!prev) return prev;
 
-        const key =
-          entityModal.type === "person"
-            ? "persons"
-            : "vehicles";
+        const key = entityModal.type === "person" ? "persons" : "vehicles";
 
         return {
           ...prev,
@@ -2646,21 +3213,20 @@ console.log(vehicleData);
                   disabledReason: null,
                   disabledAt: null,
                 }
-              : item
+              : item,
           ),
         };
       });
 
       // Refresh list so parent request also comes back normally
       fetchAllViewPasses();
-
     } catch (error) {
       console.error("Enable pass error:", error);
 
       toast.error(
         error.response?.data?.message ||
           error.message ||
-          "Unable to enable pass."
+          "Unable to enable pass.",
       );
     } finally {
       setEnableLoading(false);
@@ -2676,15 +3242,20 @@ console.log(vehicleData);
 
   const handleSubmitRequest = async () => {
     if (companyBlacklisted) {
-      return toast.error("Pass application blocked. Your company is blacklisted.", {
-        description: `Reason: ${companyBlacklistReason}`,
-        duration: 8000
-      });
+      return toast.error(
+        "Pass application blocked. Your company is blacklisted.",
+        {
+          description: `Reason: ${companyBlacklistReason}`,
+          duration: 8000,
+        },
+      );
     }
     if (!generalForm.purpose)
       return toast.warning("Please select a Purpose of Visit.");
     if (!generalForm.authLetter)
-      return toast.warning("Please upload the Licence / Work Order / Contract document.");
+      return toast.warning(
+        "Please upload the Licence / Work Order / Contract document.",
+      );
     if (!generalForm.requisitionLetter)
       return toast.warning("Please upload the Requisition Letter.");
     if (!agreedToTerms)
@@ -2745,9 +3316,19 @@ console.log(vehicleData);
             ? p.passportNo
             : p.aadharNo;
 
-        const isCustomDesig = p.designation === "Crew" || p.designation === "Supernumerary" || p.designation === "Others";
-        const desigIdVal = isCustomDesig ? null : (parseInt(p.designation, 10) || null);
-        const desigOtherVal = (p.designation === "Crew" || p.designation === "Supernumerary") ? p.designation : (p.designation === "Others" ? p.designationOther : null);
+        const isCustomDesig =
+          p.designation === "Crew" ||
+          p.designation === "Supernumerary" ||
+          p.designation === "Others";
+        const desigIdVal = isCustomDesig
+          ? null
+          : parseInt(p.designation, 10) || null;
+        const desigOtherVal =
+          p.designation === "Crew" || p.designation === "Supernumerary"
+            ? p.designation
+            : p.designation === "Others"
+              ? p.designationOther
+              : null;
 
         return {
           rateId: 1,
@@ -2824,10 +3405,10 @@ console.log(vehicleData);
           dateFrom: v.dateFrom,
           dateTo: computedDateTo,
           amount: parseFloat(v.amount) || 0,
-           // ULIP
+          // ULIP
           ulipVerified: v.ulipVerified,
           vehicleStatus: v.vehicleStatus,
-          ulipVerifiedAt: v.ulipVerifiedAt
+          ulipVerifiedAt: v.ulipVerifiedAt,
         };
       });
 
@@ -2870,20 +3451,24 @@ console.log(vehicleData);
       persons.forEach((p, idx) => {
         if (p.photo) formData.append(`personPhoto_${idx}`, p.photo);
         if (p.aadharFile) formData.append(`personAadhar_${idx}`, p.aadharFile);
-        if (p.idProofFile) formData.append(`personIdProof_${idx}`, p.idProofFile);
+        if (p.idProofFile)
+          formData.append(`personIdProof_${idx}`, p.idProofFile);
 
         // Auto-fallback if driverLicence is empty for a Driver
-        const dlFile = p.driverLicence || (p.hepType === "1" ? p.idProofFile : null);
+        const dlFile =
+          p.driverLicence || (p.hepType === "1" ? p.idProofFile : null);
         if (dlFile) formData.append(`driverLicense_${idx}`, dlFile);
 
         if (p.policeVerification)
           formData.append(`policeVerification_${idx}`, p.policeVerification);
         if (p.proofOfEmployment)
           formData.append(`employmentProof_${idx}`, p.proofOfEmployment);
-        if (p.copyOfLicence) formData.append(`chaLicenseCopy_${idx}`, p.copyOfLicence);
+        if (p.copyOfLicence)
+          formData.append(`chaLicenseCopy_${idx}`, p.copyOfLicence);
         if (p.passportDoc) formData.append(`passportDoc_${idx}`, p.passportDoc);
         if (p.visaDoc) formData.append(`visaDoc_${idx}`, p.visaDoc);
-        if (p.immigrationDoc) formData.append(`immigrationDoc_${idx}`, p.immigrationDoc);
+        if (p.immigrationDoc)
+          formData.append(`immigrationDoc_${idx}`, p.immigrationDoc);
         if (p.cdcDocument) formData.append(`cdcDocument_${idx}`, p.cdcDocument);
         if (p.declarationForm)
           formData.append(`declarationForm_${idx}`, p.declarationForm);
@@ -2898,12 +3483,15 @@ console.log(vehicleData);
         if (v.insuranceDocument)
           formData.append(`vehicleInsurance_${idx}`, v.insuranceDocument);
         if (v.permit) formData.append(`vehiclePermit_${idx}`, v.permit);
-        if (v.fitnessCert) formData.append(`vehicleFitness_${idx}`, v.fitnessCert);
+        if (v.fitnessCert)
+          formData.append(`vehicleFitness_${idx}`, v.fitnessCert);
         if (v.requestLetter)
           formData.append(`vehicleRequestLetter_${idx}`, v.requestLetter);
         if (v.taxDoc) formData.append(`vehicleTax_${idx}`, v.taxDoc);
-        if (v.emissionCert) formData.append(`vehicleEmission_${idx}`, v.emissionCert);
-        if (v.sparkArrester) formData.append(`sparkArrester_${idx}`, v.sparkArrester);
+        if (v.emissionCert)
+          formData.append(`vehicleEmission_${idx}`, v.emissionCert);
+        if (v.sparkArrester)
+          formData.append(`sparkArrester_${idx}`, v.sparkArrester);
         if (v.twistLock) formData.append(`twistLock_${idx}`, v.twistLock);
       });
       // ===== CHANGE END =====
@@ -2955,45 +3543,52 @@ console.log(vehicleData);
       }
     } catch (error) {
       const errData = error.response?.data;
-      if (errData && (errData.code === "LICENSE_EXPIRED" || errData.code === "PASS_EXCEEDS_LICENSE")) {
-        toast.custom((t) => (
-          <div className="flex flex-col gap-3 w-[360px] p-4 bg-white dark:bg-stone-900 border-l-4 border-red-500 rounded-xl shadow-2xl animate-in slide-in-from-top-4 duration-300">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg shrink-0">
-                <AlertCircle className="h-5 w-5" />
+      if (
+        errData &&
+        (errData.code === "LICENSE_EXPIRED" ||
+          errData.code === "PASS_EXCEEDS_LICENSE")
+      ) {
+        toast.custom(
+          (t) => (
+            <div className="flex flex-col gap-3 w-[360px] p-4 bg-white dark:bg-stone-900 border-l-4 border-red-500 rounded-xl shadow-2xl animate-in slide-in-from-top-4 duration-300">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg shrink-0">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h5 className="text-xs font-bold uppercase tracking-wider text-stone-900 dark:text-white">
+                    {errData.code === "LICENSE_EXPIRED"
+                      ? "License Expired"
+                      : "Exceeds Expiry"}
+                  </h5>
+                  <p className="text-[11px] text-stone-600 dark:text-stone-400 mt-1 leading-relaxed">
+                    {errData.message}
+                  </p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <h5 className="text-xs font-bold uppercase tracking-wider text-stone-900 dark:text-white">
-                  {errData.code === "LICENSE_EXPIRED" ? "License Expired" : "Exceeds Expiry"}
-                </h5>
-                <p className="text-[11px] text-stone-600 dark:text-stone-400 mt-1 leading-relaxed">
-                  {errData.message}
-                </p>
+              <div className="flex items-center justify-end gap-2 pt-1 border-t border-stone-100 dark:border-stone-850">
+                <button
+                  onClick={() => toast.dismiss(t)}
+                  className="px-2.5 py-1.5 text-[10px] font-bold text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 transition-all uppercase"
+                >
+                  Dismiss
+                </button>
+                <button
+                  onClick={() => {
+                    toast.dismiss(t);
+                    window.dispatchEvent(new Event("open-profile-update"));
+                  }}
+                  className="px-3 py-1.5 text-[10px] font-black bg-amber-400 hover:bg-amber-500 text-black rounded-lg transition-all shadow-sm uppercase tracking-wide"
+                >
+                  Update Profile
+                </button>
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2 pt-1 border-t border-stone-100 dark:border-stone-850">
-              <button
-                onClick={() => toast.dismiss(t)}
-                className="px-2.5 py-1.5 text-[10px] font-bold text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 transition-all uppercase"
-              >
-                Dismiss
-              </button>
-              <button
-                onClick={() => {
-                  toast.dismiss(t);
-                  window.dispatchEvent(new Event("open-profile-update"));
-                }}
-                className="px-3 py-1.5 text-[10px] font-black bg-amber-400 hover:bg-amber-500 text-black rounded-lg transition-all shadow-sm uppercase tracking-wide"
-              >
-                Update Profile
-              </button>
-            </div>
-          </div>
-        ), { duration: 8000 });
-      } else {
-        toast.error(
-          errData?.message || "Submission failed. Server Error.",
+          ),
+          { duration: 8000 },
         );
+      } else {
+        toast.error(errData?.message || "Submission failed. Server Error.");
       }
       console.error("Submit Error:", error);
     } finally {
@@ -3012,7 +3607,7 @@ console.log(vehicleData);
     existingFileName,
     onView,
     fileType = "pdf",
-    disabled = false
+    disabled = false,
   }) => (
     <div className="bg-white p-4 border border-slate-200 rounded-xl shadow-sm hover:border-orange-300 hover:shadow-md transition-all group flex flex-col justify-between h-full">
       <label className="text-xs font-bold text-slate-800 block mb-3">
@@ -3065,10 +3660,9 @@ console.log(vehicleData);
           type="file"
           disabled={disabled}
           accept={fileType === "image" ? "image/*" : "application/pdf"}
-          className={`absolute inset-0 w-full h-full opacity-0 z-10 ${disabled
-            ? "cursor-not-allowed"
-            : "cursor-pointer"
-            }`}
+          className={`absolute inset-0 w-full h-full opacity-0 z-10 ${
+            disabled ? "cursor-not-allowed" : "cursor-pointer"
+          }`}
           required={isRequired && !existingFileName && !file}
           onChange={(e) => {
             const file = e.target.files[0];
@@ -3085,12 +3679,13 @@ console.log(vehicleData);
           }}
         />
         <div
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${disabled
-            ? "bg-slate-100 border-slate-300 opacity-60"
-            : file
-              ? "border-orange-300 bg-orange-50"
-              : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
-            } transition-colors`}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
+            disabled
+              ? "bg-slate-100 border-slate-300 opacity-60"
+              : file
+                ? "border-orange-300 bg-orange-50"
+                : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
+          } transition-colors`}
         >
           <Upload
             className={`w-4 h-4 flex-shrink-0 ${file ? "text-orange-600" : "text-slate-400"}`}
@@ -3146,8 +3741,10 @@ console.log(vehicleData);
     setEditingRevertedPass(pass);
 
     // Extract only reverted entities
-    const revertedPersonsList = pass.persons?.filter(p => p.status === 'reverted') || [];
-    const revertedVehiclesList = pass.vehicles?.filter(v => v.status === 'reverted') || [];
+    const revertedPersonsList =
+      pass.persons?.filter((p) => p.status === "reverted") || [];
+    const revertedVehiclesList =
+      pass.vehicles?.filter((v) => v.status === "reverted") || [];
 
     setRevertedPersons(revertedPersonsList);
     setRevertedVehicles(revertedVehiclesList);
@@ -3168,28 +3765,47 @@ console.log(vehicleData);
 
     // Find original index in full list
     let originalIdx = index;
-    if (type === 'person' && editingRevertedPass?.persons) {
-      originalIdx = editingRevertedPass.persons.findIndex(p => p.id === entity.id);
-    } else if (type === 'vehicle' && editingRevertedPass?.vehicles) {
-      originalIdx = editingRevertedPass.vehicles.findIndex(v => v.id === entity.id);
+    if (type === "person" && editingRevertedPass?.persons) {
+      originalIdx = editingRevertedPass.persons.findIndex(
+        (p) => p.id === entity.id,
+      );
+    } else if (type === "vehicle" && editingRevertedPass?.vehicles) {
+      originalIdx = editingRevertedPass.vehicles.findIndex(
+        (v) => v.id === entity.id,
+      );
     }
     if (originalIdx === -1) originalIdx = index;
 
     // Store the entity being edited for later use
-    setEditingRevertedEntity({ type, index: originalIdx, id: entity.id, passId: editingRevertedPass?.id, revertedIndex: index });
+    setEditingRevertedEntity({
+      type,
+      index: originalIdx,
+      id: entity.id,
+      passId: editingRevertedPass?.id,
+      revertedIndex: index,
+    });
 
-    if (type === 'person') {
+    if (type === "person") {
       // Set editing index so master directory dropdown is hidden and button shows "Update Person"
-      setEditingPersonIndex('reverted');
+      setEditingPersonIndex("reverted");
 
       // Resolve HEP Type ID (1: Drivers, 2: Personnel, 3: Seafarers, 4: Vendors)
       const rawHep = entity.hepTypeId || entity.hepType;
       let resolvedHepType = "2";
-      if (String(rawHep) === "3" || String(rawHep).toUpperCase().includes("SEAFARER")) {
+      if (
+        String(rawHep) === "3" ||
+        String(rawHep).toUpperCase().includes("SEAFARER")
+      ) {
         resolvedHepType = "3";
-      } else if (String(rawHep) === "1" || String(rawHep).toUpperCase().includes("DRIVER")) {
+      } else if (
+        String(rawHep) === "1" ||
+        String(rawHep).toUpperCase().includes("DRIVER")
+      ) {
         resolvedHepType = "1";
-      } else if (String(rawHep) === "4" || String(rawHep).toUpperCase().includes("VENDOR")) {
+      } else if (
+        String(rawHep) === "4" ||
+        String(rawHep).toUpperCase().includes("VENDOR")
+      ) {
         resolvedHepType = "4";
       } else if (rawHep) {
         resolvedHepType = String(rawHep);
@@ -3197,25 +3813,56 @@ console.log(vehicleData);
 
       // Map ENUM strings to numeric IDs using masterData
       const nationalityEnum = entity.nationality; // "INDIAN" or "FOREIGNER"
-      const nationalityObj = masterData.nationalities.find(n => (n.value || n.label || n.name || "").toUpperCase() === nationalityEnum?.toUpperCase());
-      const nationalityId = nationalityObj ? String(nationalityObj.id || nationalityObj.value) : (nationalityEnum === "FOREIGNER" ? "2" : "1");
+      const nationalityObj = masterData.nationalities.find(
+        (n) =>
+          (n.value || n.label || n.name || "").toUpperCase() ===
+          nationalityEnum?.toUpperCase(),
+      );
+      const nationalityId = nationalityObj
+        ? String(nationalityObj.id || nationalityObj.value)
+        : nationalityEnum === "FOREIGNER"
+          ? "2"
+          : "1";
 
       const accessAreaEnum = entity.accessAreaId || entity.accessArea; // "OIL JETTY AND OTHER GATES" or "OTHER GATES ONLY"
-      const accessAreaObj = masterData.accessAreas.find(a => (a.value || a.label || a.name || "").toUpperCase() === accessAreaEnum?.toUpperCase());
-      const accessAreaId = accessAreaObj ? String(accessAreaObj.id || accessAreaObj.value) : '';
+      const accessAreaObj = masterData.accessAreas.find(
+        (a) =>
+          (a.value || a.label || a.name || "").toUpperCase() ===
+          accessAreaEnum?.toUpperCase(),
+      );
+      const accessAreaId = accessAreaObj
+        ? String(accessAreaObj.id || accessAreaObj.value)
+        : "";
 
       const idProofTypeEnum = entity.idProofType; // "PASSPORT", "PAN CARD", etc.
-      const idProofTypeObj = masterData.idProofTypes.find(i => (i.value || i.label || i.name || "").toUpperCase() === idProofTypeEnum?.toUpperCase());
-      const idProofTypeId = idProofTypeObj ? String(idProofTypeObj.id || idProofTypeObj.value) : idProofTypeEnum;
+      const idProofTypeObj = masterData.idProofTypes.find(
+        (i) =>
+          (i.value || i.label || i.name || "").toUpperCase() ===
+          idProofTypeEnum?.toUpperCase(),
+      );
+      const idProofTypeId = idProofTypeObj
+        ? String(idProofTypeObj.id || idProofTypeObj.value)
+        : idProofTypeEnum;
 
       const passTypeEnum = entity.passType; // "DAILY", "MONTHLY", "YEARLY"
-      const passTypeObj = masterData.passTypes.find(p => (p.value || p.label || p.name || "").toUpperCase() === passTypeEnum?.toUpperCase());
-      const passTypeId = passTypeObj ? String(passTypeObj.id || passTypeObj.value) : passTypeEnum;
+      const passTypeObj = masterData.passTypes.find(
+        (p) =>
+          (p.value || p.label || p.name || "").toUpperCase() ===
+          passTypeEnum?.toUpperCase(),
+      );
+      const passTypeId = passTypeObj
+        ? String(passTypeObj.id || passTypeObj.value)
+        : passTypeEnum;
 
       // Resolve Seafarer ID Type (passport or aadhaar)
-      let resolvedSeafarerIdType = entity.seafarerIdType || '';
+      let resolvedSeafarerIdType = entity.seafarerIdType || "";
       if (resolvedHepType === "3" && !resolvedSeafarerIdType) {
-        if (entity.passportPath || entity.passportName || entity.passportNo || String(entity.idProofType).toUpperCase().includes("PASSPORT")) {
+        if (
+          entity.passportPath ||
+          entity.passportName ||
+          entity.passportNo ||
+          String(entity.idProofType).toUpperCase().includes("PASSPORT")
+        ) {
           resolvedSeafarerIdType = "passport";
         } else {
           resolvedSeafarerIdType = "aadhaar";
@@ -3223,11 +3870,17 @@ console.log(vehicleData);
       }
 
       // Resolve Designation
-      const rawDesig = String(entity.designationId || entity.designation || entity.designationOther || '');
+      const rawDesig = String(
+        entity.designationId ||
+          entity.designation ||
+          entity.designationOther ||
+          "",
+      );
       let resolvedDesignation = rawDesig;
-      const desigMatch = masterData.designations.find(d =>
-        String(d.id) === rawDesig ||
-        String(d.name || '').toUpperCase() === rawDesig.toUpperCase()
+      const desigMatch = masterData.designations.find(
+        (d) =>
+          String(d.id) === rawDesig ||
+          String(d.name || "").toUpperCase() === rawDesig.toUpperCase(),
       );
       if (desigMatch) {
         resolvedDesignation = String(desigMatch.id);
@@ -3236,53 +3889,93 @@ console.log(vehicleData);
       } else if (rawDesig.toUpperCase().includes("SUPERNUMERARY")) {
         resolvedDesignation = "Supernumerary";
       }
-      if (resolvedHepType === "3" && (!resolvedDesignation || resolvedDesignation === "null" || resolvedDesignation === "undefined" || resolvedDesignation === "")) {
+      if (
+        resolvedHepType === "3" &&
+        (!resolvedDesignation ||
+          resolvedDesignation === "null" ||
+          resolvedDesignation === "undefined" ||
+          resolvedDesignation === "")
+      ) {
         resolvedDesignation = "Crew";
       }
 
       // Resolve Country
       const rawCountry = entity.countryId || entity.country;
-      const countryObj = masterData.countries.find(c =>
-        String(c.id) === String(rawCountry) ||
-        String(c.name || '').trim().toUpperCase() === String(rawCountry || '').trim().toUpperCase()
+      const countryObj = masterData.countries.find(
+        (c) =>
+          String(c.id) === String(rawCountry) ||
+          String(c.name || "")
+            .trim()
+            .toUpperCase() ===
+            String(rawCountry || "")
+              .trim()
+              .toUpperCase(),
       );
-      const indiaObj = masterData.countries.find(c => String(c.name || '').trim().toLowerCase() === 'india');
-      const defaultIndiaId = indiaObj ? String(indiaObj.id) : '75';
-      const resolvedCountry = countryObj ? String(countryObj.id) : (rawCountry ? String(rawCountry) : defaultIndiaId);
+      const indiaObj = masterData.countries.find(
+        (c) =>
+          String(c.name || "")
+            .trim()
+            .toLowerCase() === "india",
+      );
+      const defaultIndiaId = indiaObj ? String(indiaObj.id) : "75";
+      const resolvedCountry = countryObj
+        ? String(countryObj.id)
+        : rawCountry
+          ? String(rawCountry)
+          : defaultIndiaId;
 
       // Resolve Passport No
-      const resolvedPassportNo = entity.passportNo || (resolvedSeafarerIdType === "passport" ? entity.aadharNo || entity.idProofNumber || '' : '');
+      const resolvedPassportNo =
+        entity.passportNo ||
+        (resolvedSeafarerIdType === "passport"
+          ? entity.aadharNo || entity.idProofNumber || ""
+          : "");
 
       // Map reverted person data to personForm structure
       console.log("REVERTED ENTITY1657", entity);
       setPersonForm({
         id: entity.id,
         masterId: entity.masterPersonId,
-        name: entity.name || '',
-        mobile: entity.mobile || '',
-        email: entity.email || '',
-        aadharNo: resolvedSeafarerIdType === "passport" ? '' : (entity.aadharNo || entity.aadharNumber || ''),
+        name: entity.name || "",
+        mobile: entity.mobile || "",
+        email: entity.email || "",
+        aadharNo:
+          resolvedSeafarerIdType === "passport"
+            ? ""
+            : entity.aadharNo || entity.aadharNumber || "",
         designation: resolvedDesignation,
-        designationOther: entity.designationOther || '',
+        designationOther: entity.designationOther || "",
         idProofType: idProofTypeId,
-        idProofNumber: entity.idProofNumber || '',
+        idProofNumber: entity.idProofNumber || "",
         hepType: resolvedHepType,
         passType: passTypeId,
-        passPeriod: entity.passPeriod || '1',
-        dateFrom: entity.dateFrom ? (entity.dateFrom.includes('T') ? entity.dateFrom.split('T')[0] : entity.dateFrom) + 'T00:00' : '',
-        dateTo: entity.dateTo ? (entity.dateTo.includes('T') ? entity.dateTo.split('T')[0] : entity.dateTo) + 'T00:00' : '',
-        amount: entity.amount || '',
+        passPeriod: entity.passPeriod || "1",
+        dateFrom: entity.dateFrom
+          ? (entity.dateFrom.includes("T")
+              ? entity.dateFrom.split("T")[0]
+              : entity.dateFrom) + "T00:00"
+          : "",
+        dateTo: entity.dateTo
+          ? (entity.dateTo.includes("T")
+              ? entity.dateTo.split("T")[0]
+              : entity.dateTo) + "T00:00"
+          : "",
+        amount: entity.amount || "",
         nationality: nationalityId,
         country: resolvedCountry,
-        visaNo: entity.visaNo || '',
-        cardNumber: entity.cardNumber || '',
+        visaNo: entity.visaNo || "",
+        cardNumber: entity.cardNumber || "",
         withTwoWheeler: entity.withTwoWheeler || false,
-        vehicleNo: entity.vehicleNo || '',
+        vehicleNo: entity.vehicleNo || "",
         accessArea: accessAreaId,
-        dob: entity.dob ? (entity.dob.includes('T') ? entity.dob.split('T')[0] : entity.dob) : '',
+        dob: entity.dob
+          ? entity.dob.includes("T")
+            ? entity.dob.split("T")[0]
+            : entity.dob
+          : "",
         passportNo: resolvedPassportNo,
-        cdcNumber: entity.cdcNumber || '',
-        seafarerPassFor: entity.seafarerPassFor || 'Sign-On',
+        cdcNumber: entity.cdcNumber || "",
+        seafarerPassFor: entity.seafarerPassFor || "Sign-On",
         seafarerIdType: resolvedSeafarerIdType,
 
         // Preserve newly uploaded files
@@ -3308,7 +4001,8 @@ console.log(vehicleData);
         existingPhotoPath: entity.photoFilePath,
 
         existingAadharName: entity.aadharPDFFileName,
-        existingAadharPath: entity.aadharPDFFilePath || entity.aadharPDFFilePATH,
+        existingAadharPath:
+          entity.aadharPDFFilePath || entity.aadharPDFFilePATH,
 
         existingIdProofName: entity.idProofFileName,
         existingIdProofPath: entity.idProofFilePath,
@@ -3332,45 +4026,68 @@ console.log(vehicleData);
         existingEntryAuthName: entity.entryAuthorizationFileName,
         existingEntryAuthPath: entity.entryAuthorizationFilePath,
         isEditing: true,
-        editIndex: index
+        editIndex: index,
       });
 
       // Open the person form modal
       toggleModal("person", true);
-      toast.success('Person details loaded for editing');
-
-    } else if (type === 'vehicle') {
+      toast.success("Person details loaded for editing");
+    } else if (type === "vehicle") {
       // Set editing index so fleet dropdown is hidden and button shows "Update Vehicle"
-      setEditingVehicleIndex('reverted');
+      setEditingVehicleIndex("reverted");
 
       // Map ENUM string to numeric ID using masterData
       const accessAreaEnum = entity.accessAreaId; // "OIL JETTY AND OTHER GATES" or "OTHER GATES ONLY"
-      const accessAreaObj = masterData.accessAreas.find(a => (a.value || a.label || a.name || "").toUpperCase() === accessAreaEnum?.toUpperCase());
-      const accessAreaId = accessAreaObj ? String(accessAreaObj.id || accessAreaObj.value) : '';
+      const accessAreaObj = masterData.accessAreas.find(
+        (a) =>
+          (a.value || a.label || a.name || "").toUpperCase() ===
+          accessAreaEnum?.toUpperCase(),
+      );
+      const accessAreaId = accessAreaObj
+        ? String(accessAreaObj.id || accessAreaObj.value)
+        : "";
 
       const passTypeEnum = entity.passType;
-      const passTypeObj = masterData.passTypes.find(p => (p.value || p.label || p.name || "").toUpperCase() === passTypeEnum?.toUpperCase());
-      const passTypeId = passTypeObj ? String(passTypeObj.id || passTypeObj.value) : (
-        passTypeEnum === "MONTHLY" ? "2" : (passTypeEnum === "YEARLY" || passTypeEnum === "ANNUAL" ? "3" : "1")
+      const passTypeObj = masterData.passTypes.find(
+        (p) =>
+          (p.value || p.label || p.name || "").toUpperCase() ===
+          passTypeEnum?.toUpperCase(),
       );
+      const passTypeId = passTypeObj
+        ? String(passTypeObj.id || passTypeObj.value)
+        : passTypeEnum === "MONTHLY"
+          ? "2"
+          : passTypeEnum === "YEARLY" || passTypeEnum === "ANNUAL"
+            ? "3"
+            : "1";
 
       console.log("REVERTED ENTITY1726", entity);
       // Map reverted vehicle data to vehicleForm structure
       setVehicleForm({
         id: entity.id,
-        regNo: entity.registrationNo || entity.regNo || '',
-        engineNo: entity.engineNo || '',
-        chassisNo: entity.chassisNo || '',
-        type: String(entity.vehicleTypeId || ''),
-        fuelType: entity.fuelType || '',
+        regNo: entity.registrationNo || entity.regNo || "",
+        engineNo: entity.engineNo || "",
+        chassisNo: entity.chassisNo || "",
+        type: String(entity.vehicleTypeId || ""),
+        fuelType: entity.fuelType || "",
         accessArea: accessAreaId,
-        insuranceExpiry: entity.insuranceExpiry ? entity.insuranceExpiry.split('T')[0] : '',
-        rcValidity: entity.rcValidity ? entity.rcValidity.split('T')[0] : '',
+        insuranceExpiry: entity.insuranceExpiry
+          ? entity.insuranceExpiry.split("T")[0]
+          : "",
+        rcValidity: entity.rcValidity ? entity.rcValidity.split("T")[0] : "",
         passType: passTypeId,
-        passPeriod: entity.passPeriod || '',
-        dateFrom: entity.dateFrom ? (entity.dateFrom.includes('T') ? entity.dateFrom.split('T')[0] : entity.dateFrom) + 'T00:00' : '',
-        dateTo: entity.dateTo ? (entity.dateTo.includes('T') ? entity.dateTo.split('T')[0] : entity.dateTo) + 'T00:00' : '',
-        amount: entity.amount || '',
+        passPeriod: entity.passPeriod || "",
+        dateFrom: entity.dateFrom
+          ? (entity.dateFrom.includes("T")
+              ? entity.dateFrom.split("T")[0]
+              : entity.dateFrom) + "T00:00"
+          : "",
+        dateTo: entity.dateTo
+          ? (entity.dateTo.includes("T")
+              ? entity.dateTo.split("T")[0]
+              : entity.dateTo) + "T00:00"
+          : "",
+        amount: entity.amount || "",
 
         // Preserve newly uploaded files
         rcDocument: entity.newRc || null,
@@ -3397,12 +4114,12 @@ console.log(vehicleData);
         existingTwistLockName: entity.twistLockFileName,
         existingTwistLockPath: entity.twistLockFilePath,
         isEditing: true,
-        editIndex: index
+        editIndex: index,
       });
 
       // Open the vehicle form modal
       toggleModal("vehicle", true);
-      toast.success('Vehicle details loaded for editing');
+      toast.success("Vehicle details loaded for editing");
     }
   };
 
@@ -3416,15 +4133,37 @@ console.log(vehicleData);
       const token = localStorage.getItem("accessToken");
       const headers = { Authorization: `Bearer ${token}` };
 
-      if (type === 'person') {
+      if (type === "person") {
         const currentEntity = revertedPersons[targetIdx] || {};
-        const isCustomDesig = personForm.designation === "Crew" || personForm.designation === "Supernumerary" || personForm.designation === "Others";
-        const desigIdVal = isCustomDesig ? null : (parseInt(personForm.designation, 10) || null);
-        const desigOtherVal = (personForm.designation === "Crew" || personForm.designation === "Supernumerary") ? personForm.designation : (personForm.designation === "Others" ? personForm.designationOther : null);
-        const primaryIdNo = personForm.hepType === "3" && personForm.seafarerIdType === "passport" ? personForm.passportNo : personForm.aadharNo;
+        const isCustomDesig =
+          personForm.designation === "Crew" ||
+          personForm.designation === "Supernumerary" ||
+          personForm.designation === "Others";
+        const desigIdVal = isCustomDesig
+          ? null
+          : parseInt(personForm.designation, 10) || null;
+        const desigOtherVal =
+          personForm.designation === "Crew" ||
+          personForm.designation === "Supernumerary"
+            ? personForm.designation
+            : personForm.designation === "Others"
+              ? personForm.designationOther
+              : null;
+        const primaryIdNo =
+          personForm.hepType === "3" && personForm.seafarerIdType === "passport"
+            ? personForm.passportNo
+            : personForm.aadharNo;
 
-        const nationalityEnum = getEnumValue(masterData.nationalities, personForm.nationality, "INDIAN");
-        const idProofTypeEnum = getEnumValue(masterData.idProofTypes, personForm.idProofType, "");
+        const nationalityEnum = getEnumValue(
+          masterData.nationalities,
+          personForm.nationality,
+          "INDIAN",
+        );
+        const idProofTypeEnum = getEnumValue(
+          masterData.idProofTypes,
+          personForm.idProofType,
+          "",
+        );
 
         // Use personForm data for the update
         const updateData = {
@@ -3448,13 +4187,13 @@ console.log(vehicleData);
             personForm.accessArea,
             "OTHER GATES ONLY",
           ),
-          email: personForm.email || '',
-          visaNo: personForm.visaNo || '',
+          email: personForm.email || "",
+          visaNo: personForm.visaNo || "",
           dob: personForm.dob || null,
           nationality: nationalityEnum,
-          idProofNumber: personForm.idProofNumber || '',
+          idProofNumber: personForm.idProofNumber || "",
           withTwoWheeler: personForm.withTwoWheeler || false,
-          vehicleNo: personForm.vehicleNo || '',
+          vehicleNo: personForm.vehicleNo || "",
           cdcNumber: personForm.cdcNumber || null,
           passportNo: personForm.passportNo || null,
           seafarerPassFor: personForm.seafarerPassFor || null,
@@ -3470,8 +4209,14 @@ console.log(vehicleData);
           chaLicenseName: personForm.existingChaName,
           idProofFileName: personForm.existingIdProofName,
           cdcDocumentName: personForm.existingCdcName,
-          visaDocName: personForm.visaDoc?.name || personForm.existingVisaDocName || currentEntity.visaDocName,
-          immigrationDocName: personForm.immigrationDoc?.name || personForm.existingImmigrationDocName || currentEntity.immigrationDocName,
+          visaDocName:
+            personForm.visaDoc?.name ||
+            personForm.existingVisaDocName ||
+            currentEntity.visaDocName,
+          immigrationDocName:
+            personForm.immigrationDoc?.name ||
+            personForm.existingImmigrationDocName ||
+            currentEntity.immigrationDocName,
           declarationFormName: personForm.existingDeclarationName,
           entryAuthorizationFileName: personForm.existingEntryAuthName,
         };
@@ -3482,32 +4227,66 @@ console.log(vehicleData);
         updatedPersons[targetIdx] = {
           ...updateData,
           id,
-          status: 'updated',
+          status: "updated",
           // Carry file paths so they don't get lost on subsequent edits
-          photoFilePath: personForm.existingPhotoPath || currentEntity.photoFilePath,
-          aadharPDFFilePATH: personForm.existingAadharPath || currentEntity.aadharPDFFilePATH || currentEntity.aadharPDFFilePath,
-          aadharPDFFilePath: personForm.existingAadharPath || currentEntity.aadharPDFFilePath || currentEntity.aadharPDFFilePATH,
-          idProofFilePath: personForm.existingIdProofPath || currentEntity.idProofFilePath,
-          driverLicensePath: personForm.existingDlPath || currentEntity.driverLicensePath,
-          visaDocPath: personForm.existingVisaDocPath || currentEntity.visaDocPath,
-          immigrationDocPath: personForm.existingImmigrationDocPath || currentEntity.immigrationDocPath,
-          entryAuthorizationFilePath: personForm.existingEntryAuthPath || currentEntity.entryAuthorizationFilePath,
+          photoFilePath:
+            personForm.existingPhotoPath || currentEntity.photoFilePath,
+          aadharPDFFilePATH:
+            personForm.existingAadharPath ||
+            currentEntity.aadharPDFFilePATH ||
+            currentEntity.aadharPDFFilePath,
+          aadharPDFFilePath:
+            personForm.existingAadharPath ||
+            currentEntity.aadharPDFFilePath ||
+            currentEntity.aadharPDFFilePATH,
+          idProofFilePath:
+            personForm.existingIdProofPath || currentEntity.idProofFilePath,
+          driverLicensePath:
+            personForm.existingDlPath || currentEntity.driverLicensePath,
+          visaDocPath:
+            personForm.existingVisaDocPath || currentEntity.visaDocPath,
+          immigrationDocPath:
+            personForm.existingImmigrationDocPath ||
+            currentEntity.immigrationDocPath,
+          entryAuthorizationFilePath:
+            personForm.existingEntryAuthPath ||
+            currentEntity.entryAuthorizationFilePath,
 
           // Carry File objects from personForm for resubmission
           newPhoto: personForm.photo || currentEntity.newPhoto || null,
           newAadhar: personForm.aadharFile || currentEntity.newAadhar || null,
-          newIdProof: personForm.idProofFile || currentEntity.newIdProof || null,
-          newDriverLicence: personForm.driverLicence || currentEntity.newDriverLicence || null,
-          newPoliceVerification: personForm.policeVerification || currentEntity.newPoliceVerification || null,
-          newEmploymentProof: personForm.proofOfEmployment || currentEntity.newEmploymentProof || null,
-          newChaLicence: personForm.copyOfLicence || currentEntity.newChaLicence || null,
-          newPassport: personForm.passportDoc || currentEntity.newPassport || null,
+          newIdProof:
+            personForm.idProofFile || currentEntity.newIdProof || null,
+          newDriverLicence:
+            personForm.driverLicence || currentEntity.newDriverLicence || null,
+          newPoliceVerification:
+            personForm.policeVerification ||
+            currentEntity.newPoliceVerification ||
+            null,
+          newEmploymentProof:
+            personForm.proofOfEmployment ||
+            currentEntity.newEmploymentProof ||
+            null,
+          newChaLicence:
+            personForm.copyOfLicence || currentEntity.newChaLicence || null,
+          newPassport:
+            personForm.passportDoc || currentEntity.newPassport || null,
           newVisaDoc: personForm.visaDoc || currentEntity.newVisaDoc || null,
-          newImmigrationDoc: personForm.immigrationDoc || currentEntity.newImmigrationDoc || null,
-          newRequisitionLetter: personForm.requisitionLetter || currentEntity.newRequisitionLetter || null,
+          newImmigrationDoc:
+            personForm.immigrationDoc ||
+            currentEntity.newImmigrationDoc ||
+            null,
+          newRequisitionLetter:
+            personForm.requisitionLetter ||
+            currentEntity.newRequisitionLetter ||
+            null,
           newCdc: personForm.cdcDocument || currentEntity.newCdc || null,
-          newDeclaration: personForm.declarationForm || currentEntity.newDeclaration || null,
-          newEntryAuthorization: personForm.entryAuthorization || currentEntity.newEntryAuthorization || null,
+          newDeclaration:
+            personForm.declarationForm || currentEntity.newDeclaration || null,
+          newEntryAuthorization:
+            personForm.entryAuthorization ||
+            currentEntity.newEntryAuthorization ||
+            null,
         };
         setRevertedPersons(updatedPersons);
 
@@ -3517,8 +4296,7 @@ console.log(vehicleData);
 
         // Reopen the reverted edit modal
         setRevertedEditModal(true);
-
-      } else if (type === 'vehicle') {
+      } else if (type === "vehicle") {
         const currentEntity = revertedVehicles[targetIdx] || {};
         // Use vehicleForm data for the update
         const updateData = {
@@ -3559,7 +4337,7 @@ console.log(vehicleData);
         updatedVehicles[targetIdx] = {
           ...updateData,
           id,
-          status: 'updated',
+          status: "updated",
           // Carry file paths
           scannedCopyFilePath: currentEntity.scannedCopyFilePath,
           insuranceFilePath: currentEntity.insuranceFilePath,
@@ -3568,19 +4346,29 @@ console.log(vehicleData);
           requestLetterPath: currentEntity.requestLetterPath,
           taxDocFilePath: currentEntity.taxDocFilePath,
           emissionCertFilePath: currentEntity.emissionCertFilePath,
-          sparkArresterFilePath: vehicleForm.existingSparkArresterPath || currentEntity.sparkArresterFilePath,
-          twistLockFilePath: vehicleForm.existingTwistLockPath || currentEntity.twistLockFilePath,
+          sparkArresterFilePath:
+            vehicleForm.existingSparkArresterPath ||
+            currentEntity.sparkArresterFilePath,
+          twistLockFilePath:
+            vehicleForm.existingTwistLockPath ||
+            currentEntity.twistLockFilePath,
 
           // Carry File objects from vehicleForm for resubmission
           newRc: vehicleForm.rcDocument || currentEntity.newRc || null,
-          newInsurance: vehicleForm.insuranceDocument || currentEntity.newInsurance || null,
+          newInsurance:
+            vehicleForm.insuranceDocument || currentEntity.newInsurance || null,
           newPermit: vehicleForm.permit || currentEntity.newPermit || null,
-          newFitness: vehicleForm.fitnessCert || currentEntity.newFitness || null,
-          newRequestLetter: vehicleForm.requestLetter || currentEntity.newRequestLetter || null,
+          newFitness:
+            vehicleForm.fitnessCert || currentEntity.newFitness || null,
+          newRequestLetter:
+            vehicleForm.requestLetter || currentEntity.newRequestLetter || null,
           newTax: vehicleForm.taxDoc || currentEntity.newTax || null,
-          newEmission: vehicleForm.emissionCert || currentEntity.newEmission || null,
-          newSparkArrester: vehicleForm.sparkArrester || currentEntity.newSparkArrester || null,
-          newTwistLock: vehicleForm.twistLock || currentEntity.newTwistLock || null,
+          newEmission:
+            vehicleForm.emissionCert || currentEntity.newEmission || null,
+          newSparkArrester:
+            vehicleForm.sparkArrester || currentEntity.newSparkArrester || null,
+          newTwistLock:
+            vehicleForm.twistLock || currentEntity.newTwistLock || null,
         };
         setRevertedVehicles(updatedVehicles);
 
@@ -3592,161 +4380,112 @@ console.log(vehicleData);
         setRevertedEditModal(true);
       }
 
-      toast.success(`${type === 'person' ? 'Person' : 'Vehicle'} updated successfully`);
+      toast.success(
+        `${type === "person" ? "Person" : "Vehicle"} updated successfully`,
+      );
       setEditingRevertedEntity(null);
-
     } catch (error) {
-      console.error('Error updating reverted entity:', error);
-      toast.error(error.response?.data?.message || 'Failed to update entity');
+      console.error("Error updating reverted entity:", error);
+      toast.error(error.response?.data?.message || "Failed to update entity");
     }
   };
 
-  // const handleVehicleNumberChange=(e)=>{
+  // const handleVehicleNumberChange = (e) => {
 
-  //   const value=e.target.value.toUpperCase();
+  //     const value = e.target.value.toUpperCase();
 
-  //   setVehicleForm(prev=>({
+  //     setVehicleForm(prev => ({
+  //         ...prev,
+  //         regNo: value
+  //     }));
 
-  //   ...prev,
+  //     // NEW
+  //     setVehicleVerification({
+  //         loading: false,
+  //         verified: false,
+  //         message: "",
+  //         data: null
+  //     });
 
-  //   regNo:value
+  //     if (!VALIDATORS.vehicleReg(value)) {
+  //         return;
+  //     }
 
-  //   }));
-
-  //   if(!VALIDATORS.vehicleReg(value))
-  //   {
-
-  //   setVehicleVerification({
-
-  //   loading:false,
-
-  //   verified:false,
-
-  //   message:"",
-
-  //   data:null
-
-  //   });
-
-  //   return;
-
-  //   }
-
-  //   verifyVehicle(value);
-
-  //   }
+  //     verifyVehicle(value);
+  // }
 
   const handleVehicleNumberChange = (e) => {
+    const value = e.target.value.toUpperCase();
 
-      const value = e.target.value.toUpperCase();
+    // Registration number changed:
+    // old VAHAN verification is no longer valid.
+    setVehicleForm((prev) => ({
+      ...prev,
+      regNo: value,
 
-      setVehicleForm(prev => ({
-          ...prev,
-          regNo: value
-      }));
+      // Clear old VAHAN dates immediately
+      insuranceExpiry: "",
+      rcValidity: "",
+    }));
 
-      // NEW
-      setVehicleVerification({
-          loading: false,
-          verified: false,
-          message: "",
-          data: null
-      });
+    // Clear old verification
+    setVehicleVerification({
+      loading: false,
+      verified: false,
+      message: "",
+      data: null,
+    });
 
-      if (!VALIDATORS.vehicleReg(value)) {
-          return;
-      }
+    // Don't call VAHAN until registration format is valid
+    if (!VALIDATORS.vehicleReg(value)) {
+      return;
+    }
 
-      verifyVehicle(value);
-  }
-
-//   const handleDLChange=(e)=>{
-
-// const value=e.target.value.toUpperCase();
-
-// setPersonForm(prev=>({
-
-// ...prev,
-
-// idProofNumber:value
-
-// }));
-
-// if(personForm.idProofType!=="1")
-// return;
-
-// if(!VALIDATORS.drivingLicence(value))
-// {
-
-// setDlVerification({
-
-// loading:false,
-
-// verified:false,
-
-// message:"",
-
-// data:null
-
-// });
-
-// return;
-
-// }
-
-// verifyDL(value);
-
-// }
+    verifyVehicle(value);
+  };
 
   const handleDLChange = (e) => {
-
     const value = e.target.value.toUpperCase();
 
     // Update textbox
-    setPersonForm(prev => ({
-        ...prev,
-        idProofNumber: value
+    setPersonForm((prev) => ({
+      ...prev,
+      idProofNumber: value,
     }));
 
     // Clear previous verification
     setDlVerification({
-        loading: false,
-        verified: false,
-        message: "",
-        data: null
+      loading: false,
+      verified: false,
+      message: "",
+      data: null,
     });
 
     // Validate field
-    validatePersonField(
-        "idProofNumber",
-        value,
-        {
-            idProofType: personForm.idProofType
-        }
-    );
+    validatePersonField("idProofNumber", value, {
+      idProofType: personForm.idProofType,
+    });
 
     // Only verify DL
     if (personForm.idProofType !== "1") {
-        return;
+      return;
     }
 
     // Wait until DL format is valid
     if (!VALIDATORS.drivingLicence(value)) {
+      setDlVerification({
+        loading: false,
+        verified: false,
+        message: "",
+        data: null,
+      });
 
-          setDlVerification({
-              loading: false,
-              verified: false,
-              message: "",
-              data: null
-          });
-
-          return;
-      }
+      return;
+    }
 
     // Call backend
     verifyDL(value);
-
-};
+  };
 
   const handleResubmitRevertedPass = async () => {
     if (!editingRevertedPass) return;
@@ -3759,86 +4498,128 @@ console.log(vehicleData);
       for (const person of revertedPersons) {
         try {
           const passTypeMap = {
-            '1': 'DAILY',
-            '2': 'MONTHLY',
-            '3': 'YEARLY'
+            1: "DAILY",
+            2: "MONTHLY",
+            3: "YEARLY",
           };
           const passTypeEnum = passTypeMap[person.passType] || person.passType;
 
           const formData = new FormData();
 
           // Append text fields
-          formData.append('name', person.name || '');
-          formData.append('mobile', person.mobile || '');
-          formData.append('aadharNo', person.aadharNo || '');
-          formData.append('designation', person.designation || '');
-          if (person.designationId) formData.append('designationId', person.designationId);
-          if (person.designationOther) formData.append('designationOther', person.designationOther);
-          const natEnum = getEnumValue(masterData.nationalities, person.nationality, 'INDIAN');
-          const idTypeEnum = getEnumValue(masterData.idProofTypes, person.idProofType, '');
+          formData.append("name", person.name || "");
+          formData.append("mobile", person.mobile || "");
+          formData.append("aadharNo", person.aadharNo || "");
+          formData.append("designation", person.designation || "");
+          if (person.designationId)
+            formData.append("designationId", person.designationId);
+          if (person.designationOther)
+            formData.append("designationOther", person.designationOther);
+          const natEnum = getEnumValue(
+            masterData.nationalities,
+            person.nationality,
+            "INDIAN",
+          );
+          const idTypeEnum = getEnumValue(
+            masterData.idProofTypes,
+            person.idProofType,
+            "",
+          );
 
-          formData.append('idProofType', idTypeEnum || '');
-          formData.append('hepTypeId', person.hepTypeId || '');
-          formData.append('passType', passTypeEnum);
-          formData.append('passPeriod', person.passPeriod || '');
-          formData.append('dateFrom', person.dateFrom || '');
-          formData.append('dateTo', person.dateTo || '');
-          formData.append('amount', person.amount || '');
-          formData.append('countryId', person.countryId || '');
-          formData.append('accessAreaId', person.accessAreaId || '');
-          formData.append('email', person.email || '');
-          formData.append('visaNo', person.visaNo || '');
-          formData.append('nationality', natEnum || 'INDIAN');
-          formData.append('idProofNumber', person.idProofNumber || '');
-          formData.append('withTwoWheeler', person.withTwoWheeler ? 'true' : 'false');
-          formData.append('vehicleNo', person.vehicleNo || '');
-          formData.append('passportNo', person.passportNo || '');
-          formData.append('cdcNumber', person.cdcNumber || '');
-          formData.append('seafarerPassFor', person.seafarerPassFor || '');
-          formData.append('seafarerIdType', person.seafarerIdType || '');
-          formData.append('dob', person.dob || '');
+          formData.append("idProofType", idTypeEnum || "");
+          formData.append("hepTypeId", person.hepTypeId || "");
+          formData.append("passType", passTypeEnum);
+          formData.append("passPeriod", person.passPeriod || "");
+          formData.append("dateFrom", person.dateFrom || "");
+          formData.append("dateTo", person.dateTo || "");
+          formData.append("amount", person.amount || "");
+          formData.append("countryId", person.countryId || "");
+          formData.append("accessAreaId", person.accessAreaId || "");
+          formData.append("email", person.email || "");
+          formData.append("visaNo", person.visaNo || "");
+          formData.append("nationality", natEnum || "INDIAN");
+          formData.append("idProofNumber", person.idProofNumber || "");
+          formData.append(
+            "withTwoWheeler",
+            person.withTwoWheeler ? "true" : "false",
+          );
+          formData.append("vehicleNo", person.vehicleNo || "");
+          formData.append("passportNo", person.passportNo || "");
+          formData.append("cdcNumber", person.cdcNumber || "");
+          formData.append("seafarerPassFor", person.seafarerPassFor || "");
+          formData.append("seafarerIdType", person.seafarerIdType || "");
+          formData.append("dob", person.dob || "");
 
           // File name references
-          formData.append('photoFileName', person.photoFileName || '');
-          formData.append('aadharPDFFileName', person.aadharPDFFileName || '');
-          formData.append('driverLicenseName', person.driverLicenseName || '');
-          formData.append('requisitionLetterName', person.requisitionLetterName || '');
-          formData.append('passportName', person.passportName || '');
-          formData.append('visaDocName', person.visaDocName || '');
-          formData.append('immigrationDocName', person.immigrationDocName || '');
-          formData.append('policeVerificationName', person.policeVerificationName || '');
-          formData.append('employmentProofName', person.employmentProofName || '');
-          formData.append('chaLicenseName', person.chaLicenseName || '');
-          formData.append('idProofFileName', person.idProofFileName || '');
-          formData.append('cdcDocumentName', person.cdcDocumentName || '');
-          formData.append('declarationFormName', person.declarationFormName || '');
-          formData.append('entryAuthorizationFileName', person.entryAuthorizationFileName || '');
+          formData.append("photoFileName", person.photoFileName || "");
+          formData.append("aadharPDFFileName", person.aadharPDFFileName || "");
+          formData.append("driverLicenseName", person.driverLicenseName || "");
+          formData.append(
+            "requisitionLetterName",
+            person.requisitionLetterName || "",
+          );
+          formData.append("passportName", person.passportName || "");
+          formData.append("visaDocName", person.visaDocName || "");
+          formData.append(
+            "immigrationDocName",
+            person.immigrationDocName || "",
+          );
+          formData.append(
+            "policeVerificationName",
+            person.policeVerificationName || "",
+          );
+          formData.append(
+            "employmentProofName",
+            person.employmentProofName || "",
+          );
+          formData.append("chaLicenseName", person.chaLicenseName || "");
+          formData.append("idProofFileName", person.idProofFileName || "");
+          formData.append("cdcDocumentName", person.cdcDocumentName || "");
+          formData.append(
+            "declarationFormName",
+            person.declarationFormName || "",
+          );
+          formData.append(
+            "entryAuthorizationFileName",
+            person.entryAuthorizationFileName || "",
+          );
 
           // Append actual File objects if re-uploaded
-          if (person.newPhoto) formData.append('personPhoto', person.newPhoto);
-          if (person.newAadhar) formData.append('personAadhar', person.newAadhar);
-          if (person.newIdProof) formData.append('personIdProof', person.newIdProof);
-          if (person.newDriverLicence) formData.append('driverLicense', person.newDriverLicence);
-          if (person.newPoliceVerification) formData.append('policeVerification', person.newPoliceVerification);
-          if (person.newEmploymentProof) formData.append('employmentProof', person.newEmploymentProof);
-          if (person.newChaLicence) formData.append('chaLicenseCopy', person.newChaLicence);
-          if (person.newPassport) formData.append('passportDoc', person.newPassport);
-          if (person.newVisaDoc) formData.append('visaDoc', person.newVisaDoc);
-          if (person.newImmigrationDoc) formData.append('immigrationDoc', person.newImmigrationDoc);
-          if (person.newRequisitionLetter) formData.append('requisitionLetter', person.newRequisitionLetter);
-          if (person.newCdc) formData.append('cdcDocument', person.newCdc);
-          if (person.newDeclaration) formData.append('declarationForm', person.newDeclaration);
-          if (person.newEntryAuthorization) formData.append('entryAuthorization', person.newEntryAuthorization);
+          if (person.newPhoto) formData.append("personPhoto", person.newPhoto);
+          if (person.newAadhar)
+            formData.append("personAadhar", person.newAadhar);
+          if (person.newIdProof)
+            formData.append("personIdProof", person.newIdProof);
+          if (person.newDriverLicence)
+            formData.append("driverLicense", person.newDriverLicence);
+          if (person.newPoliceVerification)
+            formData.append("policeVerification", person.newPoliceVerification);
+          if (person.newEmploymentProof)
+            formData.append("employmentProof", person.newEmploymentProof);
+          if (person.newChaLicence)
+            formData.append("chaLicenseCopy", person.newChaLicence);
+          if (person.newPassport)
+            formData.append("passportDoc", person.newPassport);
+          if (person.newVisaDoc) formData.append("visaDoc", person.newVisaDoc);
+          if (person.newImmigrationDoc)
+            formData.append("immigrationDoc", person.newImmigrationDoc);
+          if (person.newRequisitionLetter)
+            formData.append("requisitionLetter", person.newRequisitionLetter);
+          if (person.newCdc) formData.append("cdcDocument", person.newCdc);
+          if (person.newDeclaration)
+            formData.append("declarationForm", person.newDeclaration);
+          if (person.newEntryAuthorization)
+            formData.append("entryAuthorization", person.newEntryAuthorization);
 
-          console.log('Updating person:', person.id);
+          console.log("Updating person:", person.id);
           await axios.put(
             `${AGENT_API}/pass-request/update-pass-person/${person.id}`,
             formData,
-            { headers: { ...headers, 'Content-Type': 'multipart/form-data' } }
+            { headers: { ...headers, "Content-Type": "multipart/form-data" } },
           );
-          console.log('Person updated successfully:', person.id);
+          console.log("Person updated successfully:", person.id);
         } catch (error) {
-          console.error('Error updating person:', person.id, error);
+          console.error("Error updating person:", person.id, error);
           throw error;
         }
       }
@@ -3847,81 +4628,97 @@ console.log(vehicleData);
       for (const vehicle of revertedVehicles) {
         try {
           const passTypeMap = {
-            '1': 'DAILY',
-            '2': 'MONTHLY',
-            '3': 'ANNUAL'
+            1: "DAILY",
+            2: "MONTHLY",
+            3: "ANNUAL",
           };
-          const passTypeEnum = passTypeMap[vehicle.passType] || vehicle.passType;
+          const passTypeEnum =
+            passTypeMap[vehicle.passType] || vehicle.passType;
 
           const formData = new FormData();
 
           // Append text fields
-          formData.append('registrationNo', vehicle.registrationNo || vehicle.regNo || '');
-          formData.append('vehicleTypeId', vehicle.vehicleTypeId || '');
-          formData.append('fuelType', vehicle.fuelType || '');
-          formData.append('insuranceExpiry', vehicle.insuranceExpiry || '');
-          formData.append('rcValidity', vehicle.rcValidity || '');
-          formData.append('passType', passTypeEnum);
-          formData.append('passPeriod', vehicle.passPeriod || '');
-          formData.append('dateFrom', vehicle.dateFrom || '');
-          formData.append('dateTo', vehicle.dateTo || '');
-          formData.append('amount', vehicle.amount || '');
-          formData.append('accessAreaId', vehicle.accessAreaId || '');
+          formData.append(
+            "registrationNo",
+            vehicle.registrationNo || vehicle.regNo || "",
+          );
+          formData.append("vehicleTypeId", vehicle.vehicleTypeId || "");
+          formData.append("fuelType", vehicle.fuelType || "");
+          formData.append("insuranceExpiry", vehicle.insuranceExpiry || "");
+          formData.append("rcValidity", vehicle.rcValidity || "");
+          formData.append("passType", passTypeEnum);
+          formData.append("passPeriod", vehicle.passPeriod || "");
+          formData.append("dateFrom", vehicle.dateFrom || "");
+          formData.append("dateTo", vehicle.dateTo || "");
+          formData.append("amount", vehicle.amount || "");
+          formData.append("accessAreaId", vehicle.accessAreaId || "");
 
           // File name references
-          formData.append('scannedCopyFileName', vehicle.scannedCopyFileName || '');
-          formData.append('insuranceFileName', vehicle.insuranceFileName || '');
-          formData.append('permitFileName', vehicle.permitFileName || '');
-          formData.append('fitnessFileName', vehicle.fitnessFileName || '');
-          formData.append('requestLetterName', vehicle.requestLetterName || '');
-          formData.append('taxDocName', vehicle.taxDocName || '');
-          formData.append('emissionCertName', vehicle.emissionCertName || '');
-          formData.append('sparkArresterFileName', vehicle.sparkArresterFileName || '');
-          formData.append('twistLockFileName', vehicle.twistLockFileName || '');
+          formData.append(
+            "scannedCopyFileName",
+            vehicle.scannedCopyFileName || "",
+          );
+          formData.append("insuranceFileName", vehicle.insuranceFileName || "");
+          formData.append("permitFileName", vehicle.permitFileName || "");
+          formData.append("fitnessFileName", vehicle.fitnessFileName || "");
+          formData.append("requestLetterName", vehicle.requestLetterName || "");
+          formData.append("taxDocName", vehicle.taxDocName || "");
+          formData.append("emissionCertName", vehicle.emissionCertName || "");
+          formData.append(
+            "sparkArresterFileName",
+            vehicle.sparkArresterFileName || "",
+          );
+          formData.append("twistLockFileName", vehicle.twistLockFileName || "");
 
           // Append actual File objects if re-uploaded
-          if (vehicle.newRc) formData.append('vehicleRC', vehicle.newRc);
-          if (vehicle.newInsurance) formData.append('vehicleInsurance', vehicle.newInsurance);
-          if (vehicle.newPermit) formData.append('vehiclePermit', vehicle.newPermit);
-          if (vehicle.newFitness) formData.append('vehicleFitness', vehicle.newFitness);
-          if (vehicle.newRequestLetter) formData.append('vehicleRequestLetter', vehicle.newRequestLetter);
-          if (vehicle.newTax) formData.append('vehicleTax', vehicle.newTax);
-          if (vehicle.newEmission) formData.append('vehicleEmission', vehicle.newEmission);
-          if (vehicle.newSparkArrester) formData.append('sparkArrester', vehicle.newSparkArrester);
-          if (vehicle.newTwistLock) formData.append('twistLock', vehicle.newTwistLock);
+          if (vehicle.newRc) formData.append("vehicleRC", vehicle.newRc);
+          if (vehicle.newInsurance)
+            formData.append("vehicleInsurance", vehicle.newInsurance);
+          if (vehicle.newPermit)
+            formData.append("vehiclePermit", vehicle.newPermit);
+          if (vehicle.newFitness)
+            formData.append("vehicleFitness", vehicle.newFitness);
+          if (vehicle.newRequestLetter)
+            formData.append("vehicleRequestLetter", vehicle.newRequestLetter);
+          if (vehicle.newTax) formData.append("vehicleTax", vehicle.newTax);
+          if (vehicle.newEmission)
+            formData.append("vehicleEmission", vehicle.newEmission);
+          if (vehicle.newSparkArrester)
+            formData.append("sparkArrester", vehicle.newSparkArrester);
+          if (vehicle.newTwistLock)
+            formData.append("twistLock", vehicle.newTwistLock);
 
-          console.log('Updating vehicle:', vehicle.id);
+          console.log("Updating vehicle:", vehicle.id);
           await axios.put(
             `${AGENT_API}/pass-request/update-pass-vehicle/${vehicle.id}`,
             formData,
-            { headers: { ...headers, 'Content-Type': 'multipart/form-data' } }
+            { headers: { ...headers, "Content-Type": "multipart/form-data" } },
           );
-          console.log('Vehicle updated successfully:', vehicle.id);
+          console.log("Vehicle updated successfully:", vehicle.id);
         } catch (error) {
-          console.error('Error updating vehicle:', vehicle.id, error);
+          console.error("Error updating vehicle:", vehicle.id, error);
           throw error;
         }
       }
 
       // Resubmit the pass - change status back to PENDING
-      console.log('Resubmitting pass:', editingRevertedPass.id);
+      console.log("Resubmitting pass:", editingRevertedPass.id);
       await axios.put(
         `${AGENT_API}/pass-request/resubmit-reverted-pass/${editingRevertedPass.id}`,
         {},
-        { headers }
+        { headers },
       );
-      console.log('Pass resubmitted successfully');
+      console.log("Pass resubmitted successfully");
 
-      toast.success('Pass resubmitted successfully!');
+      toast.success("Pass resubmitted successfully!");
       closeRevertedEditModal();
 
       // Reset pagination and switch to 'view' tab to show resubmitted pass
       setCurrentPage(1);
       setActiveTab("view");
-
     } catch (error) {
-      console.error('Error resubmitting pass:', error);
-      toast.error(error.response?.data?.message || 'Failed to resubmit pass');
+      console.error("Error resubmitting pass:", error);
+      toast.error(error.response?.data?.message || "Failed to resubmit pass");
     }
   };
 
@@ -3954,7 +4751,9 @@ console.log(vehicleData);
     <div className="space-y-6 font-sans w-full text-slate-800 dark:text-stone-200">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-[#0a1e4d] dark:text-white">Pass Request</h2>
+          <h2 className="text-3xl font-bold text-[#0a1e4d] dark:text-white">
+            Pass Request
+          </h2>
           <p className="text-base text-slate-500 dark:text-stone-300 font-medium">
             Apply for new harbour entry permits
           </p>
@@ -4004,13 +4803,19 @@ console.log(vehicleData);
                 <AlertCircle className="h-6 w-6 text-white" />
               </div>
               <div className="flex-1">
-                <h4 className="text-base font-extrabold tracking-wide uppercase">Your Company is Blacklisted!</h4>
+                <h4 className="text-base font-extrabold tracking-wide uppercase">
+                  Your Company is Blacklisted!
+                </h4>
                 <p className="text-sm text-red-100 mt-1 leading-relaxed font-semibold">
                   Pass requests and applications are disabled for your company.
                 </p>
                 <div className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 bg-black/20 hover:bg-black/35 rounded-xl border border-white/10 text-xs font-bold text-white transition-all">
-                  <span className="text-red-300 uppercase tracking-widest text-[10px]">Suspension Reason:</span>
-                  <span className="uppercase tracking-wide">{companyBlacklistReason}</span>
+                  <span className="text-red-300 uppercase tracking-widest text-[10px]">
+                    Suspension Reason:
+                  </span>
+                  <span className="uppercase tracking-wide">
+                    {companyBlacklistReason}
+                  </span>
                 </div>
               </div>
             </div>
@@ -4025,11 +4830,18 @@ console.log(vehicleData);
                 Pass Generation Locked — License Expired
               </h3>
               <p className="text-sm text-stone-600 mt-2 leading-relaxed font-medium">
-                Your company license expired on <strong className="text-red-700 font-bold">{formatDateLong(generalForm.licenseValidityDate)}</strong>. Pass application form is disabled until your company license is renewed.
+                Your company license expired on{" "}
+                <strong className="text-red-700 font-bold">
+                  {formatDateLong(generalForm.licenseValidityDate)}
+                </strong>
+                . Pass application form is disabled until your company license
+                is renewed.
               </p>
               <div className="mt-6 flex justify-center">
                 <button
-                  onClick={() => window.dispatchEvent(new Event("open-profile-update"))}
+                  onClick={() =>
+                    window.dispatchEvent(new Event("open-profile-update"))
+                  }
                   className="px-6 py-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-sm tracking-wider uppercase rounded-xl shadow-lg transition-all flex items-center gap-2"
                 >
                   Renew / Update License Now
@@ -4038,25 +4850,37 @@ console.log(vehicleData);
             </div>
           ) : (
             <>
-              {!generalForm.isLifetimeLicense && !generalForm.isLicenseExpired && generalForm.remainingDays !== null && generalForm.remainingDays <= 30 && (
-                <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 border border-amber-400/30 text-[#4c2d00] rounded-2xl p-5 flex items-start gap-4 animate-in slide-in-from-top-2 duration-300 shadow-lg shadow-amber-950/10">
-                  <div className="bg-white/20 text-[#4c2d00] p-3 rounded-xl border border-white/30 shadow-inner shrink-0">
-                    <AlertCircle className="h-6 w-6" />
+              {!generalForm.isLifetimeLicense &&
+                !generalForm.isLicenseExpired &&
+                generalForm.remainingDays !== null &&
+                generalForm.remainingDays <= 30 && (
+                  <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 border border-amber-400/30 text-[#4c2d00] rounded-2xl p-5 flex items-start gap-4 animate-in slide-in-from-top-2 duration-300 shadow-lg shadow-amber-950/10">
+                    <div className="bg-white/20 text-[#4c2d00] p-3 rounded-xl border border-white/30 shadow-inner shrink-0">
+                      <AlertCircle className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-base font-extrabold tracking-wide uppercase">
+                        Company License Expiring Soon!
+                      </h4>
+                      <p className="text-sm text-[#5c3c00] mt-1 leading-relaxed font-semibold">
+                        Your license expires in{" "}
+                        <span className="font-extrabold text-red-700 bg-red-100/50 px-1.5 py-0.5 rounded">
+                          {generalForm.remainingDays} days
+                        </span>{" "}
+                        (on {formatDateLong(generalForm.licenseValidityDate)}).
+                        Passes valid beyond this date cannot be created.
+                      </p>
+                      <button
+                        onClick={() =>
+                          window.dispatchEvent(new Event("open-profile-update"))
+                        }
+                        className="mt-3.5 px-5 py-2.5 bg-stone-900 text-amber-400 hover:bg-stone-850 active:scale-95 transition-all text-xs font-black tracking-wider uppercase rounded-xl shadow-md flex items-center gap-1.5"
+                      >
+                        Renew / Update License Now
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <h4 className="text-base font-extrabold tracking-wide uppercase">Company License Expiring Soon!</h4>
-                    <p className="text-sm text-[#5c3c00] mt-1 leading-relaxed font-semibold">
-                      Your license expires in <span className="font-extrabold text-red-700 bg-red-100/50 px-1.5 py-0.5 rounded">{generalForm.remainingDays} days</span> (on {formatDateLong(generalForm.licenseValidityDate)}). Passes valid beyond this date cannot be created.
-                    </p>
-                    <button
-                      onClick={() => window.dispatchEvent(new Event("open-profile-update"))}
-                      className="mt-3.5 px-5 py-2.5 bg-stone-900 text-amber-400 hover:bg-stone-850 active:scale-95 transition-all text-xs font-black tracking-wider uppercase rounded-xl shadow-md flex items-center gap-1.5"
-                    >
-                      Renew / Update License Now
-                    </button>
-                  </div>
-                </div>
-              )}
+                )}
               <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                   <h3 className="font-black text-[#0a1e4d] flex items-center gap-2 uppercase text-sm tracking-wider">
@@ -4178,7 +5002,8 @@ console.log(vehicleData);
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        Requisition Letter <span className="text-red-500">*</span>
+                        Requisition Letter{" "}
+                        <span className="text-red-500">*</span>
                       </label>
                       <label className="w-full h-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-lg px-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors group">
                         <Upload className="h-4 w-4 text-slate-400 group-hover:text-orange-500" />
@@ -4217,7 +5042,8 @@ console.log(vehicleData);
               <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
                 <div className="px-6 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
                   <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wide flex items-center gap-2">
-                    <Users className="h-5 w-5 text-orange-500" /> Detail of Persons:
+                    <Users className="h-5 w-5 text-orange-500" /> Detail of
+                    Persons:
                   </h3>
                   <span className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-[#0a1e4d] font-black shadow-sm">
                     Total: {persons.length}
@@ -4274,7 +5100,6 @@ console.log(vehicleData);
                             <div className="flex items-center gap-3">
                               {p.photo || p.existingPhotoName ? (
                                 <img
-
                                   src={
                                     p.photo instanceof File
                                       ? URL.createObjectURL(p.photo)
@@ -4282,7 +5107,6 @@ console.log(vehicleData);
                                         ? `${AGENT_API}/${p.existingPhotoPath}`
                                         : `${AGENT_API}/pass-request/viewMasterDocument?masterId=${p.masterId}&entityType=person&documentType=personPhoto`
                                   }
-
                                   alt="Profile"
                                   className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-sm"
                                 />
@@ -4299,9 +5123,9 @@ console.log(vehicleData);
                                   {p.designation === "Others"
                                     ? p.designationOther
                                     : getLabelById(
-                                      masterData.designations,
-                                      p.designation,
-                                    )}
+                                        masterData.designations,
+                                        p.designation,
+                                      )}
                                 </p>
                               </div>
                             </div>
@@ -4311,7 +5135,8 @@ console.log(vehicleData);
                               {getLabelById(masterData.hepTypes, p.hepType)}
                             </p>
                             <p className="text-xs text-orange-600 font-bold capitalize">
-                              {getLabelById(masterData.passTypes, p.passType)} Pass
+                              {getLabelById(masterData.passTypes, p.passType)}{" "}
+                              Pass
                             </p>
                           </td>
                           <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
@@ -4434,7 +5259,8 @@ console.log(vehicleData);
                           </td>
                           <td className="px-4 py-4 border-r border-slate-100">
                             <p className="text-sm font-semibold text-slate-800 capitalize">
-                              {getLabelById(masterData.passTypes, v.passType)} Pass
+                              {getLabelById(masterData.passTypes, v.passType)}{" "}
+                              Pass
                             </p>
                           </td>
                           <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
@@ -4544,12 +5370,12 @@ console.log(vehicleData);
                   </div>
                   <div className="bg-orange-50/50 p-5 rounded-xl border border-orange-100 space-y-3">
                     <h4 className="text-xs font-black text-[#0a1e4d] uppercase flex items-center gap-2 tracking-wider">
-                      <ShieldCheck className="h-4 w-4 text-emerald-600" /> Terms &
-                      Conditions
+                      <ShieldCheck className="h-4 w-4 text-emerald-600" /> Terms
+                      & Conditions
                     </h4>
                     <p className="text-[10px] text-slate-600 text-justify leading-relaxed font-medium">
-                      I/We hereby certify that the above permits are required only
-                      for our official purpose. We hold responsibility for
+                      I/We hereby certify that the above permits are required
+                      only for our official purpose. We hold responsibility for
                       identification and all activities inside the port...
                     </p>
                     <label className="flex items-center gap-3 cursor-pointer pt-3 group">
@@ -4593,7 +5419,9 @@ console.log(vehicleData);
                 disabled={allViewLoading}
                 className="bg-white text-[#0a1e4d] px-4 py-2 rounded-lg border border-slate-200 text-xs font-bold hover:bg-slate-50 disabled:opacity-50 transition-colors flex items-center gap-2 shadow-sm"
               >
-                <RefreshCw className={`h-4 w-4 ${allViewLoading ? "animate-spin" : ""}`} />
+                <RefreshCw
+                  className={`h-4 w-4 ${allViewLoading ? "animate-spin" : ""}`}
+                />
                 {allViewLoading ? "Refreshing..." : "Refresh List"}
               </button>
             </div>
@@ -4601,26 +5429,84 @@ console.log(vehicleData);
             {/* ── Number system: per-status count cards (click to filter) ── */}
             <div className="px-6 pt-5 pb-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
-                { key: "ALL", label: "Total", value: viewCounts.total, icon: FileText, color: "text-[#0a1e4d]", ring: "ring-[#0a1e4d]/30", bg: "bg-[#0a1e4d]/5" },
-                { key: "SUBMITTED", label: "Submitted", value: viewCounts.submitted, icon: Send, color: "text-blue-600", ring: "ring-blue-300", bg: "bg-blue-50" },
-                { key: "UNDER_REVIEW", label: "Under Review", value: viewCounts.underReview, icon: Clock, color: "text-amber-600", ring: "ring-amber-300", bg: "bg-amber-50" },
-                { key: "COMPLETED", label: "Completed", value: viewCounts.completed, icon: CheckCircle, color: "text-emerald-600", ring: "ring-emerald-300", bg: "bg-emerald-50" },
-                { key: "REVERTED", label: "Reverted", value: viewCounts.reverted, icon: RefreshCw, color: "text-orange-600", ring: "ring-orange-300", bg: "bg-orange-50" },
-                { key: "REJECTED", label: "Rejected", value: viewCounts.rejected, icon: XCircle, color: "text-red-600", ring: "ring-red-300", bg: "bg-red-50" },
+                {
+                  key: "ALL",
+                  label: "Total",
+                  value: viewCounts.total,
+                  icon: FileText,
+                  color: "text-[#0a1e4d]",
+                  ring: "ring-[#0a1e4d]/30",
+                  bg: "bg-[#0a1e4d]/5",
+                },
+                {
+                  key: "SUBMITTED",
+                  label: "Submitted",
+                  value: viewCounts.submitted,
+                  icon: Send,
+                  color: "text-blue-600",
+                  ring: "ring-blue-300",
+                  bg: "bg-blue-50",
+                },
+                {
+                  key: "UNDER_REVIEW",
+                  label: "Under Review",
+                  value: viewCounts.underReview,
+                  icon: Clock,
+                  color: "text-amber-600",
+                  ring: "ring-amber-300",
+                  bg: "bg-amber-50",
+                },
+                {
+                  key: "COMPLETED",
+                  label: "Completed",
+                  value: viewCounts.completed,
+                  icon: CheckCircle,
+                  color: "text-emerald-600",
+                  ring: "ring-emerald-300",
+                  bg: "bg-emerald-50",
+                },
+                {
+                  key: "REVERTED",
+                  label: "Reverted",
+                  value: viewCounts.reverted,
+                  icon: RefreshCw,
+                  color: "text-orange-600",
+                  ring: "ring-orange-300",
+                  bg: "bg-orange-50",
+                },
+                {
+                  key: "REJECTED",
+                  label: "Rejected",
+                  value: viewCounts.rejected,
+                  icon: XCircle,
+                  color: "text-red-600",
+                  ring: "ring-red-300",
+                  bg: "bg-red-50",
+                },
               ].map((c) => {
                 const active = viewStatusFilter === c.key;
                 return (
                   <button
                     key={c.key}
-                    onClick={() => setViewStatusFilter(active && c.key !== "ALL" ? "ALL" : c.key)}
+                    onClick={() =>
+                      setViewStatusFilter(
+                        active && c.key !== "ALL" ? "ALL" : c.key,
+                      )
+                    }
                     title={`Filter by ${c.label}`}
                     className={`text-left rounded-xl p-3 ring-1 transition-all active:scale-[0.98] ${active ? `${c.bg} ${c.ring} shadow-sm` : "bg-white ring-slate-200 hover:bg-slate-50 hover:ring-slate-300"}`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className={`text-[10px] font-bold uppercase tracking-wider ${active ? c.color : "text-slate-500"}`}>{c.label}</span>
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wider ${active ? c.color : "text-slate-500"}`}
+                      >
+                        {c.label}
+                      </span>
                       <c.icon className={`h-3.5 w-3.5 ${c.color}`} />
                     </div>
-                    <p className={`mt-1 text-2xl font-black tabular-nums ${active ? c.color : "text-[#0a1e4d]"}`}>
+                    <p
+                      className={`mt-1 text-2xl font-black tabular-nums ${active ? c.color : "text-[#0a1e4d]"}`}
+                    >
                       {allViewLoading ? "…" : c.value}
                     </p>
                   </button>
@@ -4678,7 +5564,9 @@ console.log(vehicleData);
                 </div>
               )}
 
-              {(viewDateFilter !== "all" || viewStatusFilter !== "ALL" || debouncedSearch) && (
+              {(viewDateFilter !== "all" ||
+                viewStatusFilter !== "ALL" ||
+                debouncedSearch) && (
                 <button
                   onClick={() => {
                     setViewDateFilter("all");
@@ -4696,10 +5584,16 @@ console.log(vehicleData);
 
             <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                Showing {filteredViewPasses.length > 0 ? (viewPage - 1) * viewPageSize + 1 : 0}–
-                {Math.min(viewPage * viewPageSize, filteredViewPasses.length)} of {filteredViewPasses.length} records
+                Showing{" "}
+                {filteredViewPasses.length > 0
+                  ? (viewPage - 1) * viewPageSize + 1
+                  : 0}
+                –{Math.min(viewPage * viewPageSize, filteredViewPasses.length)}{" "}
+                of {filteredViewPasses.length} records
                 {filteredViewPasses.length !== viewCounts.total && (
-                  <span className="ml-2 text-orange-500 normal-case tracking-normal">(filtered from {viewCounts.total})</span>
+                  <span className="ml-2 text-orange-500 normal-case tracking-normal">
+                    (filtered from {viewCounts.total})
+                  </span>
                 )}
               </div>
               <div className="relative w-full md:w-72">
@@ -4816,7 +5710,32 @@ console.log(vehicleData);
                       return (
                         <tr
                           key={pass.id || idx}
-                          onClick={() => setSelectedPassDetails(pass)}
+                          // onClick={() => setSelectedPassDetails(pass)}
+                          onClick={() =>
+                            setSelectedPassDetails({
+                              ...pass,
+
+                              persons: (pass.persons || []).map((person) => ({
+                                ...person,
+                                passStatus:
+                                  person.passStatus ??
+                                  person.pass_status ??
+                                  person.passstatus ??
+                                  null,
+                              })),
+
+                              vehicles: (pass.vehicles || []).map(
+                                (vehicle) => ({
+                                  ...vehicle,
+                                  passStatus:
+                                    vehicle.passStatus ??
+                                    vehicle.pass_status ??
+                                    vehicle.passstatus ??
+                                    null,
+                                }),
+                              ),
+                            })
+                          }
                           className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${catInfo.borderAccent}`}
                         >
                           <td className="px-6 py-4 text-sm font-bold text-slate-400 text-center border-r border-slate-100 tabular-nums">
@@ -4825,7 +5744,9 @@ console.log(vehicleData);
                           <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d] border-r border-slate-100">
                             <div className="flex flex-col gap-1">
                               <span>{passIdStr}</span>
-                              <span className={`self-start px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${catInfo.badgeClass}`}>
+                              <span
+                                className={`self-start px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${catInfo.badgeClass}`}
+                              >
                                 {catInfo.label}
                               </span>
                             </div>
@@ -4833,12 +5754,12 @@ console.log(vehicleData);
                           <td className="px-6 py-4 text-sm text-slate-600 font-medium border-r border-slate-100">
                             {createdAtStr
                               ? new Date(createdAtStr).toLocaleString("en-IN", {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
                               : "-"}
                           </td>
                           <td className="px-6 py-4 text-sm font-bold text-slate-600 border-r border-slate-100">
@@ -4849,14 +5770,15 @@ console.log(vehicleData);
                           </td>
                           <td className="px-6 py-4 text-center border-r border-slate-100">
                             <span
-                              className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${currentStatus === "SUBMITTED"
-                                ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                : isApproved
-                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                  : currentStatus === "REJECTED"
-                                    ? "bg-red-50 text-red-700 border border-red-200"
-                                    : "bg-amber-50 text-amber-700 border border-amber-200"
-                                }`}
+                              className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                                currentStatus === "SUBMITTED"
+                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                  : isApproved
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : currentStatus === "REJECTED"
+                                      ? "bg-red-50 text-red-700 border border-red-200"
+                                      : "bg-amber-50 text-amber-700 border border-amber-200"
+                              }`}
                             >
                               {currentStatus}
                             </span>
@@ -4894,22 +5816,34 @@ console.log(vehicleData);
           <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 bg-amber-50 flex justify-between items-center">
               <h3 className="font-black text-amber-900 flex items-center gap-2 uppercase text-sm tracking-wider">
-                <AlertCircle className="h-5 w-5 text-amber-600" /> Reverted Applications - Action Required
+                <AlertCircle className="h-5 w-5 text-amber-600" /> Reverted
+                Applications - Action Required
               </h3>
               <button
                 onClick={fetchSubmittedPasses}
                 disabled={loadingPasses}
                 className="bg-white text-amber-700 px-4 py-2 rounded-lg border border-amber-200 text-xs font-bold hover:bg-amber-50 disabled:opacity-50 transition-colors flex items-center gap-2 shadow-sm"
               >
-                <RefreshCw className={`h-4 w-4 ${loadingPasses ? "animate-spin" : ""}`} />
+                <RefreshCw
+                  className={`h-4 w-4 ${loadingPasses ? "animate-spin" : ""}`}
+                />
                 Refresh
               </button>
             </div>
 
             <div className="px-6 py-4 bg-amber-50/30 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="text-xs font-bold text-amber-900 uppercase tracking-widest">
-                Showing {paginationMeta.totalRecords > 0 ? (paginationMeta.currentPage - 1) * paginationMeta.pageSize + 1 : 0}–
-                {Math.min(paginationMeta.currentPage * paginationMeta.pageSize, paginationMeta.totalRecords)} of {paginationMeta.totalRecords} reverted records
+                Showing{" "}
+                {paginationMeta.totalRecords > 0
+                  ? (paginationMeta.currentPage - 1) * paginationMeta.pageSize +
+                    1
+                  : 0}
+                –
+                {Math.min(
+                  paginationMeta.currentPage * paginationMeta.pageSize,
+                  paginationMeta.totalRecords,
+                )}{" "}
+                of {paginationMeta.totalRecords} reverted records
               </div>
               <div className="relative w-full md:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
@@ -4963,7 +5897,9 @@ console.log(vehicleData);
                         </p>
                       </td>
                     </tr>
-                  ) : submittedPasses.filter(p => p.status === 'REVERTED' || p.hasRevertedEntities).length === 0 ? (
+                  ) : submittedPasses.filter(
+                      (p) => p.status === "REVERTED" || p.hasRevertedEntities,
+                    ).length === 0 ? (
                     <tr>
                       <td
                         colSpan="5"
@@ -4972,18 +5908,29 @@ console.log(vehicleData);
                         <div className="flex flex-col items-center gap-3">
                           <CheckCircle2 className="h-12 w-12 text-emerald-400" />
                           <p>No reverted applications found.</p>
-                          <p className="text-xs">All your pass applications are under review or completed.</p>
+                          <p className="text-xs">
+                            All your pass applications are under review or
+                            completed.
+                          </p>
                         </div>
                       </td>
                     </tr>
                   ) : (
                     submittedPasses
-                      .filter(p => p.status === 'REVERTED' || p.hasRevertedEntities)
+                      .filter(
+                        (p) => p.status === "REVERTED" || p.hasRevertedEntities,
+                      )
                       .map((pass) => {
-                        const totalEntities = (pass.persons?.length || 0) + (pass.vehicles?.length || 0);
+                        const totalEntities =
+                          (pass.persons?.length || 0) +
+                          (pass.vehicles?.length || 0);
                         const revertedEntities = [
-                          ...(pass.persons || []).filter(p => p.status === 'reverted'),
-                          ...(pass.vehicles || []).filter(v => v.status === 'reverted')
+                          ...(pass.persons || []).filter(
+                            (p) => p.status === "reverted",
+                          ),
+                          ...(pass.vehicles || []).filter(
+                            (v) => v.status === "reverted",
+                          ),
                         ];
 
                         return (
@@ -4997,10 +5944,12 @@ console.log(vehicleData);
                               </span>
                             </td>
                             <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
-                              {new Date(pass.submittedAt || pass.createdAt).toLocaleDateString('en-GB', {
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric'
+                              {new Date(
+                                pass.submittedAt || pass.createdAt,
+                              ).toLocaleDateString("en-GB", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
                               })}
                             </td>
                             <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
@@ -5169,10 +6118,11 @@ console.log(vehicleData);
                       <input
                         type="tel"
                         value={personForm.mobile}
-                        className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${personErrors.mobile
-                          ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
-                          : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
-                          }`}
+                        className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${
+                          personErrors.mobile
+                            ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
+                            : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
+                        }`}
                         placeholder="00000 00000"
                         maxLength={10}
                         inputMode="numeric"
@@ -5240,27 +6190,57 @@ console.log(vehicleData);
                           "label",
                         )?.toUpperCase();
 
-                        const isForeignerVal = nationalityName === "FOREIGNER" || value === "2";
-                        const passportIdObj = (masterData.idProofTypes || []).find(
-                          (t) => (t.label || t.name || "").toLowerCase().includes("passport")
+                        const isForeignerVal =
+                          nationalityName === "FOREIGNER" || value === "2";
+                        const passportIdObj = (
+                          masterData.idProofTypes || []
+                        ).find((t) =>
+                          (t.label || t.name || "")
+                            .toLowerCase()
+                            .includes("passport"),
                         );
-                        const passportTypeId = passportIdObj ? String(passportIdObj.id || passportIdObj.value) : "4";
+                        const passportTypeId = passportIdObj
+                          ? String(passportIdObj.id || passportIdObj.value)
+                          : "4";
 
                         const dlIdObj = (masterData.idProofTypes || []).find(
-                          (t) => (t.label || t.name || "").toLowerCase().includes("driver") || (t.label || t.name || "").toLowerCase().includes("licence")
+                          (t) =>
+                            (t.label || t.name || "")
+                              .toLowerCase()
+                              .includes("driver") ||
+                            (t.label || t.name || "")
+                              .toLowerCase()
+                              .includes("licence"),
                         );
-                        const dlTypeId = dlIdObj ? String(dlIdObj.id || dlIdObj.value) : "1";
+                        const dlTypeId = dlIdObj
+                          ? String(dlIdObj.id || dlIdObj.value)
+                          : "1";
 
                         const indiaObj = (masterData.countries || []).find(
-                          (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
+                          (c) =>
+                            String(c.name || "")
+                              .trim()
+                              .toUpperCase() === "INDIA",
                         );
-                        const indiaId = indiaObj ? String(indiaObj.id || indiaObj.value) : "";
+                        const indiaId = indiaObj
+                          ? String(indiaObj.id || indiaObj.value)
+                          : "";
 
                         setPersonForm((prev) => ({
                           ...prev,
                           nationality: value,
-                          country: nationalityName === "INDIAN" ? (indiaId || prev.country) : (prev.country === indiaId ? "" : prev.country),
-                          idProofType: prev.hepType === "1" ? dlTypeId : (isForeignerVal ? passportTypeId : prev.idProofType),
+                          country:
+                            nationalityName === "INDIAN"
+                              ? indiaId || prev.country
+                              : prev.country === indiaId
+                                ? ""
+                                : prev.country,
+                          idProofType:
+                            prev.hepType === "1"
+                              ? dlTypeId
+                              : isForeignerVal
+                                ? passportTypeId
+                                : prev.idProofType,
                           aadharNo: isForeignerVal ? "" : prev.aadharNo,
                           aadharFile: isForeignerVal ? null : prev.aadharFile,
                         }));
@@ -5289,19 +6269,23 @@ console.log(vehicleData);
                         })
                       }
                       className={inputClass}
-                      disabled={
-                        !isPersonForeigner(personForm.nationality)
-                      }
+                      disabled={!isPersonForeigner(personForm.nationality)}
                     >
                       <option value="">Select Country</option>
 
                       {masterData.countries
                         .filter((c) => {
-                          const isForeigner = isPersonForeigner(personForm.nationality);
+                          const isForeigner = isPersonForeigner(
+                            personForm.nationality,
+                          );
                           if (!isForeigner) {
-                            return c.name && c.name.trim().toUpperCase() === "INDIA";
+                            return (
+                              c.name && c.name.trim().toUpperCase() === "INDIA"
+                            );
                           } else {
-                            return c.name && c.name.trim().toUpperCase() !== "INDIA";
+                            return (
+                              c.name && c.name.trim().toUpperCase() !== "INDIA"
+                            );
                           }
                         })
                         .map((c) => (
@@ -5314,7 +6298,10 @@ console.log(vehicleData);
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
-                      Visa No. {isPersonForeigner(personForm.nationality) && <span className="text-red-500">*</span>}
+                      Visa No.{" "}
+                      {isPersonForeigner(personForm.nationality) && (
+                        <span className="text-red-500">*</span>
+                      )}
                     </label>
                     <input
                       type="text"
@@ -5349,7 +6336,8 @@ console.log(vehicleData);
                       const isTwoWheeler = personForm.withTwoWheeler;
                       const hasError = !!personErrors.vehicleNo;
 
-                      let containerClass = "border-slate-300 focus-within:ring-2 focus-within:ring-orange-500/30 focus-within:border-orange-500";
+                      let containerClass =
+                        "border-slate-300 focus-within:ring-2 focus-within:ring-orange-500/30 focus-within:border-orange-500";
                       if (isTwoWheeler && hasVal) {
                         containerClass = hasError
                           ? "border-red-400 focus-within:ring-2 focus-within:ring-red-500/20 focus-within:border-red-400"
@@ -5357,7 +6345,9 @@ console.log(vehicleData);
                       }
 
                       return (
-                        <div className={`flex h-10 shadow-sm rounded-lg overflow-hidden border transition-all ${containerClass}`}>
+                        <div
+                          className={`flex h-10 shadow-sm rounded-lg overflow-hidden border transition-all ${containerClass}`}
+                        >
                           <div className="border-r border-slate-300 flex items-center justify-center px-4 bg-slate-50">
                             <input
                               type="checkbox"
@@ -5379,11 +6369,16 @@ console.log(vehicleData);
                             className="w-full text-sm disabled:bg-slate-100 disabled:cursor-not-allowed px-3 outline-none uppercase font-bold text-[#0a1e4d]"
                             onBlur={(e) => {
                               if (personForm.withTwoWheeler) {
-                                validatePersonField("vehicleNo", e.target.value);
+                                validatePersonField(
+                                  "vehicleNo",
+                                  e.target.value,
+                                );
                               }
                             }}
                             onChange={(e) => {
-                              const val = e.target.value.toUpperCase().slice(0, 13);
+                              const val = e.target.value
+                                .toUpperCase()
+                                .slice(0, 13);
                               setPersonForm({
                                 ...personForm,
                                 vehicleNo: val,
@@ -5392,8 +6387,15 @@ console.log(vehicleData);
                                 if (val.length >= 8) {
                                   validatePersonField("vehicleNo", val);
                                 }
-                                if (/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(val)) {
-                                  checkBlacklistStatus("VEHICLE", val.replace(/[\s-]/g, ""));
+                                if (
+                                  /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(
+                                    val,
+                                  )
+                                ) {
+                                  checkBlacklistStatus(
+                                    "VEHICLE",
+                                    val.replace(/[\s-]/g, ""),
+                                  );
                                 }
                               }
                             }}
@@ -5401,27 +6403,46 @@ console.log(vehicleData);
                         </div>
                       );
                     })()}
-                    {personForm.withTwoWheeler && personForm.vehicleNo.trim() && (
-                      <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all">
-                        {personErrors.vehicleNo ? (
-                          <>
-                            <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                            <span className="text-red-500">{personErrors.vehicleNo}</span>
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                            <span className="text-emerald-600">Valid Two Wheeler registration format</span>
-                          </>
-                        )}
-                      </div>
-                    )}
-                    {!personErrors.vehicleNo && blacklistWarnings["VEHICLE_" + personForm.vehicleNo.replace(/[\s-]/g, "").toUpperCase()] && (
-                      <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
-                        <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
-                        <span>PORT BLACKLISTED — {blacklistWarnings["VEHICLE_" + personForm.vehicleNo.replace(/[\s-]/g, "").toUpperCase()]?.replace("⚠️ BLACKLISTED ", "")}</span>
-                      </div>
-                    )}
+                    {personForm.withTwoWheeler &&
+                      personForm.vehicleNo.trim() && (
+                        <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all">
+                          {personErrors.vehicleNo ? (
+                            <>
+                              <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                              <span className="text-red-500">
+                                {personErrors.vehicleNo}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                              <span className="text-emerald-600">
+                                Valid Two Wheeler registration format
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    {!personErrors.vehicleNo &&
+                      blacklistWarnings[
+                        "VEHICLE_" +
+                          personForm.vehicleNo
+                            .replace(/[\s-]/g, "")
+                            .toUpperCase()
+                      ] && (
+                        <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
+                          <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
+                          <span>
+                            PORT BLACKLISTED —{" "}
+                            {blacklistWarnings[
+                              "VEHICLE_" +
+                                personForm.vehicleNo
+                                  .replace(/[\s-]/g, "")
+                                  .toUpperCase()
+                            ]?.replace("⚠️ BLACKLISTED ", "")}
+                          </span>
+                        </div>
+                      )}
                   </div>
 
                   {/* Seafarer ID Type Selection */}
@@ -5437,18 +6458,27 @@ console.log(vehicleData);
                           setPersonForm({
                             ...personForm,
                             seafarerIdType: value,
-                            aadharNo: value === "passport" ? "" : personForm.aadharNo,
-                            passportNo: value === "aadhaar" ? "" : personForm.passportNo,
-                            aadharFile: value === "passport" ? null : personForm.aadharFile,
+                            aadharNo:
+                              value === "passport" ? "" : personForm.aadharNo,
+                            passportNo:
+                              value === "aadhaar" ? "" : personForm.passportNo,
+                            aadharFile:
+                              value === "passport"
+                                ? null
+                                : personForm.aadharFile,
                           });
                           if (personErrors.seafarerIdType) {
-                            setPersonErrors((prev) => ({ ...prev, seafarerIdType: null }));
+                            setPersonErrors((prev) => ({
+                              ...prev,
+                              seafarerIdType: null,
+                            }));
                           }
                         }}
-                        className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${personErrors.seafarerIdType
-                          ? "border-red-400 bg-red-50"
-                          : "border-slate-300 bg-white"
-                          }`}
+                        className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${
+                          personErrors.seafarerIdType
+                            ? "border-red-400 bg-red-50"
+                            : "border-slate-300 bg-white"
+                        }`}
                       >
                         <option value="">-- Select ID Type --</option>
                         <option value="aadhaar">Aadhaar</option>
@@ -5463,223 +6493,257 @@ console.log(vehicleData);
                   )}
 
                   {/* Aadhaar Fields - Show for non-foreigners (non-seafarers OR seafarers who selected aadhaar) */}
-                  {!isPersonForeigner(personForm.nationality) && (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar") && (
-                    <>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase">
-                          Upload Aadhar <span className="text-red-500">*</span>
-                        </label>
-                        <FileUploadBox
-                          disabled={!!personForm.masterId}
-                          file={personForm.aadharFile}
-                          existingFileName={personForm.existingAadharName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "personAadhar",
-                              personForm.existingAadharName,
-                              personForm.editIndex
-                            )
-                          }
-                          onChange={async (e) => {
-                            if (personForm.masterId) {
-                              toast.error(
-                                "Aadhaar document comes from Master Directory and cannot be changed."
-                              );
-                              return;
+                  {!isPersonForeigner(personForm.nationality) &&
+                    (personForm.hepType !== "3" ||
+                      personForm.seafarerIdType === "aadhaar") && (
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700 uppercase">
+                            Upload Aadhar{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <FileUploadBox
+                            disabled={!!personForm.masterId}
+                            file={personForm.aadharFile}
+                            existingFileName={personForm.existingAadharName}
+                            onView={() =>
+                              handleViewDoc(
+                                personForm.existingPassRequestId,
+                                "personAadhar",
+                                personForm.existingAadharName,
+                                personForm.editIndex,
+                              )
                             }
+                            onChange={async (e) => {
+                              if (personForm.masterId) {
+                                toast.error(
+                                  "Aadhaar document comes from Master Directory and cannot be changed.",
+                                );
+                                return;
+                              }
 
-                            const file =
-                              e?.target?.files?.[0] ||
-                              e?.files?.[0] ||
-                              e?.file ||
-                              e;
+                              const file =
+                                e?.target?.files?.[0] ||
+                                e?.files?.[0] ||
+                                e?.file ||
+                                e;
 
-                            if (!file) return;
+                              if (!file) return;
 
-                            setPersonForm((prev) => ({
-                              ...prev,
-                              aadharFile: file,
-                            }));
+                              setPersonForm((prev) => ({
+                                ...prev,
+                                aadharFile: file,
+                              }));
 
-                            try {
-                              toast.loading(
-                                "Reading Aadhaar PDF...",
-                                {
+                              try {
+                                toast.loading("Reading Aadhaar PDF...", {
                                   id: "aadhar-ocr",
+                                });
+
+                                const extractedAadhar =
+                                  await extractAadharFromPdf(file);
+
+                                toast.dismiss("aadhar-ocr");
+
+                                if (!extractedAadhar) {
+                                  setPersonForm((prev) => ({
+                                    ...prev,
+                                    aadharFile: file,
+                                    aadharNo: "",
+                                  }));
+
+                                  toast.warning(
+                                    "Could not detect Aadhaar automatically. Please enter manually.",
+                                  );
+                                  return;
                                 }
-                              );
 
-                              const extractedAadhar =
-                                await extractAadharFromPdf(file);
+                                setPersonForm((prev) => ({
+                                  ...prev,
+                                  aadharFile: file,
+                                  aadharNo: extractedAadhar,
+                                }));
 
-                              toast.dismiss("aadhar-ocr");
-
-                              if (!extractedAadhar) {
+                                toast.success(
+                                  `Aadhaar detected: ${extractedAadhar}`,
+                                );
+                              } catch (error) {
+                                toast.dismiss("aadhar-ocr");
+                                console.error(error);
                                 setPersonForm((prev) => ({
                                   ...prev,
                                   aadharFile: file,
                                   aadharNo: "",
                                 }));
 
-                                toast.warning(
-                                  "Could not detect Aadhaar automatically. Please enter manually."
-                                );
-                                return;
+                                toast.error("Failed to read Aadhaar PDF");
                               }
+                            }}
+                          />
+                        </div>
 
-                              setPersonForm((prev) => ({
-                                ...prev,
-                                aadharFile: file,
-                                aadharNo: extractedAadhar,
-                              }));
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700 uppercase">
+                            Aadhaar No. <span className="text-red-500">*</span>
+                          </label>
+                          {(() => {
+                            const hasVal = !!personForm.aadharNo.trim();
+                            const isValid = /^\d{12}$/.test(
+                              personForm.aadharNo,
+                            );
+                            const hasError = !!personErrors.aadharNo;
 
-                              toast.success(
-                                `Aadhaar detected: ${extractedAadhar}`
-                              );
-
-                            } catch (error) {
-                              toast.dismiss("aadhar-ocr");
-                              console.error(error);
-                              setPersonForm((prev) => ({
-                                ...prev,
-                                aadharFile: file,
-                                aadharNo: "",
-                              }));
-
-                              toast.error(
-                                "Failed to read Aadhaar PDF"
-                              );
+                            let customBorderClass =
+                              "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
+                            if (hasVal) {
+                              customBorderClass =
+                                hasError || !isValid
+                                  ? "border-red-400 focus:ring-red-500/20 focus:border-red-400"
+                                  : "border-emerald-500 focus:ring-emerald-500/20 focus:border-emerald-500";
                             }
-                          }}
-                        />
-                      </div>
 
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase">
-                          Aadhaar No. <span className="text-red-500">*</span>
-                        </label>
-                        {(() => {
-                          const hasVal = !!personForm.aadharNo.trim();
-                          const isValid = /^\d{12}$/.test(personForm.aadharNo);
-                          const hasError = !!personErrors.aadharNo;
-
-                          let customBorderClass = "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
-                          if (hasVal) {
-                            customBorderClass = (hasError || !isValid)
-                              ? "border-red-400 focus:ring-red-500/20 focus:border-red-400"
-                              : "border-emerald-500 focus:ring-emerald-500/20 focus:border-emerald-500";
-                          }
-
-                          return (
-                            <>
-                              <input
-                                type="text"
-                                value={personForm.aadharNo}
-                                readOnly={!!personForm.masterId}
-                                onChange={(e) => {
-                                  const val = e.target.value
-                                    .replace(/\D/g, "")
-                                    .slice(0, 12);
-                                  setPersonForm({ ...personForm, aadharNo: val });
-                                  if (val.length === 12) {
-                                    validatePersonField("aadharNo", val);
-                                    checkBlacklistStatus("PERSON", val);
-                                    checkBlacklistStatus("DRIVER", val);
+                            return (
+                              <>
+                                <input
+                                  type="text"
+                                  value={personForm.aadharNo}
+                                  readOnly={!!personForm.masterId}
+                                  onChange={(e) => {
+                                    const val = e.target.value
+                                      .replace(/\D/g, "")
+                                      .slice(0, 12);
+                                    setPersonForm({
+                                      ...personForm,
+                                      aadharNo: val,
+                                    });
+                                    if (val.length === 12) {
+                                      validatePersonField("aadharNo", val);
+                                      checkBlacklistStatus("PERSON", val);
+                                      checkBlacklistStatus("DRIVER", val);
+                                    }
+                                  }}
+                                  onBlur={(e) =>
+                                    validatePersonField(
+                                      "aadharNo",
+                                      e.target.value,
+                                    )
                                   }
-                                }}
-                                onBlur={(e) => validatePersonField("aadharNo", e.target.value)}
-                                className={`w-full h-10 border rounded-lg text-sm px-3 shadow-sm outline-none transition-all focus:ring-2 ${customBorderClass}`}
-                                placeholder="XXXX XXXX XXXX"
-                                maxLength={12}
-                                inputMode="numeric"
-                              />
-                              {hasVal && (
-                                <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all animate-in fade-in duration-200">
-                                  {(hasError || !isValid) ? (
-                                    <>
-                                      <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                      <span className="text-red-500">Aadhaar must be exactly 12 digits</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                                      <span className="text-emerald-600">Valid Aadhaar format</span>
-                                    </>
+                                  className={`w-full h-10 border rounded-lg text-sm px-3 shadow-sm outline-none transition-all focus:ring-2 ${customBorderClass}`}
+                                  placeholder="XXXX XXXX XXXX"
+                                  maxLength={12}
+                                  inputMode="numeric"
+                                />
+                                {hasVal && (
+                                  <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all animate-in fade-in duration-200">
+                                    {hasError || !isValid ? (
+                                      <>
+                                        <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                        <span className="text-red-500">
+                                          Aadhaar must be exactly 12 digits
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                        <span className="text-emerald-600">
+                                          Valid Aadhaar format
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                                {isValid &&
+                                  (blacklistWarnings[
+                                    "PERSON_" + personForm.aadharNo
+                                  ] ||
+                                    blacklistWarnings[
+                                      "DRIVER_" + personForm.aadharNo
+                                    ]) && (
+                                    <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
+                                      <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
+                                      <span>
+                                        PORT BLACKLISTED —{" "}
+                                        {(
+                                          blacklistWarnings[
+                                            "PERSON_" + personForm.aadharNo
+                                          ] ||
+                                          blacklistWarnings[
+                                            "DRIVER_" + personForm.aadharNo
+                                          ]
+                                        )?.replace("⚠️ BLACKLISTED ", "")}
+                                      </span>
+                                    </div>
                                   )}
-                                </div>
-                              )}
-                              {isValid && (blacklistWarnings["PERSON_" + personForm.aadharNo] || blacklistWarnings["DRIVER_" + personForm.aadharNo]) && (
-                                <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
-                                  <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
-                                  <span>
-                                    PORT BLACKLISTED —{" "}
-                                    {(blacklistWarnings["PERSON_" + personForm.aadharNo] || blacklistWarnings["DRIVER_" + personForm.aadharNo])?.replace("⚠️ BLACKLISTED ", "")}
-                                  </span>
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </>
-                  )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </>
+                    )}
 
                   {/* Passport Fields - Show only for seafarers who selected passport */}
-                  {personForm.hepType === "3" && personForm.seafarerIdType === "passport" && (
-                    <>
-                      <div className="space-y-1.5 animate-in zoom-in">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          Passport No. <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={personForm.passportNo}
-                          onChange={(e) => {
-                            const val = e.target.value.toUpperCase().slice(0, 15);
-                            setPersonForm({ ...personForm, passportNo: val });
-                            if (personErrors.passportNo) {
-                              setPersonErrors((prev) => ({ ...prev, passportNo: null }));
-                            }
-                          }}
-                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${personErrors.passportNo
-                            ? "border-red-400 bg-red-50"
-                            : "border-slate-300 bg-white"
+                  {personForm.hepType === "3" &&
+                    personForm.seafarerIdType === "passport" && (
+                      <>
+                        <div className="space-y-1.5 animate-in zoom-in">
+                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Passport No. <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={personForm.passportNo}
+                            onChange={(e) => {
+                              const val = e.target.value
+                                .toUpperCase()
+                                .slice(0, 15);
+                              setPersonForm({ ...personForm, passportNo: val });
+                              if (personErrors.passportNo) {
+                                setPersonErrors((prev) => ({
+                                  ...prev,
+                                  passportNo: null,
+                                }));
+                              }
+                            }}
+                            className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${
+                              personErrors.passportNo
+                                ? "border-red-400 bg-red-50"
+                                : "border-slate-300 bg-white"
                             }`}
-                          placeholder="Passport Number"
-                          maxLength={15}
-                        />
-                        {personErrors.passportNo && (
-                          <p className="text-xs text-red-500 mt-0.5 font-medium">
-                            {personErrors.passportNo}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-1.5 animate-in zoom-in">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          Upload Passport <span className="text-red-500">*</span>
-                        </label>
-                        <FileUploadBox
-                          file={personForm.passportDoc}
-                          existingFileName={personForm.existingPassportName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "passportDoc",
-                              personForm.existingPassportName,
-                              personForm.editIndex
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              passportDoc: e.target.files[0],
-                            })
-                          }
-                        />
-                      </div>
-                    </>
-                  )}
+                            placeholder="Passport Number"
+                            maxLength={15}
+                          />
+                          {personErrors.passportNo && (
+                            <p className="text-xs text-red-500 mt-0.5 font-medium">
+                              {personErrors.passportNo}
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-1.5 animate-in zoom-in">
+                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Upload Passport{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <FileUploadBox
+                            file={personForm.passportDoc}
+                            existingFileName={personForm.existingPassportName}
+                            onView={() =>
+                              handleViewDoc(
+                                personForm.existingPassRequestId,
+                                "passportDoc",
+                                personForm.existingPassportName,
+                                personForm.editIndex,
+                              )
+                            }
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                passportDoc: e.target.files[0],
+                              })
+                            }
+                          />
+                        </div>
+                      </>
+                    )}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Access Area <span className="text-red-500">*</span>
@@ -5704,7 +6768,8 @@ console.log(vehicleData);
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
-                      Date of Birth (DOB) <span className="text-red-500">*</span>
+                      Date of Birth (DOB){" "}
+                      <span className="text-red-500">*</span>
                     </label>
                     <div className="relative flex items-center">
                       <input
@@ -5755,7 +6820,10 @@ console.log(vehicleData);
                                 dob: e.target.value,
                               }));
                               if (personErrors.dob) {
-                                setPersonErrors((prev) => ({ ...prev, dob: null }));
+                                setPersonErrors((prev) => ({
+                                  ...prev,
+                                  dob: null,
+                                }));
                               }
                             }
                           }}
@@ -5764,8 +6832,12 @@ console.log(vehicleData);
                         <button
                           type="button"
                           onClick={() => {
-                            const picker = document.getElementById("dob-hidden-picker");
-                            if (picker && typeof picker.showPicker === "function") {
+                            const picker =
+                              document.getElementById("dob-hidden-picker");
+                            if (
+                              picker &&
+                              typeof picker.showPicker === "function"
+                            ) {
                               picker.showPicker();
                             } else if (picker) {
                               picker.focus();
@@ -5781,7 +6853,8 @@ console.log(vehicleData);
                     </div>
                     {personErrors.dob && (
                       <p className="text-[11px] font-semibold text-red-500 flex items-center gap-1 mt-1">
-                        <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" /> {personErrors.dob}
+                        <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />{" "}
+                        {personErrors.dob}
                       </p>
                     )}
                   </div>
@@ -5836,7 +6909,10 @@ console.log(vehicleData);
                               designationOther: e.target.value,
                             });
                             if (personErrors.dob) {
-                              setPersonErrors((prev) => ({ ...prev, dob: null }));
+                              setPersonErrors((prev) => ({
+                                ...prev,
+                                dob: null,
+                              }));
                             }
                           }}
                           className={inputClass}
@@ -5848,7 +6924,8 @@ console.log(vehicleData);
                     <div className="col-span-1 md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-5 items-start">
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700 uppercase">
-                          CDC Document No. <span className="text-red-500">*</span>
+                          CDC Document No.{" "}
+                          <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -5875,7 +6952,7 @@ console.log(vehicleData);
                               personForm.existingPassRequestId,
                               "cdcDocument",
                               personForm.existingCdcName,
-                              personForm.editIndex
+                              personForm.editIndex,
                             )
                           }
                           onChange={(e) =>
@@ -5893,7 +6970,10 @@ console.log(vehicleData);
                     <>
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700 uppercase">
-                          Type of Id proof {isPersonForeigner(personForm.nationality) && <span className="text-red-500">*</span>}
+                          Type of Id proof{" "}
+                          {isPersonForeigner(personForm.nationality) && (
+                            <span className="text-red-500">*</span>
+                          )}
                         </label>
                         <select
                           value={personForm.idProofType}
@@ -5904,29 +6984,33 @@ console.log(vehicleData);
                           //   })
                           // }
                           onChange={(e) => {
-
                             const value = e.target.value;
 
-                            setPersonForm(prev => ({
-                                ...prev,
-                                idProofType: value,
-                                idProofNumber: ""
+                            setPersonForm((prev) => ({
+                              ...prev,
+                              idProofType: value,
+                              idProofNumber: "",
                             }));
 
                             setDlVerification({
-                                loading: false,
-                                verified: false,
-                                message: "",
-                                data: null
+                              loading: false,
+                              verified: false,
+                              message: "",
+                              data: null,
                             });
-
-                        }}
+                          }}
                           className={inputClass}
-                          disabled={isPersonForeigner(personForm.nationality) || personForm.hepType === "1"}
+                          disabled={
+                            isPersonForeigner(personForm.nationality) ||
+                            personForm.hepType === "1"
+                          }
                         >
                           <option value="">-- Select --</option>
                           {masterData.idProofTypes.map((t) => (
-                            <option key={t.id || t.value} value={t.id || t.value}>
+                            <option
+                              key={t.id || t.value}
+                              value={t.id || t.value}
+                            >
                               {t.label}
                             </option>
                           ))}
@@ -5934,7 +7018,10 @@ console.log(vehicleData);
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700 uppercase">
-                          {idProofLabel} {isPersonForeigner(personForm.nationality) && <span className="text-red-500">*</span>}
+                          {idProofLabel}{" "}
+                          {isPersonForeigner(personForm.nationality) && (
+                            <span className="text-red-500">*</span>
+                          )}
                         </label>
                         <input
                           type="text"
@@ -5955,66 +7042,57 @@ console.log(vehicleData);
                           //   }
                           // }}
                           onChange={(e) => {
-
                             if (personForm.idProofType === "1") {
+                              handleDLChange(e);
 
-                                handleDLChange(e);
+                              const valClean = e.target.value
+                                .replace(/[\s-]/g, "")
+                                .toUpperCase();
 
-                                const valClean = e.target.value
-                                    .replace(/[\s-]/g, "")
-                                    .toUpperCase();
-
-                                checkBlacklistStatus("DRIVER", valClean);
-                                checkBlacklistStatus("PERSON", valClean);
-
+                              checkBlacklistStatus("DRIVER", valClean);
+                              checkBlacklistStatus("PERSON", valClean);
                             } else {
+                              const val = e.target.value.toUpperCase();
 
-                                const val = e.target.value.toUpperCase();
+                              setPersonForm((prev) => ({
+                                ...prev,
+                                idProofNumber: val,
+                              }));
 
-                                setPersonForm(prev => ({
-                                    ...prev,
-                                    idProofNumber: val
-                                }));
+                              if (val) {
+                                const isValid = validatePersonField(
+                                  "idProofNumber",
+                                  val,
+                                  {
+                                    idProofType: personForm.idProofType,
+                                  },
+                                );
 
-                                if (val) {
+                                if (isValid) {
+                                  const valClean = val.replace(/[\s-]/g, "");
 
-                                    const isValid = validatePersonField(
-                                        "idProofNumber",
-                                        val,
-                                        {
-                                            idProofType: personForm.idProofType
-                                        }
-                                    );
-
-                                    if (isValid) {
-
-                                        const valClean = val.replace(/[\s-]/g, "");
-
-                                        checkBlacklistStatus("DRIVER", valClean);
-                                        checkBlacklistStatus("PERSON", valClean);
-
-                                    }
+                                  checkBlacklistStatus("DRIVER", valClean);
+                                  checkBlacklistStatus("PERSON", valClean);
                                 }
-
+                              }
                             }
-
-                        }}
+                          }}
                           onBlur={(e) => {
                             if (e.target.value) {
-                              validatePersonField("idProofNumber", e.target.value, {
-                                idProofType: personForm.idProofType,
-                              });
+                              validatePersonField(
+                                "idProofNumber",
+                                e.target.value,
+                                {
+                                  idProofType: personForm.idProofType,
+                                },
+                              );
                             }
                           }}
                           className={`${inputClass} ${personErrors.idProofNumber ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                           placeholder={idProofPlaceholder}
                         />
                         {dlVerification.loading && (
-
-                            <Loader2
-                                className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-orange-500"
-                            />
-
+                          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-orange-500" />
                         )}
                         {personErrors.idProofNumber && (
                           <p className="text-xs text-red-500 mt-0.5 font-medium">
@@ -6022,24 +7100,51 @@ console.log(vehicleData);
                           </p>
                         )}
                         {dlVerification.message && (
-
-                            <p
-                                className={`text-xs mt-1 font-medium ${
-                                    dlVerification.verified
-                                        ? "text-green-600"
-                                        : "text-red-600"
-                                }`}
-                            >
-                                {dlVerification.message}
-                            </p>
-
+                          <p
+                            className={`text-xs mt-1 font-medium ${
+                              dlVerification.verified
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {dlVerification.message}
+                          </p>
                         )}
-                        {!personErrors.idProofNumber && personForm.idProofNumber && (blacklistWarnings["DRIVER_" + personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase()] || blacklistWarnings["PERSON_" + personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase()]) && (
-                          <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
-                            <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
-                            <span>PORT BLACKLISTED — {(blacklistWarnings["DRIVER_" + personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase()] || blacklistWarnings["PERSON_" + personForm.idProofNumber.replace(/[\s-]/g, "").toUpperCase()])?.replace("⚠️ BLACKLISTED ", "")}</span>
-                          </div>
-                        )}
+                        {!personErrors.idProofNumber &&
+                          personForm.idProofNumber &&
+                          (blacklistWarnings[
+                            "DRIVER_" +
+                              personForm.idProofNumber
+                                .replace(/[\s-]/g, "")
+                                .toUpperCase()
+                          ] ||
+                            blacklistWarnings[
+                              "PERSON_" +
+                                personForm.idProofNumber
+                                  .replace(/[\s-]/g, "")
+                                  .toUpperCase()
+                            ]) && (
+                            <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
+                              <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
+                              <span>
+                                PORT BLACKLISTED —{" "}
+                                {(
+                                  blacklistWarnings[
+                                    "DRIVER_" +
+                                      personForm.idProofNumber
+                                        .replace(/[\s-]/g, "")
+                                        .toUpperCase()
+                                  ] ||
+                                  blacklistWarnings[
+                                    "PERSON_" +
+                                      personForm.idProofNumber
+                                        .replace(/[\s-]/g, "")
+                                        .toUpperCase()
+                                  ]
+                                )?.replace("⚠️ BLACKLISTED ", "")}
+                              </span>
+                            </div>
+                          )}
                       </div>
                     </>
                   )}
@@ -6140,7 +7245,7 @@ console.log(vehicleData);
                             personForm.existingPassRequestId,
                             "personIdProof",
                             personForm.existingIdProofName,
-                            personForm.editIndex
+                            personForm.editIndex,
                           )
                         }
                         onChange={(e) =>
@@ -6166,7 +7271,7 @@ console.log(vehicleData);
                               personForm.existingPassRequestId,
                               "visaDoc",
                               personForm.existingVisaDocName,
-                              personForm.editIndex
+                              personForm.editIndex,
                             )
                           }
                           onChange={(e) =>
@@ -6179,17 +7284,20 @@ console.log(vehicleData);
                       </div>
                       <div className="space-y-1.5 md:col-span-2 max-w-sm">
                         <label className="text-xs font-bold text-slate-700 uppercase">
-                          Immigration Clearance <span className="text-red-500">*</span>
+                          Immigration Clearance{" "}
+                          <span className="text-red-500">*</span>
                         </label>
                         <FileUploadBox
                           file={personForm.immigrationDoc}
-                          existingFileName={personForm.existingImmigrationDocName}
+                          existingFileName={
+                            personForm.existingImmigrationDocName
+                          }
                           onView={() =>
                             handleViewDoc(
                               personForm.existingPassRequestId,
                               "immigrationDoc",
                               personForm.existingImmigrationDocName,
-                              personForm.editIndex
+                              personForm.editIndex,
                             )
                           }
                           onChange={(e) =>
@@ -6261,22 +7369,39 @@ console.log(vehicleData);
                           {masterData.passTypes
                             .filter((t) => {
                               const val = String(t.id || t.value);
-                              const name = String(t.label || t.name || "").toUpperCase();
+                              const name = String(
+                                t.label || t.name || "",
+                              ).toUpperCase();
                               if (String(personForm.hepType) === "3") {
-                                if (val !== "1" && !name.includes("DAILY")) return false;
+                                if (val !== "1" && !name.includes("DAILY"))
+                                  return false;
                               }
                               return true;
                             })
                             .map((t) => {
                               const val = String(t.id || t.value);
-                              const name = String(t.label || t.name || "").toUpperCase();
+                              const name = String(
+                                t.label || t.name || "",
+                              ).toUpperCase();
                               let isLocked = false;
                               let lockSuffix = "";
-                              if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && !generalForm.isLicenseExpired) {
-                                if ((val === "2" || name.includes("MONTHLY")) && generalForm.remainingDays < 30) {
+                              if (
+                                generalForm.remainingDays !== null &&
+                                generalForm.remainingDays !== undefined &&
+                                !generalForm.isLicenseExpired
+                              ) {
+                                if (
+                                  (val === "2" || name.includes("MONTHLY")) &&
+                                  generalForm.remainingDays < 30
+                                ) {
                                   isLocked = true;
                                   lockSuffix = ` (Locked — License expires in ${generalForm.remainingDays} days)`;
-                                } else if ((val === "3" || name.includes("YEARLY") || name.includes("ANNUAL")) && generalForm.remainingDays < 365) {
+                                } else if (
+                                  (val === "3" ||
+                                    name.includes("YEARLY") ||
+                                    name.includes("ANNUAL")) &&
+                                  generalForm.remainingDays < 365
+                                ) {
                                   isLocked = true;
                                   lockSuffix = ` (Locked — License expires in ${generalForm.remainingDays} days)`;
                                 }
@@ -6301,7 +7426,13 @@ console.log(vehicleData);
                             min="1"
                             max={
                               String(personForm.passType) === "1"
-                                ? (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && generalForm.remainingDays < 7 ? String(Math.max(1, generalForm.remainingDays)) : "7")
+                                ? generalForm.remainingDays !== null &&
+                                  generalForm.remainingDays !== undefined &&
+                                  generalForm.remainingDays < 7
+                                  ? String(
+                                      Math.max(1, generalForm.remainingDays),
+                                    )
+                                  : "7"
                                 : "1"
                             }
                             disabled={String(personForm.passType) !== "1"}
@@ -6323,9 +7454,13 @@ console.log(vehicleData);
                           <input
                             type="text"
                             placeholder="DD/MM/YYYY, hh:mm AM/PM"
-                            value={formatDateTimeISOToDisplay(personForm.dateFrom)}
+                            value={formatDateTimeISOToDisplay(
+                              personForm.dateFrom,
+                            )}
                             onChange={(e) => {
-                              const iso = formatDateTimeDisplayToISO(e.target.value);
+                              const iso = formatDateTimeDisplayToISO(
+                                e.target.value,
+                              );
                               if (iso) {
                                 setPersonForm((prev) => ({
                                   ...prev,
@@ -6355,8 +7490,13 @@ console.log(vehicleData);
                             <button
                               type="button"
                               onClick={() => {
-                                const picker = document.getElementById("dateFrom-person-hidden-picker");
-                                if (picker && typeof picker.showPicker === "function") {
+                                const picker = document.getElementById(
+                                  "dateFrom-person-hidden-picker",
+                                );
+                                if (
+                                  picker &&
+                                  typeof picker.showPicker === "function"
+                                ) {
                                   picker.showPicker();
                                 } else if (picker) {
                                   picker.focus();
@@ -6397,109 +7537,115 @@ console.log(vehicleData);
                 </table>
               </div>
 
-              {((personForm.hepType === "1" && personForm.idProofType !== "1") ||
+              {((personForm.hepType === "1" &&
+                personForm.idProofType !== "1") ||
                 String(personForm.passType) === "2" ||
                 String(personForm.passType) === "3" ||
-                String(personForm.accessArea).toUpperCase().includes("OIL JETTY") ||
+                String(personForm.accessArea)
+                  .toUpperCase()
+                  .includes("OIL JETTY") ||
                 String(personForm.accessArea) === "1") && (
-                  <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
-                      <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
-                      Mandatory Documents
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                      {personForm.hepType === "1" && ( // 1 = Driver ID
-                        <FileUploadBox
-                          label="Driver Licence"
-                          isRequired
-                          file={personForm.driverLicence}
-                          existingFileName={personForm.existingDlName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "driverLicense",
-                              personForm.existingDlName,
-                              personForm.editIndex
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              driverLicence: e.target.files[0],
-                            })
-                          }
-                        />
-                      )}
-                      {(String(personForm.passType) === "2" ||
-                        String(personForm.passType) === "3") && (
-                          <FileUploadBox
-                            label="Police Verification"
-                            isRequired
-                            file={personForm.policeVerification}
-                            existingFileName={personForm.existingPoliceName}
-                            onView={() =>
-                              handleViewDoc(
-                                personForm.existingPassRequestId,
-                                "policeVerification",
-                                personForm.existingPoliceName,
-                                personForm.editIndex
-                              )
-                            }
-                            onChange={(e) =>
-                              setPersonForm({
-                                ...personForm,
-                                policeVerification: e.target.files[0],
-                              })
-                            }
-                          />
-                        )}
-                      {personForm.hepType === "3" && (
-                        <FileUploadBox
-                          label="Passport"
-                          isRequired
-                          file={personForm.passportDoc}
-                          existingFileName={personForm.existingPassportName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "passportDoc",
-                              personForm.existingPassportName,
-                              personForm.editIndex
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              passportDoc: e.target.files[0],
-                            })
-                          }
-                        />
-                      )}
-                      {(String(personForm.accessArea).toUpperCase().includes("OIL JETTY") || String(personForm.accessArea) === "1") && (
-                        <FileUploadBox
-                          label="Entry Authorization Document"
-                          isRequired
-                          file={personForm.entryAuthorization}
-                          existingFileName={personForm.existingEntryAuthName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "entryAuthorization",
-                              personForm.existingEntryAuthName,
-                              personForm.editIndex
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              entryAuthorization: e.target.files[0],
-                            })
-                          }
-                        />
-                      )}
-                    </div>
+                <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
+                    <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
+                    Mandatory Documents
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    {personForm.hepType === "1" && ( // 1 = Driver ID
+                      <FileUploadBox
+                        label="Driver Licence"
+                        isRequired
+                        file={personForm.driverLicence}
+                        existingFileName={personForm.existingDlName}
+                        onView={() =>
+                          handleViewDoc(
+                            personForm.existingPassRequestId,
+                            "driverLicense",
+                            personForm.existingDlName,
+                            personForm.editIndex,
+                          )
+                        }
+                        onChange={(e) =>
+                          setPersonForm({
+                            ...personForm,
+                            driverLicence: e.target.files[0],
+                          })
+                        }
+                      />
+                    )}
+                    {(String(personForm.passType) === "2" ||
+                      String(personForm.passType) === "3") && (
+                      <FileUploadBox
+                        label="Police Verification"
+                        isRequired
+                        file={personForm.policeVerification}
+                        existingFileName={personForm.existingPoliceName}
+                        onView={() =>
+                          handleViewDoc(
+                            personForm.existingPassRequestId,
+                            "policeVerification",
+                            personForm.existingPoliceName,
+                            personForm.editIndex,
+                          )
+                        }
+                        onChange={(e) =>
+                          setPersonForm({
+                            ...personForm,
+                            policeVerification: e.target.files[0],
+                          })
+                        }
+                      />
+                    )}
+                    {personForm.hepType === "3" && (
+                      <FileUploadBox
+                        label="Passport"
+                        isRequired
+                        file={personForm.passportDoc}
+                        existingFileName={personForm.existingPassportName}
+                        onView={() =>
+                          handleViewDoc(
+                            personForm.existingPassRequestId,
+                            "passportDoc",
+                            personForm.existingPassportName,
+                            personForm.editIndex,
+                          )
+                        }
+                        onChange={(e) =>
+                          setPersonForm({
+                            ...personForm,
+                            passportDoc: e.target.files[0],
+                          })
+                        }
+                      />
+                    )}
+                    {(String(personForm.accessArea)
+                      .toUpperCase()
+                      .includes("OIL JETTY") ||
+                      String(personForm.accessArea) === "1") && (
+                      <FileUploadBox
+                        label="Entry Authorization Document"
+                        isRequired
+                        file={personForm.entryAuthorization}
+                        existingFileName={personForm.existingEntryAuthName}
+                        onView={() =>
+                          handleViewDoc(
+                            personForm.existingPassRequestId,
+                            "entryAuthorization",
+                            personForm.existingEntryAuthName,
+                            personForm.editIndex,
+                          )
+                        }
+                        onChange={(e) =>
+                          setPersonForm({
+                            ...personForm,
+                            entryAuthorization: e.target.files[0],
+                          })
+                        }
+                      />
+                    )}
                   </div>
-                )}
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -6582,14 +7728,16 @@ console.log(vehicleData);
                       const hasVal = !!vehicleForm.regNo.trim();
                       const hasError = !!vehicleErrors.regNo;
 
-                      let customBorderClass = "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
+                      let customBorderClass =
+                        "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
                       if (hasVal) {
                         customBorderClass = hasError
                           ? "border-red-400 focus:border-red-500 focus:ring-red-500/20"
                           : "border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/20";
                       }
 
-                      const baseInputClass = "w-full h-10 rounded-lg text-sm px-3 shadow-sm bg-white outline-none transition-all border focus:ring-2";
+                      const baseInputClass =
+                        "w-full h-10 rounded-lg text-sm px-3 shadow-sm bg-white outline-none transition-all border focus:ring-2";
 
                       return (
                         <>
@@ -6613,13 +7761,11 @@ console.log(vehicleData);
                             maxLength={13}
                           /> */}
                           <div className="relative">
-
                             <input
                               type="text"
                               value={vehicleForm.regNo}
                               readOnly={vehicleVerification.loading}
                               onChange={handleVehicleNumberChange}
-
                               // onChange={(e) => {
                               //   const val = e.target.value.toUpperCase().slice(0, 13);
                               //   setVehicleForm({ ...vehicleForm, regNo: val });
@@ -6636,59 +7782,56 @@ console.log(vehicleData);
                               placeholder="TN-XX-XX-XXXX"
                               maxLength={13}
                             />
-                            {
-                            vehicleVerification.loading &&
-                            <Loader2
-                            className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin h-4 w-4 text-orange-500"
-                            />
-                            }
-
+                            {vehicleVerification.loading && (
+                              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin h-4 w-4 text-orange-500" />
+                            )}
                           </div>
                           {hasVal && (
                             <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all">
                               {hasError ? (
                                 <>
                                   <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                  <span className="text-red-500">{vehicleErrors.regNo}</span>
+                                  <span className="text-red-500">
+                                    {vehicleErrors.regNo}
+                                  </span>
                                 </>
                               ) : (
                                 <>
                                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                                  <span className="text-emerald-600">Vehicle number format is valid</span>
+                                  <span className="text-emerald-600">
+                                    Vehicle number format is valid
+                                  </span>
                                 </>
                               )}
                             </div>
                           )}
-                          {!hasError && blacklistWarnings["VEHICLE_" + vehicleForm.regNo.replace(/[\s-]/g, "")] && (
-                            <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
-                              <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
-                              <span>PORT BLACKLISTED — {blacklistWarnings["VEHICLE_" + vehicleForm.regNo.replace(/[\s-]/g, "")]?.replace("⚠️ BLACKLISTED ", "")}</span>
-                            </div>
-                          )}
-                          {
-                            vehicleVerification.message &&
-
+                          {!hasError &&
+                            blacklistWarnings[
+                              "VEHICLE_" +
+                                vehicleForm.regNo.replace(/[\s-]/g, "")
+                            ] && (
+                              <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
+                                <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
+                                <span>
+                                  PORT BLACKLISTED —{" "}
+                                  {blacklistWarnings[
+                                    "VEHICLE_" +
+                                      vehicleForm.regNo.replace(/[\s-]/g, "")
+                                  ]?.replace("⚠️ BLACKLISTED ", "")}
+                                </span>
+                              </div>
+                            )}
+                          {vehicleVerification.message && (
                             <p
-
-                            className={`text-xs mt-1 ${
-                            vehicleVerification.verified
-                            ?
-                            "text-green-600"
-                            :
-                            "text-red-600"
-                            }`}
-
+                              className={`text-xs mt-1 ${
+                                vehicleVerification.verified
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                              }`}
                             >
-
-                            {
-
-                            vehicleVerification.message
-
-                            }
-
+                              {vehicleVerification.message}
                             </p>
-
-                            }
+                          )}
                         </>
                       );
                     })()}
@@ -6755,21 +7898,33 @@ console.log(vehicleData);
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Insurance Expiry Date
                     </label>
+
                     <div className="relative flex items-center">
                       <input
                         type="text"
                         placeholder="DD/MM/YYYY"
                         maxLength={10}
                         value={formatISOToDDMMYYYY(vehicleForm.insuranceExpiry)}
+                        readOnly={ulipVehicleFetched}
                         onChange={(e) => {
+                          // Once VAHAN has returned data,
+                          // this field must not be editable.
+                          if (ulipVehicleFetched) return;
+
                           let input = e.target.value.replace(/\D/g, "");
-                          if (input.length > 8) input = input.substring(0, 8);
+
+                          if (input.length > 8) {
+                            input = input.substring(0, 8);
+                          }
 
                           let formatted = "";
+
                           if (input.length > 0) {
                             formatted += input.substring(0, 2);
+
                             if (input.length >= 3) {
                               formatted += "/" + input.substring(2, 4);
+
                               if (input.length >= 5) {
                                 formatted += "/" + input.substring(4, 8);
                               }
@@ -6778,78 +7933,137 @@ console.log(vehicleData);
 
                           const iso = formatDDMMYYYYToISO(formatted);
                           const val = iso || formatted;
+
                           setVehicleForm((prev) => ({
                             ...prev,
                             insuranceExpiry: val,
                           }));
+
                           validateVehicleField("insuranceExpiry", val);
                         }}
-                        className={`${inputClass} pr-10 ${vehicleErrors.insuranceExpiry ? "border-red-400" : ""}`}
+                        className={`${inputClass} pr-10 ${
+                          vehicleErrors.insuranceExpiry ? "border-red-400" : ""
+                        } ${
+                          ulipVehicleFetched
+                            ? "bg-slate-50 cursor-not-allowed"
+                            : ""
+                        }`}
                       />
+
+                      {/* =========================================
+                          RIGHT SIDE STATUS ICON
+                          ========================================= */}
                       <div className="absolute right-2 flex items-center">
-                        <input
-                          type="date"
-                          id="ins-hidden-picker"
-                          tabIndex={-1}
-                          value={
-                            vehicleForm.insuranceExpiry && vehicleForm.insuranceExpiry.includes("-")
-                              ? vehicleForm.insuranceExpiry
-                              : formatDDMMYYYYToISO(vehicleForm.insuranceExpiry)
-                          }
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              setVehicleForm((prev) => ({
-                                ...prev,
-                                insuranceExpiry: e.target.value,
-                              }));
-                              validateVehicleField("insuranceExpiry", e.target.value);
-                            }
-                          }}
-                          className="sr-only"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const picker = document.getElementById("ins-hidden-picker");
-                            if (picker && typeof picker.showPicker === "function") {
-                              picker.showPicker();
-                            } else if (picker) {
-                              picker.focus();
-                              picker.click();
-                            }
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                          title="Choose Insurance Expiry Date"
-                        >
-                          <Calendar className="h-4 w-4" />
-                        </button>
+                        {ulipVehicleFetched ? (
+                          ulipVehicleActive ? (
+                            <CheckCircle2
+                              className="h-5 w-5 text-blue-600"
+                              strokeWidth={2.5}
+                              title="Insurance verified by VAHAN"
+                            />
+                          ) : (
+                            <XCircle
+                              className="h-5 w-5 text-red-500"
+                              strokeWidth={2.5}
+                              title="Vehicle is inactive according to VAHAN"
+                            />
+                          )
+                        ) : (
+                          <>
+                            <input
+                              type="date"
+                              id="ins-hidden-picker"
+                              tabIndex={-1}
+                              value={
+                                vehicleForm.insuranceExpiry &&
+                                vehicleForm.insuranceExpiry.includes("-")
+                                  ? vehicleForm.insuranceExpiry
+                                  : formatDDMMYYYYToISO(
+                                      vehicleForm.insuranceExpiry,
+                                    )
+                              }
+                              onChange={(e) => {
+                                if (ulipVehicleFetched) return;
+
+                                if (e.target.value) {
+                                  setVehicleForm((prev) => ({
+                                    ...prev,
+                                    insuranceExpiry: e.target.value,
+                                  }));
+
+                                  validateVehicleField(
+                                    "insuranceExpiry",
+                                    e.target.value,
+                                  );
+                                }
+                              }}
+                              className="sr-only"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const picker =
+                                  document.getElementById("ins-hidden-picker");
+
+                                if (
+                                  picker &&
+                                  typeof picker.showPicker === "function"
+                                ) {
+                                  picker.showPicker();
+                                } else if (picker) {
+                                  picker.focus();
+                                  picker.click();
+                                }
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                              title="Choose Insurance Expiry Date"
+                            >
+                              <Calendar className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
+
                     {vehicleErrors.insuranceExpiry && (
                       <p className="text-xs text-red-500 mt-0.5 font-medium">
                         {vehicleErrors.insuranceExpiry}
                       </p>
                     )}
                   </div>
+
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       RC Validity Date
                     </label>
+
                     <div className="relative flex items-center">
                       <input
                         type="text"
                         placeholder="DD/MM/YYYY"
                         maxLength={10}
                         value={formatISOToDDMMYYYY(vehicleForm.rcValidity)}
+                        readOnly={ulipVehicleFetched}
                         onChange={(e) => {
+                          // Once VAHAN has returned data,
+                          // this field must not be editable.
+                          if (ulipVehicleFetched) return;
+
                           let input = e.target.value.replace(/\D/g, "");
-                          if (input.length > 8) input = input.substring(0, 8);
+
+                          if (input.length > 8) {
+                            input = input.substring(0, 8);
+                          }
 
                           let formatted = "";
+
                           if (input.length > 0) {
                             formatted += input.substring(0, 2);
+
                             if (input.length >= 3) {
                               formatted += "/" + input.substring(2, 4);
+
                               if (input.length >= 5) {
                                 formatted += "/" + input.substring(4, 8);
                               }
@@ -6858,53 +8072,97 @@ console.log(vehicleData);
 
                           const iso = formatDDMMYYYYToISO(formatted);
                           const val = iso || formatted;
+
                           setVehicleForm((prev) => ({
                             ...prev,
                             rcValidity: val,
                           }));
+
                           validateVehicleField("rcValidity", val);
                         }}
-                        className={`${inputClass} pr-10 ${vehicleErrors.rcValidity ? "border-red-400" : ""}`}
+                        className={`${inputClass} pr-10 ${
+                          vehicleErrors.rcValidity ? "border-red-400" : ""
+                        } ${
+                          ulipVehicleFetched
+                            ? "bg-slate-50 cursor-not-allowed"
+                            : ""
+                        }`}
                       />
+
+                      {/* =========================================
+                          RIGHT SIDE STATUS ICON
+                          ========================================= */}
                       <div className="absolute right-2 flex items-center">
-                        <input
-                          type="date"
-                          id="rc-hidden-picker"
-                          tabIndex={-1}
-                          value={
-                            vehicleForm.rcValidity && vehicleForm.rcValidity.includes("-")
-                              ? vehicleForm.rcValidity
-                              : formatDDMMYYYYToISO(vehicleForm.rcValidity)
-                          }
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              setVehicleForm((prev) => ({
-                                ...prev,
-                                rcValidity: e.target.value,
-                              }));
-                              validateVehicleField("rcValidity", e.target.value);
-                            }
-                          }}
-                          className="sr-only"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const picker = document.getElementById("rc-hidden-picker");
-                            if (picker && typeof picker.showPicker === "function") {
-                              picker.showPicker();
-                            } else if (picker) {
-                              picker.focus();
-                              picker.click();
-                            }
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                          title="Choose RC Validity Date"
-                        >
-                          <Calendar className="h-4 w-4" />
-                        </button>
+                        {ulipVehicleFetched ? (
+                          ulipVehicleActive ? (
+                            <CheckCircle2
+                              className="h-5 w-5 text-blue-600"
+                              strokeWidth={2.5}
+                              title="RC validity verified by VAHAN"
+                            />
+                          ) : (
+                            <XCircle
+                              className="h-5 w-5 text-red-500"
+                              strokeWidth={2.5}
+                              title="Vehicle is inactive according to VAHAN"
+                            />
+                          )
+                        ) : (
+                          <>
+                            <input
+                              type="date"
+                              id="rc-hidden-picker"
+                              tabIndex={-1}
+                              value={
+                                vehicleForm.rcValidity &&
+                                vehicleForm.rcValidity.includes("-")
+                                  ? vehicleForm.rcValidity
+                                  : formatDDMMYYYYToISO(vehicleForm.rcValidity)
+                              }
+                              onChange={(e) => {
+                                if (ulipVehicleFetched) return;
+
+                                if (e.target.value) {
+                                  setVehicleForm((prev) => ({
+                                    ...prev,
+                                    rcValidity: e.target.value,
+                                  }));
+
+                                  validateVehicleField(
+                                    "rcValidity",
+                                    e.target.value,
+                                  );
+                                }
+                              }}
+                              className="sr-only"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const picker =
+                                  document.getElementById("rc-hidden-picker");
+
+                                if (
+                                  picker &&
+                                  typeof picker.showPicker === "function"
+                                ) {
+                                  picker.showPicker();
+                                } else if (picker) {
+                                  picker.focus();
+                                  picker.click();
+                                }
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                              title="Choose RC Validity Date"
+                            >
+                              <Calendar className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
+
                     {vehicleErrors.rcValidity && (
                       <p className="text-xs text-red-500 mt-0.5 font-medium">
                         {vehicleErrors.rcValidity}
@@ -6945,31 +8203,44 @@ console.log(vehicleData);
                           }
                           className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                         >
-                          {masterData.passTypes
-                            .map((t) => {
-                              const val = String(t.id || t.value);
-                              const name = String(t.label || t.name || "").toUpperCase();
-                              let isLocked = false;
-                              let lockSuffix = "";
-                              if (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && !generalForm.isLicenseExpired) {
-                                if ((val === "2" || name.includes("MONTHLY")) && generalForm.remainingDays < 30) {
-                                  isLocked = true;
-                                  lockSuffix = ` (Locked — License expires in ${generalForm.remainingDays} days)`;
-                                } else if ((val === "3" || name.includes("YEARLY") || name.includes("ANNUAL")) && generalForm.remainingDays < 365) {
-                                  isLocked = true;
-                                  lockSuffix = ` (Locked — License expires in ${generalForm.remainingDays} days)`;
-                                }
+                          {masterData.passTypes.map((t) => {
+                            const val = String(t.id || t.value);
+                            const name = String(
+                              t.label || t.name || "",
+                            ).toUpperCase();
+                            let isLocked = false;
+                            let lockSuffix = "";
+                            if (
+                              generalForm.remainingDays !== null &&
+                              generalForm.remainingDays !== undefined &&
+                              !generalForm.isLicenseExpired
+                            ) {
+                              if (
+                                (val === "2" || name.includes("MONTHLY")) &&
+                                generalForm.remainingDays < 30
+                              ) {
+                                isLocked = true;
+                                lockSuffix = ` (Locked — License expires in ${generalForm.remainingDays} days)`;
+                              } else if (
+                                (val === "3" ||
+                                  name.includes("YEARLY") ||
+                                  name.includes("ANNUAL")) &&
+                                generalForm.remainingDays < 365
+                              ) {
+                                isLocked = true;
+                                lockSuffix = ` (Locked — License expires in ${generalForm.remainingDays} days)`;
                               }
-                              return (
-                                <option
-                                  key={t.id || t.value}
-                                  value={t.id || t.value}
-                                  disabled={isLocked}
-                                >
-                                  {(t.label || t.name) + lockSuffix}
-                                </option>
-                              );
-                            })}
+                            }
+                            return (
+                              <option
+                                key={t.id || t.value}
+                                value={t.id || t.value}
+                                disabled={isLocked}
+                              >
+                                {(t.label || t.name) + lockSuffix}
+                              </option>
+                            );
+                          })}
                         </select>
                       </td>
                       <td className="p-3 border-r border-slate-200">
@@ -6980,7 +8251,13 @@ console.log(vehicleData);
                             min="1"
                             max={
                               String(vehicleForm.passType) === "1"
-                                ? (generalForm.remainingDays !== null && generalForm.remainingDays !== undefined && generalForm.remainingDays < 7 ? String(Math.max(1, generalForm.remainingDays)) : "7")
+                                ? generalForm.remainingDays !== null &&
+                                  generalForm.remainingDays !== undefined &&
+                                  generalForm.remainingDays < 7
+                                  ? String(
+                                      Math.max(1, generalForm.remainingDays),
+                                    )
+                                  : "7"
                                 : "1"
                             }
                             disabled={String(vehicleForm.passType) !== "1"}
@@ -7002,9 +8279,13 @@ console.log(vehicleData);
                           <input
                             type="text"
                             placeholder="DD/MM/YYYY, hh:mm AM/PM"
-                            value={formatDateTimeISOToDisplay(vehicleForm.dateFrom)}
+                            value={formatDateTimeISOToDisplay(
+                              vehicleForm.dateFrom,
+                            )}
                             onChange={(e) => {
-                              const iso = formatDateTimeDisplayToISO(e.target.value);
+                              const iso = formatDateTimeDisplayToISO(
+                                e.target.value,
+                              );
                               if (iso) {
                                 setVehicleForm((prev) => ({
                                   ...prev,
@@ -7034,8 +8315,13 @@ console.log(vehicleData);
                             <button
                               type="button"
                               onClick={() => {
-                                const picker = document.getElementById("dateFrom-vehicle-hidden-picker");
-                                if (picker && typeof picker.showPicker === "function") {
+                                const picker = document.getElementById(
+                                  "dateFrom-vehicle-hidden-picker",
+                                );
+                                if (
+                                  picker &&
+                                  typeof picker.showPicker === "function"
+                                ) {
                                   picker.showPicker();
                                 } else if (picker) {
                                   picker.focus();
@@ -7063,7 +8349,6 @@ console.log(vehicleData);
                 </table>
               </div>
 
-
               <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-orange-500" /> 2. Mandatory
@@ -7080,7 +8365,7 @@ console.log(vehicleData);
                         vehicleForm.existingPassRequestId,
                         "vehicleRC",
                         vehicleForm.existingRcName,
-                        vehicleForm.editIndex
+                        vehicleForm.editIndex,
                       )
                     }
                     onChange={(e) =>
@@ -7100,7 +8385,7 @@ console.log(vehicleData);
                         vehicleForm.existingPassRequestId,
                         "vehicleInsurance",
                         vehicleForm.existingInsName,
-                        vehicleForm.editIndex
+                        vehicleForm.editIndex,
                       )
                     }
                     onChange={(e) =>
@@ -7121,7 +8406,7 @@ console.log(vehicleData);
                           vehicleForm.existingPassRequestId,
                           "vehiclePermit",
                           vehicleForm.existingPermitName,
-                          vehicleForm.editIndex
+                          vehicleForm.editIndex,
                         )
                       }
                       onChange={(e) =>
@@ -7142,7 +8427,7 @@ console.log(vehicleData);
                         vehicleForm.existingPassRequestId,
                         "vehicleFitness",
                         vehicleForm.existingFitnessName,
-                        vehicleForm.editIndex
+                        vehicleForm.editIndex,
                       )
                     }
                     onChange={(e) =>
@@ -7152,7 +8437,10 @@ console.log(vehicleData);
                       })
                     }
                   />
-                  {(String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") || String(vehicleForm.accessArea) === "1") && (
+                  {(String(vehicleForm.accessArea)
+                    .toUpperCase()
+                    .includes("OIL JETTY") ||
+                    String(vehicleForm.accessArea) === "1") && (
                     <FileUploadBox
                       label="Spark Arrester Certificate"
                       isRequired
@@ -7163,7 +8451,7 @@ console.log(vehicleData);
                           vehicleForm.existingPassRequestId,
                           "sparkArrester",
                           vehicleForm.existingSparkArresterName,
-                          vehicleForm.editIndex
+                          vehicleForm.editIndex,
                         )
                       }
                       onChange={(e) =>
@@ -7174,7 +8462,9 @@ console.log(vehicleData);
                       }
                     />
                   )}
-                  {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) && (
+                  {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                    String(vehicleForm.passType),
+                  ) && (
                     <FileUploadBox
                       label="Twist Lock Certificate"
                       isRequired
@@ -7185,7 +8475,7 @@ console.log(vehicleData);
                           vehicleForm.existingPassRequestId,
                           "twistLock",
                           vehicleForm.existingTwistLockName,
-                          vehicleForm.editIndex
+                          vehicleForm.editIndex,
                         )
                       }
                       onChange={(e) =>
@@ -7197,32 +8487,40 @@ console.log(vehicleData);
                     />
                   )}
 
-                  {(["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) ||
-                    ((String(vehicleForm.passType) === "1" || String(vehicleForm.passType).toUpperCase() === "DAILY") &&
-                      (String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") || String(vehicleForm.accessArea) === "1"))) && (
-                      <FileUploadBox
-                        label="Request Letters"
-                        isRequired
-                        file={vehicleForm.requestLetter}
-                        existingFileName={vehicleForm.existingReqName}
-                        onView={() =>
-                          handleViewDoc(
-                            vehicleForm.existingPassRequestId,
-                            "vehicleRequestLetter",
-                            vehicleForm.existingReqName,
-                            vehicleForm.editIndex
-                          )
-                        }
-                        onChange={(e) =>
-                          setVehicleForm({
-                            ...vehicleForm,
-                            requestLetter: e.target.files[0],
-                          })
-                        }
-                      />
-                    )}
+                  {(["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                    String(vehicleForm.passType),
+                  ) ||
+                    ((String(vehicleForm.passType) === "1" ||
+                      String(vehicleForm.passType).toUpperCase() === "DAILY") &&
+                      (String(vehicleForm.accessArea)
+                        .toUpperCase()
+                        .includes("OIL JETTY") ||
+                        String(vehicleForm.accessArea) === "1"))) && (
+                    <FileUploadBox
+                      label="Request Letters"
+                      isRequired
+                      file={vehicleForm.requestLetter}
+                      existingFileName={vehicleForm.existingReqName}
+                      onView={() =>
+                        handleViewDoc(
+                          vehicleForm.existingPassRequestId,
+                          "vehicleRequestLetter",
+                          vehicleForm.existingReqName,
+                          vehicleForm.editIndex,
+                        )
+                      }
+                      onChange={(e) =>
+                        setVehicleForm({
+                          ...vehicleForm,
+                          requestLetter: e.target.files[0],
+                        })
+                      }
+                    />
+                  )}
 
-                  {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) && (
+                  {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                    String(vehicleForm.passType),
+                  ) && (
                     <>
                       <FileUploadBox
                         label="Tax Document"
@@ -7234,7 +8532,7 @@ console.log(vehicleData);
                             vehicleForm.existingPassRequestId,
                             "vehicleTax",
                             vehicleForm.existingTaxName,
-                            vehicleForm.editIndex
+                            vehicleForm.editIndex,
                           )
                         }
                         onChange={(e) =>
@@ -7254,7 +8552,7 @@ console.log(vehicleData);
                             vehicleForm.existingPassRequestId,
                             "vehicleEmission",
                             vehicleForm.existingEmissionName,
-                            vehicleForm.editIndex
+                            vehicleForm.editIndex,
                           )
                         }
                         onChange={(e) =>
@@ -7318,7 +8616,9 @@ console.log(vehicleData);
                   {(() => {
                     const catInfo = getPassRequestCategory(selectedPassDetails);
                     return (
-                      <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${catInfo.badgeClass}`}>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${catInfo.badgeClass}`}
+                      >
                         {catInfo.label}
                       </span>
                     );
@@ -7360,25 +8660,25 @@ console.log(vehicleData);
                       type="text"
                       value={
                         selectedPassDetails.createdAt ||
-                          selectedPassDetails.created_at ||
-                          selectedPassDetails.submittedAt ||
-                          selectedPassDetails.submitted_at ||
-                          selectedPassDetails.createdat ||
-                          selectedPassDetails.submittedat
+                        selectedPassDetails.created_at ||
+                        selectedPassDetails.submittedAt ||
+                        selectedPassDetails.submitted_at ||
+                        selectedPassDetails.createdat ||
+                        selectedPassDetails.submittedat
                           ? new Date(
-                            selectedPassDetails.createdAt ||
-                            selectedPassDetails.created_at ||
-                            selectedPassDetails.submittedAt ||
-                            selectedPassDetails.submitted_at ||
-                            selectedPassDetails.createdat ||
-                            selectedPassDetails.submittedat,
-                          ).toLocaleString("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
+                              selectedPassDetails.createdAt ||
+                                selectedPassDetails.created_at ||
+                                selectedPassDetails.submittedAt ||
+                                selectedPassDetails.submitted_at ||
+                                selectedPassDetails.createdat ||
+                                selectedPassDetails.submittedat,
+                            ).toLocaleString("en-IN", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
                           : "-"
                       }
                     />
@@ -7415,11 +8715,12 @@ console.log(vehicleData);
                       Status
                     </label>
                     <input
-                      className={`w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold cursor-not-allowed ${(selectedPassDetails.status || "").toUpperCase() ===
+                      className={`w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold cursor-not-allowed ${
+                        (selectedPassDetails.status || "").toUpperCase() ===
                         "APPROVED"
-                        ? "text-emerald-600"
-                        : "text-orange-600"
-                        }`}
+                          ? "text-emerald-600"
+                          : "text-orange-600"
+                      }`}
                       readOnly
                       type="text"
                       value={(
@@ -7458,7 +8759,7 @@ console.log(vehicleData);
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {selectedPassDetails.persons &&
-                          selectedPassDetails.persons.length > 0 ? (
+                        selectedPassDetails.persons.length > 0 ? (
                           selectedPassDetails.persons.map((p, i) => (
                             <tr
                               key={i}
@@ -7481,10 +8782,14 @@ console.log(vehicleData);
                                 {(() => {
                                   const pCat = getItemCategoryTag(p, true);
                                   return pCat ? (
-                                    <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}>
+                                    <span
+                                      className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}
+                                    >
                                       {pCat.label}
                                     </span>
-                                  ) : "-";
+                                  ) : (
+                                    "-"
+                                  );
                                 })()}
                               </td>
                               <td className="p-3">
@@ -7495,13 +8800,18 @@ console.log(vehicleData);
                                 ) : (
                                   <span
                                     className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                                      String(p.status || "").toUpperCase() === "APPROVED"
+                                      String(p.status || "").toUpperCase() ===
+                                      "APPROVED"
                                         ? "bg-emerald-100 text-emerald-700"
-                                        : String(p.status || "").toUpperCase() === "REJECTED"
-                                        ? "bg-red-100 text-red-700"
-                                        : String(p.status || "").toUpperCase() === "REVERTED"
-                                        ? "bg-amber-100 text-amber-700"
-                                        : "bg-blue-100 text-blue-700"
+                                        : String(
+                                              p.status || "",
+                                            ).toUpperCase() === "REJECTED"
+                                          ? "bg-red-100 text-red-700"
+                                          : String(
+                                                p.status || "",
+                                              ).toUpperCase() === "REVERTED"
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-blue-100 text-blue-700"
                                     }`}
                                   >
                                     {(p.status || "PENDING").toUpperCase()}
@@ -7569,7 +8879,7 @@ console.log(vehicleData);
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {selectedPassDetails.vehicles &&
-                          selectedPassDetails.vehicles.length > 0 ? (
+                        selectedPassDetails.vehicles.length > 0 ? (
                           selectedPassDetails.vehicles.map((v, i) => (
                             <tr
                               key={i}
@@ -7586,16 +8896,22 @@ console.log(vehicleData);
                                 {v.vehiclePassNo || "-"}
                               </td>
                               <td className="p-3 text-sm font-bold text-[#0a1e4d] uppercase">
-                                {v.registrationNo || v.registration_no || v.regNo}
+                                {v.registrationNo ||
+                                  v.registration_no ||
+                                  v.regNo}
                               </td>
                               <td className="p-3">
                                 {(() => {
                                   const vCat = getItemCategoryTag(v, false);
                                   return vCat ? (
-                                    <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}>
+                                    <span
+                                      className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}
+                                    >
                                       {vCat.label}
                                     </span>
-                                  ) : "-";
+                                  ) : (
+                                    "-"
+                                  );
                                 })()}
                               </td>
                               <td className="p-3">
@@ -7606,13 +8922,18 @@ console.log(vehicleData);
                                 ) : (
                                   <span
                                     className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                                      String(v.status || "").toUpperCase() === "APPROVED"
+                                      String(v.status || "").toUpperCase() ===
+                                      "APPROVED"
                                         ? "bg-emerald-100 text-emerald-700"
-                                        : String(v.status || "").toUpperCase() === "REJECTED"
-                                        ? "bg-red-100 text-red-700"
-                                        : String(v.status || "").toUpperCase() === "REVERTED"
-                                        ? "bg-amber-100 text-amber-700"
-                                        : "bg-blue-100 text-blue-700"
+                                        : String(
+                                              v.status || "",
+                                            ).toUpperCase() === "REJECTED"
+                                          ? "bg-red-100 text-red-700"
+                                          : String(
+                                                v.status || "",
+                                              ).toUpperCase() === "REVERTED"
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-blue-100 text-blue-700"
                                     }`}
                                   >
                                     {(v.status || "PENDING").toUpperCase()}
@@ -7635,7 +8956,7 @@ console.log(vehicleData);
                                     -
                                   </span>
                                 )}
-                            </td>
+                              </td>
                             </tr>
                           ))
                         ) : (
@@ -7669,7 +8990,13 @@ console.log(vehicleData);
       <FaceCaptureDialog
         open={faceCaptureOpen}
         onClose={() => setFaceCaptureOpen(false)}
-        passId={personForm.passId || personForm.personPassNo || personForm.passNo || personForm.cardNumber || null}
+        passId={
+          personForm.passId ||
+          personForm.personPassNo ||
+          personForm.passNo ||
+          personForm.cardNumber ||
+          null
+        }
         onUsePhoto={(file) => {
           setPersonForm((prev) => ({
             ...prev,
@@ -7815,7 +9142,8 @@ console.log(vehicleData);
 
               {/* REVERT REASON BANNER (IF APPLICABLE) */}
               {String(entityModal.data.status).toUpperCase() === "REVERTED" &&
-                (entityModal.data.revertReason || entityModal.data.rejectedReason) && (
+                (entityModal.data.revertReason ||
+                  entityModal.data.rejectedReason) && (
                   <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3">
                     <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
                     <div>
@@ -7823,7 +9151,8 @@ console.log(vehicleData);
                         Action Required - Application Reverted
                       </h4>
                       <p className="text-sm text-amber-700 font-medium">
-                        {entityModal.data.revertReason || entityModal.data.rejectedReason}
+                        {entityModal.data.revertReason ||
+                          entityModal.data.rejectedReason}
                       </p>
                       <p className="text-xs text-amber-600 mt-2">
                         Please update the required information and re-submit.
@@ -7838,16 +9167,15 @@ console.log(vehicleData);
                     Full Submitted Preview (Read-Only)
                   </h4>
                   <div className="flex items-center gap-4">
-
                     <span
-                        className={`px-3 py-1 rounded-full text-xs font-bold
+                      className={`px-3 py-1 rounded-full text-xs font-bold
                         ${
-                            entityModal.data.passStatus === "DISABLED"
+                          isPassDisabled(entityModal.data)
                             ? "bg-red-100 text-red-700"
                             : "bg-green-100 text-green-700"
                         }`}
                     >
-                        {entityModal.data.passStatus || "ACTIVE"}
+                      {getPassStatus(entityModal.data)}
                     </span>
 
                     {isPassApprovedAndActive(entityModal.data) ? (
@@ -7866,52 +9194,62 @@ console.log(vehicleData);
                         {enableLoading ? "Enabling..." : "Enable Pass"}
                       </button>
                     ) : null}
-
-                </div>
+                  </div>
                   {entityModal.type === "person" &&
-                    (String(entityModal.data.passType).toUpperCase() === "YEARLY" ||
-                      String(entityModal.data.passType).toUpperCase() === "ANNUAL" ||
+                    (String(entityModal.data.passType).toUpperCase() ===
+                      "YEARLY" ||
+                      String(entityModal.data.passType).toUpperCase() ===
+                        "ANNUAL" ||
                       String(entityModal.data.passType) === "3") &&
                     (entityModal.data.withTwoWheeler === true ||
                       String(entityModal.data.withTwoWheeler) === "true") &&
-                    String(entityModal.data.status).toUpperCase() === "APPROVED" && (
-                      (() => {
-                        const count = parseInt(entityModal.data.twoWheelerChangeCount || 0, 10);
-                        if (count >= 3) {
-                          return (
-                            <button
-                              onClick={() => {
-                                toast.error("Change Limit Reached: You have already changed the two-wheeler vehicle number 3 times this year. Further changes are not allowed.");
-                              }}
-                              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <Edit className="h-3.5 w-3.5 text-red-200" />
-                              Change Two-Wheeler No.
-                            </button>
-                          );
-                        }
-                        const pendingReq = twoWheelerRequests.find(
-                          (r) => String(r.personId) === String(entityModal.data.id) && r.status === "PENDING"
-                        );
-                        if (pendingReq) {
-                          return (
-                            <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 border border-amber-300 shadow-sm">
-                              <Clock className="h-3.5 w-3.5 text-amber-600 animate-pulse" />
-                              Update Pending ({pendingReq.newVehicleNo})
-                            </span>
-                          );
-                        }
+                    String(entityModal.data.status).toUpperCase() ===
+                      "APPROVED" &&
+                    (() => {
+                      const count = parseInt(
+                        entityModal.data.twoWheelerChangeCount || 0,
+                        10,
+                      );
+                      if (count >= 3) {
                         return (
                           <button
-                            onClick={() => handleOpenTwoWheelerModal(entityModal.data)}
-                            className="bg-[#0a1e4d] hover:bg-blue-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow flex items-center gap-1.5"
+                            onClick={() => {
+                              toast.error(
+                                "Change Limit Reached: You have already changed the two-wheeler vehicle number 3 times this year. Further changes are not allowed.",
+                              );
+                            }}
+                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow flex items-center gap-1.5 cursor-pointer"
                           >
-                            <Edit className="h-3.5 w-3.5 text-orange-400" />
+                            <Edit className="h-3.5 w-3.5 text-red-200" />
                             Change Two-Wheeler No.
                           </button>
                         );
-                      })()
-                    )}
+                      }
+                      const pendingReq = twoWheelerRequests.find(
+                        (r) =>
+                          String(r.personId) === String(entityModal.data.id) &&
+                          r.status === "PENDING",
+                      );
+                      if (pendingReq) {
+                        return (
+                          <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 border border-amber-300 shadow-sm">
+                            <Clock className="h-3.5 w-3.5 text-amber-600 animate-pulse" />
+                            Update Pending ({pendingReq.newVehicleNo})
+                          </span>
+                        );
+                      }
+                      return (
+                        <button
+                          onClick={() =>
+                            handleOpenTwoWheelerModal(entityModal.data)
+                          }
+                          className="bg-[#0a1e4d] hover:bg-blue-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow flex items-center gap-1.5"
+                        >
+                          <Edit className="h-3.5 w-3.5 text-orange-400" />
+                          Change Two-Wheeler No.
+                        </button>
+                      );
+                    })()}
                 </div>
                 <div className="p-5 grid grid-cols-2 md:grid-cols-3 gap-y-6 gap-x-4">
                   {entityModal.type === "person" ? (
@@ -7945,7 +9283,9 @@ console.log(vehicleData);
                       />
                       <DetailItem
                         label="Access Area"
-                        value={entityModal.data.accessArea || "OTHER GATES ONLY"}
+                        value={
+                          entityModal.data.accessArea || "OTHER GATES ONLY"
+                        }
                       />
                       <DetailItem
                         label="Aadhar No."
@@ -7984,7 +9324,9 @@ console.log(vehicleData);
                         label="Valid From"
                         value={
                           entityModal.data.dateFrom
-                            ? new Date(entityModal.data.dateFrom).toLocaleDateString("en-GB")
+                            ? new Date(
+                                entityModal.data.dateFrom,
+                              ).toLocaleDateString("en-GB")
                             : "-"
                         }
                       />
@@ -7992,7 +9334,9 @@ console.log(vehicleData);
                         label="Valid To"
                         value={
                           entityModal.data.dateTo
-                            ? new Date(entityModal.data.dateTo).toLocaleDateString("en-GB")
+                            ? new Date(
+                                entityModal.data.dateTo,
+                              ).toLocaleDateString("en-GB")
                             : "-"
                         }
                       />
@@ -8000,7 +9344,7 @@ console.log(vehicleData);
                         label="Two-Wheeler Availed"
                         value={
                           entityModal.data.withTwoWheeler === true ||
-                            String(entityModal.data.withTwoWheeler) === "true"
+                          String(entityModal.data.withTwoWheeler) === "true"
                             ? "Yes"
                             : "No"
                         }
@@ -8035,10 +9379,31 @@ console.log(vehicleData);
                         value={
                           entityModal.data.vehicleTypeName ||
                           entityModal.data.vehicle_type_name ||
-                          (masterData?.vehicleTypes && getLabelById(masterData.vehicleTypes, entityModal.data.vehicleTypeId || entityModal.data.vehicle_type_id || entityModal.data.vehicleType || entityModal.data.type, "name")) ||
-                          (masterData?.vehicleTypes && getLabelById(masterData.vehicleTypes, entityModal.data.vehicleTypeId || entityModal.data.vehicle_type_id || entityModal.data.vehicleType || entityModal.data.type, "label")) ||
-                          (entityModal.data.vehicleType && isNaN(entityModal.data.vehicleType) ? entityModal.data.vehicleType : null) ||
-                          (entityModal.data.type && isNaN(entityModal.data.type) ? entityModal.data.type : null) ||
+                          (masterData?.vehicleTypes &&
+                            getLabelById(
+                              masterData.vehicleTypes,
+                              entityModal.data.vehicleTypeId ||
+                                entityModal.data.vehicle_type_id ||
+                                entityModal.data.vehicleType ||
+                                entityModal.data.type,
+                              "name",
+                            )) ||
+                          (masterData?.vehicleTypes &&
+                            getLabelById(
+                              masterData.vehicleTypes,
+                              entityModal.data.vehicleTypeId ||
+                                entityModal.data.vehicle_type_id ||
+                                entityModal.data.vehicleType ||
+                                entityModal.data.type,
+                              "label",
+                            )) ||
+                          (entityModal.data.vehicleType &&
+                          isNaN(entityModal.data.vehicleType)
+                            ? entityModal.data.vehicleType
+                            : null) ||
+                          (entityModal.data.type && isNaN(entityModal.data.type)
+                            ? entityModal.data.type
+                            : null) ||
                           entityModal.data.vehicleTypeId ||
                           entityModal.data.type ||
                           "-"
@@ -8046,7 +9411,9 @@ console.log(vehicleData);
                       />
                       <DetailItem
                         label="Access Area"
-                        value={entityModal.data.accessArea || "OTHER GATES ONLY"}
+                        value={
+                          entityModal.data.accessArea || "OTHER GATES ONLY"
+                        }
                       />
                       <DetailItem
                         label="Pass Type"
@@ -8057,7 +9424,9 @@ console.log(vehicleData);
                         label="Valid From"
                         value={
                           entityModal.data.dateFrom
-                            ? new Date(entityModal.data.dateFrom).toLocaleDateString("en-GB")
+                            ? new Date(
+                                entityModal.data.dateFrom,
+                              ).toLocaleDateString("en-GB")
                             : "-"
                         }
                       />
@@ -8065,7 +9434,9 @@ console.log(vehicleData);
                         label="Valid To"
                         value={
                           entityModal.data.dateTo
-                            ? new Date(entityModal.data.dateTo).toLocaleDateString("en-GB")
+                            ? new Date(
+                                entityModal.data.dateTo,
+                              ).toLocaleDateString("en-GB")
                             : "-"
                         }
                       />
@@ -8073,7 +9444,9 @@ console.log(vehicleData);
                         label="Insurance Expiry"
                         value={
                           entityModal.data.insuranceExpiry
-                            ? new Date(entityModal.data.insuranceExpiry).toLocaleDateString("en-GB")
+                            ? new Date(
+                                entityModal.data.insuranceExpiry,
+                              ).toLocaleDateString("en-GB")
                             : "-"
                         }
                       />
@@ -8081,7 +9454,9 @@ console.log(vehicleData);
                         label="RC Validity"
                         value={
                           entityModal.data.rcValidity
-                            ? new Date(entityModal.data.rcValidity).toLocaleDateString("en-GB")
+                            ? new Date(
+                                entityModal.data.rcValidity,
+                              ).toLocaleDateString("en-GB")
                             : "-"
                         }
                       />
@@ -8106,121 +9481,275 @@ console.log(vehicleData);
                     <>
                       {entityModal.data.photoFileName && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "personPhoto", entityModal.data.photoFileName)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "personPhoto",
+                              entityModal.data.photoFileName,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Photo</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" />{" "}
+                            Photo
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
-                      {(entityModal.data.aadharPDFFileName || entityModal.data.aadharFileName) && (
+                      {(entityModal.data.aadharPDFFileName ||
+                        entityModal.data.aadharFileName) && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "personAadhar", entityModal.data.aadharPDFFileName || entityModal.data.aadharFileName)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "personAadhar",
+                              entityModal.data.aadharPDFFileName ||
+                                entityModal.data.aadharFileName,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Aadhar PDF</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" />{" "}
+                            Aadhar PDF
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
-                      {(entityModal.data.idProofFileName || entityModal.data.idProofName) && (
+                      {(entityModal.data.idProofFileName ||
+                        entityModal.data.idProofName) && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "personIdProof", entityModal.data.idProofFileName || entityModal.data.idProofName)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "personIdProof",
+                              entityModal.data.idProofFileName ||
+                                entityModal.data.idProofName,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> ID Proof</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" /> ID
+                            Proof
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
-                      {(entityModal.data.driverLicenseName || entityModal.data.dlName) && (
+                      {(entityModal.data.driverLicenseName ||
+                        entityModal.data.dlName) && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "personDrivingLicense", entityModal.data.driverLicenseName || entityModal.data.dlName)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "personDrivingLicense",
+                              entityModal.data.driverLicenseName ||
+                                entityModal.data.dlName,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Driving Licence</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" />{" "}
+                            Driving Licence
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
-                      {(entityModal.data.policeVerificationName || entityModal.data.policeName) && (
+                      {(entityModal.data.policeVerificationName ||
+                        entityModal.data.policeName) && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "policeVerification", entityModal.data.policeVerificationName || entityModal.data.policeName)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "policeVerification",
+                              entityModal.data.policeVerificationName ||
+                                entityModal.data.policeName,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Police Verification</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" />{" "}
+                            Police Verification
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
-                      {(entityModal.data.employmentProofName || entityModal.data.empName) && (
+                      {(entityModal.data.employmentProofName ||
+                        entityModal.data.empName) && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "employmentProof", entityModal.data.employmentProofName || entityModal.data.empName)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "employmentProof",
+                              entityModal.data.employmentProofName ||
+                                entityModal.data.empName,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Employment Proof</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" />{" "}
+                            Employment Proof
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
-                      {(entityModal.data.visaDocName || entityModal.data.visaDocPath) && (
+                      {(entityModal.data.visaDocName ||
+                        entityModal.data.visaDocPath) && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "visaDoc", entityModal.data.visaDocName || entityModal.data.visaDocPath)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "visaDoc",
+                              entityModal.data.visaDocName ||
+                                entityModal.data.visaDocPath,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Visa</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" />{" "}
+                            Visa
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
-                      {(entityModal.data.immigrationDocName || entityModal.data.immigrationDocPath) && (
+                      {(entityModal.data.immigrationDocName ||
+                        entityModal.data.immigrationDocPath) && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "immigrationDoc", entityModal.data.immigrationDocName || entityModal.data.immigrationDocPath)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "immigrationDoc",
+                              entityModal.data.immigrationDocName ||
+                                entityModal.data.immigrationDocPath,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Immigration Clearance</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" />{" "}
+                            Immigration Clearance
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
-                      {(entityModal.data.passportName || entityModal.data.passportPath) && (
+                      {(entityModal.data.passportName ||
+                        entityModal.data.passportPath) && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "passportDoc", entityModal.data.passportName || entityModal.data.passportPath)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "passportDoc",
+                              entityModal.data.passportName ||
+                                entityModal.data.passportPath,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Passport</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" />{" "}
+                            Passport
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
                     </>
                   ) : (
                     <>
-                      {(entityModal.data.scannedCopyFileName || entityModal.data.rcName) && (
+                      {(entityModal.data.scannedCopyFileName ||
+                        entityModal.data.rcName) && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "vehicleRC", entityModal.data.scannedCopyFileName || entityModal.data.rcName)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "vehicleRC",
+                              entityModal.data.scannedCopyFileName ||
+                                entityModal.data.rcName,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> RC / NOC</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" /> RC
+                            / NOC
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
-                      {(entityModal.data.insuranceFileName || entityModal.data.insName) && (
+                      {(entityModal.data.insuranceFileName ||
+                        entityModal.data.insName) && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "vehicleInsurance", entityModal.data.insuranceFileName || entityModal.data.insName)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "vehicleInsurance",
+                              entityModal.data.insuranceFileName ||
+                                entityModal.data.insName,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Insurance</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" />{" "}
+                            Insurance
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
-                      {(entityModal.data.fitnessFileName || entityModal.data.fitnessName) && (
+                      {(entityModal.data.fitnessFileName ||
+                        entityModal.data.fitnessName) && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "vehicleFitness", entityModal.data.fitnessFileName || entityModal.data.fitnessName)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "vehicleFitness",
+                              entityModal.data.fitnessFileName ||
+                                entityModal.data.fitnessName,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Fitness Cert</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" />{" "}
+                            Fitness Cert
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
-                      {(entityModal.data.permitFileName || entityModal.data.permitName) && (
+                      {(entityModal.data.permitFileName ||
+                        entityModal.data.permitName) && (
                         <button
-                          onClick={() => handleViewDoc(selectedPassDetails?.id || entityModal.data.passRequestId, "vehiclePermit", entityModal.data.permitFileName || entityModal.data.permitName)}
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedPassDetails?.id ||
+                                entityModal.data.passRequestId,
+                              "vehiclePermit",
+                              entityModal.data.permitFileName ||
+                                entityModal.data.permitName,
+                            )
+                          }
                           className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
                         >
-                          <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-orange-500" /> Permit</span>
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-orange-500" />{" "}
+                            Permit
+                          </span>
                           <Eye className="h-4 w-4 text-slate-400" />
                         </button>
                       )}
@@ -8244,56 +9773,42 @@ console.log(vehicleData);
         </div>
       )}
       {disableModal && (
-
         <div className="fixed inset-0 z-[120] bg-black/40 flex justify-center items-center">
+          <div className="bg-white rounded-xl w-[450px] p-6">
+            <h2 className="text-lg font-bold">Disable Pass</h2>
 
-        <div className="bg-white rounded-xl w-[450px] p-6">
+            <p className="text-sm text-slate-500 mt-2">
+              Please enter the reason.
+            </p>
 
-        <h2 className="text-lg font-bold">
-        Disable Pass
-        </h2>
+            <textarea
+              rows={5}
+              className="w-full border rounded-lg mt-4 p-3"
+              value={disableReason}
+              onChange={(e) => setDisableReason(e.target.value)}
+            />
 
-        <p className="text-sm text-slate-500 mt-2">
-        Please enter the reason.
-        </p>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                className="px-5 py-2 bg-slate-300 rounded-lg"
+                onClick={() => {
+                  setDisableModal(false);
+                  setDisableReason("");
+                }}
+              >
+                Cancel
+              </button>
 
-        <textarea
-        rows={5}
-        className="w-full border rounded-lg mt-4 p-3"
-        value={disableReason}
-        onChange={(e)=>setDisableReason(e.target.value)}
-        />
-
-        <div className="flex justify-end gap-3 mt-6">
-
-        <button
-        className="px-5 py-2 bg-slate-300 rounded-lg"
-        onClick={()=>{
-        setDisableModal(false);
-        setDisableReason("");
-        }}
-        >
-        Cancel
-        </button>
-
-        <button
-        disabled={disableLoading}
-        onClick={handleDisablePass}
-        className="px-5 py-2 bg-red-600 text-white rounded-lg"
-        >
-
-        {disableLoading
-        ? "Disabling..."
-        : "Disable"}
-
-        </button>
-
+              <button
+                disabled={disableLoading}
+                onClick={handleDisablePass}
+                className="px-5 py-2 bg-red-600 text-white rounded-lg"
+              >
+                {disableLoading ? "Disabling..." : "Disable"}
+              </button>
+            </div>
+          </div>
         </div>
-
-        </div>
-
-        </div>
-
       )}
 
       {/* TWO WHEELER UPDATE MODAL */}
@@ -8306,7 +9821,15 @@ console.log(vehicleData);
                 Change Two-Wheeler Vehicle No.
               </h3>
               <button
-                onClick={() => setTwoWheelerModal({ isOpen: false, person: null, newVehicleNo: "", reason: "", loading: false })}
+                onClick={() =>
+                  setTwoWheelerModal({
+                    isOpen: false,
+                    person: null,
+                    newVehicleNo: "",
+                    reason: "",
+                    loading: false,
+                  })
+                }
                 className="text-white/70 hover:text-white"
               >
                 <X className="h-5 w-5" />
@@ -8314,33 +9837,65 @@ console.log(vehicleData);
             </div>
             <div className="p-6 space-y-4 bg-slate-50">
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Person Name</label>
-                <input readOnly type="text" value={twoWheelerModal.person?.name || ""} className="w-full mt-1 bg-slate-100 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold text-slate-700 cursor-not-allowed" />
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Person Name
+                </label>
+                <input
+                  readOnly
+                  type="text"
+                  value={twoWheelerModal.person?.name || ""}
+                  className="w-full mt-1 bg-slate-100 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold text-slate-700 cursor-not-allowed"
+                />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Current Vehicle No.</label>
-                <input readOnly type="text" value={twoWheelerModal.person?.vehicleNo || "N/A"} className="w-full mt-1 bg-slate-100 border border-slate-200 rounded-lg h-10 px-3 text-sm font-mono font-bold text-slate-700 cursor-not-allowed" />
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Current Vehicle No.
+                </label>
+                <input
+                  readOnly
+                  type="text"
+                  value={twoWheelerModal.person?.vehicleNo || "N/A"}
+                  className="w-full mt-1 bg-slate-100 border border-slate-200 rounded-lg h-10 px-3 text-sm font-mono font-bold text-slate-700 cursor-not-allowed"
+                />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">New Two-Wheeler Vehicle No. <span className="text-red-500">*</span></label>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  New Two-Wheeler Vehicle No.{" "}
+                  <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={twoWheelerModal.newVehicleNo}
-                  onChange={(e) => setTwoWheelerModal({ ...twoWheelerModal, newVehicleNo: e.target.value.toUpperCase() })}
+                  onChange={(e) =>
+                    setTwoWheelerModal({
+                      ...twoWheelerModal,
+                      newVehicleNo: e.target.value.toUpperCase(),
+                    })
+                  }
                   placeholder="e.g. MH01AB1234, KA-02-C-5678"
-                  className={`w-full mt-1 border rounded-lg h-10 px-3 text-sm font-mono font-bold focus:outline-none transition-all ${twoWheelerModal.newVehicleNo.trim().length === 0
+                  className={`w-full mt-1 border rounded-lg h-10 px-3 text-sm font-mono font-bold focus:outline-none transition-all ${
+                    twoWheelerModal.newVehicleNo.trim().length === 0
                       ? "border-slate-300 focus:ring-2 focus:ring-[#0a1e4d] text-[#0a1e4d]"
-                      : /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(twoWheelerModal.newVehicleNo.trim())
+                      : /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(
+                            twoWheelerModal.newVehicleNo.trim(),
+                          )
                         ? "border-emerald-500 bg-emerald-50/50 text-emerald-800 focus:ring-2 focus:ring-emerald-500"
                         : "border-red-400 bg-red-50/50 text-red-700 focus:ring-2 focus:ring-red-500"
-                    }`}
+                  }`}
                 />
                 {twoWheelerModal.newVehicleNo.trim().length > 0 && (
-                  <p className={`text-[11px] font-semibold mt-1 flex items-center gap-1 ${/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(twoWheelerModal.newVehicleNo.trim())
-                      ? "text-emerald-600"
-                      : "text-red-500"
-                    }`}>
-                    {/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(twoWheelerModal.newVehicleNo.trim()) ? (
+                  <p
+                    className={`text-[11px] font-semibold mt-1 flex items-center gap-1 ${
+                      /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(
+                        twoWheelerModal.newVehicleNo.trim(),
+                      )
+                        ? "text-emerald-600"
+                        : "text-red-500"
+                    }`}
+                  >
+                    {/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(
+                      twoWheelerModal.newVehicleNo.trim(),
+                    ) ? (
                       <>
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Valid vehicle registration number format
@@ -8355,11 +9910,18 @@ console.log(vehicleData);
                 )}
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Reason for Change (Optional)</label>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Reason for Change (Optional)
+                </label>
                 <textarea
                   rows={2}
                   value={twoWheelerModal.reason}
-                  onChange={(e) => setTwoWheelerModal({ ...twoWheelerModal, reason: e.target.value })}
+                  onChange={(e) =>
+                    setTwoWheelerModal({
+                      ...twoWheelerModal,
+                      reason: e.target.value,
+                    })
+                  }
                   placeholder="Reason for changing two-wheeler vehicle..."
                   className="w-full mt-1 border border-slate-300 rounded-lg p-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0a1e4d]"
                 />
@@ -8367,7 +9929,15 @@ console.log(vehicleData);
             </div>
             <div className="p-4 border-t border-slate-200 bg-white flex justify-end gap-3">
               <button
-                onClick={() => setTwoWheelerModal({ isOpen: false, person: null, newVehicleNo: "", reason: "", loading: false })}
+                onClick={() =>
+                  setTwoWheelerModal({
+                    isOpen: false,
+                    person: null,
+                    newVehicleNo: "",
+                    reason: "",
+                    loading: false,
+                  })
+                }
                 className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold transition-colors"
               >
                 Cancel
@@ -8376,7 +9946,9 @@ console.log(vehicleData);
                 disabled={
                   twoWheelerModal.loading ||
                   !twoWheelerModal.newVehicleNo.trim() ||
-                  !/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(twoWheelerModal.newVehicleNo.trim())
+                  !/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(
+                    twoWheelerModal.newVehicleNo.trim(),
+                  )
                 }
                 onClick={handleSubmitTwoWheelerUpdate}
                 className="px-5 py-2 rounded-xl bg-[#0a1e4d] hover:bg-blue-900 text-white text-sm font-bold shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -8419,7 +9991,8 @@ console.log(vehicleData);
                 <div className="text-sm text-amber-800">
                   <p className="font-semibold">Action Required</p>
                   <p>
-                    Please review and update all reverted entities below. Once updated, you can resubmit the pass for approval.
+                    Please review and update all reverted entities below. Once
+                    updated, you can resubmit the pass for approval.
                   </p>
                 </div>
               </div>
@@ -8435,60 +10008,92 @@ console.log(vehicleData);
                     {revertedPersons.map((person, index) => (
                       <div
                         key={person.id}
-                        className={`p-4 rounded-xl border-2 transition-all ${person.status === 'reverted'
-                          ? 'bg-white border-amber-300'
-                          : 'bg-green-50 border-green-300'
-                          }`}
+                        className={`p-4 rounded-xl border-2 transition-all ${
+                          person.status === "reverted"
+                            ? "bg-white border-amber-300"
+                            : "bg-green-50 border-green-300"
+                        }`}
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${person.status === 'reverted' ? 'bg-amber-100' : 'bg-green-100'
-                              }`}>
-                              <User className={`h-5 w-5 ${person.status === 'reverted' ? 'text-amber-600' : 'text-green-600'
-                                }`} />
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                person.status === "reverted"
+                                  ? "bg-amber-100"
+                                  : "bg-green-100"
+                              }`}
+                            >
+                              <User
+                                className={`h-5 w-5 ${
+                                  person.status === "reverted"
+                                    ? "text-amber-600"
+                                    : "text-green-600"
+                                }`}
+                              />
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className="font-semibold text-slate-800">{person.name}</p>
+                                <p className="font-semibold text-slate-800">
+                                  {person.name}
+                                </p>
                                 {(() => {
                                   const pCat = getItemCategoryTag(person, true);
                                   return pCat ? (
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}>
+                                    <span
+                                      className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}
+                                    >
                                       {pCat.label}
                                     </span>
                                   ) : null;
                                 })()}
                               </div>
-                              <p className="text-xs text-slate-500">{person.id}</p>
+                              <p className="text-xs text-slate-500">
+                                {person.id}
+                              </p>
                             </div>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${person.status === 'reverted'
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-green-100 text-green-700'
-                            }`}>
-                            {person.status === 'reverted' ? 'Needs Update' : 'Updated ✓'}
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                              person.status === "reverted"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-green-100 text-green-700"
+                            }`}
+                          >
+                            {person.status === "reverted"
+                              ? "Needs Update"
+                              : "Updated ✓"}
                           </span>
                         </div>
 
                         {/* Revert Reason */}
                         {person.rejectedReason && (
                           <div className="bg-red-50 border border-red-200 p-3 rounded-lg mb-3">
-                            <p className="text-xs text-red-600 font-semibold mb-1">Revert Reason:</p>
-                            <p className="text-sm text-red-700">{person.rejectedReason}</p>
+                            <p className="text-xs text-red-600 font-semibold mb-1">
+                              Revert Reason:
+                            </p>
+                            <p className="text-sm text-red-700">
+                              {person.rejectedReason}
+                            </p>
                           </div>
                         )}
 
                         {/* Edit Button */}
-                        {(person.status === 'reverted' || person.status === 'updated') && (
+                        {(person.status === "reverted" ||
+                          person.status === "updated") && (
                           <button
-                            onClick={() => handleEditRevertedEntity('person', index, person)}
-                            className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${person.status === 'updated'
-                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                              : 'bg-amber-500 hover:bg-amber-600 text-white'
-                              }`}
+                            onClick={() =>
+                              handleEditRevertedEntity("person", index, person)
+                            }
+                            className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+                              person.status === "updated"
+                                ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                                : "bg-amber-500 hover:bg-amber-600 text-white"
+                            }`}
                           >
                             <Edit3 className="h-4 w-4" />
-                            {person.status === 'updated' ? 'Edit Again' : 'Update Person'}
+                            {person.status === "updated"
+                              ? "Edit Again"
+                              : "Update Person"}
                           </button>
                         )}
                       </div>
@@ -8508,60 +10113,99 @@ console.log(vehicleData);
                     {revertedVehicles.map((vehicle, index) => (
                       <div
                         key={vehicle.id}
-                        className={`p-4 rounded-xl border-2 transition-all ${vehicle.status === 'reverted'
-                          ? 'bg-white border-amber-300'
-                          : 'bg-green-50 border-green-300'
-                          }`}
+                        className={`p-4 rounded-xl border-2 transition-all ${
+                          vehicle.status === "reverted"
+                            ? "bg-white border-amber-300"
+                            : "bg-green-50 border-green-300"
+                        }`}
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${vehicle.status === 'reverted' ? 'bg-amber-100' : 'bg-green-100'
-                              }`}>
-                              <Car className={`h-5 w-5 ${vehicle.status === 'reverted' ? 'text-amber-600' : 'text-green-600'
-                                }`} />
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                vehicle.status === "reverted"
+                                  ? "bg-amber-100"
+                                  : "bg-green-100"
+                              }`}
+                            >
+                              <Car
+                                className={`h-5 w-5 ${
+                                  vehicle.status === "reverted"
+                                    ? "text-amber-600"
+                                    : "text-green-600"
+                                }`}
+                              />
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className="font-semibold text-slate-800">{vehicle.registrationNo || vehicle.regNo}</p>
+                                <p className="font-semibold text-slate-800">
+                                  {vehicle.registrationNo || vehicle.regNo}
+                                </p>
                                 {(() => {
-                                  const vCat = getItemCategoryTag(vehicle, false);
+                                  const vCat = getItemCategoryTag(
+                                    vehicle,
+                                    false,
+                                  );
                                   return vCat ? (
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}>
+                                    <span
+                                      className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}
+                                    >
                                       {vCat.label}
                                     </span>
                                   ) : null;
                                 })()}
                               </div>
-                              <p className="text-xs text-slate-500">{vehicle.id}</p>
+                              <p className="text-xs text-slate-500">
+                                {vehicle.id}
+                              </p>
                             </div>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${vehicle.status === 'reverted'
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-green-100 text-green-700'
-                            }`}>
-                            {vehicle.status === 'reverted' ? 'Needs Update' : 'Updated ✓'}
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                              vehicle.status === "reverted"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-green-100 text-green-700"
+                            }`}
+                          >
+                            {vehicle.status === "reverted"
+                              ? "Needs Update"
+                              : "Updated ✓"}
                           </span>
                         </div>
 
                         {/* Revert Reason */}
                         {vehicle.rejectedReason && (
                           <div className="bg-red-50 border border-red-200 p-3 rounded-lg mb-3">
-                            <p className="text-xs text-red-600 font-semibold mb-1">Revert Reason:</p>
-                            <p className="text-sm text-red-700">{vehicle.rejectedReason}</p>
+                            <p className="text-xs text-red-600 font-semibold mb-1">
+                              Revert Reason:
+                            </p>
+                            <p className="text-sm text-red-700">
+                              {vehicle.rejectedReason}
+                            </p>
                           </div>
                         )}
 
                         {/* Edit Button */}
-                        {(vehicle.status === 'reverted' || vehicle.status === 'updated') && (
+                        {(vehicle.status === "reverted" ||
+                          vehicle.status === "updated") && (
                           <button
-                            onClick={() => handleEditRevertedEntity('vehicle', index, vehicle)}
-                            className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${vehicle.status === 'updated'
-                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                              : 'bg-amber-500 hover:bg-amber-600 text-white'
-                              }`}
+                            onClick={() =>
+                              handleEditRevertedEntity(
+                                "vehicle",
+                                index,
+                                vehicle,
+                              )
+                            }
+                            className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+                              vehicle.status === "updated"
+                                ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                                : "bg-amber-500 hover:bg-amber-600 text-white"
+                            }`}
                           >
                             <Edit3 className="h-4 w-4" />
-                            {vehicle.status === 'updated' ? 'Edit Again' : 'Update Vehicle'}
+                            {vehicle.status === "updated"
+                              ? "Edit Again"
+                              : "Update Vehicle"}
                           </button>
                         )}
                       </div>
@@ -8571,14 +10215,18 @@ console.log(vehicleData);
               )}
 
               {/* All Updated Message */}
-              {revertedPersons.every(p => p.status !== 'reverted') &&
-                revertedPersons.every(p => p.status === 'updated') &&
-                revertedVehicles.every(v => v.status === 'updated') && (
+              {revertedPersons.every((p) => p.status !== "reverted") &&
+                revertedPersons.every((p) => p.status === "updated") &&
+                revertedVehicles.every((v) => v.status === "updated") && (
                   <div className="bg-green-50 border border-green-200 p-4 rounded-xl flex items-center gap-3 mb-6">
                     <CheckCircle className="h-6 w-6 text-green-600" />
                     <div>
-                      <p className="font-semibold text-green-800">All entities updated!</p>
-                      <p className="text-sm text-green-700">You can now resubmit your pass for approval.</p>
+                      <p className="font-semibold text-green-800">
+                        All entities updated!
+                      </p>
+                      <p className="text-sm text-green-700">
+                        You can now resubmit your pass for approval.
+                      </p>
                     </div>
                   </div>
                 )}
@@ -8595,14 +10243,15 @@ console.log(vehicleData);
               <button
                 onClick={handleResubmitRevertedPass}
                 disabled={
-                  revertedPersons.some(p => p.status === 'reverted') ||
-                  revertedVehicles.some(v => v.status === 'reverted')
+                  revertedPersons.some((p) => p.status === "reverted") ||
+                  revertedVehicles.some((v) => v.status === "reverted")
                 }
-                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${revertedPersons.some(p => p.status === 'reverted') ||
-                  revertedVehicles.some(v => v.status === 'reverted')
-                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                  : 'bg-amber-500 hover:bg-amber-600 text-white'
-                  }`}
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${
+                  revertedPersons.some((p) => p.status === "reverted") ||
+                  revertedVehicles.some((v) => v.status === "reverted")
+                    ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                    : "bg-amber-500 hover:bg-amber-600 text-white"
+                }`}
               >
                 <Send className="h-4 w-4" />
                 Resubmit Pass
@@ -8616,8 +10265,9 @@ console.log(vehicleData);
       {viewingDocUrl && (
         <div className="fixed inset-0 z-[150] bg-slate-900/85 backdrop-blur-sm flex items-center justify-center p-4 md:p-6 lg:p-10 animate-in fade-in duration-300">
           <div
-            className={`bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${isFullscreen ? "w-full h-full" : "w-full max-w-5xl h-[85vh]"
-              }`}
+            className={`bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${
+              isFullscreen ? "w-full h-full" : "w-full max-w-5xl h-[85vh]"
+            }`}
           >
             {/* Header */}
             <div className="bg-slate-800 text-white px-6 py-4 flex items-center justify-between shrink-0">
@@ -8711,21 +10361,27 @@ console.log(vehicleData);
             {/* Warning Message Card */}
             <div className="bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/20 rounded-2xl p-5 space-y-4 mb-6">
               <div className="flex justify-between items-center border-b border-red-100/50 dark:border-red-900/20 pb-3">
-                <span className="text-xs font-bold text-slate-400 dark:text-stone-500 uppercase">Suspended Entity</span>
+                <span className="text-xs font-bold text-slate-400 dark:text-stone-500 uppercase">
+                  Suspended Entity
+                </span>
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-900/40">
                   Suspended
                 </span>
               </div>
 
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-slate-400 dark:text-stone-500 uppercase tracking-wider">Company Name</p>
+                <p className="text-[10px] font-bold text-slate-400 dark:text-stone-500 uppercase tracking-wider">
+                  Company Name
+                </p>
                 <p className="text-sm font-extrabold text-slate-900 dark:text-stone-100">
                   {generalForm.companyName}
                 </p>
               </div>
 
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-slate-400 dark:text-stone-500 uppercase tracking-wider">Blacklist Reason</p>
+                <p className="text-[10px] font-bold text-slate-400 dark:text-stone-500 uppercase tracking-wider">
+                  Blacklist Reason
+                </p>
                 <p className="text-sm font-semibold text-red-800 dark:text-red-400 leading-relaxed bg-red-50 dark:bg-red-950/20 p-3 rounded-xl border border-red-100/50 dark:border-red-900/10">
                   {companyBlacklistReason}
                 </p>
@@ -8733,7 +10389,10 @@ console.log(vehicleData);
             </div>
 
             <p className="text-xs text-slate-500 dark:text-stone-400 text-center leading-relaxed mb-6 font-medium">
-              You are blocked from submitting new harbor entry passes. To restore access, please contact the Traffic Department or request reinstatement through the ATM Portal once compliance terms are met.
+              You are blocked from submitting new harbor entry passes. To
+              restore access, please contact the Traffic Department or request
+              reinstatement through the ATM Portal once compliance terms are
+              met.
             </p>
 
             {/* Buttons */}
