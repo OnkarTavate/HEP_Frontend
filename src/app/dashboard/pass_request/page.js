@@ -2866,7 +2866,7 @@ export default function PassRequestPage() {
 
       // Actual DL status is inside DLInformation
       const dlStatus =
-        ulipResponse?.DLInformation?.DL_status;
+        ulipResponse?.DLinformation?.DL_status;
 
       const normalizedDlStatus = String(dlStatus || "")
         .trim()
