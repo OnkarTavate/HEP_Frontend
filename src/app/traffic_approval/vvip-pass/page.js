@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import {
   approveVvipPass,
   getVvipPass,
-  listVvipPasses,
+  listVvipPassQueue,
   rejectVvipPass,
   returnVvipPass,
 } from "@/lib/vvipPassApi";
@@ -109,7 +109,7 @@ export default function TrafficVvipPassPage() {
       setLoading(true);
       setError("");
       setSuccessMessage("");
-      const data = await listVvipPasses(status ? { status } : {});
+      const data = await listVvipPassQueue(status ? { status } : {});
       setRequests(data);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load VVIP requests.");
@@ -125,7 +125,7 @@ export default function TrafficVvipPassPage() {
       try {
         setLoading(true);
         setError("");
-        const data = await listVvipPasses(status ? { status } : {});
+        const data = await listVvipPassQueue(status ? { status } : {});
         if (!cancelled) setRequests(data);
       } catch (err) {
         if (!cancelled) {

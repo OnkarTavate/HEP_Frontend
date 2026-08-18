@@ -35,7 +35,7 @@ export async function resubmitVvipPass(id, formData) {
   return res.data?.data;
 }
 
-export async function listVvipPasses(filters = {}) {
+const buildQuery = (filters = {}) => {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
@@ -43,7 +43,21 @@ export async function listVvipPasses(filters = {}) {
     }
   });
 
-  const res = await axios.get(`${ADMIN_API}/vvip-pass/queue?${params.toString()}`, {
+  return params.toString();
+};
+
+export async function listVvipPasses(filters = {}) {
+  const query = buildQuery(filters);
+  const res = await axios.get(`${AGENT_API}/vvip-pass${query ? `?${query}` : ""}`, {
+    headers: authHeaders(),
+  });
+
+  return res.data?.data || [];
+}
+
+export async function listVvipPassQueue(filters = {}) {
+  const query = buildQuery(filters);
+  const res = await axios.get(`${ADMIN_API}/vvip-pass/queue${query ? `?${query}` : ""}`, {
     headers: authHeaders(),
   });
 
@@ -113,9 +127,7 @@ async function getVvipQrPdfBlob(id) {
 
 export async function viewVvipQrPdf(id) {
   const blob = await getVvipQrPdfBlob(id);
-  const url = window.URL.createObjectURL(blob);
-  window.open(url, "_blank", "noopener,noreferrer");
-  window.setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+  return window.URL.createObjectURL(blob);
 }
 
 export async function downloadVvipQrPdf(id, referenceNo = "vvip-pass") {

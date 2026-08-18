@@ -87,6 +87,8 @@ export default function HodVvipPassRequestsPage() {
   const [trackingError, setTrackingError] = useState("");
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [qrViewerUrl, setQrViewerUrl] = useState("");
+  const [qrViewerLoading, setQrViewerLoading] = useState(false);
 
   const reloadRequestTracking = async () => {
     try {
@@ -128,6 +130,12 @@ export default function HodVvipPassRequestsPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (qrViewerUrl) window.URL.revokeObjectURL(qrViewerUrl);
+    };
+  }, [qrViewerUrl]);
 
   const statCards = useMemo(
     () => [
@@ -204,12 +212,20 @@ export default function HodVvipPassRequestsPage() {
   const handleViewQr = async (request) => {
     try {
       setTrackingError("");
-      await viewVvipQrPdf(request.id);
+      setQrViewerLoading(true);
+      const url = await viewVvipQrPdf(request.id);
+      setQrViewerUrl(url);
     } catch (error) {
       setTrackingError(
         error?.response?.data?.message || "Failed to view VVIP QR PDF.",
       );
+    } finally {
+      setQrViewerLoading(false);
     }
+  };
+
+  const closeQrViewer = () => {
+    setQrViewerUrl("");
   };
 
   return (
@@ -539,6 +555,44 @@ export default function HodVvipPassRequestsPage() {
                 </Button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {(qrViewerLoading || qrViewerUrl) && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <div className="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-slate-950">
+            <div className="flex items-center justify-between bg-[#0a1e4d] px-6 py-4 text-white">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-orange-300">
+                  Approved VVIP Pass
+                </p>
+                <h2 className="text-xl font-black">QR Pass Preview</h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeQrViewer}
+                className="rounded-xl p-2 text-white transition hover:bg-white/10"
+                aria-label="Close QR pass preview"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 bg-slate-100 p-3 dark:bg-slate-900">
+              {qrViewerLoading ? (
+                <div className="flex h-full items-center justify-center gap-3 text-sm font-bold text-slate-600 dark:text-stone-300">
+                  <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
+                  Loading QR pass…
+                </div>
+              ) : (
+                <iframe
+                  src={qrViewerUrl}
+                  title="VVIP QR pass PDF preview"
+                  className="h-full w-full rounded-xl bg-white"
+                />
+              )}
+            </div>
           </div>
         </div>
       )}
