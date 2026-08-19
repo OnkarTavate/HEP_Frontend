@@ -2414,7 +2414,7 @@ export default function PassRequestPage() {
 
     const isForeigner = isPersonForeigner(personForm.nationality);
 
-    // Aadhaar validation - required for non-foreigners (non-seafarers OR seafarers who chose aadhaar)
+        // Aadhaar validation - required for non-foreigners (non-seafarers OR seafarers who chose aadhaar)
     if (
       !isForeigner &&
       (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar")
@@ -2422,6 +2422,10 @@ export default function PassRequestPage() {
       if (!personForm.aadharNo) errors.aadharNo = "Aadhaar number is required";
       else if (!/^\d{12}$/.test(personForm.aadharNo.replace(/\s/g, "")))
         errors.aadharNo = "Aadhaar must be exactly 12 digits";
+
+      if (!(personForm.aadharFile || personForm.existingAadharName)) {
+        errors.aadharFile = "Aadhaar document upload is required";
+      }
     }
 
     // Passport validation - required for seafarers who chose passport OR for Foreigners
@@ -2477,17 +2481,105 @@ export default function PassRequestPage() {
       }
     }
 
-    if (personForm.idProofNumber) {
-      const err = getValidationError(
-        "idProofNumber",
-        personForm.idProofNumber,
-        { idProofType: personForm.idProofType },
-      );
-      if (err) errors.idProofNumber = err;
+    if (!personForm.nationality) {
+      errors.nationality = "Nationality is required";
+    }
+    if (!personForm.country) {
+      errors.country = "Country is required";
+    }
+    if (!personForm.accessArea) {
+      errors.accessArea = "Access Area is required";
+    }
+
+    // Secondary ID Proof block — only shown/relevant for non-Seafarers
+    if (personForm.hepType !== "3") {
+      if (!personForm.idProofType) {
+        errors.idProofType = "Please select Type of Id proof";
+      }
+      if (!personForm.idProofNumber || !personForm.idProofNumber.trim()) {
+        if (!errors.idProofNumber) {
+          errors.idProofNumber = "ID Proof Number is required";
+        }
+      } else {
+        const err = getValidationError(
+          "idProofNumber",
+          personForm.idProofNumber,
+          { idProofType: personForm.idProofType },
+        );
+        if (err) errors.idProofNumber = err;
+      }
+      if (!(personForm.idProofFile || personForm.existingIdProofName)) {
+        errors.idProofFile = "Copy of ID Proof is mandatory";
+      }
+    }
+
+    // ---- Designation & Photo ----
+    if (!personForm.designation) {
+      errors.designation = "Designation is required";
+    }
+    if (!(personForm.photo || personForm.existingPhotoName)) {
+      errors.photo = "Photo is required";
+    }
+
+    // ---- Driver Licence — mandatory for Drivers ----
+    if (
+      personForm.hepType === "1" &&
+      !(personForm.driverLicence || personForm.existingDlName)
+    ) {
+      errors.driverLicence =
+        "Driver Licence document is mandatory for Drivers";
+    }
+
+    // ---- Copy of Passport — mandatory for Foreigners ----
+    if (
+      isForeigner &&
+      !(
+        personForm.idProofFile ||
+        personForm.existingIdProofName ||
+        personForm.passportDoc ||
+        personForm.existingPassportName
+      )
+    ) {
+      errors.idProofFile = "Copy of Passport is mandatory for Foreigners";
+      errors.passportDoc = "Copy of Passport is mandatory for Foreigners";
+    }
+
+    // ---- Visa & Immigration — mandatory for Foreigners ----
+    if (isForeigner && !(personForm.visaDoc || personForm.existingVisaDocName)) {
+      errors.visaDoc = "Visa document is mandatory for Foreigners";
+    }
+    if (
+      isForeigner &&
+      !(personForm.immigrationDoc || personForm.existingImmigrationDocName)
+    ) {
+      errors.immigrationDoc =
+        "Immigration Clearance document is mandatory for Foreigners";
+    }
+
+    // ---- Police Verification — mandatory for Monthly/Yearly ----
+    if (
+      (personForm.passType === "2" || personForm.passType === "3") &&
+      !(personForm.policeVerification || personForm.existingPoliceName)
+    ) {
+      errors.policeVerification =
+        "Police Verification is mandatory for Monthly/Yearly passes";
+    }
+
+    // ---- Entry Authorization — mandatory for Oil Dock ----
+    const isPersonOilDock =
+      String(personForm.accessArea).toUpperCase().includes("OIL JETTY") ||
+      String(personForm.accessArea) === "1";
+    if (
+      isPersonOilDock &&
+      !(personForm.entryAuthorization || personForm.existingEntryAuthName)
+    ) {
+      errors.entryAuthorization =
+        "Entry Authorization is mandatory for Oil Dock passes";
     }
 
     if (Object.keys(errors).length > 0) {
       setPersonErrors(errors);
+      toast.error("Please fix the highlighted errors before adding.");
       return;
     }
     setPersonErrors({});
@@ -2498,64 +2590,6 @@ export default function PassRequestPage() {
 
     if (personForm.idProofType === "1" && !dlVerification.verified) {
       return toast.error("Please verify the Driving Licence before adding.");
-    }
-
-    if (
-      !personForm.name.trim() ||
-      !personForm.designation ||
-      !personForm.mobile ||
-      !(personForm.photo || personForm.existingPhotoName)
-    ) {
-      return toast.error("Please fill all mandatory fields including Photo.");
-    }
-
-    if (
-      personForm.hepType === "1" &&
-      !(personForm.driverLicence || personForm.existingDlName)
-    )
-      return toast.error("Driver Licence is mandatory for Drivers.");
-
-    // Copy of Passport doc is required for Foreigners or Seafarers who selected "passport"
-    if (
-      isForeigner &&
-      !(
-        personForm.idProofFile ||
-        personForm.existingIdProofName ||
-        personForm.passportDoc ||
-        personForm.existingPassportName
-      )
-    )
-      return toast.error("Copy of Passport is mandatory for Foreigners.");
-
-    if (isForeigner && !(personForm.visaDoc || personForm.existingVisaDocName))
-      return toast.error("Visa document is mandatory for Foreigners.");
-
-    if (
-      isForeigner &&
-      !(personForm.immigrationDoc || personForm.existingImmigrationDocName)
-    )
-      return toast.error(
-        "Immigration Clearance document is mandatory for Foreigners.",
-      );
-
-    if (personForm.passType === "2" || personForm.passType === "3") {
-      if (!(personForm.policeVerification || personForm.existingPoliceName)) {
-        return toast.error(
-          "Police Verification is mandatory for Monthly/Yearly passes.",
-        );
-      }
-    }
-
-    const isPersonOilDock =
-      String(personForm.accessArea).toUpperCase().includes("OIL JETTY") ||
-      String(personForm.accessArea) === "1";
-    if (
-      isPersonOilDock &&
-      !(personForm.entryAuthorization || personForm.existingEntryAuthName)
-    ) {
-      return toast.error(
-        "Entry Authorization is mandatory for Oil Dock passes.",
-      );
     }
 
     // Check if we're editing a reverted entity
@@ -2629,6 +2663,7 @@ export default function PassRequestPage() {
       ),
     });
     setEditingPersonIndex(null);
+    setPersonErrors({});
   };
 
   const convertDate = (dateStr) => {
@@ -2980,18 +3015,88 @@ export default function PassRequestPage() {
     )
       vErrors.regNo = "Enter a valid registration number (e.g. TN-01-AB-1234)";
 
-    if (vehicleForm.insuranceExpiry) {
+    if (!vehicleForm.insuranceExpiry) {
+      vErrors.insuranceExpiry = "Insurance expiry date is required";
+    } else {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       if (new Date(vehicleForm.insuranceExpiry) < today)
         vErrors.insuranceExpiry = "Insurance expiry date must be in the future";
     }
-    if (vehicleForm.rcValidity) {
+    if (!vehicleForm.rcValidity) {
+      vErrors.rcValidity = "RC validity date is required";
+    } else {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       if (new Date(vehicleForm.rcValidity) < today)
         vErrors.rcValidity = "RC validity date must be in the future";
     }
+
+    const isVehicleOilDock =
+      String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") ||
+      String(vehicleForm.accessArea) === "1";
+    const isMonthlyYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+      String(vehicleForm.passType),
+    );
+
+    if (!(vehicleForm.rcDocument || vehicleForm.existingRcName)) {
+      vErrors.rcDocument = "RC/NOC document is mandatory";
+    }
+    if (!(vehicleForm.insuranceDocument || vehicleForm.existingInsName)) {
+      vErrors.insuranceDocument = "Insurance document is mandatory";
+    }
+    if (!(vehicleForm.fitnessCert || vehicleForm.existingFitnessName)) {
+      vErrors.fitnessCert = "Fitness Certificate is mandatory";
+    }
+    if (
+      isMonthlyYearly &&
+      !(vehicleForm.permit || vehicleForm.existingPermitName)
+    ) {
+      vErrors.permit = "Permit Document is mandatory for Monthly/Yearly passes";
+    }
+    if (
+      (isMonthlyYearly || isVehicleOilDock) &&
+      !(vehicleForm.requestLetter || vehicleForm.existingReqName)
+    ) {
+      vErrors.requestLetter = isMonthlyYearly
+        ? "Request Letter is mandatory for Monthly/Yearly passes"
+        : "Request Letter is mandatory for Oil Dock Daily passes";
+    }
+    if (
+      isMonthlyYearly &&
+      !(vehicleForm.taxDoc || vehicleForm.existingTaxName)
+    ) {
+      vErrors.taxDoc = "Tax Document is mandatory for Monthly/Yearly passes";
+    }
+    if (
+      isMonthlyYearly &&
+      !(vehicleForm.emissionCert || vehicleForm.existingEmissionName)
+    ) {
+      vErrors.emissionCert =
+        "Emission Certificate is mandatory for Monthly/Yearly passes";
+    }
+    if (
+      isVehicleOilDock &&
+      !(vehicleForm.sparkArrester || vehicleForm.existingSparkArresterName)
+    ) {
+      vErrors.sparkArrester =
+        "Spark Arrester Certificate is mandatory for Oil Dock passes";
+    }
+    if (
+      isMonthlyYearly &&
+      !(vehicleForm.twistLock || vehicleForm.existingTwistLockName)
+    ) {
+      vErrors.twistLock =
+        "Twist Lock Certificate is mandatory for Monthly/Yearly passes";
+    }
+
+    if (!vehicleForm.type) {
+      vErrors.type = "Vehicle Type is required";
+    }
+    if (!vehicleForm.accessArea) {
+      vErrors.accessArea = "Access Area is required";
+    }
+
     if (Object.keys(vErrors).length > 0) {
       setVehicleErrors(vErrors);
       return toast.error(
@@ -3007,72 +3112,6 @@ export default function PassRequestPage() {
     if (!vehicleVerification.verified) {
       return toast.error(
         "Please verify the Vehicle Registration Number before adding.",
-      );
-    }
-    // ---- End validation ----
-    if (
-      !vehicleForm.regNo.trim() ||
-      !(vehicleForm.rcDocument || vehicleForm.existingRcName) ||
-      !(vehicleForm.insuranceDocument || vehicleForm.existingInsName) ||
-      !(vehicleForm.fitnessCert || vehicleForm.existingFitnessName) ||
-      !vehicleForm.insuranceExpiry ||
-      !vehicleForm.rcValidity
-    ) {
-      return toast.error(
-        "RC/NOC, Insurance, Fitness Certificate, and their Validity Dates are mandatory.",
-      );
-    }
-    if (
-      ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
-        String(vehicleForm.passType),
-      )
-    ) {
-      if (!(vehicleForm.permit || vehicleForm.existingPermitName)) {
-        return toast.error(
-          "Permit Document is mandatory for Monthly/Yearly passes.",
-        );
-      }
-      if (
-        !(vehicleForm.requestLetter || vehicleForm.existingReqName) ||
-        !(vehicleForm.taxDoc || vehicleForm.existingTaxName) ||
-        !(vehicleForm.emissionCert || vehicleForm.existingEmissionName)
-      ) {
-        return toast.error(
-          "Request Letter, Tax, Emission Cert, and Permit are mandatory for Monthly/Yearly passes.",
-        );
-      }
-    }
-
-    const isVehicleOilDock =
-      String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") ||
-      String(vehicleForm.accessArea) === "1";
-    if (isVehicleOilDock) {
-      if (
-        !(vehicleForm.sparkArrester || vehicleForm.existingSparkArresterName)
-      ) {
-        return toast.error(
-          "Spark Arrester Certificate is mandatory for Oil Dock passes.",
-        );
-      }
-    }
-    const isMonthlyYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
-      String(vehicleForm.passType),
-    );
-    if (
-      isMonthlyYearly &&
-      !(vehicleForm.twistLock || vehicleForm.existingTwistLockName)
-    ) {
-      return toast.error(
-        "Twist Lock Certificate is mandatory for Monthly/Yearly passes.",
-      );
-    }
-    if (
-      isVehicleOilDock &&
-      !isMonthlyYearly &&
-      !(vehicleForm.requestLetter || vehicleForm.existingReqName)
-    ) {
-      return toast.error(
-        "Request Letter is mandatory for Oil Dock Daily passes.",
       );
     }
 
@@ -3608,6 +3647,7 @@ export default function PassRequestPage() {
     onView,
     fileType = "pdf",
     disabled = false,
+    error,
   }) => (
     <div className="bg-white p-4 border border-slate-200 rounded-xl shadow-sm hover:border-orange-300 hover:shadow-md transition-all group flex flex-col justify-between h-full">
       <label className="text-xs font-bold text-slate-800 block mb-3">
@@ -3701,6 +3741,9 @@ export default function PassRequestPage() {
           </span>
         </div>
       </div>
+      {error && (
+        <p className="text-xs text-red-500 mt-2 font-medium">{error}</p>
+      )}
     </div>
   );
 
@@ -6073,7 +6116,7 @@ export default function PassRequestPage() {
                       ))}
                     </select>
                     {personErrors.hepType && (
-                      <p className="text-xs text-red-500 font-semibold mt-1">
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
                         {personErrors.hepType}
                       </p>
                     )}
@@ -6254,6 +6297,11 @@ export default function PassRequestPage() {
                         </option>
                       ))}
                     </select>
+                    {personErrors.nationality && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {personErrors.nationality}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
@@ -6294,6 +6342,11 @@ export default function PassRequestPage() {
                           </option>
                         ))}
                     </select>
+                    {personErrors.country && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {personErrors.country}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
@@ -6506,6 +6559,7 @@ export default function PassRequestPage() {
                             disabled={!!personForm.masterId}
                             file={personForm.aadharFile}
                             existingFileName={personForm.existingAadharName}
+                            error={personErrors.aadharFile}
                             onView={() =>
                               handleViewDoc(
                                 personForm.existingPassRequestId,
@@ -6633,24 +6687,20 @@ export default function PassRequestPage() {
                                   maxLength={12}
                                   inputMode="numeric"
                                 />
-                                {hasVal && (
-                                  <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all animate-in fade-in duration-200">
+                                {(hasVal || hasError) && (
+                                  <>
                                     {hasError || !isValid ? (
-                                      <>
-                                        <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                        <span className="text-red-500">
-                                          Aadhaar must be exactly 12 digits
-                                        </span>
-                                      </>
+                                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                                        {personErrors.aadharNo ||
+                                          (hasVal ? "Aadhaar must be exactly 12 digits" : "Aadhaar number is required")}
+                                      </p>
                                     ) : (
-                                      <>
-                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                                        <span className="text-emerald-600">
-                                          Valid Aadhaar format
-                                        </span>
-                                      </>
+                                      <p className="text-xs text-emerald-600 mt-0.5 font-medium flex items-center gap-1">
+                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                                        Valid Aadhaar format
+                                      </p>
                                     )}
-                                  </div>
+                                  </>
                                 )}
                                 {isValid &&
                                   (blacklistWarnings[
@@ -6740,6 +6790,7 @@ export default function PassRequestPage() {
                                 passportDoc: e.target.files[0],
                               })
                             }
+                            error={personErrors.passportDoc}
                           />
                         </div>
                       </>
@@ -6765,6 +6816,11 @@ export default function PassRequestPage() {
                         </option>
                       ))}
                     </select>
+                    {personErrors.accessArea && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {personErrors.accessArea}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
@@ -6852,8 +6908,7 @@ export default function PassRequestPage() {
                       </div>
                     </div>
                     {personErrors.dob && (
-                      <p className="text-[11px] font-semibold text-red-500 flex items-center gap-1 mt-1">
-                        <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />{" "}
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
                         {personErrors.dob}
                       </p>
                     )}
@@ -6893,6 +6948,11 @@ export default function PassRequestPage() {
                         <option value="Supernumerary">Supernumerary</option>
                         <option value="Others">Others</option>
                       </select>
+                      {personErrors.designation && (
+                        <p className="text-xs text-red-500 mt-0.5 font-medium">
+                          {personErrors.designation}
+                        </p>
+                      )}
                     </div>
                     {personForm.designation === "Others" && (
                       <div className="space-y-1.5">
@@ -7015,6 +7075,11 @@ export default function PassRequestPage() {
                             </option>
                           ))}
                         </select>
+                        {personErrors.idProofType && (
+                          <p className="text-xs text-red-500 mt-0.5 font-medium">
+                            {personErrors.idProofType}
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700 uppercase">
@@ -7225,6 +7290,11 @@ export default function PassRequestPage() {
                         </button>
                       </div>
                     )}
+                    {personErrors.photo && (
+                      <p className="text-xs text-red-500 mt-1 font-medium">
+                        {personErrors.photo}
+                      </p>
+                    )}
                   </div>
                   {personForm.hepType !== "3" && (
                     <div className="space-y-1.5 md:col-span-2 max-w-sm">
@@ -7240,6 +7310,7 @@ export default function PassRequestPage() {
                       <FileUploadBox
                         file={personForm.idProofFile}
                         existingFileName={personForm.existingIdProofName}
+                        error={personErrors.idProofFile}
                         onView={() =>
                           handleViewDoc(
                             personForm.existingPassRequestId,
@@ -7280,6 +7351,7 @@ export default function PassRequestPage() {
                               visaDoc: e.target.files[0],
                             })
                           }
+                          error={personErrors.visaDoc}
                         />
                       </div>
                       <div className="space-y-1.5 md:col-span-2 max-w-sm">
@@ -7306,6 +7378,7 @@ export default function PassRequestPage() {
                               immigrationDoc: e.target.files[0],
                             })
                           }
+                          error={personErrors.immigrationDoc}
                         />
                       </div>
                     </>
@@ -7571,6 +7644,7 @@ export default function PassRequestPage() {
                             driverLicence: e.target.files[0],
                           })
                         }
+                        error={personErrors.driverLicence}
                       />
                     )}
                     {(String(personForm.passType) === "2" ||
@@ -7594,6 +7668,7 @@ export default function PassRequestPage() {
                             policeVerification: e.target.files[0],
                           })
                         }
+                        error={personErrors.policeVerification}
                       />
                     )}
                     {personForm.hepType === "3" && (
@@ -7616,6 +7691,7 @@ export default function PassRequestPage() {
                             passportDoc: e.target.files[0],
                           })
                         }
+                        error={personErrors.passportDoc}
                       />
                     )}
                     {(String(personForm.accessArea)
@@ -7641,6 +7717,7 @@ export default function PassRequestPage() {
                             entryAuthorization: e.target.files[0],
                           })
                         }
+                        error={personErrors.entryAuthorization}
                       />
                     )}
                   </div>
@@ -7720,7 +7797,7 @@ export default function PassRequestPage() {
                   1. Vehicle Details
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-x-5 gap-y-5">
-                  <div className="space-y-1.5">
+                                    <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Registration No. <span className="text-red-500">*</span>
                     </label>
@@ -7733,7 +7810,12 @@ export default function PassRequestPage() {
                       if (hasVal) {
                         customBorderClass = hasError
                           ? "border-red-400 focus:border-red-500 focus:ring-red-500/20"
-                          : "border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/20";
+                          : vehicleVerification.verified
+                            ? "border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/20"
+                            : "border-orange-500 focus:border-orange-500 focus:ring-orange-500/20";
+                      } else if (hasError) {
+                        customBorderClass =
+                          "border-red-400 focus:border-red-500 focus:ring-red-500/20";
                       }
 
                       const baseInputClass =
@@ -7741,40 +7823,12 @@ export default function PassRequestPage() {
 
                       return (
                         <>
-                          {/* <input
-                            type="text"
-                            value={vehicleForm.regNo}
-                            onChange={(e) => {
-                              const val = e.target.value.toUpperCase().slice(0, 13);
-                              setVehicleForm({ ...vehicleForm, regNo: val });
-                              if (val.length >= 8) validateVehicleField("regNo", val);
-                              // Real-time blacklist check — fires as soon as reg number format is valid
-                              if (/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(val)) {
-                                checkBlacklistStatus("VEHICLE", val.replace(/[\s-]/g, ""));
-                              }
-                            }}
-                            onBlur={(e) => {
-                              validateVehicleField("regNo", e.target.value);
-                            }}
-                            className={`${baseInputClass} ${customBorderClass} uppercase font-bold text-[#0a1e4d] tracking-wider`}
-                            placeholder="TN-XX-XX-XXXX"
-                            maxLength={13}
-                          /> */}
                           <div className="relative">
                             <input
                               type="text"
                               value={vehicleForm.regNo}
                               readOnly={vehicleVerification.loading}
                               onChange={handleVehicleNumberChange}
-                              // onChange={(e) => {
-                              //   const val = e.target.value.toUpperCase().slice(0, 13);
-                              //   setVehicleForm({ ...vehicleForm, regNo: val });
-                              //   if (val.length >= 8) validateVehicleField("regNo", val);
-                              //   // Real-time blacklist check — fires as soon as reg number format is valid
-                              //   if (/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{4}$/i.test(val)) {
-                              //     checkBlacklistStatus("VEHICLE", val.replace(/[\s-]/g, ""));
-                              //   }
-                              // }}
                               onBlur={(e) => {
                                 validateVehicleField("regNo", e.target.value);
                               }}
@@ -7786,23 +7840,27 @@ export default function PassRequestPage() {
                               <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin h-4 w-4 text-orange-500" />
                             )}
                           </div>
-                          {hasVal && (
-                            <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all">
-                              {hasError ? (
-                                <>
-                                  <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                  <span className="text-red-500">
-                                    {vehicleErrors.regNo}
-                                  </span>
-                                </>
-                              ) : (
+                          {(hasVal || hasError) && (
+                            <div className="mt-0.5 flex items-center gap-1 text-xs font-medium transition-all">
+                              {vehicleVerification.verified ? (
                                 <>
                                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                                   <span className="text-emerald-600">
-                                    Vehicle number format is valid
+                                    {vehicleVerification.message}
                                   </span>
                                 </>
-                              )}
+                              ) : hasError ? (
+                                <span className="text-red-500">
+                                  {vehicleErrors.regNo}
+                                </span>
+                              ) : vehicleVerification.message ? (
+                                <>
+                                  <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                  <span className="text-red-500">
+                                    {vehicleVerification.message}
+                                  </span>
+                                </>
+                              ) : null}
                             </div>
                           )}
                           {!hasError &&
@@ -7821,17 +7879,6 @@ export default function PassRequestPage() {
                                 </span>
                               </div>
                             )}
-                          {vehicleVerification.message && (
-                            <p
-                              className={`text-xs mt-1 ${
-                                vehicleVerification.verified
-                                  ? "text-green-600"
-                                  : "text-red-600"
-                              }`}
-                            >
-                              {vehicleVerification.message}
-                            </p>
-                          )}
                         </>
                       );
                     })()}
@@ -7854,6 +7901,11 @@ export default function PassRequestPage() {
                         </option>
                       ))}
                     </select>
+                    {vehicleErrors.type && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {vehicleErrors.type}
+                      </p>
+                    )}
                   </div>
                   {/* <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
@@ -7893,6 +7945,11 @@ export default function PassRequestPage() {
                         </option>
                       ))}
                     </select>
+                      {vehicleErrors.accessArea && (
+                        <p className="text-xs text-red-500 mt-0.5 font-medium">
+                          {vehicleErrors.accessArea}
+                        </p>
+                      )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
@@ -8374,6 +8431,7 @@ export default function PassRequestPage() {
                         rcDocument: e.target.files[0],
                       })
                     }
+                    error={vehicleErrors.rcDocument}
                   />
                   <FileUploadBox
                     label="Insurance"
@@ -8394,6 +8452,7 @@ export default function PassRequestPage() {
                         insuranceDocument: e.target.files[0],
                       })
                     }
+                    error={vehicleErrors.insuranceDocument}
                   />
                   {String(vehicleForm.passType) !== "1" && (
                     <FileUploadBox
@@ -8415,6 +8474,7 @@ export default function PassRequestPage() {
                           permit: e.target.files[0],
                         })
                       }
+                      error={vehicleErrors.permit}
                     />
                   )}
                   <FileUploadBox
@@ -8436,6 +8496,7 @@ export default function PassRequestPage() {
                         fitnessCert: e.target.files[0],
                       })
                     }
+                    error={vehicleErrors.fitnessCert}
                   />
                   {(String(vehicleForm.accessArea)
                     .toUpperCase()
@@ -8460,6 +8521,7 @@ export default function PassRequestPage() {
                           sparkArrester: e.target.files[0],
                         })
                       }
+                      error={vehicleErrors.sparkArrester}
                     />
                   )}
                   {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
@@ -8484,6 +8546,7 @@ export default function PassRequestPage() {
                           twistLock: e.target.files[0],
                         })
                       }
+                      error={vehicleErrors.twistLock}
                     />
                   )}
 
@@ -8515,6 +8578,7 @@ export default function PassRequestPage() {
                           requestLetter: e.target.files[0],
                         })
                       }
+                      error={vehicleErrors.requestLetter}
                     />
                   )}
 
@@ -8541,6 +8605,7 @@ export default function PassRequestPage() {
                             taxDoc: e.target.files[0],
                           })
                         }
+                        error={vehicleErrors.taxDoc}
                       />
                       <FileUploadBox
                         label="Emission Certificate"
@@ -8561,6 +8626,7 @@ export default function PassRequestPage() {
                             emissionCert: e.target.files[0],
                           })
                         }
+                        error={vehicleErrors.emissionCert}
                       />
                     </>
                   )}
@@ -8573,6 +8639,7 @@ export default function PassRequestPage() {
                 onClick={() => {
                   setVehicleForm(initialVehicleForm);
                   setEditingVehicleIndex(null);
+                  setVehicleErrors({}); // NEW
                 }}
                 className="bg-white border border-slate-300 text-slate-700 px-8 py-2.5 rounded-xl shadow-sm text-sm font-bold hover:bg-slate-50 transition-colors uppercase tracking-wider"
               >
