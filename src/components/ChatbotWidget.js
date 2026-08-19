@@ -56,6 +56,12 @@ const SendIcon = () => (
 export default function ChatbotWidget() {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
+  const [sessionId, setSessionId] = useState(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("apacs_chatbot_session_id") || null;
+    }
+    return null;
+  });
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -69,6 +75,17 @@ export default function ChatbotWidget() {
   const lastMsgRef = useRef(null);
   const dotsRef = useRef(null);
   const textareaRef = useRef(null);
+
+  const updateSessionId = (newId) => {
+    setSessionId(newId);
+    if (typeof window !== "undefined") {
+      if (newId) {
+        sessionStorage.setItem("apacs_chatbot_session_id", newId);
+      } else {
+        sessionStorage.removeItem("apacs_chatbot_session_id");
+      }
+    }
+  };
 
   const canSend = useMemo(
     () => question.trim().length > 0 && !loading,
@@ -107,31 +124,132 @@ export default function ChatbotWidget() {
     setLoading(true);
     setMessages((prev) => [...prev, { role: "user", text }]);
 
-    try {
-      const res = await axios.post(`${AGENT_API}/chatbot/chat`, { question: text });
-      const d = res?.data || {};
+    const msgId = "asst_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
 
-      if (d.error) {
-        setMessages((prev) => [...prev, { role: "assistant", text: `Error: ${d.error}` }]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            text: d.answer || "I could not find a response right now.",
-            sources: d.sources || [],
-            latencyMs: d.latency_ms || 0,
-            retrieved: d.retrieved || [],
-            chips: Array.isArray(d.follow_up_questions) ? d.follow_up_questions.filter((q) => typeof q === "string" && q.trim()) : [],
-            answerType: d.answer_type,
-            title: d.title,
-            items: d.items,
-          },
-        ]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: msgId,
+        role: "assistant",
+        text: "",
+        sources: [],
+        chips: [],
+        isStreaming: true,
+      },
+    ]);
+
+    try {
+      const response = await fetch(`${AGENT_API}/chatbot/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: text,
+          session_id: sessionId || undefined,
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      let fullText = "";
+      let sources = [];
+      let followUps = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("data: ")) {
+            try {
+              const event = JSON.parse(trimmed.slice(6));
+              if (event.session_id) {
+                updateSessionId(event.session_id);
+              }
+
+              if (event.type === "start") {
+                sources = event.sources || [];
+                followUps = Array.isArray(event.follow_up_questions)
+                  ? event.follow_up_questions.filter((q) => typeof q === "string" && q.trim())
+                  : [];
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === msgId ? { ...m, sources } : m
+                  )
+                );
+              } else if (event.type === "token") {
+                fullText += event.content || "";
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === msgId ? { ...m, text: fullText } : m
+                  )
+                );
+              } else if (event.type === "replace") {
+                fullText = event.content || "";
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === msgId ? { ...m, text: fullText } : m
+                  )
+                );
+              } else if (event.type === "done") {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === msgId ? { ...m, isStreaming: false, chips: followUps } : m
+                  )
+                );
+              }
+            } catch (e) {
+              console.warn("SSE parse error", e);
+            }
+          }
+        }
       }
     } catch (error) {
-      const message = error?.response?.data?.error || error?.response?.data?.message || "Could not reach the server. Please try again.";
-      setMessages((prev) => [...prev, { role: "assistant", text: message }]);
+      console.warn("Stream error, falling back to standard POST", error);
+      try {
+        const res = await axios.post(`${AGENT_API}/chatbot/chat`, {
+          question: text,
+          session_id: sessionId || undefined,
+        });
+        const d = res?.data || {};
+
+        if (d.session_id) {
+          updateSessionId(d.session_id);
+        }
+
+        const botReply = {
+          id: msgId,
+          role: "assistant",
+          text: d.answer || "I could not find a response right now.",
+          sources: d.sources || [],
+          chips: Array.isArray(d.follow_up_questions)
+            ? d.follow_up_questions.filter((q) => typeof q === "string" && q.trim())
+            : [],
+        };
+
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msgId ? botReply : m))
+        );
+      } catch (fallbackErr) {
+        const message = fallbackErr?.response?.data?.error || fallbackErr?.response?.data?.message || "Could not reach the server. Please try again.";
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId
+              ? { id: msgId, role: "assistant", text: message }
+              : m
+          )
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -535,6 +653,23 @@ export default function ChatbotWidget() {
                 <div className="ht">Support Assistant</div>
                 <div className="hs">Chennai Port Authority · Automated Port Access &amp; Control System</div>
               </div>
+              <button
+                className="closebtn"
+                style={{ fontSize: "11px", padding: "2px 8px", marginRight: "4px", width: "auto" }}
+                onClick={() => {
+                  updateSessionId(null);
+                  setMessages([
+                    {
+                      role: "assistant",
+                      text: "Hello! I'm the support assistant for Chennai Port Authority.\n\nWhat would you like help with?",
+                      chips: STARTER_QUESTIONS,
+                    },
+                  ]);
+                }}
+                title="Start New Conversation"
+              >
+                New Chat
+              </button>
               <button className="closebtn" onClick={() => setOpen(false)} aria-label="Close chat">
                 ✕
               </button>
@@ -555,9 +690,17 @@ export default function ChatbotWidget() {
                       <p>{msg.text}</p>
                     ) : (
                       <>
-                        <ReactMarkdown>{msg.text}</ReactMarkdown>
+                        {msg.text ? (
+                          <ReactMarkdown>{msg.text}</ReactMarkdown>
+                        ) : (
+                          <div className="dots">
+                            <span />
+                            <span />
+                            <span />
+                          </div>
+                        )}
 
-                        {msg.chips && msg.chips.length ? (
+                        {!msg.isStreaming && msg.chips && msg.chips.length ? (
                           <div className="chips">
                             {msg.chips.map((c, i) => (
                               <button className="chip" key={i} onClick={() => sendQuickQuestion(c)}>
@@ -573,7 +716,7 @@ export default function ChatbotWidget() {
               );
               })}
 
-              {loading ? (
+              {loading && (!messages.length || messages[messages.length - 1]?.role !== "assistant") ? (
                 <div className="row bot" ref={dotsRef}>
                   <div className="av bot">
                     <BotIcon />
