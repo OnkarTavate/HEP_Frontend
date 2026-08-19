@@ -727,7 +727,7 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                   );
                 })()}
               </h2>
-              <p className="text-base xl:text-lg text-stone-200/90 leading-relaxed max-w-xl drop-shadow font-medium">
+              <p className="text-base xl:text-lg text-stone-200 leading-relaxed max-w-xl font-medium">
                 A next-generation digital logistics gateway streamlining access control, commercial fleet movement, and gate-pass security verification at Chennai Port.
               </p>
             </div>
