@@ -159,8 +159,8 @@ export default function CreateBulkPassPage() {
     purposeOfVisit: "",
     validityFrom: "",
     validityUpto: "",
-    linkValidityHours: "48",
     remarks: "",
+    multipleSubmissionsEnabled: false,
   });
 
   // Split date/time state for validity fields — defaults: 06:00 start, 23:59 end
@@ -237,10 +237,10 @@ export default function CreateBulkPassPage() {
       fd.append("purposeOfVisit", form.purposeOfVisit.trim());
       fd.append("validityFrom", form.validityFrom);
       fd.append("validityUpto", form.validityUpto);
-      fd.append("linkValidityHours", form.linkValidityHours);
       fd.append("remarks", form.remarks.trim());
+      fd.append("multipleSubmissionsEnabled", form.multipleSubmissionsEnabled ? "true" : "false");
       if (dept.id) fd.append("departmentId", dept.id);
-      if (workOrderFile) fd.append("workOrderFile", workOrderFile);
+      if (workOrderFile) fd.append("workOrder", workOrderFile);
 
       const result = await createBulkIntake(fd);
       const refNo = result?.refNo || result?.ref_no || "";
@@ -513,22 +513,6 @@ export default function CreateBulkPassPage() {
                 <p className="text-[11px] text-stone-400 mt-1">Default end time: 11:59 PM</p>
                 <FieldError msg={errors.validityUpto} />
               </div>
-
-              {/* Upload Link Validity */}
-              <div>
-                <FieldLabel required>Upload Link Validity</FieldLabel>
-                <select
-                  value={form.linkValidityHours}
-                  onChange={(e) => set("linkValidityHours", e.target.value)}
-                  className={inputCls(false)}
-                >
-                  <option value="48">48 hours (default)</option>
-                  <option value="24">24 hours</option>
-                </select>
-                <p className="text-[11px] text-stone-400 mt-1">
-                  How long the applicant&apos;s upload link stays valid.
-                </p>
-              </div>
             </div>
 
             {/* Work Order Required */}
@@ -609,6 +593,54 @@ export default function CreateBulkPassPage() {
                 />
               </div>
             )}
+
+            {/* ── Section: Multiple Submissions ── */}
+            <div className="mt-5">
+              <div className="flex items-start gap-3 p-4 rounded-2xl border border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-white/[0.03]">
+                <div className="mt-0.5">
+                  <div
+                    onClick={() => set("multipleSubmissionsEnabled", !form.multipleSubmissionsEnabled)}
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition cursor-pointer ${
+                      form.multipleSubmissionsEnabled
+                        ? "border-amber-500 bg-amber-400"
+                        : "border-stone-300 dark:border-white/20 bg-transparent"
+                    }`}
+                  >
+                    {form.multipleSubmissionsEnabled && (
+                      <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <label
+                    className="flex items-start gap-2 cursor-pointer"
+                    onClick={() => set("multipleSubmissionsEnabled", !form.multipleSubmissionsEnabled)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.multipleSubmissionsEnabled}
+                      onChange={(e) => set("multipleSubmissionsEnabled", e.target.checked)}
+                      className="hidden"
+                    />
+                    <span className="text-sm font-bold text-stone-800 dark:text-stone-200">
+                      Enable multiple submissions
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-stone-500 mt-1">
+                    Organization can submit multiple batches with same link until validity expires
+                  </p>
+                  
+                  <InfoPanel title="How Multiple Submissions Work" defaultExpanded={false}>
+                    <ul className="list-disc space-y-1 marker:text-amber-500">
+                      <li>The organization receives ONE link that remains active</li>
+                      <li>They can submit multiple batches within validity period</li>
+                      <li>Each batch (max 30 persons) is reviewed separately by Traffic</li>
+                      <li>Useful for schools with changing visitors or film productions with evolving crews</li>
+                    </ul>
+                  </InfoPanel>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* ── Section 4: Additional Info ── */}
@@ -685,6 +717,38 @@ function SectionHeading({ icon, title }) {
         {icon}
       </span>
       <h3 className="text-base font-bold text-stone-800 dark:text-stone-200">{title}</h3>
+    </div>
+  );
+}
+
+// ── Multiple Submissions Info Panel ─────────────────────────────────────────────────
+
+function InfoPanel({ title, children, defaultExpanded = false }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  return (
+    <div className="mt-4 rounded-2xl border border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-white/[0.03] overflow-hidden transition-all">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between text-left"
+      >
+        <span className="text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
+          {title}
+        </span>
+        <span
+          className={`text-amber-500 transition-transform duration-300 ${
+            expanded ? "rotate-180" : ""
+          }`}
+        >
+          ▼
+        </span>
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 text-sm text-stone-600 dark:text-stone-400 pl-6">
+          {children}
+        </div>
+      )}
     </div>
   );
 }

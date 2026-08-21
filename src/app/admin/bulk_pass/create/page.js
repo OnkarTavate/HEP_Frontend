@@ -59,6 +59,39 @@ function FieldError({ msg }) {
   if (!msg) return null;
   return <p className="flex items-center gap-1 mt-1.5 text-xs font-semibold text-red-500"><AlertCircle className="h-3.5 w-3.5" />{msg}</p>;
 }
+
+// ── Multiple Submissions Info Panel ─────────────────────────────────────────────────
+
+function InfoPanel({ title, children, defaultExpanded = false }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden transition-all">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between text-left"
+      >
+        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+          {title}
+        </span>
+        <span
+          className={`text-amber-500 transition-transform duration-300 ${
+            expanded ? "rotate-180" : ""
+          }`}
+        >
+          ▼
+        </span>
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 text-sm text-slate-600 pl-6">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SectionHeading({ icon, title }) {
   return (
     <div className="flex items-center gap-2.5 mb-5">
@@ -85,7 +118,8 @@ export default function AdminCreateBulkPassPage() {
   const [form, setForm] = useState({
     visitorType: "", companyName: "", applicantEmail: "", applicantMobile: "",
     refDocNo: "", workOrderRequired: "no", noOfPersons: "30", noOfVehicles: "0",
-    paymentMode: "", purposeOfVisit: "", validityFrom: "", validityUpto: "", linkValidityHours: "48", remarks: "",
+    paymentMode: "", purposeOfVisit: "", validityFrom: "", validityUpto: "", remarks: "",
+    multipleSubmissionsEnabled: false,
   });
   const [workOrderFile, setWorkOrderFile] = useState(null);
   const [errors, setErrors] = useState({});
@@ -112,7 +146,13 @@ export default function AdminCreateBulkPassPage() {
     setSubmitting(true);
     try {
       const fd = new FormData();
-      Object.entries(form).forEach(([k, v]) => fd.append(k, typeof v === "string" ? v.trim() : v));
+      Object.entries(form).forEach(([k, v]) => {
+        if (k === "multipleSubmissionsEnabled") {
+          fd.append(k, v ? "true" : "false");
+        } else {
+          fd.append(k, typeof v === "string" ? v.trim() : v);
+        }
+      });
       if (dept.id) fd.append("departmentId", dept.id);
       if (workOrderFile) fd.append("workOrder", workOrderFile);
       const result = await createBulkIntake(fd);
@@ -219,20 +259,13 @@ export default function AdminCreateBulkPassPage() {
                 min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} className={inputCls(!!errors.validityFrom)} />
               <FieldError msg={errors.validityFrom} />
             </div>
-            <div>
-              <FieldLabel required>Validity Upto</FieldLabel>
-              <input type="datetime-local" value={form.validityUpto} onChange={(e) => set("validityUpto", e.target.value)} onBlur={() => touch("validityUpto")}
-                min={form.validityFrom || new Date(Date.now() + 60000).toISOString().slice(0, 16)} className={inputCls(!!errors.validityUpto)} />
-              <FieldError msg={errors.validityUpto} />
+              <div>
+                <FieldLabel required>Validity Upto</FieldLabel>
+                <input type="datetime-local" value={form.validityUpto} onChange={(e) => set("validityUpto", e.target.value)} onBlur={() => touch("validityUpto")}
+                  min={form.validityFrom || new Date(Date.now() + 60000).toISOString().slice(0, 16)} className={inputCls(!!errors.validityUpto)} />
+                <FieldError msg={errors.validityUpto} />
+              </div>
             </div>
-            <div>
-              <FieldLabel required>Upload Link Validity</FieldLabel>
-              <select value={form.linkValidityHours} onChange={(e) => set("linkValidityHours", e.target.value)} className={inputCls(false)}>
-                <option value="48">48 hours (default)</option>
-                <option value="24">24 hours</option>
-              </select>
-            </div>
-          </div>
 
           <div className="mt-5">
             <FieldLabel>Work Order Required</FieldLabel>
@@ -266,6 +299,60 @@ export default function AdminCreateBulkPassPage() {
               <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={(e) => setWorkOrderFile(e.target.files?.[0] || null)} />
             </div>
           )}
+        </div>
+
+        {/* Multiple Submissions Section */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <SectionHeading icon={<Hash className="h-4 w-4" />} title="Submission Options" />
+          <div className="space-y-4 mt-5">
+            {/* Enable Multiple Submissions Checkbox */}
+            <div>
+              <div
+                onClick={() => set("multipleSubmissionsEnabled", !form.multipleSubmissionsEnabled)}
+                className="flex items-start gap-3 cursor-pointer"
+              >
+                <div
+                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition mt-0.5 shrink-0 ${
+                    form.multipleSubmissionsEnabled
+                      ? "border-amber-500 bg-amber-400"
+                      : "border-slate-300"
+                  }`}
+                >
+                  {form.multipleSubmissionsEnabled && (
+                    <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.multipleSubmissionsEnabled}
+                      onChange={(e) => set("multipleSubmissionsEnabled", e.target.checked)}
+                      className="hidden"
+                    />
+                    <span className="text-sm font-bold text-slate-800">
+                      Enable multiple submissions
+                    </span>
+                  </label>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Organization can submit multiple batches with same link until validity expires
+                  </p>
+                  
+                  {/* Collapsible Information Panel */}
+                  {form.multipleSubmissionsEnabled && (
+                    <InfoPanel title="How Multiple Submissions Work" defaultExpanded={false}>
+                      <ul className="list-disc space-y-1 marker:text-amber-500">
+                        <li>The organization receives ONE link that remains active</li>
+                        <li>They can submit multiple batches within validity period</li>
+                        <li>Each batch (max 30 persons) is reviewed separately by Traffic</li>
+                        <li>Useful for schools with changing visitors or film productions with evolving crews</li>
+                      </ul>
+                    </InfoPanel>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Additional Info */}

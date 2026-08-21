@@ -19,10 +19,12 @@ import {
   ChevronUp,
   ImageIcon,
   Car,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getBulkBatchDetail,
+  getChildSubmissions,
   returnToApplicant,
   resendInvitation,
   downloadBulkPdf,
@@ -234,7 +236,7 @@ function ReturnModal({ batchId, refNo, onClose, onSuccess }) {
 // Displayed on DRAFT and RETURNED_TO_APPLICANT batches so the dept user
 // can resend the invitation email through the application.
 
-function UploadLinkBanner({ tokenActive, tokenExpiresAt, linkValidityHours, onResend, resending }) {
+function UploadLinkBanner({ tokenActive, tokenExpiresAt, onResend, resending }) {
   const isExpired =
     tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now();
 
@@ -248,11 +250,6 @@ function UploadLinkBanner({ tokenActive, tokenExpiresAt, linkValidityHours, onRe
         <Send className={`h-4 w-4 shrink-0 ${isExpired || !tokenActive ? "text-red-500" : "text-sky-600 dark:text-sky-400"}`} />
         <p className={`text-sm font-bold ${isExpired || !tokenActive ? "text-red-700 dark:text-red-300" : "text-sky-700 dark:text-sky-300"}`}>
           Applicant Upload Link
-          {linkValidityHours && !isExpired && tokenActive && (
-            <span className="ml-2 text-xs font-normal text-sky-500 dark:text-sky-400">
-              · valid for {linkValidityHours}h
-            </span>
-          )}
           {(isExpired || !tokenActive) && (
             <span className="ml-2 text-xs font-normal text-red-500">· Link expired</span>
           )}
@@ -649,6 +646,10 @@ export default function BulkPassDetailPage() {
   const [downloading, setDownloading] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [resending, setResending] = useState(false);
+  
+  // Child submissions state (Multiple Pass Submissions Feature)
+  const [childSubmissions, setChildSubmissions] = useState([]);
+  const [childSubmissionsLoading, setChildSubmissionsLoading] = useState(false);
 
   const fetchBatch = useCallback(async () => {
     if (!id) return;
@@ -671,6 +672,33 @@ export default function BulkPassDetailPage() {
   useEffect(() => {
     fetchBatch();
   }, [fetchBatch]);
+
+  // Fetch child submissions if multiple submissions are enabled
+  useEffect(() => {
+    const fetchChildSubmissions = async () => {
+      if (!batch?.id || !batch.multipleSubmissionsEnabled) {
+        setChildSubmissions([]);
+        return;
+      }
+      
+      setChildSubmissionsLoading(true);
+      try {
+        const res = await getChildSubmissions(batch.id);
+        if (res?.success) {
+          setChildSubmissions(res.submissions || []);
+        } else {
+          setChildSubmissions([]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch child submissions:", err);
+        setChildSubmissions([]);
+      } finally {
+        setChildSubmissionsLoading(false);
+      }
+    };
+    
+    fetchChildSubmissions();
+  }, [batch?.id, batch?.multipleSubmissionsEnabled]);
 
   const handleDownloadPdf = async () => {
     setDownloading(true);
@@ -857,7 +885,6 @@ export default function BulkPassDetailPage() {
         <UploadLinkBanner
           tokenActive={batch.tokenActive}
           tokenExpiresAt={batch.tokenExpiresAt}
-          linkValidityHours={batch.linkValidityHours}
           batchId={id}
           onResend={handleResendInvitation}
           resending={resending}
@@ -911,6 +938,112 @@ export default function BulkPassDetailPage() {
           </div>
         ))}
       </div>
+
+      {/* ── Child submissions (Multiple Pass Submissions Feature) ── */}
+      {batch.multipleSubmissionsEnabled && (
+        <div className={`${cardShell} p-6`}>
+          <SectionHeading
+            icon={<RefreshCw className="h-4 w-4" />}
+            title="Submission History"
+          />
+          <p className="text-sm text-stone-500 dark:text-stone-400 mb-4">
+            This batch allows multiple submissions. Below are all submissions made so far.
+          </p>
+          
+          {childSubmissionsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-10 w-10 rounded-full border-4 border-amber-400 border-t-transparent animate-spin" />
+                <p className="text-sm text-stone-500 dark:text-stone-400">
+                  Loading submission history…
+                </p>
+              </div>
+            </div>
+          ) : childSubmissions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 dark:bg-white/5 text-stone-400 mb-3">
+                <FileText className="h-6 w-6" />
+              </div>
+              <p className="text-sm font-semibold text-stone-500 dark:text-stone-400">
+                No submissions yet
+              </p>
+              <p className="text-xs text-stone-400 dark:text-stone-500 mt-1 max-w-sm">
+                The applicant will receive the upload link via email. Submissions will appear here after they upload their first batch.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-2xl ring-1 ring-stone-100 dark:ring-white/[0.05]">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-stone-50/80 dark:bg-white/[0.03] border-b border-stone-100 dark:border-white/[0.06]">
+                    {["Submission #", "Reference No", "Persons", "Vehicles", "Status", "Submitted Date", "Actions"].map((h) => (
+                      <th
+                        key={h}
+                        className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100 dark:divide-white/[0.05]">
+                  {childSubmissions.map((submission, idx) => {
+                    const submissionStatus = submission.status || "UNKNOWN";
+                    const statusConfig = STATUS_CONFIG[submissionStatus] || {
+                      chip: "bg-stone-100 text-stone-500 border border-stone-200",
+                      dot: "bg-stone-400",
+                    };
+                    return (
+                      <tr
+                        key={submission.id || idx}
+                        className="hover:bg-stone-50/50 dark:hover:bg-white/[0.02] transition-colors"
+                      >
+                        <td className="px-4 py-3 font-mono text-xs font-semibold text-stone-600 dark:text-stone-400">
+                          {submission.submissionNumber || "—"}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs font-bold text-stone-800 dark:text-stone-200">
+                          {submission.refNo || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-stone-600 dark:text-stone-400 tabular-nums">
+                          {submission.personsCount ?? 0}
+                        </td>
+                        <td className="px-4 py-3 text-stone-600 dark:text-stone-400 tabular-nums">
+                          {submission.vehiclesCount ?? 0}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${statusConfig.chip}`}
+                          >
+                            <span className={`h-1.5 w-1.5 rounded-full ${statusConfig.dot}`} />
+                            {statusConfig.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-stone-600 dark:text-stone-400 whitespace-nowrap">
+                          {fmtDate(submission.createdAt)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => router.push(`/dashboard/bulk_pass/${submission.id}`)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition"
+                          >
+                            <Eye className="h-3.5 w-3.5" /> View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          
+          <div className="mt-4 pt-4 border-t border-stone-100 dark:border-white/[0.06]">
+            <p className="text-xs text-stone-500 dark:text-stone-400 text-center">
+              Total Submissions: {childSubmissions.length}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Two-column layout: Intake details + Status timeline ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

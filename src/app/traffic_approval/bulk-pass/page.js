@@ -133,6 +133,9 @@ function BatchTable({ rows, loading, emptyMessage, emptySubMessage, canApprove, 
             {headers.map((h) => (
               <th key={h} className="px-5 py-4 text-left text-[11px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">{h}</th>
             ))}
+            {!showStatus && (
+              <th className="px-5 py-4 text-left text-[11px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">Multiple Submissions</th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -164,7 +167,7 @@ function BatchTable({ rows, loading, emptyMessage, emptySubMessage, canApprove, 
                 {showStatus ? (
                   <StatusChip status={batch.status} />
                 ) : (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => router.push(`/traffic_approval/bulk-pass/${batch.id}`)}
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-[#ff6b00] bg-orange-50 hover:bg-orange-100 border border-orange-200 transition whitespace-nowrap"
@@ -182,6 +185,28 @@ function BatchTable({ rows, loading, emptyMessage, emptySubMessage, canApprove, 
                   </div>
                 )}
               </td>
+              {batch.multipleSubmissionsEnabled && (
+                <td className="px-5 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      Enabled
+                    </span>
+                    {batch.childSubmissionsCount > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-amber-200 text-amber-800 text-[10px] font-bold">
+                        {batch.childSubmissionsCount}
+                      </span>
+                    )}
+                  </div>
+                </td>
+              )}
+              {!batch.multipleSubmissionsEnabled && (
+                <td className="px-5 py-4">
+                  <span className="text-[10px] text-slate-400">—</span>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -199,6 +224,8 @@ export default function TrafficBulkPassPage() {
   const [activeTab, setActiveTab] = useState("queue");
   // statusFilter: null | "DRAFT" | "UNDER_REVIEW" | "RETURNED_TO_APPLICANT" | "REJECTED" | "COMPLETED"
   const [statusFilter, setStatusFilter] = useState(null);
+  // multipleSubmissionsFilter: null | true
+  const [multipleSubmissionsFilter, setMultipleSubmissionsFilter] = useState(null);
 
   // ── Queue state (approval-admin-service, UNDER_REVIEW only) ──
   const [batches, setBatches] = useState([]);
@@ -230,13 +257,16 @@ export default function TrafficBulkPassPage() {
   const fetchAllBatches = useCallback(async () => {
     setDashLoading(true);
     try {
-      const data = await listBulkBatches();
+      const filters = {};
+      if (statusFilter) filters.status = statusFilter;
+      if (multipleSubmissionsFilter !== null) filters.multipleSubmissionsEnabled = multipleSubmissionsFilter;
+      const data = await listBulkBatches(filters);
       setAllBatches(Array.isArray(data) ? data : []);
     } catch {
       toast.error("Failed to load dashboard data.");
       setAllBatches([]);
     } finally { setDashLoading(false); }
-  }, []);
+  }, [statusFilter, multipleSubmissionsFilter]);
 
   useEffect(() => {
     fetchQueue();
@@ -247,9 +277,13 @@ export default function TrafficBulkPassPage() {
 
   // Batches filtered by the status card the user clicked on the dashboard
   const filteredBatches = useMemo(() => {
-    if (!statusFilter) return allBatches;
-    return allBatches.filter((b) => b.status === statusFilter);
-  }, [allBatches, statusFilter]);
+    let filtered = allBatches;
+    if (statusFilter) filtered = filtered.filter((b) => b.status === statusFilter);
+    if (multipleSubmissionsFilter !== null) {
+      filtered = filtered.filter((b) => b.multipleSubmissionsEnabled === multipleSubmissionsFilter);
+    }
+    return filtered;
+  }, [allBatches, statusFilter, multipleSubmissionsFilter]);
 
   const handleRefresh = () => {
     fetchQueue();
@@ -272,13 +306,33 @@ export default function TrafficBulkPassPage() {
           <h2 className="text-2xl font-bold text-slate-800">Bulk Pass Approvals</h2>
           <p className="text-sm text-slate-500 mt-0.5">Review and approve group port-entry pass batches</p>
         </div>
-        <button
-          onClick={handleRefresh}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 shadow-sm transition"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setMultipleSubmissionsFilter(multipleSubmissionsFilter === null ? true : null)}
+            className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition border ${
+              multipleSubmissionsFilter !== null
+                ? "bg-amber-50 text-amber-700 border-amber-200"
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Multiple Submissions
+            {multipleSubmissionsFilter !== null && (
+              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-amber-200 text-amber-800 text-[10px] font-bold">
+                {allBatches.filter((b) => b.multipleSubmissionsEnabled).length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={handleRefresh}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 shadow-sm transition"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* ── Tabs ── */}

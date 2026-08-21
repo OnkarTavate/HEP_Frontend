@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   Download,
   Upload,
@@ -25,10 +26,12 @@ import {
   Plus,
   Car,
   Users,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getPublicBatch,
+  validateUploadToken,
   uploadExcelFiles,
   downloadTemplate,
   parseExcelOnly,
@@ -37,6 +40,7 @@ import {
   checkBulkPassBlacklist,
   checkVehicleValidity,
   fileUrl,
+  getBulkBatchDetail,
 } from "@/lib/bulkPassApi";
 import { processPhoto } from "@/lib/photoProcessor";
 
@@ -252,7 +256,7 @@ function ErrorScreen({ type }) {
   );
 }
 
-function ConfirmationScreen({ refNo, email }) {
+function ConfirmationScreen({ refNo, email, isMultipleSubmissionEnabled, onNextSubmit, onHistoryClick, submissionNumber }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 to-amber-50/30 flex items-center justify-center px-4">
       <div className={`${card} p-10 max-w-md w-full text-center`}>
@@ -262,6 +266,9 @@ function ConfirmationScreen({ refNo, email }) {
         <h2 className="text-xl font-black text-stone-900 mb-2">Submitted Successfully</h2>
         {refNo && (
           <p className="text-sm font-mono font-bold text-amber-700 mb-3">{refNo}</p>
+        )}
+        {submissionNumber && (
+          <p className="text-xs font-semibold text-emerald-600 mb-4">Submission #{submissionNumber} completed</p>
         )}
         <p className="text-sm text-stone-500 leading-relaxed">
           Your visitor data has been submitted and is now with the department for review.
@@ -285,15 +292,49 @@ function ConfirmationScreen({ refNo, email }) {
           </div>
         )}
 
-        <div className="mt-4 px-5 py-4 rounded-2xl bg-amber-50 ring-1 ring-amber-200 text-left">
-          <div className="flex gap-2">
-            <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-700 leading-relaxed">
-              This upload link is now inactive. Contact the issuing department if corrections are
-              needed.
-            </p>
+        {/* Post-submission actions for multiple submissions */}
+        {isMultipleSubmissionEnabled && (
+          <div className="mt-6 space-y-3">
+            <div className="px-5 py-4 rounded-2xl bg-amber-50 ring-1 ring-amber-200 text-left">
+              <div className="flex gap-2">
+                <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  This link allows multiple submissions. You can submit another batch until{" "}
+                  <span className="font-semibold">validity expires</span>.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={onNextSubmit}
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-500 text-[#1f1f1f] font-bold text-sm transition"
+              >
+                <Plus className="h-4 w-4" />
+                Submit Another Batch
+              </button>
+              <button
+                onClick={onHistoryClick}
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-sm transition"
+              >
+                <Eye className="h-4 w-4" />
+                View All Submissions
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+
+        {!isMultipleSubmissionEnabled && (
+          <div className="mt-4 px-5 py-4 rounded-2xl bg-amber-50 ring-1 ring-amber-200 text-left">
+            <div className="flex gap-2">
+              <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700 leading-relaxed">
+                This upload link is now inactive. Contact the issuing department if corrections are
+                needed.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -301,11 +342,140 @@ function ConfirmationScreen({ refNo, email }) {
 
 // ── Intake info card ─────────────────────────────────────────────────────────
 
-function IntakeCard({ batch }) {
+function IntakeCard({ batch, isMultipleSubmissionEnabled, submissionHistory, nextSubmissionNumber }) {
   const [expanded, setExpanded] = useState(false);
   const isReturned = batch?.status === "RETURNED_TO_APPLICANT";
+  
+  // Multiple submission UI components
+  const MultipleSubmissionBanner = () => (
+    <div className="mb-6 rounded-2xl bg-blue-50 ring-1 ring-blue-200 p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+          <Info className="h-4 w-4" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-bold text-blue-900 mb-1">
+            Multiple submissions enabled
+          </p>
+          {batch?.validityUpto && (
+            <p className="text-xs text-blue-700 leading-relaxed mb-2">
+              You can submit passes until <span className="font-semibold">{fmtDate(batch.validityUpto)}</span>.
+            </p>
+          )}
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-100 text-blue-800 text-xs font-bold">
+            <span>Current Submission: #{nextSubmissionNumber}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const SubmissionHistoryCard = () => (
+    <div id="submission-history" className={`${card} mb-6`}>
+      <div className="px-6 py-4 border-b border-stone-100">
+        <h4 className="text-sm font-bold text-stone-800">Submission History</h4>
+        <p className="text-xs text-stone-500 mt-0.5">
+          This batch allows multiple submissions. Below are all submissions made so far.
+        </p>
+      </div>
+      {submissionHistory.length === 0 ? (
+        <div className="px-6 py-8 text-center">
+          <Archive className="h-10 w-10 mx-auto text-stone-300 mb-3" />
+          <p className="text-sm text-stone-500">
+            No submissions yet. Upload your first batch below.
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-stone-50 text-stone-600 font-semibold">
+              <tr>
+                <th className="px-6 py-3">Submission #</th>
+                <th className="px-6 py-3">Reference No</th>
+                <th className="px-6 py-3">Persons</th>
+                <th className="px-6 py-3">Vehicles</th>
+                <th className="px-6 py-3">Status</th>
+                <th className="px-6 py-3">Submitted Date</th>
+                <th className="px-6 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {submissionHistory.map((submission, i) => (
+                <tr key={i} className="hover:bg-stone-50">
+                  <td className="px-6 py-3 font-mono">{submission.submissionNumber || "—"}</td>
+                  <td className="px-6 py-3 font-mono">{submission.refNo || "—"}</td>
+                  <td className="px-6 py-3">{submission.personsCount || "—"}</td>
+                  <td className="px-6 py-3">{submission.vehiclesCount || "—"}</td>
+                  <td className="px-6 py-3">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        submission.status === "COMPLETED"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : submission.status === "UNDER_REVIEW"
+                          ? "bg-amber-100 text-amber-700"
+                          : submission.status === "REJECTED"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-stone-100 text-stone-700"
+                      }`}
+                    >
+                      {submission.status || "—"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3 text-stone-500">{fmtDate(submission.createdAt)}</td>
+                  <td className="px-6 py-3">
+                    <button
+                      onClick={() => {
+                        // Navigate to batch detail page
+                        window.location.href = `/bulk_pass_view/${submission.id}`;
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold transition"
+                    >
+                      <Eye className="h-3 w-3" />
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="px-6 py-3 bg-stone-50 text-center">
+        <p className="text-xs text-stone-500">
+          Total Submissions: {submissionHistory.length}
+        </p>
+      </div>
+    </div>
+  );
+
+  const SubmitAnotherButton = () => (
+    <div className="mt-6 flex justify-center">
+      <button
+        onClick={() => {
+          // Reset form state
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          // Trigger the reset in the parent component
+          toast.info("Use the Submit Another Batch button on the success screen to reset the form.");
+        }}
+        className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-500 text-[#1f1f1f] font-bold text-sm transition"
+      >
+        <Plus className="h-4 w-4" />
+        Submit Another Pass
+      </button>
+    </div>
+  );
+  
   return (
     <>
+      {/* Multiple submission UI components */}
+      {isMultipleSubmissionEnabled && (
+        <>
+          <MultipleSubmissionBanner />
+          <SubmissionHistoryCard />
+          <SubmitAnotherButton />
+        </>
+      )}
+
       {/* Return reason banner (if returned for revision) */}
       {isReturned && batch.returnReason && (
         <div className={`${card} mb-6`}>
@@ -2379,6 +2549,14 @@ export default function BulkPassPublicPage() {
   const [batch, setBatch] = useState(null);
   const [loadingBatch, setLoadingBatch] = useState(true);
   const [batchError, setBatchError] = useState(null); // "invalid" | "expired" | null
+  
+  // Multiple submission detection
+  const [isMultipleSubmissionEnabled, setIsMultipleSubmissionEnabled] = useState(false);
+  const [isParentRequest, setIsParentRequest] = useState(false);
+  const [isParentBatch, setIsParentBatch] = useState(false);
+  const [submissionHistory, setSubmissionHistory] = useState([]);
+  const [nextSubmissionNumber, setNextSubmissionNumber] = useState(1);
+  const [withinValidityPeriod, setWithinValidityPeriod] = useState(true);
 
   // "excel" → "edit" → "submitted"
   const [step, setStep] = useState("excel");
@@ -2432,66 +2610,87 @@ export default function BulkPassPublicPage() {
     let alive = true;
     (async () => {
       try {
-        const data = await getPublicBatch(token);
-        if (alive) {
-          setBatch(data);
-          // If this is a revision (returned), pre-populate previously submitted data
-          // so the applicant can correct and re-submit without starting from scratch.
-          if (
-            data?.status === "RETURNED_TO_APPLICANT" &&
-            Array.isArray(data.previousPersons) &&
-            data.previousPersons.length > 0
-          ) {
-            // Map stored person data back into the row format the edit step expects.
-            // Photos and Aadhaar card files can't be restored (they're server-side files),
-            // so we mark them null — the applicant must re-upload them.
-            const restoredRows = data.previousPersons.map((p) => ({
-              name: p.name || "",
-              aadhaar: p.aadhaar || "",
-              dob: normaliseDob(p.dob),
-              mobile: p.mobile || "",
-              photoDataUrl: null,
-              aadhaarCardFile: null,
-              // Keep references to previous server-side files so the applicant
-              // can reuse them without re-uploading. Set the _keep* flags to true
-              // by default — applicant can clear them by uploading a replacement.
-              _previousPhotoPath: p.photoPath || null,
-              _keepPhotoPath: p.photoPath || null,         // reuse unless replaced
-              _previousAadhaarPath: p.aadhaarCardPath || null,
-              _keepAadhaarPath: p.aadhaarCardPath || null, // reuse unless replaced
-              _revisionRejected: p.approvalStatus === "REJECTED",
-              _revisionReason: p.approvalReason || null,
-              parseErrors: [],
-            }));
-            setRows(restoredRows);
-
-            // Pre-populate vehicles too
-            if (Array.isArray(data.previousVehicles) && data.previousVehicles.length > 0) {
-              const restoredVehicles = data.previousVehicles.map((v) => ({
-                regNo: v.regNo || "",
-                vehicleType: v.vehicleType || "",
-                driverName: v.driverName || "",
-                driverAadhaar: v.driverAadhaar || "",
-                driverMobile: v.driverMobile || "",
-                driverDob: normaliseDob(v.driverDob),
-                driverLicenseNumber: v.driverLicenseNumber || "",
-                // All doc File slots start null — new uploads will fill them.
-                rc: null, insurance: null, fitness: null,
-                permit: null, roadTax: null, emission: null,
-                driverAadhaarCard: null, driverLicense: null,
-                // Previous server-side doc paths — kept by default so the applicant
-                // doesn't have to re-upload unchanged documents.
-                _previousVehicleDocs: v.vehicleDocs || {},
-                _keepVehicleDocs: { ...(v.vehicleDocs || {}) },
-                _revisionRejected: v.approvalStatus === "REJECTED",
-                _revisionReason: v.approvalReason || null,
-              }));
-              setVehicles(restoredVehicles);
+        // First, try to validate the token to detect multiple submission support
+        try {
+          const tokenValidationData = await validateUploadToken(token);
+          if (alive) {
+            // Multiple submission detection
+            const isParentReq = tokenValidationData.isParentRequest || false;
+            const isParentBch = tokenValidationData.isParentBatch || false;
+            setIsParentRequest(isParentReq);
+            setIsParentBatch(isParentBch);
+            setIsMultipleSubmissionEnabled(isParentReq || isParentBch);
+            setSubmissionHistory(tokenValidationData.submissionHistory || []);
+            setNextSubmissionNumber(tokenValidationData.nextSubmissionNumber || 1);
+            setWithinValidityPeriod(tokenValidationData.withinValidityPeriod !== false);
+            
+            // If validation returns full batch data, use it; otherwise fall back to getPublicBatch
+            if (tokenValidationData.batch) {
+              setBatch(tokenValidationData.batch);
+            } else {
+              // Fall back to getPublicBatch if validation doesn't include batch data
+              const publicBatchData = await getPublicBatch(token);
+              if (alive) setBatch(publicBatchData);
             }
-
-            // Skip the excel upload step — go straight to review/edit
-            setStep("edit");
           }
+        } catch (validationErr) {
+          // If token validation fails, fall back to getPublicBatch for backward compatibility
+          const publicBatchData = await getPublicBatch(token);
+          if (alive) setBatch(publicBatchData);
+        }
+        
+        // If batch data was fetched and this is a revision (returned), pre-populate previously submitted data
+        // so the applicant can correct and re-submit without starting from scratch.
+        if (batch?.status === "RETURNED_TO_APPLICANT" && Array.isArray(batch.previousPersons) && batch.previousPersons.length > 0) {
+          // Map stored person data back into the row format the edit step expects.
+          // Photos and Aadhaar card files can't be restored (they're server-side files),
+          // so we mark them null — the applicant must re-upload them.
+          const restoredRows = batch.previousPersons.map((p) => ({
+            name: p.name || "",
+            aadhaar: p.aadhaar || "",
+            dob: normaliseDob(p.dob),
+            mobile: p.mobile || "",
+            photoDataUrl: null,
+            aadhaarCardFile: null,
+            // Keep references to previous server-side files so the applicant
+            // can reuse them without re-uploading. Set the _keep* flags to true
+            // by default — applicant can clear them by uploading a replacement.
+            _previousPhotoPath: p.photoPath || null,
+            _keepPhotoPath: p.photoPath || null,         // reuse unless replaced
+            _previousAadhaarPath: p.aadhaarCardPath || null,
+            _keepAadhaarPath: p.aadhaarCardPath || null, // reuse unless replaced
+            _revisionRejected: p.approvalStatus === "REJECTED",
+            _revisionReason: p.approvalReason || null,
+            parseErrors: [],
+          }));
+          setRows(restoredRows);
+
+          // Pre-populate vehicles too
+          if (Array.isArray(batch.previousVehicles) && batch.previousVehicles.length > 0) {
+            const restoredVehicles = batch.previousVehicles.map((v) => ({
+              regNo: v.regNo || "",
+              vehicleType: v.vehicleType || "",
+              driverName: v.driverName || "",
+              driverAadhaar: v.driverAadhaar || "",
+              driverMobile: v.driverMobile || "",
+              driverDob: normaliseDob(v.driverDob),
+              driverLicenseNumber: v.driverLicenseNumber || "",
+              // All doc File slots start null — new uploads will fill them.
+              rc: null, insurance: null, fitness: null,
+              permit: null, roadTax: null, emission: null,
+              driverAadhaarCard: null, driverLicense: null,
+              // Previous server-side doc paths — kept by default so the applicant
+              // doesn't have to re-upload unchanged documents.
+              _previousVehicleDocs: v.vehicleDocs || {},
+              _keepVehicleDocs: { ...(v.vehicleDocs || {}) },
+              _revisionRejected: v.approvalStatus === "REJECTED",
+              _revisionReason: v.approvalReason || null,
+            }));
+            setVehicles(restoredVehicles);
+          }
+
+          // Skip the excel upload step — go straight to review/edit
+          setStep("edit");
         }
       } catch (err) {
         if (!alive) return;
@@ -2600,20 +2799,52 @@ export default function BulkPassPublicPage() {
       clearDraft();
       setStep("submitted");
       toast.success("Batch submitted successfully.");
+      
+      // For multiple submissions, refresh the submission history
+      if (isMultipleSubmissionEnabled) {
+        try {
+          const tokenValidationData = await validateUploadToken(token);
+          setSubmissionHistory(tokenValidationData.submissionHistory || []);
+          setNextSubmissionNumber(tokenValidationData.nextSubmissionNumber || 1);
+        } catch (refreshErr) {
+          console.error("Failed to refresh submission history:", refreshErr);
+        }
+      }
     } catch (err) {
       const errData = err?.response?.data;
-      if (errData?.data?.errors) {
-        errData.data.errors.slice(0, 3).forEach((e) => toast.error(e.message));
+      if (errData?.data?.errors && Array.isArray(errData.data.errors)) {
+        errData.data.errors.slice(0, 5).forEach((e) => toast.error(e.message));
       } else {
-        toast.error(errData?.message || "Submission failed. Please try again.");
+        const errorMsg = errData?.message || errData?.errorDetails || err?.message || "Submission failed. Please try again.";
+        toast.error(errorMsg);
       }
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleResetForNextSubmission = useCallback(async () => {
+    // Reset the form to the excel upload step
+    setStep("excel");
+    setRows([]);
+    setVehicles([]);
+    clearDraft();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    
+    // For multiple submissions, refresh the submission history after reset
+    if (isMultipleSubmissionEnabled) {
+      try {
+        const tokenValidationData = await validateUploadToken(token);
+        setSubmissionHistory(tokenValidationData.submissionHistory || []);
+        setNextSubmissionNumber(tokenValidationData.nextSubmissionNumber || 1);
+      } catch (refreshErr) {
+        console.error("Failed to refresh submission history after reset:", refreshErr);
+      }
+    }
+  }, [clearDraft, isMultipleSubmissionEnabled, token]);
+
   // Guards
-  if (step === "submitted") return <ConfirmationScreen refNo={batch?.refNo} email={batch?.applicantEmail} />;
+  if (step === "submitted") return <ConfirmationScreen refNo={batch?.refNo} email={batch?.applicantEmail} isMultipleSubmissionEnabled={isMultipleSubmissionEnabled} submissionNumber={isMultipleSubmissionEnabled ? nextSubmissionNumber : undefined} onNextSubmit={isMultipleSubmissionEnabled ? handleResetForNextSubmission : undefined} onHistoryClick={isMultipleSubmissionEnabled ? () => window.scrollTo({ top: document.getElementById('submission-history')?.offsetTop || 0, behavior: 'smooth' }) : undefined} />;
 
   if (loadingBatch) {
     return (
@@ -2700,7 +2931,12 @@ export default function BulkPassPublicPage() {
       </div>
 
       <div className="max-w-[1400px] mx-auto px-4 pb-10 flex flex-col gap-6">
-        <IntakeCard batch={batch} />
+        <IntakeCard 
+          batch={batch} 
+          isMultipleSubmissionEnabled={isMultipleSubmissionEnabled}
+          submissionHistory={submissionHistory}
+          nextSubmissionNumber={nextSubmissionNumber}
+        />
 
         {step === "excel" && <ExcelUploadStep token={token} onParsed={handleParsed} />}
 

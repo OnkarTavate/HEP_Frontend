@@ -24,6 +24,18 @@ const authHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+// Response interceptor to ensure detailed backend error messages are preserved
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const backendMsg = error.response?.data?.message || error.response?.data?.errorDetails;
+    if (backendMsg) {
+      error.message = backendMsg;
+    }
+    return Promise.reject(error);
+  }
+);
+
 // ── Lookup data ──────────────────────────────────────────────────────────────
 
 export async function getBulkVisitorTypes() {
@@ -159,6 +171,25 @@ export async function checkVehicleValidity(vehiclenumber) {
 export async function getPublicBatch(token) {
   const res = await axios.get(`${AGENT_API}/bulk-pass/public/${token}`);
   return res.data?.data;
+}
+
+/**
+ * Validate upload token and check for multiple submission support
+ * Requirements: 8.1-8.6, 11.1-11.6, 4.1-4.6
+ * 
+ * Returns: {
+ *   success: true,
+ *   isParentRequest: boolean,  // true for public request workflow
+ *   isParentBatch: boolean,    // true for department-created multiple-submission batch
+ *   withinValidityPeriod: boolean,
+ *   batch: {...},              // parent batch/request data
+ *   submissionHistory: [],     // array of child submissions
+ *   nextSubmissionNumber: number
+ * }
+ */
+export async function validateUploadToken(token) {
+  const res = await axios.get(`${AGENT_API}/bulk-pass/validate-token/${token}`);
+  return res.data;
 }
 
 // Public scan view — opened when anyone scans the bulk pass QR (no auth).
@@ -375,5 +406,82 @@ export async function resendBulkPassEmail(id) {
     {},
     { headers: authHeaders() }
   );
+  return res.data;
+}
+
+// ── Admin Public Request Management (Multiple Pass Submissions) ──────────────
+
+/**
+ * Get list of public bulk pass requests with filtering
+ * Requirements: 25.1, 25.2, 25.3
+ * 
+ * Returns: { requests: [], total: 0, page: 1, limit: 20, totalPages: 1 }
+ */
+export async function listPublicRequests(filters = {}) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") params.append(k, v);
+  });
+  const res = await axios.get(
+    `${AGENT_API}/bulk-pass/admin/public-requests?${params.toString()}`,
+    { headers: authHeaders() }
+  );
+  // Return the full response with pagination metadata
+  return res.data;
+}
+
+/**
+ * Get detailed information for a single public request
+ * Requirements: 25.7
+ */
+export async function getPublicRequestDetail(id) {
+  const res = await axios.get(
+    `${AGENT_API}/bulk-pass/admin/public-requests/${id}`,
+    { headers: authHeaders() }
+  );
+  return res.data?.request;
+}
+
+/**
+ * Approve a public request and generate upload link
+ * Requirements: 27.1-27.7
+ */
+export async function approvePublicRequest(id, data) {
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/admin/public-requests/${id}/approve`,
+    data,
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
+/**
+ * Reject a public request with reason
+ * Requirements: 28.1-28.5
+ */
+export async function rejectPublicRequest(id, rejectionReason) {
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/admin/public-requests/${id}/reject`,
+    { rejectionReason },
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
+/**
+ * Get child submissions for a parent batch with multiple submissions enabled
+ * Requirements: 5.1-5.5, 14.1
+ * 
+ * Returns: {
+ *   success: true,
+ *   parentBatch: { id, refNo, companyName, ... },
+ *   submissions: [{ id, submissionNumber, refNo, personsCount, vehiclesCount, status, createdAt }],
+ *   totalSubmissions: number
+ * }
+ */
+export async function getChildSubmissions(parentId) {
+  const res = await axios.get(`${AGENT_API}/bulk-pass/batches/${parentId}/submissions`, {
+    headers: authHeaders(),
+  });
   return res.data;
 }

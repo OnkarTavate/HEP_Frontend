@@ -21,6 +21,7 @@ import {
   Eye,
   EyeOff,
   ShieldAlert,
+  FileText,
 } from "lucide-react";
 
 import { jwtDecode } from "jwt-decode";
@@ -982,6 +983,14 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                             >
                               Forgot Password?
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => router.push("/public/bulk-pass-request")}
+                              className="text-sm font-semibold text-orange-600 hover:text-orange-700 transition-colors focus:outline-none flex items-center justify-center gap-1.5"
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                              Request Bulk Pass
+                            </button>
                             <p className="text-sm text-gray-500">
                               Don&apos;t have an account?{" "}
                               <button
@@ -1279,6 +1288,14 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                     {authMode === "forgot"
                       ? "Back to Sign In"
                       : "Forgot Password?"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/public/bulk-pass-request")}
+                    className="mt-2 px-10 py-3 bg-white/10 border border-white/60 text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Request Bulk Pass
                   </button>
                 </div>
               </div>

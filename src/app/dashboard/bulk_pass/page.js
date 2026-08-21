@@ -171,6 +171,14 @@ export default function BulkPassListPage() {
   useEffect(() => { fetchAllBatches(); }, []); // eslint-disable-line
   useEffect(() => { fetchBatches(); }, [fetchBatches]);
 
+  // Real-time polling for submission count updates
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      fetchBatches();
+    }, 8000); // Poll every 8 seconds
+    return () => clearInterval(intervalId);
+  }, [fetchBatches]);
+
   const handleRefresh = () => { fetchBatches(); fetchAllBatches(); };
   const totalPages = Math.max(1, Math.ceil(batches.length / pageSize));
   const paginated = batches.slice((page - 1) * pageSize, page * pageSize);
@@ -356,10 +364,27 @@ export default function BulkPassListPage() {
                       className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
                       onClick={() => router.push(`${BASE}/${batch.id}`)}>
                       <td className="px-5 py-3.5">
-                        <p className="font-bold text-slate-900 text-sm font-mono group-hover:text-amber-600 transition-colors">
-                          {batch.refNo || "—"}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-slate-900 text-sm font-mono group-hover:text-amber-600 transition-colors">
+                            {batch.refNo || "—"}
+                          </p>
+                          {batch.multipleSubmissionsEnabled && (
+                            <span 
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[9px] font-bold"
+                              title={`Multiple submissions enabled (${batch.childSubmissionsCount || 0} submission${(batch.childSubmissionsCount || 0) !== 1 ? 's' : ''})`}>
+                              <svg className="h-2 w-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="ml-0.5">Multi</span>
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-slate-400 mt-0.5">{visitorLabel(batch.visitorType)}</p>
+                        {batch.multipleSubmissionsEnabled && (
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            {batch.childSubmissionsCount || 0} submission{batch.childSubmissionsCount !== 1 ? 's' : ''} made
+                          </p>
+                        )}
                       </td>
                       <td className="px-5 py-3.5 max-w-[200px]">
                         <p className="font-medium text-slate-800 truncate" title={batch.companyName}>{batch.companyName || "—"}</p>

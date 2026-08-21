@@ -6,10 +6,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   ArrowLeft, Users, FileText, Clock, Send, RotateCcw, Download,
-  XCircle, AlertCircle, X, RefreshCw, ChevronDown, ChevronUp, Car, ImageIcon,
+  XCircle, AlertCircle, X, RefreshCw, ChevronDown, ChevronUp, Car, ImageIcon, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
-import { getBulkBatchDetail, returnToApplicant, resendInvitation, downloadBulkPdf, fileUrl } from "@/lib/bulkPassApi";
+import { getBulkBatchDetail, returnToApplicant, resendInvitation, downloadBulkPdf, fileUrl, getChildSubmissions } from "@/lib/bulkPassApi";
 
 const BASE = "/admin/bulk_pass";
 
@@ -45,7 +45,7 @@ function ReadField({ label, value, mono }) {
   );
 }
 
-function UploadLinkBanner({ tokenActive, tokenExpiresAt, linkValidityHours, onResend, resending }) {
+function UploadLinkBanner({ tokenActive, tokenExpiresAt, onResend, resending }) {
   const isExpired = tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now();
   // canResend: link is active OR expired by time (admin can refresh the window).
   // If tokenActive=false but NOT time-expired the applicant already submitted —
@@ -57,7 +57,6 @@ function UploadLinkBanner({ tokenActive, tokenExpiresAt, linkValidityHours, onRe
         <Send className={`h-4 w-4 shrink-0 ${isExpired || !tokenActive ? "text-red-500" : "text-sky-600"}`} />
         <p className={`text-sm font-bold ${isExpired || !tokenActive ? "text-red-700" : "text-sky-700"}`}>
           Applicant Upload Link
-          {linkValidityHours && !isExpired && tokenActive && <span className="ml-2 text-xs font-normal text-sky-500">· valid for {linkValidityHours}h</span>}
           {isExpired && <span className="ml-2 text-xs font-normal text-red-500">· Link expired</span>}
           {!tokenActive && !isExpired && <span className="ml-2 text-xs font-normal text-red-500">· Submitted</span>}
           {tokenExpiresAt && !isExpired && tokenActive && (
@@ -262,6 +261,10 @@ export default function AdminBulkPassDetailPage() {
   const [resending, setResending] = useState(false);
   const [user, setUser] = useState(null);
 
+  // Child submissions state (Multiple Pass Submissions Feature)
+  const [childSubmissions, setChildSubmissions] = useState([]);
+  const [childSubmissionsLoading, setChildSubmissionsLoading] = useState(false);
+
   useEffect(() => {
     try { const r = localStorage.getItem("user"); if (r) setUser(JSON.parse(r)); } catch {}
   }, []);
@@ -278,6 +281,33 @@ export default function AdminBulkPassDetailPage() {
   }, [id]);
 
   useEffect(() => { fetchBatch(); }, [fetchBatch]);
+
+  // Fetch child submissions if multiple submissions are enabled
+  useEffect(() => {
+    const fetchChildSubmissions = async () => {
+      if (!batch?.id || !batch.multipleSubmissionsEnabled) {
+        setChildSubmissions([]);
+        return;
+      }
+      
+      setChildSubmissionsLoading(true);
+      try {
+        const res = await getChildSubmissions(batch.id);
+        if (res?.success) {
+          setChildSubmissions(res.submissions || []);
+        } else {
+          setChildSubmissions([]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch child submissions:", err);
+        setChildSubmissions([]);
+      } finally {
+        setChildSubmissionsLoading(false);
+      }
+    };
+    
+    fetchChildSubmissions();
+  }, [batch?.id, batch?.multipleSubmissionsEnabled]);
 
   const handleDownloadPdf = async () => {
     setDownloading(true);
@@ -390,10 +420,87 @@ export default function AdminBulkPassDetailPage() {
         <UploadLinkBanner
           tokenActive={batch.tokenActive}
           tokenExpiresAt={batch.tokenExpiresAt}
-          linkValidityHours={batch.linkValidityHours}
           onResend={handleResendInvitation}
           resending={resending}
         />
+      )}
+
+      {/* Child Submissions (Multiple Pass Submissions Feature) */}
+      {batch.multipleSubmissionsEnabled && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <div className="flex items-center gap-2.5 mb-5">
+            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-100 text-amber-600"><RefreshCw className="h-4 w-4" /></span>
+            <h3 className="text-base font-bold text-slate-800">Submission History</h3>
+          </div>
+          <p className="text-sm text-slate-500 mb-4">
+            This batch allows multiple submissions. Below are all submissions made so far.
+          </p>
+          
+          {childSubmissionsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="h-10 w-10 rounded-full border-4 border-amber-400 border-t-transparent animate-spin" />
+            </div>
+          ) : childSubmissions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="h-12 w-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+                <FileText className="h-6 w-6" />
+              </div>
+              <p className="text-sm font-semibold text-slate-500">No submissions yet</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                The applicant will receive the upload link via email. Submissions will appear here after they upload their first batch.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl ring-1 ring-slate-100">
+              <table className="w-full min-w-[700px] text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    {["Submission #", "Reference No", "Persons", "Vehicles", "Status", "Submitted Date", "Actions"].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {childSubmissions.map((submission, idx) => {
+                    const submissionStatus = submission.status || "UNKNOWN";
+                    const statusConfig = STATUS_CONFIG[submissionStatus] || { 
+                      label: submissionStatus, 
+                      chip: "bg-stone-100 text-stone-500 border border-stone-200", 
+                      dot: "bg-stone-400" 
+                    };
+                    return (
+                      <tr key={submission.id || idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors last:border-b-0">
+                        <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-600">{submission.submissionNumber || "—"}</td>
+                        <td className="px-4 py-3 font-mono text-xs font-bold text-slate-800 whitespace-nowrap">{submission.refNo || "—"}</td>
+                        <td className="px-4 py-3 text-slate-600 tabular-nums">{submission.personsCount ?? 0}</td>
+                        <td className="px-4 py-3 text-slate-600 tabular-nums">{submission.vehiclesCount ?? 0}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${statusConfig.chip}`}>
+                            <span className={`h-2 w-2 rounded-full ${statusConfig.dot}`} />
+                            {statusConfig.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{fmtDate(submission.createdAt)}</td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => router.push(`/admin/bulk_pass/${submission.id}`)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 transition"
+                          >
+                            <Eye className="h-3.5 w-3.5" /> View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <p className="text-xs text-slate-500 text-center">Total Submissions: {childSubmissions.length}</p>
+          </div>
+        </div>
       )}
 
       {/* Stats */}
