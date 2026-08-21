@@ -319,8 +319,570 @@ export function cropFace(source: CanvasImageSource, landmarks: LandmarkPoint[]):
   return canvas;
 }
 
-export async function removeBackground(source: HTMLCanvasElement): Promise<HTMLCanvasElement> {
+type SegmentationMaskQuality = {
+  valid: boolean;
+  reasons: string[];
+
+  width: number;
+  height: number;
+
+  foregroundPixels: number;
+  foregroundRatio: number;
+
+  componentCount: number;
+  largestComponentPixels: number;
+  largestComponentRatio: number;
+
+  holeCount: number;
+
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+
+  bboxWidthRatio: number;
+  bboxHeightRatio: number;
+
+  centroidX: number;
+  centroidY: number;
+
+  meanConfidence: number;
+  meanForegroundConfidence: number;
+
+  touchesLeft: boolean;
+  touchesRight: boolean;
+  touchesTop: boolean;
+  touchesBottom: boolean;
+
+  noisyBoundaryRatio: number;
+};
+
+function analyzeSegmentationMask(
+  maskData: ImageData,
+  threshold = 128
+): SegmentationMaskQuality {
+  const { data, width, height } = maskData;
+  const pixelCount = width * height;
+
+  const binary = new Uint8Array(pixelCount);
+
+  let foregroundPixels = 0;
+  let confidenceSum = 0;
+  let foregroundConfidenceSum = 0;
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  let centroidXSum = 0;
+  let centroidYSum = 0;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+
+      // MediaPipe mask is grayscale.
+      const confidence = data[i];
+
+      confidenceSum += confidence;
+
+      if (confidence >= threshold) {
+        const p = y * width + x;
+
+        binary[p] = 1;
+        foregroundPixels++;
+
+        foregroundConfidenceSum += confidence;
+
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+
+        centroidXSum += x;
+        centroidYSum += y;
+      }
+    }
+  }
+
+  const foregroundRatio = foregroundPixels / pixelCount;
+
+  // ---------------------------------------------------------
+  // Connected components - 8 connected neighbors
+  // ---------------------------------------------------------
+
+  const visited = new Uint8Array(pixelCount);
+
+  const components: number[] = [];
+
+  const queueX = new Int32Array(pixelCount);
+  const queueY = new Int32Array(pixelCount);
+
+  const neighbors = [
+    [-1, -1],
+    [0, -1],
+    [1, -1],
+    [-1, 0],
+    [1, 0],
+    [-1, 1],
+    [0, 1],
+    [1, 1],
+  ];
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const start = y * width + x;
+
+      if (!binary[start] || visited[start]) {
+        continue;
+      }
+
+      let head = 0;
+      let tail = 0;
+
+      queueX[tail] = x;
+      queueY[tail] = y;
+      tail++;
+
+      visited[start] = 1;
+
+      let componentSize = 0;
+
+      while (head < tail) {
+        const cx = queueX[head];
+        const cy = queueY[head];
+        head++;
+
+        componentSize++;
+
+        for (const [dx, dy] of neighbors) {
+          const nx = cx + dx;
+          const ny = cy + dy;
+
+          if (
+            nx < 0 ||
+            nx >= width ||
+            ny < 0 ||
+            ny >= height
+          ) {
+            continue;
+          }
+
+          const index = ny * width + nx;
+
+          if (!binary[index] || visited[index]) {
+            continue;
+          }
+
+          visited[index] = 1;
+
+          queueX[tail] = nx;
+          queueY[tail] = ny;
+          tail++;
+        }
+      }
+
+      components.push(componentSize);
+    }
+  }
+
+  components.sort((a, b) => b - a);
+
+  const componentCount = components.length;
+  const largestComponentPixels = components[0] || 0;
+
+  const largestComponentRatio =
+    foregroundPixels > 0
+      ? largestComponentPixels / foregroundPixels
+      : 0;
+
+  // ---------------------------------------------------------
+  // Border contact
+  // ---------------------------------------------------------
+
+  let touchesLeft = false;
+  let touchesRight = false;
+  let touchesTop = false;
+  let touchesBottom = false;
+
+  if (foregroundPixels > 0) {
+    for (let y = 0; y < height; y++) {
+      if (binary[y * width]) {
+        touchesLeft = true;
+      }
+
+      if (binary[y * width + width - 1]) {
+        touchesRight = true;
+      }
+    }
+
+    for (let x = 0; x < width; x++) {
+      if (binary[x]) {
+        touchesTop = true;
+      }
+
+      if (binary[(height - 1) * width + x]) {
+        touchesBottom = true;
+      }
+    }
+  }
+
+  // ---------------------------------------------------------
+  // Holes inside the mask
+  //
+  // Flood-fill background from the image border.
+  // Any remaining background region is a hole.
+  // ---------------------------------------------------------
+
+  const backgroundVisited = new Uint8Array(pixelCount);
+
+  let holeCount = 0;
+
+  const bgQueueX = new Int32Array(pixelCount);
+  const bgQueueY = new Int32Array(pixelCount);
+
+  const floodBackground = (startX: number, startY: number) => {
+    const start = startY * width + startX;
+
+    if (binary[start] || backgroundVisited[start]) {
+      return;
+    }
+
+    let head = 0;
+    let tail = 0;
+
+    bgQueueX[tail] = startX;
+    bgQueueY[tail] = startY;
+    tail++;
+
+    backgroundVisited[start] = 1;
+
+    while (head < tail) {
+      const cx = bgQueueX[head];
+      const cy = bgQueueY[head];
+      head++;
+
+      for (const [dx, dy] of neighbors) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+
+        if (
+          nx < 0 ||
+          nx >= width ||
+          ny < 0 ||
+          ny >= height
+        ) {
+          continue;
+        }
+
+        const index = ny * width + nx;
+
+        if (
+          binary[index] ||
+          backgroundVisited[index]
+        ) {
+          continue;
+        }
+
+        backgroundVisited[index] = 1;
+
+        bgQueueX[tail] = nx;
+        bgQueueY[tail] = ny;
+        tail++;
+      }
+    }
+  };
+
+  // Flood-fill all background connected to border.
+  for (let x = 0; x < width; x++) {
+    floodBackground(x, 0);
+    floodBackground(x, height - 1);
+  }
+
+  for (let y = 0; y < height; y++) {
+    floodBackground(0, y);
+    floodBackground(width - 1, y);
+  }
+
+  // Remaining background pixels = holes.
+  for (let i = 0; i < pixelCount; i++) {
+    if (!binary[i] && !backgroundVisited[i]) {
+      holeCount++;
+
+      // Flood-fill this hole so it is counted only once.
+      const startX = i % width;
+      const startY = Math.floor(i / width);
+
+      floodBackground(startX, startY);
+    }
+  }
+
+  // ---------------------------------------------------------
+  // Boundary noise
+  //
+  // Count foreground pixels that have many background neighbors.
+  // A very high value usually indicates a noisy/stair-stepped edge.
+  // ---------------------------------------------------------
+
+  let boundaryPixels = 0;
+  let noisyBoundaryPixels = 0;
+
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const index = y * width + x;
+
+      if (!binary[index]) {
+        continue;
+      }
+
+      let backgroundNeighbors = 0;
+
+      for (const [dx, dy] of neighbors) {
+        const nx = x + dx;
+        const ny = y + dy;
+
+        if (!binary[ny * width + nx]) {
+          backgroundNeighbors++;
+        }
+      }
+
+      if (backgroundNeighbors > 0) {
+        boundaryPixels++;
+
+        if (backgroundNeighbors >= 5) {
+          noisyBoundaryPixels++;
+        }
+      }
+    }
+  }
+
+  const noisyBoundaryRatio =
+    boundaryPixels > 0
+      ? noisyBoundaryPixels / boundaryPixels
+      : 0;
+
+  // ---------------------------------------------------------
+  // Bounding box
+  // ---------------------------------------------------------
+
+  const bboxWidth =
+    maxX >= minX ? maxX - minX + 1 : 0;
+
+  const bboxHeight =
+    maxY >= minY ? maxY - minY + 1 : 0;
+
+  const bboxWidthRatio = bboxWidth / width;
+  const bboxHeightRatio = bboxHeight / height;
+
+  const centroidX =
+    foregroundPixels > 0
+      ? centroidXSum / foregroundPixels / width
+      : 0;
+
+  const centroidY =
+    foregroundPixels > 0
+      ? centroidYSum / foregroundPixels / height
+      : 0;
+
+  const meanConfidence =
+    pixelCount > 0
+      ? confidenceSum / pixelCount
+      : 0;
+
+  const meanForegroundConfidence =
+    foregroundPixels > 0
+      ? foregroundConfidenceSum / foregroundPixels
+      : 0;
+
+  // ---------------------------------------------------------
+  // Quality rules
+  // ---------------------------------------------------------
+
+  const reasons: string[] = [];
+
+  // No foreground at all.
+  if (foregroundPixels === 0) {
+    reasons.push("No foreground detected.");
+  }
+
+  // Too little foreground.
+  if (
+    foregroundPixels > 0 &&
+    foregroundRatio < 0.03
+  ) {
+    reasons.push(
+      `Foreground area too small (${(foregroundRatio * 100).toFixed(1)}%).`
+    );
+  }
+
+  // Too much foreground.
+  if (foregroundRatio > 0.90) {
+    reasons.push(
+      `Foreground area suspiciously large (${(foregroundRatio * 100).toFixed(1)}%).`
+    );
+  }
+
+  // Multiple disconnected blocks.
+  if (componentCount > 8) {
+    reasons.push(
+      `Too many disconnected mask components (${componentCount}).`
+    );
+  }
+
+  // Main person should dominate.
+  if (
+    foregroundPixels > 0 &&
+    largestComponentRatio < 0.80
+  ) {
+    reasons.push(
+      `Mask is fragmented: largest component is only ${(largestComponentRatio * 100).toFixed(1)}% of foreground.`
+    );
+  }
+
+  // Very noisy edge.
+  if (noisyBoundaryRatio > 0.35) {
+    reasons.push(
+      `Mask boundary is noisy (${(noisyBoundaryRatio * 100).toFixed(1)}%).`
+    );
+  }
+
+  // Too many holes.
+  if (holeCount > 15) {
+    reasons.push(
+      `Too many enclosed holes in mask (${holeCount}).`
+    );
+  }
+
+  // Bounding box sanity.
+  if (
+    foregroundPixels > 0 &&
+    bboxHeightRatio < 0.20
+  ) {
+    reasons.push(
+      "Foreground bounding box is unusually short."
+    );
+  }
+
+  if (
+    foregroundPixels > 0 &&
+    bboxWidthRatio < 0.05
+  ) {
+    reasons.push(
+      "Foreground bounding box is unusually narrow."
+    );
+  }
+
+  // Extremely low foreground confidence.
+  if (
+    foregroundPixels > 0 &&
+    meanForegroundConfidence < 150
+  ) {
+    reasons.push(
+      `Foreground confidence is weak (${meanForegroundConfidence.toFixed(1)}).`
+    );
+  }
+
+  const valid =
+    foregroundPixels > 0 &&
+    foregroundRatio >= 0.03 &&
+    foregroundRatio <= 0.90 &&
+    componentCount <= 8 &&
+    largestComponentRatio >= 0.80 &&
+    noisyBoundaryRatio <= 0.35 &&
+    holeCount <= 15 &&
+    bboxHeightRatio >= 0.20 &&
+    bboxWidthRatio >= 0.05 &&
+    meanForegroundConfidence >= 150;
+
+  return {
+    valid,
+    reasons,
+
+    width,
+    height,
+
+    foregroundPixels,
+    foregroundRatio,
+
+    componentCount,
+    largestComponentPixels,
+    largestComponentRatio,
+
+    holeCount,
+
+    minX,
+    minY,
+    maxX,
+    maxY,
+
+    bboxWidthRatio,
+    bboxHeightRatio,
+
+    centroidX,
+    centroidY,
+
+    meanConfidence,
+    meanForegroundConfidence,
+
+    touchesLeft,
+    touchesRight,
+    touchesTop,
+    touchesBottom,
+
+    noisyBoundaryRatio,
+  };
+}
+
+/** Separable box blur on the grayscale mask (smooths upscale staircase). */
+function boxBlurGray(imageData: ImageData, radius: number): ImageData {
+  const { data, width, height } = imageData;
+  const tmp = new Float32Array(width * height);
+  const out = new ImageData(width, height);
+
+  // Horizontal pass
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      let count = 0;
+      for (let dx = -radius; dx <= radius; dx++) {
+        const nx = x + dx;
+        if (nx < 0 || nx >= width) continue;
+        sum += data[(y * width + nx) * 4];
+        count++;
+      }
+      tmp[y * width + x] = sum / count;
+    }
+  }
+
+  // Vertical pass
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      let count = 0;
+      for (let dy = -radius; dy <= radius; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height) continue;
+        sum += tmp[ny * width + x];
+        count++;
+      }
+      const val = Math.round(sum / count);
+      const idx = (y * width + x) * 4;
+      out.data[idx] = val;
+      out.data[idx + 1] = val;
+      out.data[idx + 2] = val;
+      out.data[idx + 3] = 255;
+    }
+  }
+
+  return out;
+}
+
+export async function removeBackground(
+  source: HTMLCanvasElement
+): Promise<HTMLCanvasElement> {
   const { width, height } = getSourceSize(source);
+
   const segmenter = await loadSelfieSegmentation();
 
   const results = await new Promise<{
@@ -331,32 +893,78 @@ export async function removeBackground(source: HTMLCanvasElement): Promise<HTMLC
     segmenter.send({ image: source }).catch(reject);
   });
 
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Unable to remove image background.");
-
-  // Create a blurred mask
+  // ── Step 1: upscale the raw low-res mask to full canvas size ──────────
+  // imageSmoothingQuality "high" gives bilinear interpolation which is
+  // better than nearest-neighbor, but still produces a gradient staircase
+  // at the boundary because the mask was internally ~256×256.
   const maskCanvas = createCanvas(width, height);
   const maskCtx = maskCanvas.getContext("2d")!;
+  maskCtx.imageSmoothingEnabled = true;
+  maskCtx.imageSmoothingQuality = "high";
+  maskCtx.drawImage(results.segmentationMask, 0, 0, width, height);
 
-  // Blur the segmentation mask
-  maskCtx.filter = "blur(1.5px)";
-  maskCtx.drawImage(results.segmentationMask, 0, 0);
-  
-  maskCtx.globalAlpha = 0.35;
-  maskCtx.drawImage(maskCanvas, 0, 0); // Slightly dilate/feather
-  maskCtx.globalAlpha = 1;
-  maskCtx.filter = "none";
+  let maskData = maskCtx.getImageData(0, 0, width, height);
 
-  // Use blurred mask as alpha
+  // ── Step 2: Gaussian blur (3-pass box blur approximation) ─────────────
+  // Each pass with radius 3 (7×7 kernel). Three consecutive box blurs
+  // approximate a Gaussian — this removes the upscale staircase artifact
+  // by spreading edge confidence values smoothly across ~7 pixels.
+  // A single pass or radius 1 is not enough to cover the block size that
+  // comes from upscaling a 256-wide mask to 400–600px.
+  maskData = boxBlurGray(maskData, 3);
+  maskData = boxBlurGray(maskData, 3);
+  maskData = boxBlurGray(maskData, 3);
+
+  // ── Step 3: convert to alpha with a wide soft feather band ────────────
+  // LOW=80 keeps hair/shoulder edge pixels (they have moderate confidence
+  // after the blur spreads values outward). HIGH=200 means only clearly
+  // foreground pixels become fully opaque. The smoothstep in between gives
+  // clean anti-aliasing without visible halo.
+  const alphaMask = thresholdToSharpAlpha(maskData, 80, 200);
+
+  // ── Step 4: composite original image through the alpha mask ──────────
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext("2d")!;
   ctx.clearRect(0, 0, width, height);
-  ctx.drawImage(maskCanvas, 0, 0);
+  ctx.putImageData(alphaMask, 0, 0);
   ctx.globalCompositeOperation = "source-in";
-  ctx.drawImage(source, 0, 0);
+  ctx.drawImage(source, 0, 0, width, height);
   ctx.globalCompositeOperation = "source-over";
 
   return canvas;
 }
+
+function thresholdToSharpAlpha(
+  maskData: ImageData,
+  low: number,
+  high: number
+): ImageData {
+  const { data, width, height } = maskData;
+  const out = new ImageData(width, height);
+
+  for (let i = 0; i < data.length; i += 4) {
+    const confidence = data[i]; // mask is grayscale: R=G=B=confidence
+
+    let alpha: number;
+    if (confidence <= low) {
+      alpha = 0;   // definite background
+    } else if (confidence >= high) {
+      alpha = 255; // definite foreground
+    } else {
+      // Smoothstep over the feather band — gives anti-aliased edge
+      const t = (confidence - low) / (high - low);
+      alpha = Math.round(t * t * (3 - 2 * t) * 255);
+    }
+
+    out.data[i] = 255;
+    out.data[i + 1] = 255;
+    out.data[i + 2] = 255;
+    out.data[i + 3] = alpha;
+  }
+
+  return out;
+}
+
 
 export function applyTransparentBackground(
   source: CanvasImageSource
