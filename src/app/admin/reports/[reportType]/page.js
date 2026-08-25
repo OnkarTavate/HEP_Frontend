@@ -7,42 +7,6 @@ import ReportViewerToolbar from "@/components/reports/ReportViewerToolbar";
 const AGENT_API =
   process.env.NEXT_PUBLIC_AGENT_API || "http://127.0.0.1:5001/api";
 
-const fallbackCompanyTypes = [
-  "Steamer Agent",
-  "Stevedoring and Shore Handling License",
-  "Importer/Exporter",
-  "Container Freight Station",
-  "Console Agents/Main Line Operators/Exporter",
-  "Transporting firms",
-  "Associations",
-  "Govt Departments",
-  "Chipping/Painting",
-  "Container/Operator",
-  "Contractor",
-  "Co-Operative Stores",
-  "Custom House and Steamer Agent",
-  "Custom House Agent",
-  "Labour Licence",
-  "Launch Operation",
-  "Lease and Plot holder",
-  "MLO or Consol Agent",
-  "Reg. Transport Association",
-  "Self Clearing(Customs)",
-  "Ship Chandlers",
-  "Ship Garbage Disposal",
-  "Sailors Society",
-  "Storage Tank",
-  "Surveyors",
-  "Unions",
-  "Water Supplier",
-  "Society",
-  "Terminal Operator",
-  "Ship repairer",
-  "Others",
-];
-
-const passTypes = ["Person", "Driver", "Vehicle"];
-const passRequestTypes = ["Online Transporter", "On Gate pass", "Vendor Pass"];
 const registeredUsersReportContentId = "registered-users-report-content";
 
 const fieldClass =
@@ -99,9 +63,34 @@ async function getCompanyTypesFromReportOptions() {
     .filter((value) => typeof value === "string" && value.trim())
     .map((value) => value.trim());
 
-  return Array.from(new Set([...companyTypes, ...fallbackCompanyTypes])).sort((a, b) =>
+  return Array.from(new Set(companyTypes)).sort((a, b) =>
     a.localeCompare(b),
   );
+}
+
+async function getAllPassIssuanceOptions() {
+  const data = await getJson("/reports/all-pass-issuance/options");
+  const options = data?.data;
+
+  return {
+    companyTypes: Array.isArray(options?.companyTypes) ? options.companyTypes : [],
+    passTypes: Array.isArray(options?.passTypes) ? options.passTypes : [],
+    approvalStatuses: Array.isArray(options?.approvalStatuses) ? options.approvalStatuses : [],
+    passHolderTypes: Array.isArray(options?.passHolderTypes) ? options.passHolderTypes : [],
+    nationalities: Array.isArray(options?.nationalities) ? options.nationalities : [],
+    departments: Array.isArray(options?.departments) ? options.departments : [],
+    paymentTypes: Array.isArray(options?.paymentTypes) ? options.paymentTypes : [],
+    cardTypes: Array.isArray(options?.cardTypes) ? options.cardTypes : [],
+    personVehicleCardTypes: Array.isArray(options?.cardTypes)
+      ? options.cardTypes.filter((value) => value !== "Driver")
+      : [],
+    issuedCardTypes: Array.isArray(options?.issuedCardTypes) ? options.issuedCardTypes : [],
+    passRequestTypes: Array.isArray(options?.passRequestTypes) ? options.passRequestTypes : [],
+    transactionTypes: Array.isArray(options?.transactionTypes)
+      ? options.transactionTypes.map((option) => option.label)
+      : [],
+    paymentStatuses: Array.isArray(options?.paymentStatuses) ? options.paymentStatuses : [],
+  };
 }
 
 function formatDateTimeLocal(date) {
@@ -130,6 +119,842 @@ function EmptyReportState({ children }) {
     <div className="py-16 text-center text-stone-400 dark:text-stone-500">
       {children}
     </div>
+  );
+}
+
+function SimpleFilterReport({ report, children }) {
+  return (
+    <ReportShell report={report}>
+      <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-xl overflow-hidden">
+        <form className="px-4 sm:px-6 py-5">{children}</form>
+      </section>
+    </ReportShell>
+  );
+}
+
+function ReportLabel({ children }) {
+  return (
+    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+      {children}
+    </span>
+  );
+}
+
+function SearchButtonRow() {
+  return (
+    <div className="flex items-end">
+      <button
+        type="submit"
+        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 dark:bg-amber-400 text-white dark:text-slate-900 text-sm font-bold shadow hover:opacity-90"
+      >
+        Search
+      </button>
+    </div>
+  );
+}
+
+async function GateInOutReport({ report, searchParams }) {
+  const toDate = new Date();
+  const fromDate = new Date(toDate.getTime() - 2 * 60 * 60 * 1000);
+  const options = await getAllPassIssuanceOptions();
+
+  return (
+    <SimpleFilterReport report={report}>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <label className="space-y-1.5">
+          <ReportLabel>From Date</ReportLabel>
+          <input
+            name="fromDate"
+            type="datetime-local"
+            defaultValue={getParam(searchParams, "fromDate") || formatDateTimeLocal(fromDate)}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>To Date</ReportLabel>
+          <input
+            name="toDate"
+            type="datetime-local"
+            defaultValue={getParam(searchParams, "toDate") || formatDateTimeLocal(toDate)}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Card Type</ReportLabel>
+          <select name="cardType" defaultValue={getParam(searchParams, "cardType")} className={fieldClass}>
+            <option value="">-- Select --</option>
+            {options.cardTypes.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Company Name/Code</ReportLabel>
+          <input
+            name="companyNameOrCode"
+            type="text"
+            defaultValue={getParam(searchParams, "companyNameOrCode")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Vehicle No</ReportLabel>
+          <input
+            name="vehicleNo"
+            type="text"
+            defaultValue={getParam(searchParams, "vehicleNo")}
+            className={fieldClass}
+          />
+        </label>
+
+        <SearchButtonRow />
+      </div>
+    </SimpleFilterReport>
+  );
+}
+
+async function MoreThan2CardReport({ report, searchParams }) {
+  const options = await getAllPassIssuanceOptions();
+  return (
+    <SimpleFilterReport report={report}>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <label className="space-y-1.5">
+          <ReportLabel>Person name/vehicleno</ReportLabel>
+          <input
+            name="personNameOrVehicleNo"
+            type="text"
+            defaultValue={getParam(searchParams, "personNameOrVehicleNo")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Card No</ReportLabel>
+          <input
+            name="cardNo"
+            type="text"
+            defaultValue={getParam(searchParams, "cardNo")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Company Code</ReportLabel>
+          <input
+            name="companyCode"
+            type="text"
+            defaultValue={getParam(searchParams, "companyCode")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Card Type</ReportLabel>
+          <select name="cardType" defaultValue={getParam(searchParams, "cardType")} className={fieldClass}>
+            <option value="">-- Select --</option>
+            {options.personVehicleCardTypes.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <SearchButtonRow />
+      </div>
+    </SimpleFilterReport>
+  );
+}
+
+async function ExpiredCardReport({ report, searchParams }) {
+  const today = new Date();
+  const defaultDate = today.toISOString().slice(0, 10);
+  const options = await getAllPassIssuanceOptions();
+
+  return (
+    <SimpleFilterReport report={report}>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <label className="space-y-1.5">
+          <ReportLabel>From Date</ReportLabel>
+          <input
+            name="fromDate"
+            type="date"
+            defaultValue={getParam(searchParams, "fromDate") || defaultDate}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>To Date</ReportLabel>
+          <input
+            name="toDate"
+            type="date"
+            defaultValue={getParam(searchParams, "toDate") || defaultDate}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Card Type</ReportLabel>
+          <select name="cardType" defaultValue={getParam(searchParams, "cardType")} className={fieldClass}>
+            <option value="">-- Select --</option>
+            {options.personVehicleCardTypes.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Company Name/Code</ReportLabel>
+          <input
+            name="companyNameOrCode"
+            type="text"
+            defaultValue={getParam(searchParams, "companyNameOrCode")}
+            className={fieldClass}
+          />
+        </label>
+
+        <SearchButtonRow />
+      </div>
+    </SimpleFilterReport>
+  );
+}
+
+async function CardIssuedReport({ report, searchParams }) {
+  const toDate = new Date();
+  const fromDate = new Date(toDate.getTime() - 2 * 60 * 60 * 1000);
+  const options = await getAllPassIssuanceOptions();
+
+  return (
+    <SimpleFilterReport report={report}>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <label className="space-y-1.5">
+          <ReportLabel>Pass Id</ReportLabel>
+          <input
+            name="passId"
+            type="text"
+            defaultValue={getParam(searchParams, "passId")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Company Name/Code</ReportLabel>
+          <input
+            name="companyNameOrCode"
+            type="text"
+            defaultValue={getParam(searchParams, "companyNameOrCode")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Pass Period</ReportLabel>
+          <select name="passPeriod" defaultValue={getParam(searchParams, "passPeriod")} className={fieldClass}>
+            <option value="">-- Select --</option>
+            {options.passTypes.map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Card Type</ReportLabel>
+          <select name="cardType" defaultValue={getParam(searchParams, "cardType")} className={fieldClass}>
+            <option value="">-- Select --</option>
+            {options.issuedCardTypes.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>From Date</ReportLabel>
+          <input
+            name="fromDate"
+            type="datetime-local"
+            defaultValue={getParam(searchParams, "fromDate") || formatDateTimeLocal(fromDate)}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>To Date</ReportLabel>
+          <input
+            name="toDate"
+            type="datetime-local"
+            defaultValue={getParam(searchParams, "toDate") || formatDateTimeLocal(toDate)}
+            className={fieldClass}
+          />
+        </label>
+
+        <SearchButtonRow />
+      </div>
+    </SimpleFilterReport>
+  );
+}
+
+async function CardLastIssuedReport({ report, searchParams }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const options = await getAllPassIssuanceOptions();
+
+  return (
+    <SimpleFilterReport report={report}>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <label className="space-y-1.5">
+          <ReportLabel>Company Name/Code</ReportLabel>
+          <input
+            name="companyNameOrCode"
+            type="text"
+            defaultValue={getParam(searchParams, "companyNameOrCode")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Card Type</ReportLabel>
+          <select name="cardType" defaultValue={getParam(searchParams, "cardType")} className={fieldClass}>
+            <option value="">-- Select --</option>
+            {options.issuedCardTypes.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>From Date</ReportLabel>
+          <input
+            name="fromDate"
+            type="date"
+            defaultValue={getParam(searchParams, "fromDate") || today}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>To Date</ReportLabel>
+          <input
+            name="toDate"
+            type="date"
+            defaultValue={getParam(searchParams, "toDate") || today}
+            className={fieldClass}
+          />
+        </label>
+
+        <SearchButtonRow />
+      </div>
+    </SimpleFilterReport>
+  );
+}
+
+async function RevenueReport({ report, searchParams }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const options = await getAllPassIssuanceOptions();
+
+  return (
+    <SimpleFilterReport report={report}>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <label className="space-y-1.5">
+          <ReportLabel>Company Code</ReportLabel>
+          <input
+            name="companyCode"
+            type="text"
+            defaultValue={getParam(searchParams, "companyCode")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Payment Type</ReportLabel>
+          <select name="paymentType" defaultValue={getParam(searchParams, "paymentType")} className={fieldClass}>
+            <option value="">-- Select --</option>
+            {options.paymentTypes.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Transaction Type</ReportLabel>
+          <select
+            name="transactionType"
+            defaultValue={getParam(searchParams, "transactionType")}
+            className={fieldClass}
+          >
+            <option value="">-- Select --</option>
+            {options.transactionTypes.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Paid From Date</ReportLabel>
+          <input
+            name="paidFromDate"
+            type="date"
+            defaultValue={getParam(searchParams, "paidFromDate") || today}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Paid To Date</ReportLabel>
+          <input
+            name="paidToDate"
+            type="date"
+            defaultValue={getParam(searchParams, "paidToDate") || today}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Payment Status</ReportLabel>
+          <select
+            name="paymentStatus"
+            defaultValue={getParam(searchParams, "paymentStatus")}
+            className={fieldClass}
+            disabled={!options.paymentStatuses.length}
+          >
+            <option value="">
+              {options.paymentStatuses.length ? "-- Select --" : "No database options configured"}
+            </option>
+            {options.paymentStatuses.map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </select>
+        </label>
+
+        <SearchButtonRow />
+      </div>
+    </SimpleFilterReport>
+  );
+}
+
+function WharfageReport({ report, searchParams }) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  return (
+    <SimpleFilterReport report={report}>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <label className="space-y-1.5">
+          <ReportLabel>CompanyId</ReportLabel>
+          <input
+            name="companyId"
+            type="text"
+            defaultValue={getParam(searchParams, "companyId")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Vehicle Id</ReportLabel>
+          <input
+            name="vehicleId"
+            type="text"
+            defaultValue={getParam(searchParams, "vehicleId")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Pass Id</ReportLabel>
+          <input
+            name="passId"
+            type="text"
+            defaultValue={getParam(searchParams, "passId")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>From Date</ReportLabel>
+          <input
+            name="fromDate"
+            type="date"
+            defaultValue={getParam(searchParams, "fromDate") || today}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>To Date</ReportLabel>
+          <input
+            name="toDate"
+            type="date"
+            defaultValue={getParam(searchParams, "toDate") || today}
+            className={fieldClass}
+          />
+        </label>
+
+        <SearchButtonRow />
+      </div>
+    </SimpleFilterReport>
+  );
+}
+
+function CardPenaltyReport({ report, searchParams }) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  return (
+    <SimpleFilterReport report={report}>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <label className="space-y-1.5">
+          <ReportLabel>Card No</ReportLabel>
+          <input
+            name="cardNo"
+            type="text"
+            defaultValue={getParam(searchParams, "cardNo")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Companycode</ReportLabel>
+          <input
+            name="companyCode"
+            type="text"
+            defaultValue={getParam(searchParams, "companyCode")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>From Date</ReportLabel>
+          <input
+            name="fromDate"
+            type="date"
+            defaultValue={getParam(searchParams, "fromDate") || today}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>To Date</ReportLabel>
+          <input
+            name="toDate"
+            type="date"
+            defaultValue={getParam(searchParams, "toDate") || today}
+            className={fieldClass}
+          />
+        </label>
+
+        <SearchButtonRow />
+      </div>
+    </SimpleFilterReport>
+  );
+}
+
+async function CardLostReport({ report, searchParams }) {
+  const options = await getAllPassIssuanceOptions();
+  return (
+    <SimpleFilterReport report={report}>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <label className="space-y-1.5">
+          <ReportLabel>Card No</ReportLabel>
+          <input
+            name="cardNo"
+            type="text"
+            defaultValue={getParam(searchParams, "cardNo")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Company Code</ReportLabel>
+          <input
+            name="companyCode"
+            type="text"
+            defaultValue={getParam(searchParams, "companyCode")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Card Type</ReportLabel>
+          <select name="cardType" defaultValue={getParam(searchParams, "cardType")} className={fieldClass}>
+            <option value="">-- Select --</option>
+            {options.personVehicleCardTypes.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <SearchButtonRow />
+      </div>
+    </SimpleFilterReport>
+  );
+}
+
+async function IndividualCardQueryReport({ report, searchParams }) {
+  const options = await getAllPassIssuanceOptions();
+  return (
+    <SimpleFilterReport report={report}>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <label className="space-y-1.5">
+          <ReportLabel>Card No</ReportLabel>
+          <input
+            name="cardNo"
+            type="text"
+            defaultValue={getParam(searchParams, "cardNo")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Company Code</ReportLabel>
+          <input
+            name="companyCode"
+            type="text"
+            defaultValue={getParam(searchParams, "companyCode")}
+            className={fieldClass}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Card Type</ReportLabel>
+          <select name="cardType" defaultValue={getParam(searchParams, "cardType")} className={fieldClass}>
+            <option value="">-- Select --</option>
+            {options.personVehicleCardTypes.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <SearchButtonRow />
+      </div>
+    </SimpleFilterReport>
+  );
+}
+
+function SelectField({ label, name, defaultValue, options }) {
+  return (
+    <label className="space-y-1.5">
+      <ReportLabel>{label}</ReportLabel>
+      <select name={name} defaultValue={defaultValue} className={fieldClass}>
+        <option value="">-- All --</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function TextField({ label, name, defaultValue, placeholder, type = "text" }) {
+  return (
+    <label className="space-y-1.5">
+      <ReportLabel>{label}</ReportLabel>
+      <input
+        name={name}
+        type={type}
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        className={fieldClass}
+      />
+    </label>
+  );
+}
+
+function ReferenceReportNotice({ searchParams }) {
+  const searched = Object.values(searchParams || {}).some(
+    (value) => typeof value === "string" && value.trim(),
+  );
+
+  if (!searched) return null;
+
+  return (
+    <div className="border-t border-slate-100 px-6 py-10 text-center dark:border-slate-800">
+      <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+        Filters applied. Report results will appear here when the data endpoint is connected.
+      </p>
+    </div>
+  );
+}
+
+async function AllPassIssuanceReport({ report, searchParams }) {
+  const now = new Date();
+  const periodStart = new Date(now);
+  periodStart.setHours(6, 0, 0, 0);
+  const periodEnd = new Date(periodStart);
+  periodEnd.setDate(periodEnd.getDate() + 1);
+  periodEnd.setHours(5, 59, 0, 0);
+  const options = await getAllPassIssuanceOptions();
+  const filterKeys = [
+    "fromDate", "toDate", "passId", "cardHolder", "idProof",
+    "companyCodeOrName", "companyType", "passType", "approvalStatus",
+    "passHolderType", "nationality", "department", "paymentType", "aadhaar",
+  ];
+  const searched = hasAnySearch(searchParams, filterKeys);
+  const query = buildQuery(searchParams, [...filterKeys, "page"]);
+  const reportData = searched
+    ? await getJson(`/reports/all-pass-issuance?${query}`)
+    : null;
+  const rows = Array.isArray(reportData?.data) ? reportData.data : [];
+  const pagination = reportData?.pagination || {};
+  const totalPages = Math.max(
+    1,
+    Math.ceil((pagination.totalRecords || rows.length || 0) / (pagination.limit || 100)),
+  );
+
+  return (
+    <ReportShell
+      report={{
+        ...report,
+        title: "All Pass Issuance - Transaction",
+        description: "Search every issued pass using holder, company, approval, and payment details.",
+      }}
+    >
+      <section className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900">
+        <form className="p-5 sm:p-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <TextField label="From Date" name="fromDate" type="datetime-local" defaultValue={getParam(searchParams, "fromDate") || formatDateTimeLocal(periodStart)} />
+            <TextField label="To Date" name="toDate" type="datetime-local" defaultValue={getParam(searchParams, "toDate") || formatDateTimeLocal(periodEnd)} />
+            <TextField label="Pass ID" name="passId" defaultValue={getParam(searchParams, "passId")} />
+            <TextField label="Card Holder" name="cardHolder" placeholder="Person Name / Vehicle No" defaultValue={getParam(searchParams, "cardHolder")} />
+            <TextField label="ID Proof" name="idProof" placeholder="PAN / Government ID / Driving Licence No" defaultValue={getParam(searchParams, "idProof")} />
+            <TextField label="Company Code / Name" name="companyCodeOrName" defaultValue={getParam(searchParams, "companyCodeOrName")} />
+            <SelectField label="Company Type" name="companyType" defaultValue={getParam(searchParams, "companyType")} options={options.companyTypes} />
+            <SelectField label="Pass Type" name="passType" defaultValue={getParam(searchParams, "passType")} options={options.passTypes} />
+            <SelectField label="Approval Status" name="approvalStatus" defaultValue={getParam(searchParams, "approvalStatus")} options={options.approvalStatuses} />
+            <SelectField label="Pass Holder Type" name="passHolderType" defaultValue={getParam(searchParams, "passHolderType")} options={options.passHolderTypes} />
+            <SelectField label="Nationality" name="nationality" defaultValue={getParam(searchParams, "nationality")} options={options.nationalities} />
+            <SelectField label="Department" name="department" defaultValue={getParam(searchParams, "department")} options={options.departments} />
+            <SelectField label="Payment Type" name="paymentType" defaultValue={getParam(searchParams, "paymentType")} options={options.paymentTypes} />
+            <TextField label="Aadhaar" name="aadhaar" placeholder="Aadhaar No" defaultValue={getParam(searchParams, "aadhaar")} />
+            <div className="flex items-end xl:col-start-3">
+              <SearchButtonRow />
+            </div>
+          </div>
+        </form>
+        {searched ? (
+          <>
+            <ResultCount count={pagination.totalRecords || rows.length} />
+            {rows.length ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.1em] text-stone-400 dark:bg-slate-800/70">
+                    <tr>
+                      {[
+                        "Source", "Pass ID", "Holder", "Holder Type", "Company",
+                        "Pass Type", "Status", "Payment", "Valid From", "Valid To", "Amount",
+                      ].map((label) => <th key={label} className="whitespace-nowrap px-4 py-3">{label}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {rows.map((row, index) => (
+                      <tr key={`${row.source}-${row.passId}-${index}`}>
+                        <td className="px-4 py-3">{row.source}</td>
+                        <td className="whitespace-nowrap px-4 py-3 font-semibold">{row.passId || "—"}</td>
+                        <td className="px-4 py-3">{row.cardHolder || "—"}</td>
+                        <td className="px-4 py-3">{row.passHolderType || "—"}</td>
+                        <td className="px-4 py-3">{row.companyName || row.companyCode || "—"}</td>
+                        <td className="px-4 py-3">{row.passType || "—"}</td>
+                        <td className="px-4 py-3">{row.approvalStatus || "—"}</td>
+                        <td className="px-4 py-3">{row.paymentType || "—"}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{formatReportDateTime(row.dateFrom)}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{formatReportDateTime(row.dateTo)}</td>
+                        <td className="px-4 py-3">{row.amount ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyReportState>No pass records matched these filters.</EmptyReportState>
+            )}
+            {totalPages > 1 ? (
+              <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4 text-sm dark:border-slate-800">
+                <span>Page {pagination.page || 1} of {totalPages}</span>
+                <div className="flex gap-2">
+                  {(pagination.page || 1) > 1 ? <Link href={buildPageHref(searchParams, pagination.page - 1)}>Previous</Link> : null}
+                  {(pagination.page || 1) < totalPages ? <Link href={buildPageHref(searchParams, pagination.page + 1)}>Next</Link> : null}
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </section>
+    </ReportShell>
+  );
+}
+
+async function CardInventoryReport({ report, searchParams }) {
+  const options = await getAllPassIssuanceOptions();
+  return (
+    <ReportShell report={report}>
+      <section className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900">
+        <form className="p-5 sm:p-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <TextField label="Card No" name="cardNo" defaultValue={getParam(searchParams, "cardNo")} />
+            <TextField label="Transporter Code" name="transporterCode" defaultValue={getParam(searchParams, "transporterCode")} />
+            <SelectField label="Card Type" name="cardType" defaultValue={getParam(searchParams, "cardType")} options={options.personVehicleCardTypes} />
+            <TextField label="Issuance From Date" name="issuanceFromDate" type="date" defaultValue={getParam(searchParams, "issuanceFromDate")} />
+            <TextField label="Issuance To Date" name="issuanceToDate" type="date" defaultValue={getParam(searchParams, "issuanceToDate")} />
+            <TextField label="Reissuance From Date" name="reissuanceFromDate" type="date" defaultValue={getParam(searchParams, "reissuanceFromDate")} />
+            <TextField label="Reissuance To Date" name="reissuanceToDate" type="date" defaultValue={getParam(searchParams, "reissuanceToDate")} />
+            <div className="flex items-end">
+              <SearchButtonRow />
+            </div>
+          </div>
+        </form>
+        <ReferenceReportNotice searchParams={searchParams} />
+      </section>
+    </ReportShell>
+  );
+}
+
+function CardInventorySummaryReport({ report, searchParams }) {
+  return (
+    <ReportShell
+      report={{
+        ...report,
+        title: "RFID Card Issuance",
+        description: "Summary of RFID card issuance for a selected company.",
+      }}
+    >
+      <section className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900">
+        <form className="p-5 sm:p-6">
+          <div className="grid max-w-3xl gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <TextField label="Company Code" name="companyCode" defaultValue={getParam(searchParams, "companyCode")} />
+            <div className="flex items-end">
+              <SearchButtonRow />
+            </div>
+          </div>
+        </form>
+        <ReferenceReportNotice searchParams={searchParams} />
+      </section>
+    </ReportShell>
+  );
+}
+
+function ComingSoonReport({ report }) {
+  return (
+    <ReportShell report={report}>
+      <section className="min-h-[420px] rounded-2xl border border-slate-100 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900" />
+    </ReportShell>
   );
 }
 
@@ -262,6 +1087,7 @@ function PassTypeTable({ rows }) {
 async function TypeOfPassIssuedReport({ report, searchParams }) {
   const toDate = new Date();
   const fromDate = new Date(toDate.getTime() - 6 * 60 * 60 * 1000);
+  const options = await getAllPassIssuanceOptions();
   const searched = hasAnySearch(searchParams, [
     "fromDate",
     "toDate",
@@ -356,7 +1182,7 @@ async function TypeOfPassIssuedReport({ report, searchParams }) {
               </span>
               <select name="passType" defaultValue={getParam(searchParams, "passType")} className={fieldClass}>
                 <option value="">-- Select --</option>
-                {passTypes.map((passType) => (
+                {options.cardTypes.map((passType) => (
                   <option key={passType} value={passType}>
                     {passType}
                   </option>
@@ -370,7 +1196,7 @@ async function TypeOfPassIssuedReport({ report, searchParams }) {
               </span>
               <select name="passRequestType" defaultValue={getParam(searchParams, "passRequestType")} className={fieldClass}>
                 <option value="">-- Select --</option>
-                {passRequestTypes.map((requestType) => (
+                {options.passRequestTypes.map((requestType) => (
                   <option key={requestType} value={requestType}>
                     {requestType}
                   </option>
@@ -439,8 +1265,64 @@ export default async function ReportPage({ params, searchParams }) {
     notFound();
   }
 
+  if (!report.implemented) {
+    return <ComingSoonReport report={report} />;
+  }
+
+  if (reportType === "all-pass-issuance-report") {
+    return <AllPassIssuanceReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
+  if (reportType === "card-inventory-report") {
+    return <CardInventoryReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
+  if (reportType === "card-inventory-summary") {
+    return <CardInventorySummaryReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
   if (reportType === "type-of-pass-issued") {
     return <TypeOfPassIssuedReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
+  if (reportType === "gate-in-out") {
+    return <GateInOutReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
+  if (reportType === "more-than-2-card") {
+    return <MoreThan2CardReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
+  if (reportType === "card-expired-report") {
+    return <ExpiredCardReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
+  if (reportType === "card-issued") {
+    return <CardIssuedReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
+  if (reportType === "card-last-issued") {
+    return <CardLastIssuedReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
+  if (reportType === "revenue-report") {
+    return <RevenueReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
+  if (reportType === "wharfage-report") {
+    return <WharfageReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
+  if (reportType === "card-penalty-report") {
+    return <CardPenaltyReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
+  if (reportType === "card-lost-report") {
+    return <CardLostReport report={report} searchParams={resolvedSearchParams} />;
+  }
+
+  if (reportType === "individual-card-query-report") {
+    return <IndividualCardQueryReport report={report} searchParams={resolvedSearchParams} />;
   }
 
   const companyTypes = await getCompanyTypesFromReportOptions();
