@@ -103,6 +103,8 @@ export default function TrafficVvipPassPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [reasonModal, setReasonModal] = useState(null);
   const [reasonText, setReasonText] = useState("");
+  const [documentViewerUrl, setDocumentViewerUrl] = useState("");
+  const [documentViewerTitle, setDocumentViewerTitle] = useState("");
 
   const loadRequests = async () => {
     try {
@@ -232,6 +234,17 @@ export default function TrafficVvipPassPage() {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const openDocumentViewer = (url, title) => {
+    if (!url) return;
+    setDocumentViewerUrl(url);
+    setDocumentViewerTitle(title || "Document Preview");
+  };
+
+  const closeDocumentViewer = () => {
+    setDocumentViewerUrl("");
+    setDocumentViewerTitle("");
   };
 
   return (
@@ -472,6 +485,7 @@ export default function TrafficVvipPassPage() {
                     title="VVIP Persons"
                     icon={UserRound}
                     rows={selectedRequest.persons || []}
+                    onOpenFile={openDocumentViewer}
                     columns={[
                       ["name", "Name"],
                       ["designation", "Designation"],
@@ -485,6 +499,7 @@ export default function TrafficVvipPassPage() {
                     title="Vehicles"
                     icon={Car}
                     rows={selectedRequest.vehicles || []}
+                    onOpenFile={openDocumentViewer}
                     columns={[
                       ["vehicleNo", "Vehicle No."],
                       ["vehicleType", "Vehicle Type"],
@@ -529,6 +544,37 @@ export default function TrafficVvipPassPage() {
                 </Button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {documentViewerUrl && (
+        <div className="fixed inset-0 z-[310] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <div className="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-slate-950">
+            <div className="flex items-center justify-between bg-[#0a1e4d] px-6 py-4 text-white">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-orange-300">
+                  VVIP Request Document
+                </p>
+                <h2 className="text-xl font-black">{documentViewerTitle}</h2>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={closeDocumentViewer}
+                className="text-white hover:bg-white/10"
+              >
+                Close
+              </Button>
+            </div>
+
+            <div className="min-h-0 flex-1 bg-slate-100 p-3 dark:bg-slate-900">
+              <iframe
+                src={documentViewerUrl}
+                title={documentViewerTitle || "Document Preview"}
+                className="h-full w-full rounded-xl bg-white"
+              />
+            </div>
           </div>
         </div>
       )}
@@ -601,7 +647,7 @@ export default function TrafficVvipPassPage() {
   );
 }
 
-function DetailTable({ title, icon: Icon, rows, columns }) {
+function DetailTable({ title, icon: Icon, rows, columns, onOpenFile }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900">
       <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4 dark:border-white/10">
@@ -643,21 +689,20 @@ function DetailTable({ title, icon: Icon, rows, columns }) {
                 <td className="px-4 py-3 text-sm font-semibold text-slate-500 dark:text-stone-400">
                   {String(index + 1).padStart(2, "0")}
                 </td>
-                {columns.map(([key, , type]) => (
+                {columns.map(([key, label, type]) => (
                   <td
                     key={key}
                     className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-stone-300"
                   >
                     {type === "file" && row[key] ? (
-                      <a
-                        href={fileUrl(row[key])}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => onOpenFile?.(fileUrl(row[key]), `${title} - ${label}`)}
                         className="inline-flex items-center gap-1 rounded-lg bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-orange-700 hover:bg-orange-100 dark:bg-orange-400/10 dark:text-orange-300"
                       >
                         <FileText className="h-3.5 w-3.5" />
                         View
-                      </a>
+                      </button>
                     ) : (
                       row[key] || "-"
                     )}

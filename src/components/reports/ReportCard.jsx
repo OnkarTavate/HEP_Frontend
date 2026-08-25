@@ -1,4 +1,4 @@
-import { ArrowRight, Users } from "lucide-react";
+import { ArrowRight, GripVertical, Users } from "lucide-react";
 import {
   Card,
   CardAction,
@@ -15,7 +15,10 @@ export default function ReportCard({ report }) {
         className="h-full cursor-pointer transition-colors hover:bg-orange-50 dark:hover:bg-orange-500/10"
       >
         <CardHeader>
-          <Users className="mb-1 h-6 w-6 text-orange-500" />
+          <div className="mb-1 flex items-start justify-between gap-3">
+            <Users className="h-6 w-6 text-orange-500" />
+            <GripVertical className="h-4 w-4 text-muted-foreground/70" />
+          </div>
           <CardTitle className="text-sm">{report.title}</CardTitle>
           <CardDescription>{report.description}</CardDescription>
           <CardAction>
