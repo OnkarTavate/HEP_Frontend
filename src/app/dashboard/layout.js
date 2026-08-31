@@ -7,7 +7,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
 import ProfileUpdateModal from "@/components/ProfileUpdateModal";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   Ship,
   LayoutDashboard,
@@ -591,7 +591,9 @@ export default function DashboardLayout({ children }) {
 
         {/* Mobile sidebar */}
         <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-          <SheetContent side="left" className="w-72 p-0 bg-[#0a0a0a] dark:bg-black border-black/20 dark:border-white/5">
+          <SheetContent side="left" className="w-72 p-0 bg-[#0a0a0a] dark:bg-black border-black/20 dark:border-white/5" aria-describedby={undefined}>
+            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+            <SheetDescription className="sr-only">Main navigation sidebar</SheetDescription>
             <SidebarContent
               onNavigate={() => setIsMobileMenuOpen(false)}
               expanded={true}

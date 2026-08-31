@@ -123,25 +123,12 @@ export default function AdminCompanyApprovalsPage() {
 
   useEffect(() => {
     fetchActiveLocks();
-    const interval = setInterval(fetchActiveLocks, 900); // every 900ms (< 1s)
-    return () => clearInterval(interval);
   }, [fetchActiveLocks]);
 
   useEffect(() => {
     if (!selectedRequest || isViewMode) return;
 
-    const interval = setInterval(async () => {
-      const lockRes = await acquireLock(selectedRequest.id, "company");
-      if (!lockRes.success) {
-        toast.error("Lock Lost", {
-          description: "This application lock has expired or was taken by another user.",
-        });
-        setSelectedRequest(null);
-      }
-    }, 10000); // refresh every 10 seconds
-
     return () => {
-      clearInterval(interval);
       releaseLock(selectedRequest.id, "company").then(() => {
         fetchActiveLocks();
       });
@@ -224,8 +211,28 @@ export default function AdminCompanyApprovalsPage() {
 
   useEffect(() => {
     fetchDashboardData(false);
-    const interval = setInterval(() => fetchDashboardData(true), 5000); // Poll every 5 seconds without showing loading spinner
-    return () => clearInterval(interval);
+
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      fetchDashboardData(true);
+    }, 15000); // Poll every 15s without showing loading spinner
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchDashboardData(true);
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof window !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+    };
   }, [fetchDashboardData]);
 
   // ── Action helpers ────────────────────────────────────────────────────────

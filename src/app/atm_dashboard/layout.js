@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   LogOut,
   Menu,
@@ -591,8 +591,10 @@ export default function ATMDashboardLayout({ children }) {
           <SheetContent
             side="left"
             className="w-72 p-0 bg-slate-950 border-slate-800/50 text-white"
+            aria-describedby={undefined}
           >
             <SheetTitle className="sr-only">ATM Portal Navigation</SheetTitle>
+            <SheetDescription className="sr-only">Main navigation sidebar</SheetDescription>
             <SidebarContent
               onNavigate={() => setIsMobileMenuOpen(false)}
               expanded={true}

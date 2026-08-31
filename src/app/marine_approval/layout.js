@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   Ship,
   LogOut,
@@ -391,7 +391,9 @@ export default function MarineLayout({ children }) {
 
         {/* Mobile sidebar */}
         <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-          <SheetContent side="left" className="w-72 p-0 bg-slate-900 border-slate-800 text-white">
+          <SheetContent side="left" className="w-72 p-0 bg-slate-900 border-slate-800 text-white" aria-describedby={undefined}>
+            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+            <SheetDescription className="sr-only">Main navigation sidebar</SheetDescription>
             <SidebarContent
               onNavigate={() => setIsMobileMenuOpen(false)}
               expanded={true}

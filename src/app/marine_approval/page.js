@@ -313,26 +313,14 @@ export default function TrafficPassesPage() {
 
   useEffect(() => {
     fetchActiveLocks();
-    const interval = setInterval(fetchActiveLocks, 900); // every 900ms (< 1s)
-    return () => clearInterval(interval);
   }, [fetchActiveLocks]);
 
   useEffect(() => {
     if (!isModalOpen || !selectedRequest || isViewMode) return;
 
     const lockType = selectedRequest.originType === "VENDOR" ? "vendor-pass" : "pass";
-    const interval = setInterval(async () => {
-      const lockRes = await acquireLock(selectedRequest.id, lockType);
-      if (!lockRes.success) {
-        toast.error("Lock Lost", {
-          description: "This application lock has expired or was taken by another user.",
-        });
-        setIsModalOpen(false);
-      }
-    }, 10000); // refresh every 10 seconds
 
     return () => {
-      clearInterval(interval);
       releaseLock(selectedRequest.id, lockType).then(() => {
         fetchActiveLocks();
       });
@@ -424,8 +412,28 @@ export default function TrafficPassesPage() {
 
   useEffect(() => {
     fetchPassRequests(false);
-    const interval = setInterval(() => fetchPassRequests(true), 5000); // Poll every 5 seconds without showing loading spinner
-    return () => clearInterval(interval);
+
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      fetchPassRequests(true);
+    }, 15000); // Poll every 15s without showing loading spinner
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchPassRequests(true);
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof window !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+    };
   }, [fetchPassRequests]);
 
   // const fetchCompanyProfile = async () => {
