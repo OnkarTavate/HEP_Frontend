@@ -1574,7 +1574,7 @@ export default function TrafficPassesPage() {
                         value={entityModal.data.idProofNumber}
                       />
                       {/* <DetailItem
-                        label="RFID Card"
+                        label="QR Pass Reference"
                         value={entityModal.data.cardNumber}
                       /> */}
                       <DetailItem
@@ -1616,8 +1616,8 @@ export default function TrafficPassesPage() {
                         value={entityModal.data.vehicleTypeName || entityModal.data.vehicleTypeId}
                       />
                       {/* <DetailItem
-                        label="RFID Card"
-                        value={entityModal.data.rfidCardNumber}
+                        label="QR Pass Reference"
+                        value={entityModal.data.qrCode || entityModal.data.qrPassReference || entityModal.data.rfidCardNumber}
                       /> */}
                       <DetailItem
                         label="Insurance Expiry"

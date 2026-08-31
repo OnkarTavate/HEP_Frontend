@@ -1924,7 +1924,7 @@ const PassDetailModal = memo(function PassDetailModal({ pass, hepTypes, onClose 
                       <Field label="Amount" value={p.amount != null ? formatCurrency(parseFloat(p.amount)) : "—"} />
                       <Field label="ID Proof" value={p.idProofType ? `${ID_PROOF_LABELS[p.idProofType] || p.idProofType}: ${p.idProofNumber || "—"}` : (p.idProofNumber || "—")} />
                       {p.visaNo ? <Field label="Visa No" value={p.visaNo} mono /> : null}
-                      {p.cardNumber ? <Field label="RFID Card" value={p.cardNumber} mono /> : null}
+                      {p.cardNumber ? <Field label="QR Pass Reference" value={p.cardNumber} mono /> : null}
                       {p.withTwoWheeler ? <Field label="Two-Wheeler" value={p.vehicleNo || "Yes"} mono /> : null}
                     </div>
                     {p.status === "reverted" && p.rejectedReason && (
@@ -1984,7 +1984,7 @@ const PassDetailModal = memo(function PassDetailModal({ pass, hepTypes, onClose 
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <Field label="Vehicle Type" value={v.vehicleTypeId} />
-                      <Field label="RFID Card" value={v.rfidCardNumber} mono />
+                      <Field label="QR Pass Reference" value={v.qrCode || v.rfidCardNumber} mono />
                       <Field label="Pass Type" value={v.passType} />
                       <Field label="Validity" value={dateRange(v.dateFrom, v.dateTo)} />
                       <Field label="Amount" value={v.amount != null ? formatCurrency(parseFloat(v.amount)) : "—"} />

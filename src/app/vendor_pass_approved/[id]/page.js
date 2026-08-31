@@ -63,7 +63,7 @@ const VALIDATORS = {
       v.replace(/\s/g, ""),
     ),
   name: (v) => /^[a-zA-Z\s.'-]{2,80}$/.test(v.trim()),
-  rfidCard: (v) => /^[A-Z0-9]{4,20}$/i.test(v),
+  qrPassReference: (v) => /^[A-Z0-9]{4,20}$/i.test(v),
   drivingLicence: (v) =>
     /^[A-Z]{2}[0-9]{13}$/.test(v.toUpperCase().replace(/[-\s]/g, "")),
   idProofNumber: (idType, v) => {
@@ -2042,7 +2042,7 @@ export default function VendorPassApprovedPage() {
                         })
                       }
                       className={inputClass}
-                      placeholder="RFID card number"
+                      placeholder="QR pass reference"
                     />
                   </div> */}
                   <div className="space-y-1.5">
@@ -2837,7 +2837,7 @@ export default function VendorPassApprovedPage() {
                   </div>
                   {/* <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
-                      RFID Card Number
+                      QR Pass Reference
                     </label>
                     <input
                       type="text"
@@ -2849,7 +2849,7 @@ export default function VendorPassApprovedPage() {
                         })
                       }
                       className={inputClass}
-                      placeholder="Enter RFID if available"
+                      placeholder="Generated automatically when the pass is issued"
                     />
                   </div> */}
                   <div className="space-y-1.5">

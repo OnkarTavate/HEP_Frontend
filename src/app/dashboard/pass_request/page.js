@@ -354,7 +354,7 @@ const VALIDATORS = {
       v.replace(/\s/g, ""),
     ),
   name: (v) => /^[a-zA-Z\s.'-]{2,80}$/.test(v.trim()),
-  rfidCard: (v) => /^[A-Z0-9]{4,20}$/i.test(v),
+  qrPassReference: (v) => /^[A-Z0-9]{4,20}$/i.test(v),
   drivingLicence: (v) =>
     /^[A-Z]{2}[0-9]{13}$/.test(v.toUpperCase().replace(/[-\s]/g, "")),
   idProofNumber: (idType, v) => {
@@ -393,8 +393,8 @@ const getValidationError = (field, value, extra = {}) => {
         ? null
         : "Name must be 2-80 characters (letters only)";
     case "cardNumber":
-      return value && !VALIDATORS.rfidCard(value)
-        ? "RFID Card must be 4-20 alphanumeric characters"
+      return value && !VALIDATORS.qrPassReference(value)
+        ? "QR pass reference must be 4-20 alphanumeric characters"
         : null;
     case "vehicleNo": // two-wheeler plate
       return value && !VALIDATORS.vehicleReg(value)
@@ -2235,7 +2235,7 @@ export default function PassRequestPage() {
         existingPassRequestId: data.passRequestId || data.id, // For fetching old documents
         regNo: data.registrationNo || data.regNo || "",
         type: data.vehicleTypeId || data.type || "",
-        cardNumber: data.rfidCardNumber || "",
+        cardNumber: data.qrCode || data.qrPassReference || data.rfidCardNumber || "",
         accessArea: areaVal,
         insuranceExpiry: data.insuranceExpiry
           ? new Date(data.insuranceExpiry).toISOString().split("T")[0]
@@ -3431,7 +3431,7 @@ export default function PassRequestPage() {
           rateId: 2,
           vehicleTypeId: parseInt(v.type, 10) || 1,
           registrationNo: v.regNo,
-          rfidCardNumber: v.cardNumber,
+          qrPassReference: v.cardNumber,
           insuranceExpiry: v.insuranceExpiry || null,
           rcValidity: v.rcValidity || null,
           accessAreaId: getEnumValue(
@@ -7909,7 +7909,7 @@ export default function PassRequestPage() {
                   </div>
                   {/* <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
-                      RFID Card Number
+                      QR Pass Reference
                     </label>
                     <input
                       type="text"
@@ -7921,7 +7921,7 @@ export default function PassRequestPage() {
                         })
                       }
                       className={inputClass}
-                      placeholder="Enter RFID if available"
+                      placeholder="Generated automatically when the pass is issued"
                     />
                   </div> */}
                   <div className="space-y-1.5">

@@ -188,7 +188,7 @@ const VALIDATORS = {
       v.replace(/\s/g, ""),
     ),
   name: (v) => /^[a-zA-Z\s.'-]{2,80}$/.test(v.trim()),
-  rfidCard: (v) => /^[A-Z0-9]{4,20}$/i.test(v),
+  qrPassReference: (v) => /^[A-Z0-9]{4,20}$/i.test(v),
   drivingLicence: (v) =>
     /^[A-Z]{2}[0-9]{13}$/.test(v.toUpperCase().replace(/[-\s]/g, "")),
   idProofNumber: (idType, v) => {
@@ -1045,7 +1045,7 @@ export default function VendorPassPublicPage() {
         existingPassRequestId: data.passRequestId,
         regNo: data.registrationNo || data.regNo || "",
         type: data.vehicleTypeId || data.type || "",
-        cardNumber: data.rfidCardNumber || "",
+        cardNumber: data.qrCode || data.qrPassReference || data.rfidCardNumber || "",
         accessArea: areaVal,
         insuranceExpiry: data.insuranceExpiry
           ? new Date(data.insuranceExpiry).toISOString().split("T")[0]
@@ -1484,7 +1484,7 @@ export default function VendorPassPublicPage() {
           rateId: 2,
           vehicleTypeId: parseInt(v.type, 10) || 1,
           registrationNo: v.regNo,
-          rfidCardNumber: v.cardNumber,
+          qrPassReference: v.cardNumber,
           insuranceExpiry: v.insuranceExpiry || null,
           rcValidity: v.rcValidity || null,
           accessAreaId: getEnumValue(
@@ -3966,7 +3966,7 @@ export default function VendorPassPublicPage() {
 
               <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
                 <p className="text-sm font-semibold text-slate-700 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                  The following are rates(Excluding GST) RFID based Harbour Entry
+                  The following are rates (excluding GST) for QR-based Harbour Entry
                   Permits.
                 </p>
 

@@ -690,8 +690,8 @@ export default function MasterRecordsPage() {
                         }
                       />
                       <DetailItem
-                        label="RFID Card No."
-                        value={selectedRecord.rfidCardNumber}
+                        label="QR Pass Reference"
+                        value={selectedRecord.qrCode || selectedRecord.qrPassReference || selectedRecord.rfidCardNumber}
                       />
                       <DetailItem
                         label="Insurance Expiry"
