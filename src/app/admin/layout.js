@@ -18,7 +18,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import {
   Ship,
   LayoutDashboard,
@@ -59,15 +65,26 @@ import { toast } from "sonner";
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
 
-function UserProfileDetailRow({ icon: Icon, label, value, copyKey, copiedField, onCopy }) {
+function UserProfileDetailRow({
+  icon: Icon,
+  label,
+  value,
+  copyKey,
+  copiedField,
+  onCopy,
+}) {
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-stone-100 dark:border-white/5 last:border-0">
       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-stone-100 dark:bg-white/5 text-stone-500 dark:text-stone-400 shrink-0 mt-0.5">
         <Icon className="h-4 w-4" />
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">{label}</p>
-        <p className="text-sm font-semibold text-stone-800 dark:text-stone-100 truncate">{value || "—"}</p>
+        <p className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">
+          {label}
+        </p>
+        <p className="text-sm font-semibold text-stone-800 dark:text-stone-100 truncate">
+          {value || "—"}
+        </p>
       </div>
       {value && value !== "—" && (
         <button
@@ -75,14 +92,23 @@ function UserProfileDetailRow({ icon: Icon, label, value, copyKey, copiedField, 
           className="shrink-0 p-1 rounded text-stone-400 hover:text-amber-600 transition-colors"
           title="Copy"
         >
-          {copiedField === copyKey ? <CheckCheck className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+          {copiedField === copyKey ? (
+            <CheckCheck className="h-3.5 w-3.5 text-emerald-500" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
         </button>
       )}
     </div>
   );
 }
 
-function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) {
+function UserProfilePanel({
+  user,
+  departmentName,
+  onChangePassword,
+  onLogout,
+}) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
   const [copiedField, setCopiedField] = useState(null);
@@ -90,7 +116,8 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
   useEffect(() => {
     if (!open) return;
     const handler = (e) => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false);
+      if (panelRef.current && !panelRef.current.contains(e.target))
+        setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -106,12 +133,16 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
   const username = user?.username || "Port Admin";
   const displayName = user?.name || username.split("@")[0] || "Port Admin";
   const role = user?.role || "Officer";
-  const department = user?.departmentName || departmentName || "Admin Department";
+  const department =
+    user?.departmentName || departmentName || "Admin Department";
   const email = user?.email || "—";
   const mobile = user?.mobile || user?.mobileNo || "—";
   const initials = displayName.substring(0, 2).toUpperCase();
 
-  const statusMeta = { label: "Active", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300" };
+  const statusMeta = {
+    label: "Active",
+    cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300",
+  };
 
   return (
     <div className="relative" ref={panelRef}>
@@ -123,13 +154,17 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
           {initials}
         </span>
         <span className="hidden sm:flex flex-col text-left leading-tight min-w-0 pr-1">
-          <span className="text-sm font-extrabold truncate max-w-[140px] text-white">{displayName}</span>
-          <span className="text-[10px] uppercase tracking-wider text-orange-400 font-bold truncate">{role}</span>
+          <span className="text-sm font-extrabold truncate max-w-[140px] text-white">
+            {displayName}
+          </span>
+          <span className="text-[10px] uppercase tracking-wider text-orange-400 font-bold truncate">
+            {role}
+          </span>
         </span>
         <ChevronDown
           className={cn(
             "h-4 w-4 text-stone-400 transition-transform duration-200 hidden sm:block",
-            open && "rotate-180"
+            open && "rotate-180",
           )}
         />
       </button>
@@ -137,46 +172,106 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
       {open && (
         <div className="absolute right-0 top-[calc(100%+10px)] z-[9999] w-80 rounded-3xl bg-white dark:bg-[#1f232d] shadow-[0_8px_40px_rgba(0,0,0,0.18)] ring-1 ring-stone-200/70 dark:ring-white/10 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
           <div className="bg-gradient-to-r from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] px-5 py-4 relative overflow-hidden">
-            <svg aria-hidden viewBox="0 0 320 80" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-10 w-full text-amber-400/10">
-              <path fill="currentColor" d="M0,40 C80,80 160,0 240,40 C280,60 300,30 320,40 L320,80 L0,80 Z" />
+            <svg
+              aria-hidden
+              viewBox="0 0 320 80"
+              preserveAspectRatio="none"
+              className="absolute inset-x-0 bottom-0 h-10 w-full text-amber-400/10"
+            >
+              <path
+                fill="currentColor"
+                d="M0,40 C80,80 160,0 240,40 C280,60 300,30 320,40 L320,80 L0,80 Z"
+              />
             </svg>
             <div className="relative flex items-center gap-3">
               <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-xl font-extrabold shrink-0 shadow-lg ring-2 ring-amber-300/30">
                 {initials}
               </span>
               <div className="min-w-0 flex-1 text-left">
-                <p className="text-base font-extrabold text-white leading-tight truncate">{displayName}</p>
-                <p className="text-xs text-stone-400 font-mono mt-0.5 truncate">{username}</p>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold mt-1.5 ${statusMeta.cls}`}>
+                <p className="text-base font-extrabold text-white leading-tight truncate">
+                  {displayName}
+                </p>
+                <p className="text-xs text-stone-400 font-mono mt-0.5 truncate">
+                  {username}
+                </p>
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold mt-1.5 ${statusMeta.cls}`}
+                >
                   <BadgeCheck className="h-3 w-3" />
                   {statusMeta.label}
                 </span>
               </div>
-              <button onClick={() => setOpen(false)} className="text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0">
+              <button
+                onClick={() => setOpen(false)}
+                className="text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
           </div>
 
           <div className="px-4 pt-2 pb-1 max-h-[340px] overflow-y-auto [scrollbar-width:thin] text-left">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">Account Profile</p>
-            <UserProfileDetailRow icon={User} label="Login ID" value={username} copyKey="lid" copiedField={copiedField} onCopy={copyField} />
-            <UserProfileDetailRow icon={Briefcase} label="Role" value={role} copyKey="role" copiedField={copiedField} onCopy={copyField} />
-            <UserProfileDetailRow icon={Building2} label="Department" value={department} copyKey="dept" copiedField={copiedField} onCopy={copyField} />
-            <UserProfileDetailRow icon={Mail} label="Email" value={email} copyKey="email" copiedField={copiedField} onCopy={copyField} />
-            <UserProfileDetailRow icon={Phone} label="Mobile" value={mobile} copyKey="mob" copiedField={copiedField} onCopy={copyField} />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">
+              Account Profile
+            </p>
+            <UserProfileDetailRow
+              icon={User}
+              label="Login ID"
+              value={username}
+              copyKey="lid"
+              copiedField={copiedField}
+              onCopy={copyField}
+            />
+            <UserProfileDetailRow
+              icon={Briefcase}
+              label="Role"
+              value={role}
+              copyKey="role"
+              copiedField={copiedField}
+              onCopy={copyField}
+            />
+            <UserProfileDetailRow
+              icon={Building2}
+              label="Department"
+              value={department}
+              copyKey="dept"
+              copiedField={copiedField}
+              onCopy={copyField}
+            />
+            <UserProfileDetailRow
+              icon={Mail}
+              label="Email"
+              value={email}
+              copyKey="email"
+              copiedField={copiedField}
+              onCopy={copyField}
+            />
+            <UserProfileDetailRow
+              icon={Phone}
+              label="Mobile"
+              value={mobile}
+              copyKey="mob"
+              copiedField={copiedField}
+              onCopy={copyField}
+            />
           </div>
 
           <div className="p-3 border-t border-stone-100 dark:border-white/5 space-y-1.5">
             <button
-              onClick={() => { setOpen(false); onChangePassword(); }}
+              onClick={() => {
+                setOpen(false);
+                onChangePassword();
+              }}
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-orange-50 dark:hover:bg-orange-400/10 hover:text-orange-700 dark:hover:text-orange-300 transition-colors cursor-pointer text-left"
             >
               <KeyRound className="h-4 w-4 shrink-0" />
               Change Password
             </button>
             <button
-              onClick={() => { setOpen(false); onLogout(); }}
+              onClick={() => {
+                setOpen(false);
+                onLogout();
+              }}
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors cursor-pointer text-left"
             >
               <LogOut className="h-4 w-4 shrink-0" />
@@ -220,7 +315,8 @@ export default function AdminLayout({ children }) {
       window.location.reload();
     };
 
-    const handleError = (event) => reloadOnStaleChunk(event.error || event.message);
+    const handleError = (event) =>
+      reloadOnStaleChunk(event.error || event.message);
     const handleRejection = (event) => reloadOnStaleChunk(event.reason);
     const clearReloadMarker = window.setTimeout(() => {
       if (sessionStorage.getItem(reloadKey) === window.location.pathname) {
@@ -255,7 +351,7 @@ export default function AdminLayout({ children }) {
       const next = !prev;
       try {
         localStorage.setItem("admin-theme", next ? "dark" : "light");
-      } catch { }
+      } catch {}
       return next;
     });
   };
@@ -279,7 +375,7 @@ export default function AdminLayout({ children }) {
       const next = !prev;
       try {
         localStorage.setItem("admin-sidebar", next ? "expanded" : "collapsed");
-      } catch { }
+      } catch {}
       return next;
     });
   };
@@ -292,10 +388,13 @@ export default function AdminLayout({ children }) {
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
       // Access control: Admin OR any Approval department user
+      // Access control: Admin OR Approval OR CISF Assistant Commandant
       const role = (parsedUser.role || "").toLowerCase();
       const isAdmin = role === "admin" || role === "administrator";
       const isApproval = role === "approval";
-      if (!isAdmin && !isApproval) {
+      const isCisfAssistantCommandant = role === "cisf.assistant commandant";
+
+      if (!isAdmin && !isApproval && !isCisfAssistantCommandant) {
         router.push("/");
         return;
       }
@@ -343,7 +442,7 @@ export default function AdminLayout({ children }) {
             Authorization: `Bearer ${token}`,
           },
           validateStatus: (s) => s < 500,
-        }
+        },
       );
 
       if (res.status >= 200 && res.status < 300 && res.data?.success) {
@@ -490,22 +589,38 @@ export default function AdminLayout({ children }) {
     );
   }
 
-  const isAdmin = user && (user.role?.toLowerCase() === "admin" || user.role?.toLowerCase() === "administrator");
+  const isAdmin =
+    user &&
+    (user.role?.toLowerCase() === "admin" ||
+      user.role?.toLowerCase() === "administrator");
   const consoleHref = isAdmin ? "/admin" : "/admin/vendor_pass";
 
   // Departments allowed to see Bulk Pass (General Administration = 6, Traffic = 9–15)
   const BULK_PASS_DEPT_IDS = [6, 9, 10, 11, 12, 13, 14, 15];
-  const canSeeBulkPass = isAdmin || BULK_PASS_DEPT_IDS.includes(Number(user?.departmentId));
+  const canSeeBulkPass =
+    isAdmin || BULK_PASS_DEPT_IDS.includes(Number(user?.departmentId));
 
   const navigationItems = [
-    { name: isAdmin ? "Admin Console" : "Vendor Pass", href: consoleHref, icon: ShieldCheck },
-    ...(isAdmin ? [{ name: "User Accounts", href: "/admin/user-accounts", icon: Users }] : []),
+    {
+      name: isAdmin ? "Admin Console" : "Vendor Pass",
+      href: consoleHref,
+      icon: ShieldCheck,
+    },
+    ...(isAdmin
+      ? [{ name: "User Accounts", href: "/admin/user-accounts", icon: Users }]
+      : []),
     { name: "Pass Approvals", href: "/admin/pass-approvals", icon: FileText },
     { name: "Company Approvals", href: "/admin/companies", icon: Building2 },
-    { name: "Material Approvals", href: "/admin/material-pass", icon: FileText},
+    {
+      name: "Material Approvals",
+      href: "/admin/material-pass",
+      icon: FileText,
+    },
     { name: "All Passes", href: "/admin/all-passes", icon: FileText },
     { name: "Bulk Pass", href: "/admin/bulk_pass", icon: Users },
-    ...(isAdmin ? [{ name: "Reports", href: "/admin/reports", icon: BarChart3 }] : []),
+    ...(isAdmin
+      ? [{ name: "Reports", href: "/admin/reports", icon: BarChart3 }]
+      : []),
   ];
 
   const SidebarContent = () => (
@@ -514,7 +629,13 @@ export default function AdminLayout({ children }) {
       <div className="p-6 border-b border-orange-100">
         <Link href={consoleHref} className="flex items-center gap-3 group">
           <div className="relative flex items-center justify-center w-11 h-11 rounded-xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20">
-            <Image src="/logo1.png" alt="Chennai Port Logo" width={44} height={44} className="w-full h-full object-contain" />
+            <Image
+              src="/logo1.png"
+              alt="Chennai Port Logo"
+              width={44}
+              height={44}
+              className="w-full h-full object-contain"
+            />
           </div>
           <div>
             <h1 className="font-bold text-slate-800 text-lg leading-tight">
@@ -589,16 +710,30 @@ export default function AdminLayout({ children }) {
   // Sidebar — collapses to a 24-wide icon column or expands to a 64-wide
   // labeled column. The mobile slide-over always uses the expanded variant
   // so nav labels are visible in the drawer.
-  const renderIconSidebar = ({ onNavigate, expanded = sidebarExpanded, showCollapseToggle = true }) => (
+  const renderIconSidebar = ({
+    onNavigate,
+    expanded = sidebarExpanded,
+    showCollapseToggle = true,
+  }) => (
     <div
       className={cn(
         "h-full flex flex-col justify-between py-8 bg-slate-900 dark:bg-slate-950 border-r border-slate-850 dark:border-white/5 transition-all duration-300",
         expanded ? "items-stretch px-4 w-full" : "items-center w-full",
       )}
     >
-      <div className={cn("space-y-6 flex flex-col", expanded ? "items-stretch" : "items-center")}>
+      <div
+        className={cn(
+          "space-y-6 flex flex-col",
+          expanded ? "items-stretch" : "items-center",
+        )}
+      >
         {/* Brand row */}
-        <div className={cn("flex items-center", expanded ? "justify-between" : "justify-center")}>
+        <div
+          className={cn(
+            "flex items-center",
+            expanded ? "justify-between" : "justify-center",
+          )}
+        >
           <Link
             href={consoleHref}
             className="flex items-center gap-3 group"
@@ -646,7 +781,12 @@ export default function AdminLayout({ children }) {
         )}
 
         {/* Nav items */}
-        <div className={cn("flex flex-col gap-2", expanded ? "items-stretch" : "items-center")}>
+        <div
+          className={cn(
+            "flex flex-col gap-2",
+            expanded ? "items-stretch" : "items-center",
+          )}
+        >
           {navigationItems.map((item) => {
             const isActive = pathname === item.href;
             const isReports = item.href.startsWith("/admin/reports");
@@ -667,15 +807,25 @@ export default function AdminLayout({ children }) {
                     : "text-slate-300 hover:text-amber-400 hover:bg-white/5",
                 )}
               >
-                <item.icon className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")} strokeWidth={2.5} />
-                {expanded && <span className="flex-1 truncate">{item.name}</span>}
+                <item.icon
+                  className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")}
+                  strokeWidth={2.5}
+                />
+                {expanded && (
+                  <span className="flex-1 truncate">{item.name}</span>
+                )}
               </NavItem>
             );
           })}
         </div>
       </div>
 
-      <div className={cn("flex flex-col gap-4", expanded ? "items-stretch" : "items-center")}>
+      <div
+        className={cn(
+          "flex flex-col gap-4",
+          expanded ? "items-stretch" : "items-center",
+        )}
+      >
         <button
           title="Help / Logs"
           className={cn(
@@ -683,7 +833,10 @@ export default function AdminLayout({ children }) {
             expanded ? "gap-3 px-4 py-3 text-base" : "justify-center w-12 h-12",
           )}
         >
-          <HelpCircle className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")} strokeWidth={2.5} />
+          <HelpCircle
+            className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")}
+            strokeWidth={2.5}
+          />
           {expanded && <span className="flex-1 text-left">Help / Logs</span>}
         </button>
       </div>
@@ -718,8 +871,12 @@ export default function AdminLayout({ children }) {
             side="left"
             className="w-72 p-0 bg-slate-900 dark:bg-slate-950 border-slate-800 dark:border-white/5"
           >
-            <SheetTitle className="sr-only">Admin Navigation Sidebar</SheetTitle>
-            <SheetDescription className="sr-only">Access different modules of the admin panel</SheetDescription>
+            <SheetTitle className="sr-only">
+              Admin Navigation Sidebar
+            </SheetTitle>
+            <SheetDescription className="sr-only">
+              Access different modules of the admin panel
+            </SheetDescription>
             {renderIconSidebar({
               onNavigate: () => setIsMobileMenuOpen(false),
               expanded: true,
@@ -773,7 +930,9 @@ export default function AdminLayout({ children }) {
                 onClick={toggleDarkMode}
                 variant="ghost"
                 size="icon"
-                title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+                title={
+                  darkMode ? "Switch to light mode" : "Switch to dark mode"
+                }
                 className="relative bg-white dark:bg-white/5 dark:border dark:border-white/10 shadow-sm rounded-full hover:bg-stone-50 dark:hover:bg-white/10 active:scale-95 transition-all duration-200"
               >
                 {darkMode ? (
@@ -814,7 +973,9 @@ export default function AdminLayout({ children }) {
                 <Lock className="h-7 w-7" strokeWidth={2.5} />
               </span>
               <h3 className="text-2xl font-extrabold text-[#1f1f1f] dark:text-white tracking-tight">
-                {user?.isPasswordChanged === false ? "Mandatory Password Update" : "Update Password"}
+                {user?.isPasswordChanged === false
+                  ? "Mandatory Password Update"
+                  : "Update Password"}
               </h3>
               <p className="text-sm text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
                 {user?.isPasswordChanged === false
@@ -824,8 +985,12 @@ export default function AdminLayout({ children }) {
             </div>
 
             <div className="bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/5 rounded-2xl px-4 py-3 mb-4 text-sm text-stone-700 dark:text-stone-300 font-medium flex items-center justify-start gap-3">
-              <span className="text-stone-500 dark:text-stone-400">User Account:</span>
-              <span className="text-stone-900 dark:text-white font-bold">{user?.username}</span>
+              <span className="text-stone-500 dark:text-stone-400">
+                User Account:
+              </span>
+              <span className="text-stone-900 dark:text-white font-bold">
+                {user?.username}
+              </span>
             </div>
 
             <form onSubmit={handlePasswordChangeSubmit} className="space-y-4">
@@ -844,7 +1009,11 @@ export default function AdminLayout({ children }) {
                   onClick={() => setShowNewPassword(!showNewPassword)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 focus:outline-none"
                 >
-                  {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showNewPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
                 </button>
               </div>
 
@@ -863,77 +1032,88 @@ export default function AdminLayout({ children }) {
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 focus:outline-none"
                 >
-                  {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
                 </button>
               </div>
 
-{/* Live password requirements checklist */}
-{(() => {
-  const pwd = newPassword;
+              {/* Live password requirements checklist */}
+              {(() => {
+                const pwd = newPassword;
 
-  const rules = [
-    { label: "8–15 characters", valid: pwd.length >= 8 && pwd.length <= 15 },
-    { label: "One uppercase letter", valid: /[A-Z]/.test(pwd) },
-    { label: "One lowercase letter", valid: /[a-z]/.test(pwd) },
-    { label: "One number", valid: /[0-9]/.test(pwd) },
-    { label: "One special character", valid: /[^A-Za-z0-9]/.test(pwd) },
-  ];
+                const rules = [
+                  {
+                    label: "8–15 characters",
+                    valid: pwd.length >= 8 && pwd.length <= 15,
+                  },
+                  { label: "One uppercase letter", valid: /[A-Z]/.test(pwd) },
+                  { label: "One lowercase letter", valid: /[a-z]/.test(pwd) },
+                  { label: "One number", valid: /[0-9]/.test(pwd) },
+                  {
+                    label: "One special character",
+                    valid: /[^A-Za-z0-9]/.test(pwd),
+                  },
+                ];
 
-  const passedCount = rules.filter((r) => r.valid).length;
-  const strengthPct = (passedCount / rules.length) * 100;
+                const passedCount = rules.filter((r) => r.valid).length;
+                const strengthPct = (passedCount / rules.length) * 100;
 
-  const strengthColor =
-    strengthPct === 100
-      ? "bg-emerald-500"
-      : strengthPct >= 60
-      ? "bg-amber-500"
-      : "bg-stone-300";
+                const strengthColor =
+                  strengthPct === 100
+                    ? "bg-emerald-500"
+                    : strengthPct >= 60
+                      ? "bg-amber-500"
+                      : "bg-stone-300";
 
-  return (
-    <div className="rounded-xl border border-stone-200 bg-stone-50/80 px-4 py-3.5 space-y-3">
-      {/* Strength bar */}
-      <div className="h-1.5 w-full bg-stone-200 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-300 ease-out ${strengthColor}`}
-          style={{ width: `${strengthPct}%` }}
-        />
-      </div>
+                return (
+                  <div className="rounded-xl border border-stone-200 bg-stone-50/80 px-4 py-3.5 space-y-3">
+                    {/* Strength bar */}
+                    <div className="h-1.5 w-full bg-stone-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ease-out ${strengthColor}`}
+                        style={{ width: `${strengthPct}%` }}
+                      />
+                    </div>
 
-      {/* Live checklist */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
-        {rules.map((rule, i) => (
-          <div
-            key={i}
-            className="flex items-center gap-1.5 text-xs transition-colors duration-200"
-          >
-            {rule.valid ? (
-              <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-            ) : (
-              <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-stone-300 shrink-0" />
-            )}
+                    {/* Live checklist */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                      {rules.map((rule, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-1.5 text-xs transition-colors duration-200"
+                        >
+                          {rule.valid ? (
+                            <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                          ) : (
+                            <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-stone-300 shrink-0" />
+                          )}
 
-            <span
-              className={
-                rule.valid
-                  ? "text-stone-700 font-medium"
-                  : "text-stone-400"
-              }
-            >
-              {rule.label}
-            </span>
-          </div>
-        ))}
-      </div>
+                          <span
+                            className={
+                              rule.valid
+                                ? "text-stone-700 font-medium"
+                                : "text-stone-400"
+                            }
+                          >
+                            {rule.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
 
-      {/* Backend-only rule */}
-      <div className="border-t border-stone-200 pt-2">
-        <p className="text-xs text-stone-500">
-          Your new password must also be different from your current password.
-        </p>
-      </div>
-    </div>
-  );
-})()}
+                    {/* Backend-only rule */}
+                    <div className="border-t border-stone-200 pt-2">
+                      <p className="text-xs text-stone-500">
+                        Your new password must also be different from your
+                        current password.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="flex gap-3 pt-2">
                 {user?.isPasswordChanged !== false && (
@@ -954,7 +1134,7 @@ export default function AdminLayout({ children }) {
                   disabled={modalLoading}
                   className={cn(
                     "py-3.5 bg-amber-400 text-[#1f1f1f] text-base font-bold tracking-wider uppercase rounded-2xl hover:bg-amber-500 hover:shadow-amber-400/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] shadow-lg shadow-amber-400/20 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-400/20 disabled:opacity-75 disabled:pointer-events-none flex items-center justify-center",
-                    user?.isPasswordChanged !== false ? "w-1/2" : "w-full"
+                    user?.isPasswordChanged !== false ? "w-1/2" : "w-full",
                   )}
                 >
                   {modalLoading ? (

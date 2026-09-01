@@ -778,6 +778,7 @@ export default function PassRequestPage() {
     country: "75", // Default: India
     visaNo: "",
     accessArea: "",
+    departmentId: "",
     designation: "",
     designationOther: "",
     dob: "",
@@ -977,7 +978,73 @@ export default function PassRequestPage() {
     );
   };
 
+  // const isPassApprovedAndActive = (entity) => {
+  //   const passType = String(entity?.passType || "")
+  //     .trim()
+  //     .toUpperCase();
+
+  //   const vehicleTypeId = Number(entity?.vehicleTypeId);
+
+  //   const isAnnualTrailer =
+  //     (passType === "YEARLY" || passType === "ANNUAL") &&
+  //     (vehicleTypeId === 34 || vehicleTypeId === 35);
+
+  //   /*
+  //    * Annual Trailer / Trailer Lorry:
+  //    * Marine approval is mandatory.
+  //    */
+  //   if (isAnnualTrailer && entity?.marineSafetyApproved !== true) {
+  //     return false;
+  //   }
+
+  //   return (
+  //     String(entity?.status || "")
+  //       .trim()
+  //       .toUpperCase() === "APPROVED" &&
+  //     getPassStatus(entity) === "ACTIVE" &&
+  //     isCurrentlyActive(entity)
+  //   );
+  // };
+
   const isPassApprovedAndActive = (entity) => {
+    const passType = String(entity?.passType || "")
+      .trim()
+      .toUpperCase();
+
+    const vehicleTypeId = Number(entity?.vehicleTypeId);
+
+    const essentialWorkflowState = String(entity?.essentialWorkflowState || "")
+      .trim()
+      .toUpperCase();
+
+    const isEssentialVehicle =
+      essentialWorkflowState.endsWith("_ESSENTIAL") ||
+      (entity?.essentialDepartmentId !== null &&
+        entity?.essentialDepartmentId !== undefined);
+
+    // ------------------------------------------------------------
+    // ESSENTIAL OIL DOCK
+    // QR is allowed ONLY after Pass Section completes
+    // the Essential workflow.
+    // ------------------------------------------------------------
+    if (isEssentialVehicle) {
+      if (essentialWorkflowState !== "COMPLETED_ESSENTIAL") {
+        return false;
+      }
+    }
+
+    const isAnnualTrailer =
+      (passType === "YEARLY" || passType === "ANNUAL") &&
+      (vehicleTypeId === 34 || vehicleTypeId === 35);
+
+    /*
+     * Annual Trailer / Trailer Lorry:
+     * Marine approval is mandatory.
+     */
+    if (isAnnualTrailer && entity?.marineSafetyApproved !== true) {
+      return false;
+    }
+
     return (
       String(entity?.status || "")
         .trim()
@@ -1112,6 +1179,7 @@ export default function PassRequestPage() {
     insuranceExpiry: "",
     rcValidity: "",
     accessArea: "",
+    departmentId: "",
     rcDocument: null,
     insuranceDocument: null,
     permit: null,
@@ -1169,6 +1237,7 @@ export default function PassRequestPage() {
     nationalities: [],
     accessAreas: [],
     vehicleTypes: [],
+    departments: [],
     countries: [],
     hepTypes: [
       { id: 1, name: "Drivers" },
@@ -1217,6 +1286,7 @@ export default function PassRequestPage() {
           desigRes,
           vehRes,
           countryRes,
+          departmentRes,
         ] = await Promise.all([
           axios
             .get(`${AGENT_API}/pass-request/get-nationality`, config)
@@ -1239,6 +1309,9 @@ export default function PassRequestPage() {
           axios
             .get(`${AGENT_API}/pass-request/get-countries`, config)
             .catch(() => ({ data: [] })),
+          axios
+            .get(`${ADMIN_API}/user/departments`, config)
+            .catch(() => ({ data: [] })),
         ]);
 
         const extractArray = (res) =>
@@ -1258,6 +1331,7 @@ export default function PassRequestPage() {
           accessAreas: extractArray(accessRes),
           designations: extractArray(desigRes),
           vehicleTypes: extractArray(vehRes),
+          departments: extractArray(departmentRes),
           countries:
             fetchedCountries.length > 0 ? fetchedCountries : prev.countries,
         }));
@@ -2414,7 +2488,7 @@ export default function PassRequestPage() {
 
     const isForeigner = isPersonForeigner(personForm.nationality);
 
-        // Aadhaar validation - required for non-foreigners (non-seafarers OR seafarers who chose aadhaar)
+    // Aadhaar validation - required for non-foreigners (non-seafarers OR seafarers who chose aadhaar)
     if (
       !isForeigner &&
       (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar")
@@ -2526,8 +2600,7 @@ export default function PassRequestPage() {
       personForm.hepType === "1" &&
       !(personForm.driverLicence || personForm.existingDlName)
     ) {
-      errors.driverLicence =
-        "Driver Licence document is mandatory for Drivers";
+      errors.driverLicence = "Driver Licence document is mandatory for Drivers";
     }
 
     // ---- Copy of Passport — mandatory for Foreigners ----
@@ -2545,7 +2618,10 @@ export default function PassRequestPage() {
     }
 
     // ---- Visa & Immigration — mandatory for Foreigners ----
-    if (isForeigner && !(personForm.visaDoc || personForm.existingVisaDocName)) {
+    if (
+      isForeigner &&
+      !(personForm.visaDoc || personForm.existingVisaDocName)
+    ) {
       errors.visaDoc = "Visa document is mandatory for Foreigners";
     }
     if (
@@ -2900,8 +2976,7 @@ export default function PassRequestPage() {
       const responseStatus = sarathiResult?.responseStatus;
 
       // Actual DL status is inside DLInformation
-      const dlStatus =
-        ulipResponse?.DLinformation?.DL_status;
+      const dlStatus = ulipResponse?.DLinformation?.DL_status;
 
       const normalizedDlStatus = String(dlStatus || "")
         .trim()
@@ -2909,8 +2984,9 @@ export default function PassRequestPage() {
         .replace(/[.\s]/g, "");
 
       const isVerified =
-        String(responseStatus || "").trim().toUpperCase() === "SUCCESS" &&
-        normalizedDlStatus === "ACTIVE";
+        String(responseStatus || "")
+          .trim()
+          .toUpperCase() === "SUCCESS" && normalizedDlStatus === "ACTIVE";
 
       console.log("=================================");
       console.log("ULIP DL Response:", res.data);
@@ -2929,16 +3005,13 @@ export default function PassRequestPage() {
           : "Driving Licence verification failed",
         data: res.data,
       });
-
     } catch (err) {
       console.error("DL Verification Error:", err);
 
       setDlVerification({
         loading: false,
         verified: false,
-        message:
-          err.response?.data?.message ||
-          "Driving Licence Not Found",
+        message: err.response?.data?.message || "Driving Licence Not Found",
         data: null,
       });
     }
@@ -3035,6 +3108,15 @@ export default function PassRequestPage() {
     const isVehicleOilDock =
       String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") ||
       String(vehicleForm.accessArea) === "1";
+    if (isVehicleOilDock) {
+      const selectedDepartmentId = Number(vehicleForm.departmentId);
+
+      if (![3, 4, 9].includes(selectedDepartmentId)) {
+        return toast.error(
+          "Please select Civil, Mechanical, or Traffic department for Oil Jetty and Other Gates.",
+        );
+      }
+    }
     const isMonthlyYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
       String(vehicleForm.passType),
     );
@@ -3055,65 +3137,58 @@ export default function PassRequestPage() {
       vErrors.permit = "Permit Document is mandatory for Monthly/Yearly passes";
     }
     if (
-      (isMonthlyYearly || isVehicleOilDock) &&
-      !(vehicleForm.requestLetter || vehicleForm.existingReqName)
+      ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+        String(vehicleForm.passType),
+      )
     ) {
-      vErrors.requestLetter = isMonthlyYearly
-        ? "Request Letter is mandatory for Monthly/Yearly passes"
-        : "Request Letter is mandatory for Oil Dock Daily passes";
-    }
-    if (
-      isMonthlyYearly &&
-      !(vehicleForm.taxDoc || vehicleForm.existingTaxName)
-    ) {
-      vErrors.taxDoc = "Tax Document is mandatory for Monthly/Yearly passes";
-    }
-    if (
-      isMonthlyYearly &&
-      !(vehicleForm.emissionCert || vehicleForm.existingEmissionName)
-    ) {
-      vErrors.emissionCert =
-        "Emission Certificate is mandatory for Monthly/Yearly passes";
-    }
-    if (
-      isVehicleOilDock &&
-      !(vehicleForm.sparkArrester || vehicleForm.existingSparkArresterName)
-    ) {
-      vErrors.sparkArrester =
-        "Spark Arrester Certificate is mandatory for Oil Dock passes";
-    }
-    if (
-      isMonthlyYearly &&
-      !(vehicleForm.twistLock || vehicleForm.existingTwistLockName)
-    ) {
-      vErrors.twistLock =
-        "Twist Lock Certificate is mandatory for Monthly/Yearly passes";
+      if (!(vehicleForm.permit || vehicleForm.existingPermitName)) {
+        return toast.error(
+          "Permit Document is mandatory for Monthly/Yearly passes.",
+        );
+      }
+      if (
+        // !(vehicleForm.requestLetter || vehicleForm.existingReqName) ||
+        !(vehicleForm.taxDoc || vehicleForm.existingTaxName) ||
+        !(vehicleForm.emissionCert || vehicleForm.existingEmissionName)
+      ) {
+        return toast.error(
+          "Request Letter, Tax, Emission Cert, and Permit are mandatory for Monthly/Yearly passes.",
+        );
+      }
     }
 
-    if (!vehicleForm.type) {
-      vErrors.type = "Vehicle Type is required";
-    }
-    if (!vehicleForm.accessArea) {
-      vErrors.accessArea = "Access Area is required";
-    }
-
-    if (Object.keys(vErrors).length > 0) {
-      setVehicleErrors(vErrors);
-      return toast.error(
-        "Please fix the highlighted field errors before adding.",
-      );
-    }
-    setVehicleErrors({});
-
-    //====================
-    // ULIP Verification
-    //====================
-    console.log("vehicleVerification =", vehicleVerification);
-    if (!vehicleVerification.verified) {
-      return toast.error(
-        "Please verify the Vehicle Registration Number before adding.",
-      );
-    }
+    // const isVehicleOilDock =
+    //   String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") ||
+    //   String(vehicleForm.accessArea) === "1";
+    // if (isVehicleOilDock) {
+    //   if (
+    //     !(vehicleForm.sparkArrester || vehicleForm.existingSparkArresterName)
+    //   ) {
+    //     return toast.error(
+    //       "Spark Arrester Certificate is mandatory for Oil Dock passes.",
+    //     );
+    //   }
+    // }
+    // const isMonthlyYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+    //   String(vehicleForm.passType),
+    // );
+    // if (
+    //   isMonthlyYearly &&
+    //   !(vehicleForm.twistLock || vehicleForm.existingTwistLockName)
+    // ) {
+    //   return toast.error(
+    //     "Twist Lock Certificate is mandatory for Monthly/Yearly passes.",
+    //   );
+    // }
+    // if (
+    //   isVehicleOilDock &&
+    //   !isMonthlyYearly &&
+    //   !(vehicleForm.requestLetter || vehicleForm.existingReqName)
+    // ) {
+    //   return toast.error(
+    //     "Request Letter is mandatory for Oil Dock Daily passes.",
+    //   );
+    // }
 
     // Check if we're editing a reverted entity
     if (editingRevertedEntity && editingRevertedEntity.type === "vehicle") {
@@ -3391,6 +3466,8 @@ export default function PassRequestPage() {
             p.accessArea,
             "OTHER GATES ONLY",
           ),
+          essentialDepartmentId: p.departmentId ? Number(p.departmentId) : null,
+          withTwoWheeler: p.withTwoWheeler,
           withTwoWheeler: p.withTwoWheeler,
           vehicleNo: p.vehicleNo,
           dob: p.dob || null,
@@ -3439,6 +3516,7 @@ export default function PassRequestPage() {
             v.accessArea,
             "OTHER GATES ONLY",
           ),
+          essentialDepartmentId: v.departmentId ? Number(v.departmentId) : null,
           passType: getEnumValue(masterData.passTypes, v.passType, "DAILY"),
           passPeriod: parseInt(v.passPeriod, 10) || 1,
           dateFrom: v.dateFrom,
@@ -3524,14 +3602,13 @@ export default function PassRequestPage() {
         if (v.permit) formData.append(`vehiclePermit_${idx}`, v.permit);
         if (v.fitnessCert)
           formData.append(`vehicleFitness_${idx}`, v.fitnessCert);
-        if (v.requestLetter)
-          formData.append(`vehicleRequestLetter_${idx}`, v.requestLetter);
+        // if (v.requestLetter)formData.append(`vehicleRequestLetter_${idx}`, v.requestLetter);
         if (v.taxDoc) formData.append(`vehicleTax_${idx}`, v.taxDoc);
         if (v.emissionCert)
           formData.append(`vehicleEmission_${idx}`, v.emissionCert);
-        if (v.sparkArrester)
-          formData.append(`sparkArrester_${idx}`, v.sparkArrester);
-        if (v.twistLock) formData.append(`twistLock_${idx}`, v.twistLock);
+        // if (v.sparkArrester)
+        //   formData.append(`sparkArrester_${idx}`, v.sparkArrester);
+        // if (v.twistLock) formData.append(`twistLock_${idx}`, v.twistLock);
       });
       // ===== CHANGE END =====
 
@@ -4112,6 +4189,9 @@ export default function PassRequestPage() {
         engineNo: entity.engineNo || "",
         chassisNo: entity.chassisNo || "",
         type: String(entity.vehicleTypeId || ""),
+        departmentId: entity.essentialDepartmentId
+          ? String(entity.essentialDepartmentId)
+          : "",
         fuelType: entity.fuelType || "",
         accessArea: accessAreaId,
         insuranceExpiry: entity.insuranceExpiry
@@ -4349,6 +4429,10 @@ export default function PassRequestPage() {
           engineNo: vehicleForm.engineNo,
           chassisNo: vehicleForm.chassisNo,
           vehicleTypeId: vehicleForm.type,
+          essentialDepartmentId:
+            vehicleForm.departmentId ||
+            currentEntity.essentialDepartmentId ||
+            null,
           fuelType: vehicleForm.fuelType,
           insuranceExpiry: vehicleForm.insuranceExpiry,
           rcValidity: vehicleForm.rcValidity,
@@ -4704,14 +4788,14 @@ export default function PassRequestPage() {
           formData.append("insuranceFileName", vehicle.insuranceFileName || "");
           formData.append("permitFileName", vehicle.permitFileName || "");
           formData.append("fitnessFileName", vehicle.fitnessFileName || "");
-          formData.append("requestLetterName", vehicle.requestLetterName || "");
+          // formData.append("requestLetterName", vehicle.requestLetterName || "");
           formData.append("taxDocName", vehicle.taxDocName || "");
           formData.append("emissionCertName", vehicle.emissionCertName || "");
-          formData.append(
-            "sparkArresterFileName",
-            vehicle.sparkArresterFileName || "",
-          );
-          formData.append("twistLockFileName", vehicle.twistLockFileName || "");
+          // formData.append(
+          //   "sparkArresterFileName",
+          //   vehicle.sparkArresterFileName || "",
+          // );
+          // formData.append("twistLockFileName", vehicle.twistLockFileName || "");
 
           // Append actual File objects if re-uploaded
           if (vehicle.newRc) formData.append("vehicleRC", vehicle.newRc);
@@ -4721,15 +4805,15 @@ export default function PassRequestPage() {
             formData.append("vehiclePermit", vehicle.newPermit);
           if (vehicle.newFitness)
             formData.append("vehicleFitness", vehicle.newFitness);
-          if (vehicle.newRequestLetter)
-            formData.append("vehicleRequestLetter", vehicle.newRequestLetter);
+          // if (vehicle.newRequestLetter)
+          //   formData.append("vehicleRequestLetter", vehicle.newRequestLetter);
           if (vehicle.newTax) formData.append("vehicleTax", vehicle.newTax);
           if (vehicle.newEmission)
             formData.append("vehicleEmission", vehicle.newEmission);
-          if (vehicle.newSparkArrester)
-            formData.append("sparkArrester", vehicle.newSparkArrester);
-          if (vehicle.newTwistLock)
-            formData.append("twistLock", vehicle.newTwistLock);
+          // if (vehicle.newSparkArrester)
+          //   formData.append("sparkArrester", vehicle.newSparkArrester);
+          // if (vehicle.newTwistLock)
+          //   formData.append("twistLock", vehicle.newTwistLock);
 
           console.log("Updating vehicle:", vehicle.id);
           await axios.put(
@@ -6692,7 +6776,9 @@ export default function PassRequestPage() {
                                     {hasError || !isValid ? (
                                       <p className="text-xs text-red-500 mt-0.5 font-medium">
                                         {personErrors.aadharNo ||
-                                          (hasVal ? "Aadhaar must be exactly 12 digits" : "Aadhaar number is required")}
+                                          (hasVal
+                                            ? "Aadhaar must be exactly 12 digits"
+                                            : "Aadhaar number is required")}
                                       </p>
                                     ) : (
                                       <p className="text-xs text-emerald-600 mt-0.5 font-medium flex items-center gap-1">
@@ -6801,12 +6887,36 @@ export default function PassRequestPage() {
                     </label>
                     <select
                       value={personForm.accessArea}
-                      onChange={(e) =>
-                        setPersonForm({
-                          ...personForm,
-                          accessArea: e.target.value,
-                        })
-                      }
+                      onChange={(e) => {
+                        const value = e.target.value;
+
+                        const oilDockSelected =
+                          String(value).toUpperCase().includes("OIL JETTY") ||
+                          String(value) === "1";
+
+                        setPersonForm((prev) => ({
+                          ...prev,
+                          accessArea: value,
+                          departmentId: oilDockSelected
+                            ? prev.departmentId
+                            : "",
+                        }));
+                      }}
+                      // onChange={(e) => {
+                      //   const value = e.target.value;
+
+                      //   const oilDockSelected =
+                      //     String(value).toUpperCase().includes("OIL JETTY") ||
+                      //     String(value) === "1";
+
+                      //   setVehicleForm((prev) => ({
+                      //     ...prev,
+                      //     accessArea: value,
+                      //     departmentId: oilDockSelected
+                      //       ? prev.departmentId
+                      //       : "",
+                      //   }));
+                      // }}
                       className={inputClass}
                     >
                       <option value="">Select Access Area</option>
@@ -6822,6 +6932,42 @@ export default function PassRequestPage() {
                       </p>
                     )}
                   </div>
+                  {(String(personForm.accessArea)
+                    .toUpperCase()
+                    .includes("OIL JETTY") ||
+                    String(personForm.accessArea) === "1") && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase">
+                        Select Department{" "}
+                        <span className="text-red-500">*</span>
+                      </label>
+
+                      <select
+                        value={personForm.departmentId}
+                        onChange={(e) =>
+                          setPersonForm((prev) => ({
+                            ...prev,
+                            departmentId: e.target.value,
+                          }))
+                        }
+                        className={inputClass}
+                      >
+                        <option value="">Select Department</option>
+
+                        {masterData.departments
+                          .filter(
+                            (d) =>
+                              [3, 4, 9].includes(Number(d.id)) &&
+                              d.isActive !== false,
+                          )
+                          .map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.departmentName}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Date of Birth (DOB){" "}
@@ -7797,7 +7943,7 @@ export default function PassRequestPage() {
                   1. Vehicle Details
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-x-5 gap-y-5">
-                                    <div className="space-y-1.5">
+                  <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Registration No. <span className="text-red-500">*</span>
                     </label>
@@ -7930,12 +8076,21 @@ export default function PassRequestPage() {
                     </label>
                     <select
                       value={vehicleForm.accessArea}
-                      onChange={(e) =>
-                        setVehicleForm({
-                          ...vehicleForm,
-                          accessArea: e.target.value,
-                        })
-                      }
+                      onChange={(e) => {
+                        const value = e.target.value;
+
+                        const oilDockSelected =
+                          String(value).toUpperCase().includes("OIL JETTY") ||
+                          String(value) === "1";
+
+                        setVehicleForm((prev) => ({
+                          ...prev,
+                          accessArea: value,
+                          departmentId: oilDockSelected
+                            ? prev.departmentId
+                            : "",
+                        }));
+                      }}
                       className={inputClass}
                     >
                       <option value="">Select Access Area</option>
@@ -7945,12 +8100,48 @@ export default function PassRequestPage() {
                         </option>
                       ))}
                     </select>
-                      {vehicleErrors.accessArea && (
-                        <p className="text-xs text-red-500 mt-0.5 font-medium">
-                          {vehicleErrors.accessArea}
-                        </p>
-                      )}
+                    {vehicleErrors.accessArea && (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">
+                        {vehicleErrors.accessArea}
+                      </p>
+                    )}
                   </div>
+                  {(String(vehicleForm.accessArea)
+                    .toUpperCase()
+                    .includes("OIL JETTY") ||
+                    String(vehicleForm.accessArea) === "1") && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase">
+                        Select Department{" "}
+                        <span className="text-red-500">*</span>
+                      </label>
+
+                      <select
+                        value={vehicleForm.departmentId}
+                        onChange={(e) =>
+                          setVehicleForm((prev) => ({
+                            ...prev,
+                            departmentId: e.target.value,
+                          }))
+                        }
+                        className={inputClass}
+                      >
+                        <option value="">Select Department</option>
+
+                        {masterData.departments
+                          .filter(
+                            (d) =>
+                              [3, 4, 9].includes(Number(d.id)) &&
+                              d.isActive !== false,
+                          )
+                          .map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.departmentName}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Insurance Expiry Date
@@ -8498,7 +8689,7 @@ export default function PassRequestPage() {
                     }
                     error={vehicleErrors.fitnessCert}
                   />
-                  {(String(vehicleForm.accessArea)
+                  {/* {(String(vehicleForm.accessArea)
                     .toUpperCase()
                     .includes("OIL JETTY") ||
                     String(vehicleForm.accessArea) === "1") && (
@@ -8523,8 +8714,8 @@ export default function PassRequestPage() {
                       }
                       error={vehicleErrors.sparkArrester}
                     />
-                  )}
-                  {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                  )} */}
+                  {/* {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
                     String(vehicleForm.passType),
                   ) && (
                     <FileUploadBox
@@ -8548,9 +8739,9 @@ export default function PassRequestPage() {
                       }
                       error={vehicleErrors.twistLock}
                     />
-                  )}
+                  )} */}
 
-                  {(["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                  {/* {(["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
                     String(vehicleForm.passType),
                   ) ||
                     ((String(vehicleForm.passType) === "1" ||
@@ -8580,7 +8771,7 @@ export default function PassRequestPage() {
                       }
                       error={vehicleErrors.requestLetter}
                     />
-                  )}
+                  )} */}
 
                   {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
                     String(vehicleForm.passType),

@@ -35,11 +35,16 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-import { getPassRequestCategory, getItemCategoryTag } from "@/utils/passCategoryHelper";
+import {
+  getPassRequestCategory,
+  getItemCategoryTag,
+} from "@/utils/passCategoryHelper";
 
-const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
+const AGENT_API =
+  process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
-const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
+const ADMIN_API =
+  process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 
 // --- URL Helper to reliably strip '/api' for static file fetching ---
 const getFileUrl = (path) => {
@@ -58,7 +63,11 @@ const formatDobWithAge = (dob) => {
   if (m < 0 || (m === 0 && today.getDate() < d.getDate())) {
     age--;
   }
-  const formattedDob = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const formattedDob = d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
   return `${formattedDob} (${age} Yrs)`;
 };
 
@@ -73,7 +82,12 @@ const extractEntityIndex = (entityId) => {
 const formatAccessArea = (accessAreaId) => {
   if (!accessAreaId) return "N/A";
   const area = String(accessAreaId).trim().toUpperCase();
-  if (area === "1" || area === "OIL_JETTY" || area === "OIL JETTY" || area === "OIL JETTY AND OTHER GATES") {
+  if (
+    area === "1" ||
+    area === "OIL_JETTY" ||
+    area === "OIL JETTY" ||
+    area === "OIL JETTY AND OTHER GATES"
+  ) {
     return "Oil Jetty and Other Gates";
   }
   if (area === "2" || area === "OTHER_GATES" || area === "OTHER GATES ONLY") {
@@ -85,10 +99,30 @@ const formatAccessArea = (accessAreaId) => {
 const formatHepType = (hepType) => {
   if (!hepType) return "N/A";
   const typeStr = String(hepType).trim();
-  if (typeStr === "1" || typeStr.toLowerCase() === "driver" || typeStr.toLowerCase() === "drivers") return "Drivers";
-  if (typeStr === "2" || typeStr.toLowerCase() === "personnel" || typeStr.toLowerCase() === "personal") return "Personnel";
-  if (typeStr === "3" || typeStr.toLowerCase() === "seafarer" || typeStr.toLowerCase() === "seafarers") return "Seafarers";
-  if (typeStr === "4" || typeStr.toLowerCase() === "vendor" || typeStr.toLowerCase() === "vendors") return "Vendors";
+  if (
+    typeStr === "1" ||
+    typeStr.toLowerCase() === "driver" ||
+    typeStr.toLowerCase() === "drivers"
+  )
+    return "Drivers";
+  if (
+    typeStr === "2" ||
+    typeStr.toLowerCase() === "personnel" ||
+    typeStr.toLowerCase() === "personal"
+  )
+    return "Personnel";
+  if (
+    typeStr === "3" ||
+    typeStr.toLowerCase() === "seafarer" ||
+    typeStr.toLowerCase() === "seafarers"
+  )
+    return "Seafarers";
+  if (
+    typeStr === "4" ||
+    typeStr.toLowerCase() === "vendor" ||
+    typeStr.toLowerCase() === "vendors"
+  )
+    return "Vendors";
   return typeStr;
 };
 
@@ -103,7 +137,9 @@ const formatPassType = (passType) => {
 
 const formatPassPeriod = (period, passType) => {
   if (!period) return "N/A";
-  const type = String(passType || "").trim().toUpperCase();
+  const type = String(passType || "")
+    .trim()
+    .toUpperCase();
   const p = parseInt(period, 10);
   if (isNaN(p)) return period;
   if (type === "DAILY") {
@@ -119,8 +155,20 @@ const formatPassPeriod = (period, passType) => {
 };
 
 // --- Reusable UI Components ---
-const DetailItem = ({ label, value, highlight = false, showIfEmpty = false }) => {
-  if (!showIfEmpty && (!value || value === "N/A" || value === "null" || value === "undefined" || String(value).trim() === "")) {
+const DetailItem = ({
+  label,
+  value,
+  highlight = false,
+  showIfEmpty = false,
+}) => {
+  if (
+    !showIfEmpty &&
+    (!value ||
+      value === "N/A" ||
+      value === "null" ||
+      value === "undefined" ||
+      String(value).trim() === "")
+  ) {
     return null;
   }
   return (
@@ -149,7 +197,9 @@ const DocumentCard = ({
   if (!filePath) return null; // Only renders if the file exists in the JSON data
   return (
     <button
-      onClick={() => onView(passRequestId, documentType, filePath, entityIndex, isVendorPass)}
+      onClick={() =>
+        onView(passRequestId, documentType, filePath, entityIndex, isVendorPass)
+      }
       className="flex items-center w-full justify-between bg-white p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] hover:shadow-sm transition-all group"
     >
       <div className="flex items-center gap-2 overflow-hidden">
@@ -195,22 +245,37 @@ export default function AdminPassApprovalsPage() {
     totalRecords: 0,
     pageSize: 20,
   });
-  const [globalCounts, setGlobalCounts] = useState({ total: 0, pending: 0, processed: 0 });
+  const [globalCounts, setGlobalCounts] = useState({
+    total: 0,
+    pending: 0,
+    processed: 0,
+  });
 
   // Two-Wheeler Update Request States
   const [twoWheelerRequests, setTwoWheelerRequests] = useState([]);
   const [passUpdatesCount, setPassUpdatesCount] = useState(0);
-  const [rejectModal, setRejectModal] = useState({ isOpen: false, requestId: null, reason: "" });
+  const [rejectModal, setRejectModal] = useState({
+    isOpen: false,
+    requestId: null,
+    reason: "",
+  });
 
   const fetchTwoWheelerRequests = useCallback(async () => {
     try {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
-      const res = await axios.get(`${AGENT_API}/pass-request/two-wheeler-update-requests`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("hep_token");
+      const res = await axios.get(
+        `${AGENT_API}/pass-request/two-wheeler-update-requests`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       if (res.data && res.data.success) {
         setTwoWheelerRequests(res.data.data || []);
-        const pendingCount = (res.data.data || []).filter(r => r.status === "PENDING").length;
+        const pendingCount = (res.data.data || []).filter(
+          (r) => r.status === "PENDING",
+        ).length;
         setPassUpdatesCount(pendingCount);
       }
     } catch (err) {
@@ -224,31 +289,47 @@ export default function AdminPassApprovalsPage() {
 
   const handleApproveTwoWheeler = async (id) => {
     try {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
-      await axios.put(`${AGENT_API}/pass-request/two-wheeler-update-requests/${id}/approve`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("hep_token");
+      await axios.put(
+        `${AGENT_API}/pass-request/two-wheeler-update-requests/${id}/approve`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       toast.success("Two-wheeler vehicle number update approved successfully!");
       fetchTwoWheelerRequests();
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Failed to approve two-wheeler update.");
+      toast.error(
+        err?.response?.data?.message || "Failed to approve two-wheeler update.",
+      );
     }
   };
 
   const handleRejectTwoWheeler = async () => {
     if (!rejectModal.requestId) return;
     try {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
-      await axios.put(`${AGENT_API}/pass-request/two-wheeler-update-requests/${rejectModal.requestId}/reject`, {
-        rejectedReason: rejectModal.reason,
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("hep_token");
+      await axios.put(
+        `${AGENT_API}/pass-request/two-wheeler-update-requests/${rejectModal.requestId}/reject`,
+        {
+          rejectedReason: rejectModal.reason,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       toast.success("Two-wheeler update request rejected.");
       setRejectModal({ isOpen: false, requestId: null, reason: "" });
       fetchTwoWheelerRequests();
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Failed to reject update request.");
+      toast.error(
+        err?.response?.data?.message || "Failed to reject update request.",
+      );
     }
   };
 
@@ -270,7 +351,7 @@ export default function AdminPassApprovalsPage() {
       if (response.data && response.data.success) {
         const newLocks = response.data.data;
         setActiveLocks((prev) =>
-          JSON.stringify(newLocks) === JSON.stringify(prev) ? prev : newLocks
+          JSON.stringify(newLocks) === JSON.stringify(prev) ? prev : newLocks,
         );
       }
     } catch (err) {
@@ -281,12 +362,16 @@ export default function AdminPassApprovalsPage() {
   const acquireLock = async (passId, type) => {
     try {
       const token = localStorage.getItem("accessToken");
-      const res = await axios.post(`${AGENT_API}/locks/acquire`, {
-        applicationId: passId,
-        type,
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.post(
+        `${AGENT_API}/locks/acquire`,
+        {
+          applicationId: passId,
+          type,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       return { success: true, lock: res.data.lock };
     } catch (error) {
       const message = error.response?.data?.message || "Failed to acquire lock";
@@ -297,12 +382,16 @@ export default function AdminPassApprovalsPage() {
   const releaseLock = async (passId, type) => {
     try {
       const token = localStorage.getItem("accessToken");
-      await axios.post(`${AGENT_API}/locks/release`, {
-        applicationId: passId,
-        type,
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.post(
+        `${AGENT_API}/locks/release`,
+        {
+          applicationId: passId,
+          type,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
     } catch (error) {
       console.error("Failed to release lock:", error);
     }
@@ -363,49 +452,377 @@ export default function AdminPassApprovalsPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const fetchPassRequests = useCallback(async (isPoll = false) => {
-    try {
-      if (!isPoll) setLoading(true);
-      const token = localStorage.getItem("accessToken");
-      const response = await axios.get(
-        `${AGENT_API}/pass-request/get-agent-pass-requests`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          params: {
-            page: currentPage,
-            limit: pageSize,
-            search: debouncedSearch || undefined,
-            status: activeTab || undefined,
-            sortOrder: sortBy === "DATE_ASC" ? "ASC" : sortBy === "EXPIRY_SOON" ? "EXPIRY_SOON" : "DESC",
-            processedByMe: processedByMe ? "true" : undefined,
-          },
-        },
-      );
+  const fetchPassRequests = useCallback(
+    async (isPoll = false) => {
+      try {
+        if (!isPoll) setLoading(true);
+        const token = localStorage.getItem("accessToken");
+        const storedUser = localStorage.getItem("user");
 
-      if (response.data && response.data.success) {
-        const newRequests = response.data.data || [];
-        const newMeta = response.data.pagination || {};
-        const newCounts = response.data.counts || { total: 0, pending: 0, processed: 0 };
+        let userRole = "";
+        let userDepartmentId = null;
+
+        if (storedUser) {
+          try {
+            const user = JSON.parse(storedUser);
+
+            userRole = String(user?.role || "").trim();
+            userDepartmentId = Number(user?.departmentId);
+          } catch (error) {
+            console.error("Failed to parse user:", error);
+          }
+        }
+
+        const isEssentialOilDockApprover =
+          // Marine: Dy. Conservator / Fire Safety Officer
+          (userDepartmentId === 7 &&
+            ["Dy. Conservator", "Fire Safety Officer"].includes(userRole)) ||
+          // Civil
+          (userRole === "Approval" && userDepartmentId === 3) ||
+          // Mechanical
+          (userRole === "Approval" && userDepartmentId === 4) ||
+          // Traffic / Pass Section
+          (userRole === "Approval" && userDepartmentId === 9) ||
+          // CISF
+          [
+            "CISF",
+            "CISF Asst Commandant",
+            "CISF Assistant Commandant",
+            "Cisf.Assistant Commandant",
+          ].includes(userRole);
+
+        // Keep the existing sort behavior for the normal approval page.
+        // Essential Oil Dock APIs accept only ASC / DESC.
+        const requestSortOrder = isEssentialOilDockApprover
+          ? sortBy === "DATE_ASC"
+            ? "ASC"
+            : "DESC"
+          : sortBy === "DATE_ASC"
+            ? "ASC"
+            : sortBy === "EXPIRY_SOON"
+              ? "EXPIRY_SOON"
+              : "DESC";
+
+        // ------------------------------------------------------------
+        // ESSENTIAL OIL DOCK PERSON + VEHICLE FETCH
+        //
+        // Civil / Mechanical / Traffic must receive BOTH:
+        //   1. existing vehicle Essential requests
+        //   2. new person Essential requests
+        //
+        // Marine / CISF continue using ONLY the existing vehicle API.
+        // ------------------------------------------------------------
+        const isPersonEssentialApprover =
+          isEssentialOilDockApprover &&
+          userRole === "Approval" &&
+          [3, 4, 9].includes(userDepartmentId);
+
+        const requestParams = {
+          page: currentPage,
+          limit: pageSize,
+          search: debouncedSearch || undefined,
+          status: activeTab || undefined,
+          sortOrder: requestSortOrder,
+
+          // Preserve existing generic approval behavior.
+          processedByMe: !isEssentialOilDockApprover
+            ? processedByMe
+              ? "true"
+              : undefined
+            : undefined,
+        };
+
+        let newRequests = [];
+        let newMeta = {};
+        let newCounts = {
+          total: 0,
+          pending: 0,
+          processed: 0,
+        };
+
+        if (isPersonEssentialApprover) {
+          // ----------------------------------------------------------
+          // Civil / Mechanical / Traffic:
+          // FETCH EXISTING VEHICLE FLOW + NEW PERSON FLOW
+          // ----------------------------------------------------------
+          const vehicleResponse = await axios.get(
+            `${AGENT_API}/pass-request/essential-oil-dock-passes`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              params: requestParams,
+            },
+          );
+
+          let personResponse = {
+            data: {
+              success: true,
+              data: [],
+              pagination: {
+                total: 0,
+              },
+            },
+          };
+
+          try {
+            personResponse = await axios.get(
+              `${AGENT_API}/pass-request/essential-oil-dock-person-passes`,
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+                params: requestParams,
+              },
+            );
+          } catch (error) {
+            // Person Essential API must never break the existing
+            // vehicle Essential workflow.
+            console.error(
+              "Essential Person fetch failed. Existing vehicle flow will continue:",
+              error,
+            );
+          }
+
+          const vehicleData = vehicleResponse.data?.success
+            ? vehicleResponse.data.data || []
+            : [];
+
+          const personData = personResponse.data?.success
+            ? personResponse.data.data || []
+            : [];
+
+          const vehicleMeta = vehicleResponse.data?.pagination || {};
+
+          const vehicleCounts = vehicleResponse.data?.counts || {
+            total: 0,
+            pending: 0,
+            processed: 0,
+          };
+
+          // ----------------------------------------------------------
+          // Convert Person API rows into the same request structure
+          // used by the existing table/modal.
+          // ----------------------------------------------------------
+          const personRequests = personData.map((person) => ({
+            id: person.passRequestId,
+            passRequestId: person.passRequestId,
+            referenceNo: person.referenceNo,
+            companyName: person.companyName,
+            entityName: person.companyName || null,
+            status: person.status,
+            workflowState: person.essentialWorkflowState,
+            createdAt: person.updatedAt || new Date().toISOString(),
+
+            persons: [
+              {
+                id: person.personId,
+                passRequestId: person.passRequestId,
+                personPassNo: person.personPassNo,
+                name: person.name,
+                accessAreaId: person.accessAreaId,
+                passType: person.passType,
+                passPeriod: person.passPeriod,
+                dateFrom: person.dateFrom,
+                dateTo: person.dateTo,
+                status: person.status,
+                essentialDepartmentId: person.essentialDepartmentId,
+                essentialWorkflowState: person.essentialWorkflowState,
+                essentialRevertStage: person.essentialRevertStage,
+                essentialAssignedUserId: person.essentialAssignedUserId,
+              },
+            ],
+
+            vehicles: [],
+          }));
+
+          // ----------------------------------------------------------
+          // MERGE by passRequestId
+          //
+          // This prevents a request containing both a vehicle and a
+          // person from appearing twice in the table.
+          // ----------------------------------------------------------
+          const requestMap = new Map();
+
+          vehicleData.forEach((request) => {
+            requestMap.set(String(request.id), {
+              ...request,
+              persons: Array.isArray(request.persons) ? request.persons : [],
+              vehicles: Array.isArray(request.vehicles) ? request.vehicles : [],
+            });
+          });
+
+          personRequests.forEach((request) => {
+            const key = String(request.id);
+
+            if (requestMap.has(key)) {
+              const existing = requestMap.get(key);
+
+              requestMap.set(key, {
+                ...existing,
+
+                persons: [
+                  ...(Array.isArray(existing.persons) ? existing.persons : []),
+                  ...(Array.isArray(request.persons) ? request.persons : []),
+                ],
+
+                vehicles: Array.isArray(existing.vehicles)
+                  ? existing.vehicles
+                  : [],
+              });
+            } else {
+              requestMap.set(key, request);
+            }
+          });
+
+          newRequests = Array.from(requestMap.values());
+
+          // Keep the existing vehicle pagination/count structure as the
+          // base so the existing vehicle dashboard behaviour is preserved.
+          newMeta = vehicleMeta;
+
+          // newCounts = {
+          //   total:
+          //     Number(vehicleCounts.total || 0) +
+          //     Number(personResponse.data?.pagination?.total || 0),
+
+          //   pending:
+          //     Number(vehicleCounts.pending || 0) +
+          //     (activeTab === "pending"
+          //       ? Number(personResponse.data?.pagination?.total || 0)
+          //       : 0),
+
+          //   processed:
+          //     Number(vehicleCounts.processed || 0) +
+          //     (activeTab === "processed"
+          //       ? Number(personResponse.data?.pagination?.total || 0)
+          //       : 0),
+          // };
+          newCounts = {
+            total:
+              Number(vehicleCounts.total || 0) +
+              Number(personResponse.data?.counts?.total || 0),
+
+            pending:
+              Number(vehicleCounts.pending || 0) +
+              Number(personResponse.data?.counts?.pending || 0),
+
+            processed:
+              Number(vehicleCounts.processed || 0) +
+              Number(personResponse.data?.counts?.processed || 0),
+          };
+        } else {
+          // ----------------------------------------------------------
+          // EXISTING FLOW
+          //
+          // Marine / CISF / normal users remain unchanged.
+          // ----------------------------------------------------------
+          const endpoint = isEssentialOilDockApprover
+            ? `${AGENT_API}/pass-request/essential-oil-dock-passes`
+            : `${AGENT_API}/pass-request/get-agent-pass-requests`;
+
+          const response = await axios.get(endpoint, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            params: requestParams,
+          });
+
+          if (response.data && response.data.success) {
+            newRequests = response.data.data || [];
+            newMeta = response.data.pagination || {};
+            newCounts = response.data.counts || {
+              total: 0,
+              pending: 0,
+              processed: 0,
+            };
+          }
+        }
 
         setRequests((prev) =>
-          JSON.stringify(newRequests) === JSON.stringify(prev) ? prev : newRequests
+          JSON.stringify(newRequests) === JSON.stringify(prev)
+            ? prev
+            : newRequests,
         );
+
         setPaginationMeta((prev) =>
-          JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta
+          JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta,
         );
+
         setGlobalCounts((prev) =>
-          JSON.stringify(newCounts) === JSON.stringify(prev) ? prev : newCounts
+          JSON.stringify(newCounts) === JSON.stringify(prev) ? prev : newCounts,
         );
-      } else {
-        setRequests((prev) => prev.length === 0 ? prev : []);
+
+        // const endpoint = isEssentialOilDockApprover
+        //   ? `${AGENT_API}/pass-request/essential-oil-dock-passes`
+        //   : `${AGENT_API}/pass-request/get-agent-pass-requests`;
+
+        // // Keep the existing sort behavior for the normal approval page.
+        // // Essential Oil Dock API accepts only ASC / DESC.
+        // const requestSortOrder = isEssentialOilDockApprover
+        //   ? sortBy === "DATE_ASC"
+        //     ? "ASC"
+        //     : "DESC"
+        //   : sortBy === "DATE_ASC"
+        //     ? "ASC"
+        //     : sortBy === "EXPIRY_SOON"
+        //       ? "EXPIRY_SOON"
+        //       : "DESC";
+
+        // const response = await axios.get(endpoint, {
+        //   headers: {
+        //     Authorization: `Bearer ${token}`,
+        //   },
+        //   params: {
+        //     page: currentPage,
+        //     limit: pageSize,
+        //     search: debouncedSearch || undefined,
+        //     status: activeTab || undefined,
+        //     sortOrder: requestSortOrder,
+
+        //     // Preserve existing generic approval behavior.
+        //     processedByMe: !isEssentialOilDockApprover
+        //       ? processedByMe
+        //         ? "true"
+        //         : undefined
+        //       : undefined,
+        //   },
+        // });
+
+        // if (response.data && response.data.success) {
+        //   const newRequests = response.data.data || [];
+        //   const newMeta = response.data.pagination || {};
+        //   const newCounts = response.data.counts || {
+        //     total: 0,
+        //     pending: 0,
+        //     processed: 0,
+        //   };
+
+        //   setRequests((prev) =>
+        //     JSON.stringify(newRequests) === JSON.stringify(prev)
+        //       ? prev
+        //       : newRequests,
+        //   );
+        //   setPaginationMeta((prev) =>
+        //     JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta,
+        //   );
+        //   setGlobalCounts((prev) =>
+        //     JSON.stringify(newCounts) === JSON.stringify(prev)
+        //       ? prev
+        //       : newCounts,
+        //   );
+        // } else {
+        //   setRequests((prev) => (prev.length === 0 ? prev : []));
+        // }
+      } catch (error) {
+        console.error("Failed to fetch requests", error);
+        if (!isPoll) toast.error("Failed to load pass requests.");
+      } finally {
+        if (!isPoll) setLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to fetch requests", error);
-      if (!isPoll) toast.error("Failed to load pass requests.");
-    } finally {
-      if (!isPoll) setLoading(false);
-    }
-  }, [currentPage, pageSize, debouncedSearch, activeTab, sortBy, processedByMe]);
+    },
+    [currentPage, pageSize, debouncedSearch, activeTab, sortBy, processedByMe],
+  );
 
   useEffect(() => {
     fetchPassRequests(false);
@@ -454,7 +871,13 @@ export default function AdminPassApprovalsPage() {
   //   }
   // };
 
-  const handleViewDoc = (passRequestId, documentType, staticPath, entityIndex = 0, isVendorPass = false) => {
+  const handleViewDoc = (
+    passRequestId,
+    documentType,
+    staticPath,
+    entityIndex = 0,
+    isVendorPass = false,
+  ) => {
     // Check if the file is an image based on its extension
     const isImg = staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath);
     setIsImage(!!isImg);
@@ -464,13 +887,19 @@ export default function AdminPassApprovalsPage() {
     );
   };
   const handleEntityDecision = (status) => {
-    if ((status === "REJECTED" || status === "REVERTED") && !currentRemark.trim()) {
-      toast.error(`${status === "REVERTED" ? "Revert" : "Rejection"} Reason Required`, {
-        description:
-          status === "REVERTED"
-            ? "You must provide a remark explaining what needs to be corrected."
-            : "You must provide a remark explaining why this pass is being rejected.",
-      });
+    if (
+      (status === "REJECTED" || status === "REVERTED") &&
+      !currentRemark.trim()
+    ) {
+      toast.error(
+        `${status === "REVERTED" ? "Revert" : "Rejection"} Reason Required`,
+        {
+          description:
+            status === "REVERTED"
+              ? "You must provide a remark explaining what needs to be corrected."
+              : "You must provide a remark explaining why this pass is being rejected.",
+        },
+      );
       return;
     }
 
@@ -489,6 +918,233 @@ export default function AdminPassApprovalsPage() {
     setEntityModal({ isOpen: false, data: null, type: null });
   };
 
+  // const handleSubmitReview = async () => {
+  //   const persons = selectedRequest.persons || [];
+  //   const vehicles = selectedRequest.vehicles || [];
+  //   let reviewStatus = null;
+  //   let responseMessage = null;
+
+  //   // 1. VALIDATION: Only pending/reverted entities need a decision
+  //   // Already approved/rejected entities are pre-populated in entityStatuses
+  //   const unverifiedPersons = persons.filter(
+  //     (p) =>
+  //       !entityStatuses.persons[p.id] &&
+  //       (p.status === "pending" || p.status === "reverted"),
+  //   );
+  //   const unverifiedVehicles = vehicles.filter(
+  //     (v) =>
+  //       !entityStatuses.vehicles[v.id] &&
+  //       (v.status === "pending" || v.status === "reverted"),
+  //   );
+
+  //   if (unverifiedPersons.length > 0 || unverifiedVehicles.length > 0) {
+  //     toast.warning("Incomplete Verification", {
+  //       description:
+  //         "You must approve, reject, or revert all pending persons and vehicles before submitting.",
+  //     });
+  //     return;
+  //   }
+
+  //   const loadingToastId = toast.loading("Submitting review to backend...");
+
+  //   try {
+  //     const token = localStorage.getItem("accessToken");
+  //     const headers = { Authorization: `Bearer ${token}` };
+
+  //     // Check if this is a vendor pass
+  //     const isVendorPass = selectedRequest.originType === "VENDOR";
+
+  //     if (isVendorPass) {
+  //       // --- VENDOR PASS APPROVAL FLOW ---
+  //       // Use direct agent API endpoints for vendor passes
+  //       const vendorPassId = selectedRequest.id;
+
+  //       // 2. BUILD PERSON PROMISES for vendor passes
+  //       const personTasks = [];
+  //       persons.forEach((p) => {
+  //         const status = entityStatuses.persons[p.id];
+  //         if (!status) return;
+  //         const personIndex = extractEntityIndex(p.id);
+  //         const remark = entityRemarks.persons[p.id];
+
+  //         if (status === "APPROVED") {
+  //           personTasks.push(() =>
+  //             axios.put(
+  //               `${AGENT_API}/vendor-pass/${vendorPassId}/approve-person/${personIndex}`,
+  //               {},
+  //               { headers },
+  //             ),
+  //           );
+  //         } else if (status === "REVERTED") {
+  //           personTasks.push(() =>
+  //             axios.put(
+  //               `${AGENT_API}/vendor-pass/${vendorPassId}/revert-person/${personIndex}`,
+  //               { revertReason: remark },
+  //               { headers },
+  //             ),
+  //           );
+  //         } else {
+  //           personTasks.push(() =>
+  //             axios.put(
+  //               `${AGENT_API}/vendor-pass/${vendorPassId}/reject-person/${personIndex}`,
+  //               { rejectedReason: remark },
+  //               { headers },
+  //             ),
+  //           );
+  //         }
+  //       });
+
+  //       // 3. BUILD VEHICLE PROMISES for vendor passes
+  //       const vehicleTasks = [];
+  //       vehicles.forEach((v) => {
+  //         const status = entityStatuses.vehicles[v.id];
+  //         if (!status) return;
+  //         const vehicleIndex = extractEntityIndex(v.id);
+  //         const remark = entityRemarks.vehicles[v.id];
+
+  //         if (status === "APPROVED") {
+  //           vehicleTasks.push(() =>
+  //             axios.put(
+  //               `${AGENT_API}/vendor-pass/${vendorPassId}/approve-vehicle/${vehicleIndex}`,
+  //               {},
+  //               { headers },
+  //             ),
+  //           );
+  //         } else if (status === "REVERTED") {
+  //           vehicleTasks.push(() =>
+  //             axios.put(
+  //               `${AGENT_API}/vendor-pass/${vendorPassId}/revert-vehicle/${vehicleIndex}`,
+  //               { revertReason: remark },
+  //               { headers },
+  //             ),
+  //           );
+  //         } else {
+  //           vehicleTasks.push(() =>
+  //             axios.put(
+  //               `${AGENT_API}/vendor-pass/${vendorPassId}/reject-vehicle/${vehicleIndex}`,
+  //               { rejectedReason: remark },
+  //               { headers },
+  //             ),
+  //           );
+  //         }
+  //       });
+
+  //       // 4. EXECUTE ALL ENTITY ACTIONS SEQUENTIALLY TO AVOID 401 ERRORS
+  //       const allTasks = [...personTasks, ...vehicleTasks];
+  //       for (const task of allTasks) {
+  //         await task();
+  //       }
+
+  //       // 5. FINALLY, SUBMIT THE 'COMPLETE-REVIEW' FLAG
+  //       await axios.put(
+  //         `${AGENT_API}/vendor-pass/${vendorPassId}/complete-review`,
+  //         {},
+  //         { headers },
+  //       );
+  //     } else {
+  //       // --- NORMAL PASS APPROVAL FLOW (Admin Service) ---
+  //       const actionUrl = `${ADMIN_API}/pass-request/agent-pass-request-action`;
+
+  //       // 2. BUILD PERSON PAYLOADS
+  //       const personTasks = [];
+  //       persons.forEach((p) => {
+  //         const status = entityStatuses.persons[p.id];
+  //         if (!status) return;
+  //         const remark = entityRemarks.persons[p.id];
+
+  //         const payload = {
+  //           personId: p.id,
+  //           decision:
+  //             status === "APPROVED"
+  //               ? "approve-person"
+  //               : status === "REVERTED"
+  //                 ? "revert-person"
+  //                 : "reject-person",
+  //         };
+
+  //         if (status === "REJECTED") {
+  //           payload.rejectedReason = remark;
+  //         } else if (status === "REVERTED") {
+  //           payload.revertReason = remark;
+  //         }
+
+  //         personTasks.push(() => axios.patch(actionUrl, payload, { headers }));
+  //       });
+
+  //       // 3. BUILD VEHICLE PAYLOADS
+  //       const vehicleTasks = [];
+  //       vehicles.forEach((v) => {
+  //         const status = entityStatuses.vehicles[v.id];
+  //         if (!status) return;
+  //         const remark = entityRemarks.vehicles[v.id];
+
+  //         const payload = {
+  //           vehicleId: v.id,
+  //           decision:
+  //             status === "APPROVED"
+  //               ? "approve-vehicle"
+  //               : status === "REVERTED"
+  //                 ? "revert-vehicle"
+  //                 : "reject-vehicle",
+  //         };
+
+  //         if (status === "REJECTED") {
+  //           payload.rejectedReason = remark;
+  //         } else if (status === "REVERTED") {
+  //           payload.revertReason = remark;
+  //         }
+
+  //         vehicleTasks.push(() => axios.patch(actionUrl, payload, { headers }));
+  //       });
+
+  //       // 4. EXECUTE ALL ENTITY ACTIONS SEQUENTIALLY TO AVOID 401 ERRORS
+  //       const allTasks = [...personTasks, ...vehicleTasks];
+  //       for (const task of allTasks) {
+  //         await task();
+  //       }
+
+  //       // 5. FINALLY, SUBMIT THE 'COMPLETE-REVIEW' FLAG
+  //       const finalPayload = {
+  //         passRequestId: selectedRequest.id,
+  //         decision: "complete-review",
+  //       };
+
+  //       const completeResponse = await axios.patch(actionUrl, finalPayload, {
+  //         headers,
+  //       });
+  //       reviewStatus = completeResponse.data?.data?.reviewStatus;
+  //       responseMessage = completeResponse.data?.data?.message;
+  //     }
+
+  //     // 6. HANDLE SUCCESS
+  //     if (reviewStatus === "REVERTED") {
+  //       toast.success("Review Saved with Reverted Entities", {
+  //         id: loadingToastId,
+  //         description:
+  //           responseMessage ||
+  //           "Pass request has been reverted to the applicant for corrections.",
+  //       });
+  //     } else {
+  //       toast.success("Review Submitted", {
+  //         id: loadingToastId,
+  //         description:
+  //           responseMessage || "Pass Request review processed successfully.",
+  //       });
+  //     }
+
+  //     setIsModalOpen(false);
+  //     fetchPassRequests(); // Refresh the dashboard table
+  //   } catch (error) {
+  //     console.error("Submission error:", error);
+  //     toast.error("Submission Failed", {
+  //       id: loadingToastId,
+  //       description:
+  //         error.response?.data?.message ||
+  //         "Failed to submit complete review to backend.",
+  //     });
+  //   }
+  // };
+
   const handleSubmitReview = async () => {
     const persons = selectedRequest.persons || [];
     const vehicles = selectedRequest.vehicles || [];
@@ -498,10 +1154,15 @@ export default function AdminPassApprovalsPage() {
     // 1. VALIDATION: Only pending/reverted entities need a decision
     // Already approved/rejected entities are pre-populated in entityStatuses
     const unverifiedPersons = persons.filter(
-      (p) => !entityStatuses.persons[p.id] && (p.status === 'pending' || p.status === 'reverted'),
+      (p) =>
+        !entityStatuses.persons[p.id] &&
+        (p.status === "pending" || p.status === "reverted"),
     );
+
     const unverifiedVehicles = vehicles.filter(
-      (v) => !entityStatuses.vehicles[v.id] && (v.status === 'pending' || v.status === 'reverted'),
+      (v) =>
+        !entityStatuses.vehicles[v.id] &&
+        (v.status === "pending" || v.status === "reverted"),
     );
 
     if (unverifiedPersons.length > 0 || unverifiedVehicles.length > 0) {
@@ -518,93 +1179,332 @@ export default function AdminPassApprovalsPage() {
       const token = localStorage.getItem("accessToken");
       const headers = { Authorization: `Bearer ${token}` };
 
+      // ------------------------------------------------------------
+      // USER CONTEXT
+      // ------------------------------------------------------------
+      const storedUser = localStorage.getItem("user");
+
+      let currentUserRole = "";
+      let currentUserDepartmentId = null;
+
+      if (storedUser) {
+        try {
+          const currentUser = JSON.parse(storedUser);
+
+          currentUserRole = String(currentUser?.role || "").trim();
+          currentUserDepartmentId = Number(currentUser?.departmentId);
+        } catch (error) {
+          console.error("Failed to parse current user:", error);
+        }
+      }
+
       // Check if this is a vendor pass
       const isVendorPass = selectedRequest.originType === "VENDOR";
+      const isCisfAssistantCommandant =
+        Number(currentUserDepartmentId) === 1 &&
+        String(currentUserRole || "")
+          .trim()
+          .toLowerCase() === "cisf.assistant commandant";
 
+      // ------------------------------------------------------------
+      // ESSENTIAL OIL DOCK REQUEST DETECTION
+      //
+      // Only use this special branch when:
+      // 1. Current user is a workflow approver
+      // 2. The selected request contains an Essential vehicle
+      //
+      // Existing normal pass flow remains untouched otherwise.
+      // ------------------------------------------------------------
+      const isEssentialWorkflowUser =
+        (currentUserRole === "Approval" &&
+          [3, 4, 9].includes(currentUserDepartmentId)) ||
+        (currentUserDepartmentId === 7 &&
+          ["Dy. Conservator", "Fire Safety Officer"].includes(
+            currentUserRole,
+          )) ||
+        ["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"].includes(
+          currentUserRole,
+        );
+
+      const hasEssentialVehicle = vehicles.some((v) => {
+        const workflowState = String(v?.essentialWorkflowState || "")
+          .trim()
+          .toUpperCase();
+
+        const essentialDepartmentId = v?.essentialDepartmentId;
+
+        const accessArea = String(v?.accessAreaId || v?.accessArea || "")
+          .trim()
+          .toUpperCase();
+
+        return (
+          workflowState.endsWith("_ESSENTIAL") ||
+          (essentialDepartmentId !== null &&
+            essentialDepartmentId !== undefined) ||
+          accessArea.includes("OIL JETTY") ||
+          accessArea.includes("OIL_JETTY")
+        );
+      });
+
+      const hasEssentialPerson = persons.some((p) => {
+        const workflowState = String(p?.essentialWorkflowState || "")
+          .trim()
+          .toUpperCase();
+
+        return (
+          workflowState === "PENDING_CIVIL_PERSON_ESSENTIAL" ||
+          workflowState === "PENDING_MECHANICAL_PERSON_ESSENTIAL" ||
+          workflowState === "PENDING_TRAFFIC_PERSON_ESSENTIAL" ||
+          workflowState === "REVERTED_PERSON_ESSENTIAL"
+        );
+      });
+
+      // ------------------------------------------------------------
+      // 2. VENDOR PASS FLOW
+      // EXISTING CODE - KEEP BEHAVIOUR SAME
+      // ------------------------------------------------------------
       if (isVendorPass) {
-        // --- VENDOR PASS APPROVAL FLOW ---
-        // Use direct agent API endpoints for vendor passes
         const vendorPassId = selectedRequest.id;
 
-        // 2. BUILD PERSON PROMISES for vendor passes
+        // BUILD PERSON PROMISES
         const personTasks = [];
+
         persons.forEach((p) => {
           const status = entityStatuses.persons[p.id];
+
           if (!status) return;
+
           const personIndex = extractEntityIndex(p.id);
           const remark = entityRemarks.persons[p.id];
 
           if (status === "APPROVED") {
-            personTasks.push(() => axios.put(
-              `${AGENT_API}/vendor-pass/${vendorPassId}/approve-person/${personIndex}`,
-              {},
-              { headers }
-            ));
+            personTasks.push(() =>
+              axios.put(
+                `${AGENT_API}/vendor-pass/${vendorPassId}/approve-person/${personIndex}`,
+                {},
+                { headers },
+              ),
+            );
           } else if (status === "REVERTED") {
-            personTasks.push(() => axios.put(
-              `${AGENT_API}/vendor-pass/${vendorPassId}/revert-person/${personIndex}`,
-              { revertReason: remark },
-              { headers }
-            ));
+            personTasks.push(() =>
+              axios.put(
+                `${AGENT_API}/vendor-pass/${vendorPassId}/revert-person/${personIndex}`,
+                { revertReason: remark },
+                { headers },
+              ),
+            );
           } else {
-            personTasks.push(() => axios.put(
-              `${AGENT_API}/vendor-pass/${vendorPassId}/reject-person/${personIndex}`,
-              { rejectedReason: remark },
-              { headers }
-            ));
+            personTasks.push(() =>
+              axios.put(
+                `${AGENT_API}/vendor-pass/${vendorPassId}/reject-person/${personIndex}`,
+                { rejectedReason: remark },
+                { headers },
+              ),
+            );
           }
         });
 
-        // 3. BUILD VEHICLE PROMISES for vendor passes
+        // BUILD VEHICLE PROMISES
         const vehicleTasks = [];
+
         vehicles.forEach((v) => {
           const status = entityStatuses.vehicles[v.id];
+
           if (!status) return;
+
           const vehicleIndex = extractEntityIndex(v.id);
           const remark = entityRemarks.vehicles[v.id];
 
           if (status === "APPROVED") {
-            vehicleTasks.push(() => axios.put(
-              `${AGENT_API}/vendor-pass/${vendorPassId}/approve-vehicle/${vehicleIndex}`,
-              {},
-              { headers }
-            ));
+            vehicleTasks.push(() =>
+              axios.put(
+                `${AGENT_API}/vendor-pass/${vendorPassId}/approve-vehicle/${vehicleIndex}`,
+                {},
+                { headers },
+              ),
+            );
           } else if (status === "REVERTED") {
-            vehicleTasks.push(() => axios.put(
-              `${AGENT_API}/vendor-pass/${vendorPassId}/revert-vehicle/${vehicleIndex}`,
-              { revertReason: remark },
-              { headers }
-            ));
+            vehicleTasks.push(() =>
+              axios.put(
+                `${AGENT_API}/vendor-pass/${vendorPassId}/revert-vehicle/${vehicleIndex}`,
+                { revertReason: remark },
+                { headers },
+              ),
+            );
           } else {
-            vehicleTasks.push(() => axios.put(
-              `${AGENT_API}/vendor-pass/${vendorPassId}/reject-vehicle/${vehicleIndex}`,
-              { rejectedReason: remark },
-              { headers }
-            ));
+            vehicleTasks.push(() =>
+              axios.put(
+                `${AGENT_API}/vendor-pass/${vendorPassId}/reject-vehicle/${vehicleIndex}`,
+                { rejectedReason: remark },
+                { headers },
+              ),
+            );
           }
         });
 
-        // 4. EXECUTE ALL ENTITY ACTIONS SEQUENTIALLY TO AVOID 401 ERRORS
+        // EXECUTE EXISTING VENDOR FLOW
         const allTasks = [...personTasks, ...vehicleTasks];
+
         for (const task of allTasks) {
           await task();
         }
 
-        // 5. FINALLY, SUBMIT THE 'COMPLETE-REVIEW' FLAG
         await axios.put(
           `${AGENT_API}/vendor-pass/${vendorPassId}/complete-review`,
           {},
-          { headers }
+          { headers },
         );
-      } else {
-        // --- NORMAL PASS APPROVAL FLOW (Admin Service) ---
+      } else if (hasEssentialPerson) {
+        const personPromises = [];
+
+        const essentialPersons = persons.filter((p) => {
+          const workflowState = String(p?.essentialWorkflowState || "")
+            .trim()
+            .toUpperCase();
+
+          return (
+            workflowState === "PENDING_CIVIL_PERSON_ESSENTIAL" ||
+            workflowState === "PENDING_MECHANICAL_PERSON_ESSENTIAL" ||
+            workflowState === "PENDING_TRAFFIC_PERSON_ESSENTIAL" ||
+            workflowState === "REVERTED_PERSON_ESSENTIAL"
+          );
+        });
+
+        if (essentialPersons.length === 0) {
+          throw new Error(
+            "No Essential Oil Dock person found in this request.",
+          );
+        }
+
+        essentialPersons.forEach((p) => {
+          const status = entityStatuses.persons[p.id];
+
+          if (!status) {
+            throw new Error(
+              `No decision recorded for person ${p.name || p.id}.`,
+            );
+          }
+
+          const payload = {
+            personId: p.id,
+            decision: String(status).trim().toUpperCase(),
+            remarks: entityRemarks.persons[p.id] || null,
+          };
+
+          personPromises.push(
+            axios.put(
+              `${AGENT_API}/pass-request/essential-oil-dock/person-action`,
+              payload,
+              { headers },
+            ),
+          );
+        });
+
+        await Promise.all(personPromises);
+
+        reviewStatus = "PROCESSED";
+        responseMessage =
+          "Essential Oil Dock person review processed successfully.";
+      }
+
+      // ------------------------------------------------------------
+      // 3. ESSENTIAL OIL DOCK FLOW
+      //
+      // IMPORTANT:
+      // NEVER call ADMIN_API/agent-pass-request-action here.
+      //
+      // The Essential backend route is responsible for updating:
+      // - vehicle status
+      // - essentialWorkflowState
+      // - workflow history
+      // - actor user
+      // - actor role
+      // - actor department
+      // ------------------------------------------------------------
+      else if (
+        isCisfAssistantCommandant ||
+        (isEssentialWorkflowUser && hasEssentialVehicle)
+      ) {
+        const vehiclePromises = [];
+
+        const essentialVehicles = vehicles.filter((v) => {
+          const workflowState = String(v?.essentialWorkflowState || "")
+            .trim()
+            .toUpperCase();
+
+          const essentialDepartmentId = v?.essentialDepartmentId;
+
+          const accessArea = String(v?.accessAreaId || v?.accessArea || "")
+            .trim()
+            .toUpperCase();
+
+          return (
+            workflowState.endsWith("_ESSENTIAL") ||
+            (essentialDepartmentId !== null &&
+              essentialDepartmentId !== undefined) ||
+            accessArea.includes("OIL JETTY") ||
+            accessArea.includes("OIL_JETTY")
+          );
+        });
+
+        if (essentialVehicles.length === 0) {
+          throw new Error(
+            "No Essential Oil Dock vehicle found in this request.",
+          );
+        }
+
+        essentialVehicles.forEach((v) => {
+          const status = entityStatuses.vehicles[v.id];
+
+          if (!status) {
+            throw new Error(
+              `No decision recorded for vehicle ${v.registrationNo || v.id}.`,
+            );
+          }
+
+          const payload = {
+            vehicleId: v.id,
+            decision: String(status).trim().toUpperCase(),
+            remarks: entityRemarks.vehicles[v.id] || null,
+          };
+
+          vehiclePromises.push(
+            axios.put(
+              `${AGENT_API}/pass-request/essential-oil-dock/vehicle-action`,
+              payload,
+              { headers },
+            ),
+          );
+        });
+
+        if (vehiclePromises.length === 0) {
+          throw new Error("No Essential Oil Dock vehicle action was prepared.");
+        }
+
+        await Promise.all(vehiclePromises);
+
+        reviewStatus = "PROCESSED";
+        responseMessage =
+          "Essential Oil Dock vehicle review processed successfully.";
+      }
+
+      // ------------------------------------------------------------
+      // 4. EXISTING NORMAL PASS FLOW
+      //
+      // DO NOT CHANGE THIS FLOW.
+      // It remains exactly the same for normal non-essential passes.
+      // ------------------------------------------------------------
+      else {
         const actionUrl = `${ADMIN_API}/pass-request/agent-pass-request-action`;
 
-        // 2. BUILD PERSON PAYLOADS
+        // BUILD PERSON PAYLOADS
         const personTasks = [];
+
         persons.forEach((p) => {
           const status = entityStatuses.persons[p.id];
+
           if (!status) return;
+
           const remark = entityRemarks.persons[p.id];
 
           const payload = {
@@ -626,11 +1526,14 @@ export default function AdminPassApprovalsPage() {
           personTasks.push(() => axios.patch(actionUrl, payload, { headers }));
         });
 
-        // 3. BUILD VEHICLE PAYLOADS
+        // BUILD VEHICLE PAYLOADS
         const vehicleTasks = [];
+
         vehicles.forEach((v) => {
           const status = entityStatuses.vehicles[v.id];
+
           if (!status) return;
+
           const remark = entityRemarks.vehicles[v.id];
 
           const payload = {
@@ -652,40 +1555,53 @@ export default function AdminPassApprovalsPage() {
           vehicleTasks.push(() => axios.patch(actionUrl, payload, { headers }));
         });
 
-        // 4. EXECUTE ALL ENTITY ACTIONS SEQUENTIALLY TO AVOID 401 ERRORS
+        // EXECUTE EXISTING NORMAL FLOW
         const allTasks = [...personTasks, ...vehicleTasks];
+
         for (const task of allTasks) {
           await task();
         }
 
-        // 5. FINALLY, SUBMIT THE 'COMPLETE-REVIEW' FLAG
+        // COMPLETE REVIEW
         const finalPayload = {
           passRequestId: selectedRequest.id,
           decision: "complete-review",
         };
 
-        const completeResponse = await axios.patch(actionUrl, finalPayload, { headers });
+        const completeResponse = await axios.patch(actionUrl, finalPayload, {
+          headers,
+        });
+
         reviewStatus = completeResponse.data?.data?.reviewStatus;
+
         responseMessage = completeResponse.data?.data?.message;
       }
 
-      // 6. HANDLE SUCCESS
-      if (reviewStatus === 'REVERTED') {
+      // ------------------------------------------------------------
+      // 5. SUCCESS
+      // ------------------------------------------------------------
+      if (reviewStatus === "REVERTED") {
         toast.success("Review Saved with Reverted Entities", {
           id: loadingToastId,
-          description: responseMessage || "Pass request has been reverted to the applicant for corrections.",
+          description:
+            responseMessage ||
+            "Pass request has been reverted to the applicant for corrections.",
         });
       } else {
         toast.success("Review Submitted", {
           id: loadingToastId,
-          description: responseMessage || "Pass Request review processed successfully.",
+          description:
+            responseMessage || "Pass Request review processed successfully.",
         });
       }
 
       setIsModalOpen(false);
-      fetchPassRequests(); // Refresh the dashboard table
+
+      // Refresh existing table
+      fetchPassRequests();
     } catch (error) {
       console.error("Submission error:", error);
+
       toast.error("Submission Failed", {
         id: loadingToastId,
         description:
@@ -694,6 +1610,23 @@ export default function AdminPassApprovalsPage() {
       });
     }
   };
+
+  // const hasEssentialPerson = persons.some((p) => {
+  //   const workflowState = String(p?.essentialWorkflowState || "")
+  //     .trim()
+  //     .toUpperCase();
+
+  //   const accessArea = String(p?.accessAreaId || p?.accessArea || "")
+  //     .trim()
+  //     .toUpperCase();
+
+  //   return (
+  //     workflowState.endsWith("_PERSON_ESSENTIAL") ||
+  //     accessArea === "1" ||
+  //     accessArea.includes("OIL JETTY") ||
+  //     accessArea.includes("OIL_JETTY")
+  //   );
+  // });
 
   const openReviewModal = async (pass, viewOnly = false) => {
     if (!viewOnly) {
@@ -718,23 +1651,23 @@ export default function AdminPassApprovalsPage() {
       const initialVehicleRemarks = {};
 
       (pass.persons || []).forEach((p) => {
-        if (p.status === 'approved') {
+        if (p.status === "approved") {
           // Pre-fill as APPROVED (read-only, approver cannot change)
-          initialPersonStatuses[p.id] = 'APPROVED';
-        } else if (p.status === 'rejected') {
-          initialPersonStatuses[p.id] = 'REJECTED';
-          initialPersonRemarks[p.id] = p.rejectedReason || '';
+          initialPersonStatuses[p.id] = "APPROVED";
+        } else if (p.status === "rejected") {
+          initialPersonStatuses[p.id] = "REJECTED";
+          initialPersonRemarks[p.id] = p.rejectedReason || "";
         }
         // 'pending' and 'reverted' entities need fresh review — leave empty
       });
 
       (pass.vehicles || []).forEach((v) => {
-        if (v.status === 'approved') {
+        if (v.status === "approved") {
           // Pre-fill as APPROVED (read-only, approver cannot change)
-          initialVehicleStatuses[v.id] = 'APPROVED';
-        } else if (v.status === 'rejected') {
-          initialVehicleStatuses[v.id] = 'REJECTED';
-          initialVehicleRemarks[v.id] = v.rejectedReason || '';
+          initialVehicleStatuses[v.id] = "APPROVED";
+        } else if (v.status === "rejected") {
+          initialVehicleStatuses[v.id] = "REJECTED";
+          initialVehicleRemarks[v.id] = v.rejectedReason || "";
         }
         // 'pending' and 'reverted' entities need fresh review — leave empty
       });
@@ -775,12 +1708,19 @@ export default function AdminPassApprovalsPage() {
           className="bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Total Passes</span>
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+              Total Passes
+            </span>
             <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800">
-              <Users className="h-4 w-4 text-slate-600 dark:text-slate-300" strokeWidth={2.5} />
+              <Users
+                className="h-4 w-4 text-slate-600 dark:text-slate-300"
+                strokeWidth={2.5}
+              />
             </span>
           </div>
-          <p className="text-3xl font-extrabold text-[#0a1e4d] dark:text-stone-100 tabular-nums">{globalCounts.total}</p>
+          <p className="text-3xl font-extrabold text-[#0a1e4d] dark:text-stone-100 tabular-nums">
+            {globalCounts.total}
+          </p>
         </div>
 
         {/* Pending */}
@@ -789,12 +1729,19 @@ export default function AdminPassApprovalsPage() {
           className="bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">Pending</span>
+            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+              Pending
+            </span>
             <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-50 dark:bg-amber-500/10">
-              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" strokeWidth={2.5} />
+              <Clock
+                className="h-4 w-4 text-amber-600 dark:text-amber-400"
+                strokeWidth={2.5}
+              />
             </span>
           </div>
-          <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-300 tabular-nums">{globalCounts.pending}</p>
+          <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-300 tabular-nums">
+            {globalCounts.pending}
+          </p>
         </div>
 
         {/* Processed */}
@@ -803,12 +1750,19 @@ export default function AdminPassApprovalsPage() {
           className="col-span-2 sm:col-span-1 bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Processed</span>
+            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+              Processed
+            </span>
             <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-emerald-50 dark:bg-emerald-500/10">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
+              <CheckCircle2
+                className="h-4 w-4 text-emerald-600 dark:text-emerald-400"
+                strokeWidth={2.5}
+              />
             </span>
           </div>
-          <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-300 tabular-nums">{globalCounts.processed}</p>
+          <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-300 tabular-nums">
+            {globalCounts.processed}
+          </p>
         </div>
       </div>
 
@@ -835,9 +1789,21 @@ export default function AdminPassApprovalsPage() {
       {/* ── Tabs ── */}
       <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-0">
         {[
-          { id: "pending", label: "Pending Approvals", count: globalCounts.pending },
-          { id: "processed", label: "Processed Passes", count: globalCounts.processed },
-          { id: "pass_updates", label: "Pass Updates", count: passUpdatesCount },
+          {
+            id: "pending",
+            label: "Pending Approvals",
+            count: globalCounts.pending,
+          },
+          {
+            id: "processed",
+            label: "Processed Passes",
+            count: globalCounts.processed,
+          },
+          {
+            id: "pass_updates",
+            label: "Pass Updates",
+            count: passUpdatesCount,
+          },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -848,14 +1814,20 @@ export default function AdminPassApprovalsPage() {
               setProcessedByMe(false);
               setCurrentPage(1);
             }}
-            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${activeTab === tab.id
+            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${
+              activeTab === tab.id
                 ? "bg-[#0a1e4d] text-white shadow"
                 : "text-slate-500 hover:text-[#0a1e4d] hover:bg-slate-100"
-              }`}
+            }`}
           >
             {tab.label}
-            <span className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${activeTab === tab.id ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
-              }`}>
+            <span
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
+                activeTab === tab.id
+                  ? "bg-white/20 text-white"
+                  : "bg-slate-200 text-slate-600"
+              }`}
+            >
               {tab.count}
             </span>
           </button>
@@ -869,11 +1841,13 @@ export default function AdminPassApprovalsPage() {
           <h3 className="font-bold text-slate-800 dark:text-stone-100 uppercase text-xs tracking-widest flex items-center gap-2">
             {activeTab === "pending" ? (
               <>
-                <ShieldAlert className="h-4 w-4 text-[#ff6b00]" /> Awaiting Review
+                <ShieldAlert className="h-4 w-4 text-[#ff6b00]" /> Awaiting
+                Review
               </>
             ) : (
               <>
-                <History className="h-4 w-4 text-emerald-500" /> Processed Passes
+                <History className="h-4 w-4 text-emerald-500" /> Processed
+                Passes
               </>
             )}
           </h3>
@@ -908,8 +1882,6 @@ export default function AdminPassApprovalsPage() {
               </select>
             </div>
 
-
-
             <div className="relative w-full md:w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
               <input
@@ -937,10 +1909,32 @@ export default function AdminPassApprovalsPage() {
             <thead>
               <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
                 {(activeTab === "pass_updates"
-                  ? ["Pass No.", "Person Name", "Company", "Old Vehicle No.", "New Vehicle No.", "Requested On", "Status", "Actions"]
+                  ? [
+                      "Pass No.",
+                      "Person Name",
+                      "Company",
+                      "Old Vehicle No.",
+                      "New Vehicle No.",
+                      "Requested On",
+                      "Status",
+                      "Actions",
+                    ]
                   : activeTab === "processed"
-                  ? ["Ref No", "Company Details", "Entities Included", "Applied On", "Approved By", "Status"]
-                  : ["Ref No", "Company Details", "Entities Included", "Applied On", "Status"]
+                    ? [
+                        "Ref No",
+                        "Company Details",
+                        "Entities Included",
+                        "Applied On",
+                        "Approved By",
+                        "Status",
+                      ]
+                    : [
+                        "Ref No",
+                        "Company Details",
+                        "Entities Included",
+                        "Applied On",
+                        "Status",
+                      ]
                 ).map((h) => {
                   const vis =
                     h === "Entities Included"
@@ -953,8 +1947,9 @@ export default function AdminPassApprovalsPage() {
                   return (
                     <th
                       key={h}
-                      className={`px-4 sm:px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${h === "Status" ? "text-center" : ""
-                        } ${vis}`}
+                      className={`px-4 sm:px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${
+                        h === "Status" ? "text-center" : ""
+                      } ${vis}`}
                     >
                       {h}
                     </th>
@@ -966,22 +1961,45 @@ export default function AdminPassApprovalsPage() {
               {activeTab === "pass_updates" ? (
                 twoWheelerRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center text-slate-500">
+                    <td
+                      colSpan={8}
+                      className="py-16 text-center text-slate-500"
+                    >
                       <Search className="h-10 w-10 mx-auto text-slate-200 mb-3" />
-                      <p className="text-sm font-medium">No two-wheeler update requests found.</p>
+                      <p className="text-sm font-medium">
+                        No two-wheeler update requests found.
+                      </p>
                     </td>
                   </tr>
                 ) : (
                   twoWheelerRequests.map((req) => (
-                    <tr key={req.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="px-4 sm:px-6 py-4 text-sm font-bold font-mono text-[#0a1e4d]">{req.personPassNo || `REQ-${req.passRequestId || req.id}`}</td>
-                      <td className="px-4 sm:px-6 py-4 text-sm font-bold text-slate-800">{req.personName || "—"}</td>
-                      <td className="px-4 sm:px-6 py-4 text-sm text-slate-600">{req.companyName || "—"}</td>
-                      <td className="px-4 sm:px-6 py-4 text-sm font-mono text-slate-500">{req.oldVehicleNo || "N/A"}</td>
-                      <td className="px-4 sm:px-6 py-4 text-sm font-mono font-bold text-emerald-600">{req.newVehicleNo}</td>
-                      <td className="px-4 sm:px-6 py-4 text-sm text-slate-500">{new Date(req.createdAt).toLocaleDateString("en-GB")}</td>
+                    <tr
+                      key={req.id}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                    >
+                      <td className="px-4 sm:px-6 py-4 text-sm font-bold font-mono text-[#0a1e4d]">
+                        {req.personPassNo ||
+                          `REQ-${req.passRequestId || req.id}`}
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 text-sm font-bold text-slate-800">
+                        {req.personName || "—"}
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 text-sm text-slate-600">
+                        {req.companyName || "—"}
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 text-sm font-mono text-slate-500">
+                        {req.oldVehicleNo || "N/A"}
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 text-sm font-mono font-bold text-emerald-600">
+                        {req.newVehicleNo}
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 text-sm text-slate-500">
+                        {new Date(req.createdAt).toLocaleDateString("en-GB")}
+                      </td>
                       <td className="px-4 sm:px-6 py-4 text-center">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : req.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : req.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                        >
                           {req.status}
                         </span>
                       </td>
@@ -995,7 +2013,13 @@ export default function AdminPassApprovalsPage() {
                               Approve
                             </button>
                             <button
-                              onClick={() => setRejectModal({ isOpen: true, requestId: req.id, reason: "" })}
+                              onClick={() =>
+                                setRejectModal({
+                                  isOpen: true,
+                                  requestId: req.id,
+                                  reason: "",
+                                })
+                              }
                               className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
                             >
                               Reject
@@ -1010,14 +2034,20 @@ export default function AdminPassApprovalsPage() {
                 )
               ) : loading ? (
                 <tr>
-                  <td colSpan={activeTab === "processed" ? 6 : 5} className="py-16 text-center text-slate-500">
+                  <td
+                    colSpan={activeTab === "processed" ? 6 : 5}
+                    className="py-16 text-center text-slate-500"
+                  >
                     <Loader2 className="h-10 w-10 mx-auto text-slate-300 mb-3 animate-spin" />
                     <p className="text-sm font-medium">Loading requests...</p>
                   </td>
                 </tr>
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={activeTab === "processed" ? 6 : 5} className="py-16 text-center text-slate-500">
+                  <td
+                    colSpan={activeTab === "processed" ? 6 : 5}
+                    className="py-16 text-center text-slate-500"
+                  >
                     <Search className="h-10 w-10 mx-auto text-slate-200 mb-3" />
                     <p className="text-sm font-medium">
                       No records found for the current filter/search.
@@ -1027,16 +2057,25 @@ export default function AdminPassApprovalsPage() {
               ) : (
                 filteredData.map((pass) => {
                   const statusColors = {
-                    approved: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
-                    processed: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
-                    reverted: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
-                    rejected: "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
+                    approved:
+                      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
+                    processed:
+                      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
+                    reverted:
+                      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
+                    rejected:
+                      "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
                   };
                   const statusKey = (pass.status || "").toLowerCase();
-                  const statusClass = statusColors[statusKey] || "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+                  const statusClass =
+                    statusColors[statusKey] ||
+                    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
 
-                  const lockType = pass.originType === "VENDOR" ? "vendor-pass" : "pass";
-                  const lock = activeLocks[lockType]?.find(l => String(l.applicationId) === String(pass.id));
+                  const lockType =
+                    pass.originType === "VENDOR" ? "vendor-pass" : "pass";
+                  const lock = activeLocks[lockType]?.find(
+                    (l) => String(l.applicationId) === String(pass.id),
+                  );
                   const isLocked = !!lock;
                   const catInfo = getPassRequestCategory(pass);
 
@@ -1046,7 +2085,11 @@ export default function AdminPassApprovalsPage() {
 
                   return (
                     <tr
-                      key={pass.originType === "VENDOR" ? `vpr-${pass.id}` : pass.id}
+                      key={
+                        pass.originType === "VENDOR"
+                          ? `vpr-${pass.id}`
+                          : pass.id
+                      }
                       onClick={() =>
                         openReviewModal(pass, activeTab === "processed")
                       }
@@ -1061,17 +2104,26 @@ export default function AdminPassApprovalsPage() {
                             {(pass.entityName || "?").charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <div className="text-sm font-bold text-slate-800 dark:text-stone-100 truncate">{pass.entityName || "—"}</div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{pass.email || "—"}</div>
+                            <div className="text-sm font-bold text-slate-800 dark:text-stone-100 truncate">
+                              {pass.entityName || "—"}
+                            </div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                              {pass.email || "—"}
+                            </div>
                             {/* Compact meta shown only on mobile where columns are hidden */}
                             <div className="sm:hidden mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
                               <span className="text-blue-700 dark:text-blue-300 font-semibold">
-                                {pass.persons?.length || 0}P · {pass.vehicles?.length || 0}V
+                                {pass.persons?.length || 0}P ·{" "}
+                                {pass.vehicles?.length || 0}V
                               </span>
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${catInfo.badgeClass}`}>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${catInfo.badgeClass}`}
+                              >
                                 {catInfo.label}
                               </span>
-                              <span>{new Date(pass.createdAt).toLocaleDateString()}</span>
+                              <span>
+                                {new Date(pass.createdAt).toLocaleDateString()}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -1079,9 +2131,12 @@ export default function AdminPassApprovalsPage() {
                       <td className="px-4 sm:px-6 py-4 hidden sm:table-cell">
                         <div className="flex flex-col gap-1 items-start">
                           <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-slate-200 dark:border-slate-700">
-                            {pass.persons?.length || 0} Persons | {pass.vehicles?.length || 0} Vehicles
+                            {pass.persons?.length || 0} Persons |{" "}
+                            {pass.vehicles?.length || 0} Vehicles
                           </span>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${catInfo.badgeClass}`}>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${catInfo.badgeClass}`}
+                          >
                             {catInfo.label}
                           </span>
                         </div>
@@ -1096,7 +2151,9 @@ export default function AdminPassApprovalsPage() {
                       )}
                       <td className="px-4 sm:px-6 py-4 text-center">
                         <div className="flex flex-col items-center gap-1">
-                          <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}>
+                          <span
+                            className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}
+                          >
                             {(pass.status || "PENDING").toUpperCase()}
                           </span>
                           {isLocked && (
@@ -1182,7 +2239,8 @@ export default function AdminPassApprovalsPage() {
                         }
                         className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
                       >
-                        <FileText className="h-4 w-4 text-blue-600" /> View Requisition Letter
+                        <FileText className="h-4 w-4 text-blue-600" /> View
+                        Requisition Letter
                       </button>
                     )}
                     {selectedRequest.authLetterFilePath && (
@@ -1196,7 +2254,8 @@ export default function AdminPassApprovalsPage() {
                         }
                         className="bg-orange-50 text-orange-700 border border-orange-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-orange-100 transition-colors shadow-sm"
                       >
-                        <FileCheck2 className="h-4 w-4 text-orange-600" /> View Licence / Work Order / Contract
+                        <FileCheck2 className="h-4 w-4 text-orange-600" /> View
+                        Licence / Work Order / Contract
                       </button>
                     )}
                   </div>
@@ -1271,7 +2330,10 @@ export default function AdminPassApprovalsPage() {
                           <tr
                             key={p.id}
                             onClick={() => {
-                              if (p.status === 'pending' || p.status === 'reverted') {
+                              if (
+                                p.status === "pending" ||
+                                p.status === "reverted"
+                              ) {
                                 setEntityModal({
                                   isOpen: true,
                                   data: p,
@@ -1279,13 +2341,13 @@ export default function AdminPassApprovalsPage() {
                                 });
                                 setCurrentRemark(
                                   entityRemarks.persons[p.id] ||
-                                  p.revertReason ||
-                                  p.rejectedReason ||
-                                  "",
+                                    p.revertReason ||
+                                    p.rejectedReason ||
+                                    "",
                                 );
                               }
                             }}
-                            className={`transition-all hover:shadow-sm ${(p.status === 'pending' || p.status === 'reverted') ? 'hover:bg-slate-50 cursor-pointer' : 'bg-slate-50/50 cursor-default'}`}
+                            className={`transition-all hover:shadow-sm ${p.status === "pending" || p.status === "reverted" ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/50 cursor-default"}`}
                           >
                             <td className="p-3 text-slate-800 font-mono font-bold text-xs">
                               {p.personPassNo || "-"}
@@ -1297,10 +2359,14 @@ export default function AdminPassApprovalsPage() {
                               {(() => {
                                 const pCat = getItemCategoryTag(p, true);
                                 return pCat ? (
-                                  <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}>
+                                  <span
+                                    className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}
+                                  >
                                     {pCat.label}
                                   </span>
-                                ) : "-";
+                                ) : (
+                                  "-"
+                                );
                               })()}
                             </td>
                             <td className="p-3 text-slate-600 font-mono text-xs">
@@ -1323,49 +2389,59 @@ export default function AdminPassApprovalsPage() {
                                     <>
                                       {personStatus && (
                                         <span
-                                          className={`px-2 py-1 rounded text-[10px] font-bold ${personStatus === "APPROVED"
-                                            ? "bg-emerald-100 text-emerald-700"
-                                            : personStatus === "REVERTED"
-                                              ? "bg-amber-100 text-amber-700"
-                                              : "bg-red-100 text-red-700"
-                                            }`}
+                                          className={`px-2 py-1 rounded text-[10px] font-bold ${
+                                            personStatus === "APPROVED"
+                                              ? "bg-emerald-100 text-emerald-700"
+                                              : personStatus === "REVERTED"
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-red-100 text-red-700"
+                                          }`}
                                         >
                                           {personStatus}
                                         </span>
                                       )}
 
-                                      {(personStatus === "REJECTED" || personStatus === "REVERTED") &&
+                                      {(personStatus === "REJECTED" ||
+                                        personStatus === "REVERTED") &&
                                         personRemark && (
-                                          <div className={`mt-1 text-[10px] p-1 rounded border inline-block ${personStatus === "REVERTED"
-                                            ? "text-amber-600 bg-amber-50 border-amber-100"
-                                            : "text-red-600 bg-red-50 border-red-100"
-                                            }`}>
-                                            {personStatus === "REVERTED" ? "Revert: " : "Reason: "}{personRemark}
+                                          <div
+                                            className={`mt-1 text-[10px] p-1 rounded border inline-block ${
+                                              personStatus === "REVERTED"
+                                                ? "text-amber-600 bg-amber-50 border-amber-100"
+                                                : "text-red-600 bg-red-50 border-red-100"
+                                            }`}
+                                          >
+                                            {personStatus === "REVERTED"
+                                              ? "Revert: "
+                                              : "Reason: "}
+                                            {personRemark}
                                           </div>
                                         )}
                                     </>
                                   );
                                 })()}
-                                {!isViewMode && (p.status === 'pending' || p.status === 'reverted') && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEntityModal({
-                                        isOpen: true,
-                                        data: p,
-                                        type: "person",
-                                      });
-                                      setCurrentRemark(
-                                        entityRemarks.persons[p.id] || "",
-                                      );
-                                    }}
-                                    className={`${getItemCategoryTag(p, true)?.btnClass || "bg-[#0a1e4d] hover:bg-blue-900 text-white"} px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm`}
-                                  >
-                                    {entityStatuses.persons[p.id]
-                                      ? "Re-verify"
-                                      : "Verify"}
-                                  </button>
-                                )}
+                                {!isViewMode &&
+                                  (p.status === "pending" ||
+                                    p.status === "reverted") && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEntityModal({
+                                          isOpen: true,
+                                          data: p,
+                                          type: "person",
+                                        });
+                                        setCurrentRemark(
+                                          entityRemarks.persons[p.id] || "",
+                                        );
+                                      }}
+                                      className={`${getItemCategoryTag(p, true)?.btnClass || "bg-[#0a1e4d] hover:bg-blue-900 text-white"} px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm`}
+                                    >
+                                      {entityStatuses.persons[p.id]
+                                        ? "Re-verify"
+                                        : "Verify"}
+                                    </button>
+                                  )}
                               </div>
                             </td>
                           </tr>
@@ -1409,7 +2485,10 @@ export default function AdminPassApprovalsPage() {
                           <tr
                             key={v.id}
                             onClick={() => {
-                              if (v.status === 'pending' || v.status === 'reverted') {
+                              if (
+                                v.status === "pending" ||
+                                v.status === "reverted"
+                              ) {
                                 setEntityModal({
                                   isOpen: true,
                                   data: v,
@@ -1417,13 +2496,13 @@ export default function AdminPassApprovalsPage() {
                                 });
                                 setCurrentRemark(
                                   entityRemarks.vehicles[v.id] ||
-                                  v.revertReason ||
-                                  v.rejectedReason ||
-                                  "",
+                                    v.revertReason ||
+                                    v.rejectedReason ||
+                                    "",
                                 );
                               }
                             }}
-                            className={`transition-all hover:shadow-sm ${(v.status === 'pending' || v.status === 'reverted') ? 'hover:bg-slate-50 cursor-pointer' : 'bg-slate-50/50 cursor-default'}`}
+                            className={`transition-all hover:shadow-sm ${v.status === "pending" || v.status === "reverted" ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/50 cursor-default"}`}
                           >
                             <td className="p-3 text-slate-800 font-mono font-bold text-xs">
                               {v.vehiclePassNo || "-"}
@@ -1435,14 +2514,19 @@ export default function AdminPassApprovalsPage() {
                               {(() => {
                                 const vCat = getItemCategoryTag(v, false);
                                 return vCat ? (
-                                  <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}>
+                                  <span
+                                    className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}
+                                  >
                                     {vCat.label}
                                   </span>
-                                ) : "-";
+                                ) : (
+                                  "-"
+                                );
                               })()}
                             </td>
                             <td className="p-3 text-slate-600 text-xs font-medium">
-                              {v.vehicleTypeName || v.vehicleTypeId} • {formatPassType(v.passType)}
+                              {v.vehicleTypeName || v.vehicleTypeId} •{" "}
+                              {formatPassType(v.passType)}
                             </td>
                             <td className="p-3 text-right">
                               <div className="flex justify-end items-center gap-3">
@@ -1461,49 +2545,59 @@ export default function AdminPassApprovalsPage() {
                                     <>
                                       {vehicleStatus && (
                                         <span
-                                          className={`px-2 py-1 rounded text-[10px] font-bold ${vehicleStatus === "APPROVED"
-                                            ? "bg-emerald-100 text-emerald-700"
-                                            : vehicleStatus === "REVERTED"
-                                              ? "bg-amber-100 text-amber-700"
-                                              : "bg-red-100 text-red-700"
-                                            }`}
+                                          className={`px-2 py-1 rounded text-[10px] font-bold ${
+                                            vehicleStatus === "APPROVED"
+                                              ? "bg-emerald-100 text-emerald-700"
+                                              : vehicleStatus === "REVERTED"
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-red-100 text-red-700"
+                                          }`}
                                         >
                                           {vehicleStatus}
                                         </span>
                                       )}
 
-                                      {(vehicleStatus === "REJECTED" || vehicleStatus === "REVERTED") &&
+                                      {(vehicleStatus === "REJECTED" ||
+                                        vehicleStatus === "REVERTED") &&
                                         vehicleRemark && (
-                                          <div className={`mt-1 text-[10px] p-1 rounded border inline-block ${vehicleStatus === "REVERTED"
-                                            ? "text-amber-600 bg-amber-50 border-amber-100"
-                                            : "text-red-600 bg-red-50 border-red-100"
-                                            }`}>
-                                            {vehicleStatus === "REVERTED" ? "Revert: " : "Reason: "}{vehicleRemark}
+                                          <div
+                                            className={`mt-1 text-[10px] p-1 rounded border inline-block ${
+                                              vehicleStatus === "REVERTED"
+                                                ? "text-amber-600 bg-amber-50 border-amber-100"
+                                                : "text-red-600 bg-red-50 border-red-100"
+                                            }`}
+                                          >
+                                            {vehicleStatus === "REVERTED"
+                                              ? "Revert: "
+                                              : "Reason: "}
+                                            {vehicleRemark}
                                           </div>
                                         )}
                                     </>
                                   );
                                 })()}
-                                {!isViewMode && (v.status === 'pending' || v.status === 'reverted') && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEntityModal({
-                                        isOpen: true,
-                                        data: v,
-                                        type: "vehicle",
-                                      });
-                                      setCurrentRemark(
-                                        entityRemarks.vehicles[v.id] || "",
-                                      );
-                                    }}
-                                    className={`${getItemCategoryTag(v, false)?.btnClass || "bg-[#0a1e4d] hover:bg-blue-900 text-white"} px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm`}
-                                  >
-                                    {entityStatuses.vehicles[v.id]
-                                      ? "Re-verify"
-                                      : "Verify"}
-                                  </button>
-                                )}
+                                {!isViewMode &&
+                                  (v.status === "pending" ||
+                                    v.status === "reverted") && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEntityModal({
+                                          isOpen: true,
+                                          data: v,
+                                          type: "vehicle",
+                                        });
+                                        setCurrentRemark(
+                                          entityRemarks.vehicles[v.id] || "",
+                                        );
+                                      }}
+                                      className={`${getItemCategoryTag(v, false)?.btnClass || "bg-[#0a1e4d] hover:bg-blue-900 text-white"} px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm`}
+                                    >
+                                      {entityStatuses.vehicles[v.id]
+                                        ? "Re-verify"
+                                        : "Verify"}
+                                    </button>
+                                  )}
                               </div>
                             </td>
                           </tr>
@@ -1591,7 +2685,10 @@ export default function AdminPassApprovalsPage() {
                       />
                       <DetailItem
                         label="HEP Type"
-                        value={formatHepType(entityModal.data.hepType || entityModal.data.hepTypeId)}
+                        value={formatHepType(
+                          entityModal.data.hepType ||
+                            entityModal.data.hepTypeId,
+                        )}
                       />
                       <DetailItem
                         label="Designation"
@@ -1622,7 +2719,10 @@ export default function AdminPassApprovalsPage() {
                         label="Country"
                         value={
                           entityModal.data.country ||
-                          (String(entityModal.data.nationality || "").toUpperCase() === "FOREIGNER" || String(entityModal.data.nationality) === "2"
+                          (String(
+                            entityModal.data.nationality || "",
+                          ).toUpperCase() === "FOREIGNER" ||
+                          String(entityModal.data.nationality) === "2"
                             ? ""
                             : "India")
                         }
@@ -1715,7 +2815,10 @@ export default function AdminPassApprovalsPage() {
                 <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
                   <DetailItem
                     label="Access Area"
-                    value={formatAccessArea(entityModal.data.accessAreaId || entityModal.data.accessArea)}
+                    value={formatAccessArea(
+                      entityModal.data.accessAreaId ||
+                        entityModal.data.accessArea,
+                    )}
                     highlight
                   />
                   <DetailItem
@@ -1725,7 +2828,10 @@ export default function AdminPassApprovalsPage() {
                   />
                   <DetailItem
                     label="Pass Period"
-                    value={formatPassPeriod(entityModal.data.passPeriod, entityModal.data.passType)}
+                    value={formatPassPeriod(
+                      entityModal.data.passPeriod,
+                      entityModal.data.passType,
+                    )}
                   />
                   <DetailItem
                     label="Valid From Date"
@@ -1771,7 +2877,7 @@ export default function AdminPassApprovalsPage() {
                                 "personPhoto",
                                 entityModal.data.photoFilePath,
                                 extractEntityIndex(entityModal.data.id),
-                                selectedRequest.originType === "VENDOR"
+                                selectedRequest.originType === "VENDOR",
                               )
                             }
                             title="Click to Enlarge Photo"
@@ -2083,7 +3189,9 @@ export default function AdminPassApprovalsPage() {
                 Reject Two-Wheeler Update
               </h3>
               <button
-                onClick={() => setRejectModal({ isOpen: false, requestId: null, reason: "" })}
+                onClick={() =>
+                  setRejectModal({ isOpen: false, requestId: null, reason: "" })
+                }
                 className="text-white/70 hover:text-white"
               >
                 <X className="h-5 w-5" />
@@ -2096,14 +3204,18 @@ export default function AdminPassApprovalsPage() {
               <textarea
                 rows={3}
                 value={rejectModal.reason}
-                onChange={(e) => setRejectModal({ ...rejectModal, reason: e.target.value })}
+                onChange={(e) =>
+                  setRejectModal({ ...rejectModal, reason: e.target.value })
+                }
                 placeholder="Enter rejection reason..."
                 className="w-full border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500 bg-white dark:bg-slate-800"
               />
             </div>
             <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex justify-end gap-3">
               <button
-                onClick={() => setRejectModal({ isOpen: false, requestId: null, reason: "" })}
+                onClick={() =>
+                  setRejectModal({ isOpen: false, requestId: null, reason: "" })
+                }
                 className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold transition-colors"
               >
                 Cancel

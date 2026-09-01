@@ -25,8 +25,10 @@ import {
 } from "lucide-react";
 
 import { jwtDecode } from "jwt-decode";
-const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5006/api";
-const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
+const AUTH_API =
+  process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5006/api";
+const AGENT_API =
+  process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
 // Typing animation constants (defined outside component to avoid dependency warnings and cascading renders)
 const HEADLINE_LINE1 = "Welcome to the";
@@ -82,48 +84,52 @@ const LoginPage = () => {
   const [resolvedLoginId, setResolvedLoginId] = useState("");
   const [resolvedUserName, setResolvedUserName] = useState("");
   const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
-  const [showForgotConfirmPassword, setShowForgotConfirmPassword] = useState(false);
+  const [showForgotConfirmPassword, setShowForgotConfirmPassword] =
+    useState(false);
   const [isDeptUser, setIsDeptUser] = useState(false);
   const [forgotCaptcha, setForgotCaptcha] = useState("");
-const [forgotCaptchaData, setForgotCaptchaData] = useState({
-  question: "",
-  token: "",
-});
-const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
+  const [forgotCaptchaData, setForgotCaptchaData] = useState({
+    question: "",
+    token: "",
+  });
+  const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
 
   const handleForgotSubmit = async (e) => {
     e.preventDefault();
 
     if (forgotStep === 1) {
       if (!forgotEmail.trim()) {
-        toast.warning(isDeptUser ? "Please enter your departmental email ID." : "Please enter your registered email or username.");
+        toast.warning(
+          isDeptUser
+            ? "Please enter your departmental email ID."
+            : "Please enter your registered email or username.",
+        );
         return;
       }
       if (!forgotCaptcha.trim()) {
-    toast.warning("Please enter the security code.");
-    return;
-}
+        toast.warning("Please enter the security code.");
+        return;
+      }
 
-    try {
+      try {
         const captchaRes = await axios.post(
-            `${AGENT_API}/captcha/verify-captcha`,
-            {
-                token: forgotCaptchaData.token,
-                value: forgotCaptcha,
-            }
+          `${AGENT_API}/captcha/verify-captcha`,
+          {
+            token: forgotCaptchaData.token,
+            value: forgotCaptcha,
+          },
         );
 
         if (!captchaRes.data.success) {
-            toast.error("Invalid security code");
-            fetchForgotCaptcha();
-            return;
+          toast.error("Invalid security code");
+          fetchForgotCaptcha();
+          return;
         }
-    } catch (err) {
+      } catch (err) {
         toast.error("Invalid or expired security code");
         fetchForgotCaptcha();
         return;
-    }
-
+      }
 
       setForgotLoading(true);
       try {
@@ -131,15 +137,16 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
           `${AUTH_API}/auth/forgot-password`,
           {
             loginId: forgotEmail.trim(),
-            userType: isDeptUser ? "user" : "agent"
+            userType: isDeptUser ? "user" : "agent",
           },
           {
             validateStatus: (s) => s < 500,
-          }
+          },
         );
         if (res.status >= 200 && res.status < 300 && res.data?.success) {
           toast.success("OTP Sent", {
-            description: "A One-Time Password has been sent to your registered email.",
+            description:
+              "A One-Time Password has been sent to your registered email.",
           });
           setResolvedLoginId(res.data.loginId);
           setResolvedUserName(res.data.userName || "");
@@ -165,11 +172,11 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
           {
             loginId: resolvedLoginId,
             otp: forgotOtp.trim(),
-            userType: isDeptUser ? "user" : "agent"
+            userType: isDeptUser ? "user" : "agent",
           },
           {
             validateStatus: (s) => s < 500,
-          }
+          },
         );
         if (res.status >= 200 && res.status < 300 && res.data?.success) {
           toast.success("OTP Verified", {
@@ -204,15 +211,16 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
             otp: forgotOtp.trim(),
             newPassword: forgotNewPassword,
             confirmPassword: forgotConfirmPassword,
-            userType: isDeptUser ? "user" : "agent"
+            userType: isDeptUser ? "user" : "agent",
           },
           {
             validateStatus: (s) => s < 500,
-          }
+          },
         );
         if (res.status >= 200 && res.status < 300 && res.data?.success) {
           toast.success("Password Reset Successful", {
-            description: "Your password has been updated. Please sign in with your new password.",
+            description:
+              "Your password has been updated. Please sign in with your new password.",
           });
           setAuthMode("signin");
           setForgotStep(1);
@@ -262,25 +270,25 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
   };
 
   const fetchForgotCaptcha = async () => {
-  setForgotCaptchaLoading(true);
+    setForgotCaptchaLoading(true);
 
-  try {
-    const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
+    try {
+      const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
 
-    if (res.data.success) {
-      setForgotCaptchaData({
-        question: res.data.captchaQuestion,
-        token: res.data.captchaToken,
-      });
+      if (res.data.success) {
+        setForgotCaptchaData({
+          question: res.data.captchaQuestion,
+          token: res.data.captchaToken,
+        });
 
-      setForgotCaptcha("");
+        setForgotCaptcha("");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setForgotCaptchaLoading(false);
     }
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setForgotCaptchaLoading(false);
-  }
-};
+  };
 
   // const fetchCaptcha = async () => {
   //   setIsCaptchaLoading(true);
@@ -554,28 +562,66 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
         //   Engineering Civil : 3  |  Engineering Mechanical : 4
         //   Finance           : 5  |  General Administration : 6
         const role = (tokenClaims.role || "").toLowerCase();
-        const deptId = tokenClaims.departmentId; // numeric — sourced from JWT claim
-
+        // const deptId = tokenClaims.departmentId; // numeric — sourced from JWT claim
+        const deptId = Number(tokenClaims.departmentId);
         const TRAFFIC_DEPT_IDS = [9, 10, 11, 12, 13, 14, 15];
         const MARINE_DEPT_ID = 7;
         // Civil, Mechanical, Finance, General Admin → vendor pass only (no dedicated portal)
         const VENDOR_ONLY_DEPT_IDS = [3, 4, 5, 6];
-        const TRAFFIC_APPROVAL_ROLES = ["approval", "safety officer", "fire safety officer", "senior deputy traffic manager"];
-
+        const TRAFFIC_APPROVAL_ROLES = [
+          "approval",
+          "safety officer",
+          "fire safety officer",
+          "senior deputy traffic manager",
+        ];
+        const CISF_DEPT_ID = 1;
+        const CISF_APPROVAL_ROLE = "cisf.assistant commandant";
+        // if (role === "admin" || role === "administrator") {
+        //   router.push("/admin");
+        // } else if (role === "hod") {
+        //   router.push("/hod");
+        // } else if (role === "atm") {
+        //   router.push("/atm_dashboard");
+        // } else if (
+        //   TRAFFIC_APPROVAL_ROLES.includes(role) &&
+        //   TRAFFIC_DEPT_IDS.includes(deptId)
+        // ) {
+        //   router.push("/traffic_approval/dashboard");
+        // } else if (role === "approval" && deptId === MARINE_DEPT_ID) {
+        //   router.push("/marine_approval");
+        // } else if (
+        //   role === "approval" &&
+        //   VENDOR_ONLY_DEPT_IDS.includes(deptId)
+        // ) {
+        //   router.push("/admin/vendor_pass");
+        // } else if (role === "approval") {
+        //   // Catch-all for any other approval dept not explicitly listed above
+        //   router.push("/admin/vendor_pass");
+        // } else {
+        //   router.push("/dashboard");
+        // }
         if (role === "admin" || role === "administrator") {
           router.push("/admin");
         } else if (role === "hod") {
           router.push("/hod");
         } else if (role === "atm") {
           router.push("/atm_dashboard");
-        } else if (TRAFFIC_APPROVAL_ROLES.includes(role) && TRAFFIC_DEPT_IDS.includes(deptId)) {
+        } else if (role === CISF_APPROVAL_ROLE && deptId === CISF_DEPT_ID) {
+          // CISF Assistant Commandant → same Pass Approvals page
+          router.push("/admin/pass-approvals");
+        } else if (
+          TRAFFIC_APPROVAL_ROLES.includes(role) &&
+          TRAFFIC_DEPT_IDS.includes(deptId)
+        ) {
           router.push("/traffic_approval/dashboard");
         } else if (role === "approval" && deptId === MARINE_DEPT_ID) {
           router.push("/marine_approval");
-        } else if (role === "approval" && VENDOR_ONLY_DEPT_IDS.includes(deptId)) {
+        } else if (
+          role === "approval" &&
+          VENDOR_ONLY_DEPT_IDS.includes(deptId)
+        ) {
           router.push("/admin/vendor_pass");
         } else if (role === "approval") {
-          // Catch-all for any other approval dept not explicitly listed above
           router.push("/admin/vendor_pass");
         } else {
           router.push("/dashboard");
@@ -658,7 +704,11 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
           <div className="hidden lg:block space-y-8 animate-in fade-in duration-700">
             <div className="inline-flex items-center gap-4 bg-white/10 backdrop-blur-xl p-5 rounded-3xl shadow-xl ring-1 ring-white/20">
               <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center shadow-lg shadow-orange-950/20 p-2 shrink-0 ring-4 ring-orange-500/20">
-                <img src="/chennaiport.jpg" alt="Chennai Port Logo" className="w-full h-full object-contain rounded-full" />
+                <img
+                  src="/chennaiport.jpg"
+                  alt="Chennai Port Logo"
+                  className="w-full h-full object-contain rounded-full"
+                />
               </div>
               <div>
                 <h1 className="text-4xl font-extrabold text-white leading-none drop-shadow-md chennai-port-glow tracking-tight">
@@ -729,7 +779,9 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                 })()}
               </h2>
               <p className="text-base xl:text-lg text-stone-200 leading-relaxed max-w-xl font-medium">
-                A next-generation digital logistics gateway streamlining access control, commercial fleet movement, and gate-pass security verification at Chennai Port.
+                A next-generation digital logistics gateway streamlining access
+                control, commercial fleet movement, and gate-pass security
+                verification at Chennai Port.
               </p>
             </div>
 
@@ -764,7 +816,9 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                       {item.title}
                     </p>
                   </div>
-                  <p className="text-xs text-stone-300/80 mt-2 leading-relaxed">{item.desc}</p>
+                  <p className="text-xs text-stone-300/80 mt-2 leading-relaxed">
+                    {item.desc}
+                  </p>
                 </div>
               ))}
             </div>
@@ -787,7 +841,11 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                     {/* Mobile/Tablet Header (Hidden on Desktop lg) */}
                     <div className="flex items-center gap-3 mb-6 lg:hidden justify-center bg-stone-50 border border-stone-100 p-3 rounded-2xl">
                       <div className="w-18 h-18 bg-white rounded-full flex items-center justify-center shadow-md p-2 shrink-0 border border-stone-200">
-                        <img src="/chennaiport.jpg" alt="Chennai Port Logo" className="w-full h-full object-contain rounded-full" />
+                        <img
+                          src="/chennaiport.jpg"
+                          alt="Chennai Port Logo"
+                          className="w-full h-full object-contain rounded-full"
+                        />
                       </div>
                       <div className="text-left">
                         <div className="text-lg font-bold text-gray-900 leading-none">
@@ -802,7 +860,9 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                     {/* Mobile-only Greeting */}
                     <div className="md:hidden text-center mb-4">
                       <h2 className="text-2xl font-bold text-orange-600">
-                        Hello,<br />ChennaiPort User
+                        Hello,
+                        <br />
+                        ChennaiPort User
                       </h2>
                     </div>
 
@@ -933,8 +993,9 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                                 className="shrink-0 bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100 active:scale-95 transition-all disabled:opacity-50"
                               >
                                 <RefreshCw
-                                  className={`h-4 w-4 text-orange-600 ${isCaptchaLoading ? "animate-spin" : ""
-                                    }`}
+                                  className={`h-4 w-4 text-orange-600 ${
+                                    isCaptchaLoading ? "animate-spin" : ""
+                                  }`}
                                 />
                               </button>
                             </div>
@@ -976,8 +1037,8 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                             <button
                               type="button"
                               onClick={() => {
-                                  fetchForgotCaptcha();
-                                  setAuthMode("forgot");
+                                fetchForgotCaptcha();
+                                setAuthMode("forgot");
                               }}
                               className="text-sm font-semibold text-orange-600 hover:text-orange-700 transition-colors focus:outline-none"
                             >
@@ -1014,9 +1075,12 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                             Reset Password
                           </h3>
                           <p className="text-sm text-gray-500 mt-2">
-                            {forgotStep === 1 && "Enter your registered email or username to receive a verification OTP."}
-                            {forgotStep === 2 && "Enter the OTP sent to your registered email address."}
-                            {forgotStep === 3 && "Set your new password and confirm it below."}
+                            {forgotStep === 1 &&
+                              "Enter your registered email or username to receive a verification OTP."}
+                            {forgotStep === 2 &&
+                              "Enter the OTP sent to your registered email address."}
+                            {forgotStep === 3 &&
+                              "Set your new password and confirm it below."}
                           </p>
                         </div>
 
@@ -1030,57 +1094,64 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                                 <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
                                 <input
                                   type="text"
-                                  placeholder={isDeptUser ? "Departmental Email ID" : "Email or Username"}
+                                  placeholder={
+                                    isDeptUser
+                                      ? "Departmental Email ID"
+                                      : "Email or Username"
+                                  }
                                   value={forgotEmail}
-                                  onChange={(e) => setForgotEmail(e.target.value)}
+                                  onChange={(e) =>
+                                    setForgotEmail(e.target.value)
+                                  }
                                   className="w-full pl-11 pr-3 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
                                   required
                                 />
                               </div>
                               <div className="flex flex-col sm:flex-row gap-2.5 w-full">
-
                                 <input
-                                    type="text"
-                                    placeholder="Security Code"
-                                    value={forgotCaptcha}
-                                    onChange={(e)=>setForgotCaptcha(e.target.value)}
-                                    className="flex-1 min-w-0 px-4 py-3.5 text-base bg-stone-50 border border-stone-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
+                                  type="text"
+                                  placeholder="Security Code"
+                                  value={forgotCaptcha}
+                                  onChange={(e) =>
+                                    setForgotCaptcha(e.target.value)
+                                  }
+                                  className="flex-1 min-w-0 px-4 py-3.5 text-base bg-stone-50 border border-stone-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
                                 />
 
                                 <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 w-full sm:w-[190px] shrink-0 justify-between">
+                                  <div className="flex-1 flex items-center justify-center">
+                                    {forgotCaptchaLoading ? (
+                                      <RefreshCw className="h-5 w-5 animate-spin text-orange-500" />
+                                    ) : (
+                                      <div className="font-bold text-lg text-blue-700 tracking-wide">
+                                        {forgotCaptchaData.question}
+                                      </div>
+                                    )}
+                                  </div>
 
-                                    <div className="flex-1 flex items-center justify-center">
-
-                                        {forgotCaptchaLoading ? (
-                                            <RefreshCw className="h-5 w-5 animate-spin text-orange-500"/>
-                                        ) : (
-                                            <div className="font-bold text-lg text-blue-700 tracking-wide">
-                                                {forgotCaptchaData.question}
-                                            </div>
-                                        )}
-
-                                    </div>
-
-                                    <button
-                                        type="button"
-                                        onClick={fetchForgotCaptcha}
-                                        className="bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100"
-                                    >
-                                        <RefreshCw className="h-4 w-4 text-orange-600"/>
-                                    </button>
-
+                                  <button
+                                    type="button"
+                                    onClick={fetchForgotCaptcha}
+                                    className="bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100"
+                                  >
+                                    <RefreshCw className="h-4 w-4 text-orange-600" />
+                                  </button>
                                 </div>
-
                               </div>
                               <div className="flex items-center space-x-2 mt-2 px-1">
                                 <input
                                   type="checkbox"
                                   id="isDeptUser"
                                   checked={isDeptUser}
-                                  onChange={(e) => setIsDeptUser(e.target.checked)}
+                                  onChange={(e) =>
+                                    setIsDeptUser(e.target.checked)
+                                  }
                                   className="w-4 h-4 rounded border-stone-300 text-orange-500 focus:ring-orange-500/20"
                                 />
-                                <label htmlFor="isDeptUser" className="text-sm text-stone-600 select-none cursor-pointer font-medium hover:text-stone-800 transition-colors duration-150">
+                                <label
+                                  htmlFor="isDeptUser"
+                                  className="text-sm text-stone-600 select-none cursor-pointer font-medium hover:text-stone-800 transition-colors duration-150"
+                                >
                                   For departmental users?
                                 </label>
                               </div>
@@ -1105,84 +1176,145 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                           {forgotStep === 3 && (
                             <>
                               <div className="bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-700 font-medium flex items-center justify-start gap-3">
-                                <span className="text-stone-500">Resetting for account:</span>
-                                <span className="text-stone-900 font-bold">{resolvedUserName || resolvedLoginId}</span>
+                                <span className="text-stone-500">
+                                  Resetting for account:
+                                </span>
+                                <span className="text-stone-900 font-bold">
+                                  {resolvedUserName || resolvedLoginId}
+                                </span>
                               </div>
                               <div className="relative group">
                                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
                                 <input
-                                  type={showForgotNewPassword ? "text" : "password"}
+                                  type={
+                                    showForgotNewPassword ? "text" : "password"
+                                  }
                                   placeholder="New Password"
                                   value={forgotNewPassword}
-                                  onChange={(e) => setForgotNewPassword(e.target.value)}
+                                  onChange={(e) =>
+                                    setForgotNewPassword(e.target.value)
+                                  }
                                   className="w-full pl-11 pr-10 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
                                   required
                                 />
                                 <button
                                   type="button"
-                                  onClick={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                                  onClick={() =>
+                                    setShowForgotNewPassword(
+                                      !showForgotNewPassword,
+                                    )
+                                  }
                                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 focus:outline-none"
                                 >
-                                  {showForgotNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                  {showForgotNewPassword ? (
+                                    <EyeOff className="h-5 w-5" />
+                                  ) : (
+                                    <Eye className="h-5 w-5" />
+                                  )}
                                 </button>
                               </div>
-{/* Live password requirements checklist */}
-{(() => {
-  const pwd = forgotNewPassword;
-  const rules = [
-    { label: "8–15 characters", valid: pwd.length >= 8 && pwd.length <= 15 },
-    { label: "One uppercase letter", valid: /[A-Z]/.test(pwd) },
-    { label: "One lowercase letter", valid: /[a-z]/.test(pwd) },
-    { label: "One number", valid: /[0-9]/.test(pwd) },
-    { label: "One special character", valid: /[^A-Za-z0-9]/.test(pwd) },
-  ];
-  const passedCount = rules.filter((r) => r.valid).length;
-  const strengthPct = (passedCount / rules.length) * 100;
-  const strengthColor =
-    strengthPct === 100 ? "bg-emerald-500" : strengthPct >= 60 ? "bg-amber-500" : "bg-stone-300";
+                              {/* Live password requirements checklist */}
+                              {(() => {
+                                const pwd = forgotNewPassword;
+                                const rules = [
+                                  {
+                                    label: "8–15 characters",
+                                    valid: pwd.length >= 8 && pwd.length <= 15,
+                                  },
+                                  {
+                                    label: "One uppercase letter",
+                                    valid: /[A-Z]/.test(pwd),
+                                  },
+                                  {
+                                    label: "One lowercase letter",
+                                    valid: /[a-z]/.test(pwd),
+                                  },
+                                  {
+                                    label: "One number",
+                                    valid: /[0-9]/.test(pwd),
+                                  },
+                                  {
+                                    label: "One special character",
+                                    valid: /[^A-Za-z0-9]/.test(pwd),
+                                  },
+                                ];
+                                const passedCount = rules.filter(
+                                  (r) => r.valid,
+                                ).length;
+                                const strengthPct =
+                                  (passedCount / rules.length) * 100;
+                                const strengthColor =
+                                  strengthPct === 100
+                                    ? "bg-emerald-500"
+                                    : strengthPct >= 60
+                                      ? "bg-amber-500"
+                                      : "bg-stone-300";
 
-  return (
-    <div className="rounded-xl border border-stone-200 bg-stone-50/80 px-4 py-3.5 space-y-3">
-      <div className="h-1.5 w-full bg-stone-200 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-300 ease-out ${strengthColor}`}
-          style={{ width: `${strengthPct}%` }}
-        />
-      </div>
+                                return (
+                                  <div className="rounded-xl border border-stone-200 bg-stone-50/80 px-4 py-3.5 space-y-3">
+                                    <div className="h-1.5 w-full bg-stone-200 rounded-full overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full transition-all duration-300 ease-out ${strengthColor}`}
+                                        style={{ width: `${strengthPct}%` }}
+                                      />
+                                    </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
-        {rules.map((rule, i) => (
-          <div key={i} className="flex items-center gap-1.5 text-xs transition-colors duration-200">
-            {rule.valid ? (
-              <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-            ) : (
-              <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-stone-300 shrink-0" />
-            )}
-            <span className={rule.valid ? "text-stone-700 font-medium" : "text-stone-400"}>
-              {rule.label}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-})()}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                                      {rules.map((rule, i) => (
+                                        <div
+                                          key={i}
+                                          className="flex items-center gap-1.5 text-xs transition-colors duration-200"
+                                        >
+                                          {rule.valid ? (
+                                            <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                          ) : (
+                                            <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-stone-300 shrink-0" />
+                                          )}
+                                          <span
+                                            className={
+                                              rule.valid
+                                                ? "text-stone-700 font-medium"
+                                                : "text-stone-400"
+                                            }
+                                          >
+                                            {rule.label}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                               <div className="relative group">
                                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-stone-400 group-focus-within:text-orange-500 transition-colors duration-200" />
                                 <input
-                                  type={showForgotConfirmPassword ? "text" : "password"}
+                                  type={
+                                    showForgotConfirmPassword
+                                      ? "text"
+                                      : "password"
+                                  }
                                   placeholder="Confirm New Password"
                                   value={forgotConfirmPassword}
-                                  onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                                  onChange={(e) =>
+                                    setForgotConfirmPassword(e.target.value)
+                                  }
                                   className="w-full pl-11 pr-10 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
                                   required
                                 />
                                 <button
                                   type="button"
-                                  onClick={() => setShowForgotConfirmPassword(!showForgotConfirmPassword)}
+                                  onClick={() =>
+                                    setShowForgotConfirmPassword(
+                                      !showForgotConfirmPassword,
+                                    )
+                                  }
                                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 focus:outline-none"
                                 >
-                                  {showForgotConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                  {showForgotConfirmPassword ? (
+                                    <EyeOff className="h-5 w-5" />
+                                  ) : (
+                                    <Eye className="h-5 w-5" />
+                                  )}
                                 </button>
                               </div>
                             </>
@@ -1261,7 +1393,9 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                   }}
                 >
                   <h2 className="text-2xl lg:text-3xl font-bold mb-3">
-                    Hello,<br />ChennaiPort User
+                    Hello,
+                    <br />
+                    ChennaiPort User
                   </h2>
                   <p className="text-sm leading-relaxed opacity-95 max-w-[280px] mb-6">
                     Register with your personal details to use all site features
@@ -1276,12 +1410,12 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                   <button
                     type="button"
                     onClick={() => {
-                        if (authMode === "signin") {
-                            fetchForgotCaptcha();
-                            setAuthMode("forgot");
-                        } else {
-                            setAuthMode("signin");
-                        }
+                      if (authMode === "signin") {
+                        fetchForgotCaptcha();
+                        setAuthMode("forgot");
+                      } else {
+                        setAuthMode("signin");
+                      }
                     }}
                     className="px-10 py-3 bg-white/10 border border-white/60 text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors"
                   >
@@ -1323,7 +1457,10 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
 
             <div className="p-6 space-y-6">
               {/* Form */}
-              <form onSubmit={handleTrackSubmit} className="flex flex-col sm:flex-row gap-3">
+              <form
+                onSubmit={handleTrackSubmit}
+                className="flex flex-col sm:flex-row gap-3"
+              >
                 <input
                   type="text"
                   placeholder="e.g. CHPT00001"
@@ -1372,14 +1509,15 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                     {/* Dynamic Status Badge */}
                     <div
                       className={`px-4 py-2 rounded-lg text-sm font-bold border flex items-center gap-1.5 shadow-sm
-                      ${trackResult.status === "approved"
+                      ${
+                        trackResult.status === "approved"
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                           : trackResult.status === "rejected"
                             ? "bg-red-50 text-red-700 border-red-200"
                             : trackResult.status === "reverted"
                               ? "bg-amber-50 text-amber-700 border-amber-200"
                               : "bg-yellow-50 text-yellow-700 border-yellow-200"
-                        }`}
+                      }`}
                     >
                       {trackResult.status === "approved" && (
                         <CheckCircle className="h-4 w-4" />
@@ -1392,8 +1530,8 @@ const [forgotCaptchaLoading, setForgotCaptchaLoading] = useState(false);
                       )}
                       {(!trackResult.status ||
                         trackResult.status === "pending") && (
-                          <Clock className="h-4 w-4" />
-                        )}
+                        <Clock className="h-4 w-4" />
+                      )}
                       {(trackResult.status || "PENDING").toUpperCase()}
                     </div>
                   </div>

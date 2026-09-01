@@ -37,7 +37,10 @@ import {
   Zap,
 } from "lucide-react";
 
-import { getPassRequestCategory, getItemCategoryTag } from "@/utils/passCategoryHelper";
+import {
+  getPassRequestCategory,
+  getItemCategoryTag,
+} from "@/utils/passCategoryHelper";
 
 const AGENT_API =
   process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
@@ -61,8 +64,20 @@ const extractEntityIndex = (entityId) => {
 };
 
 // --- Reusable UI Components ---
-const DetailItem = ({ label, value, highlight = false, showIfEmpty = false }) => {
-  if (!showIfEmpty && (!value || value === "N/A" || value === "null" || value === "undefined" || String(value).trim() === "")) {
+const DetailItem = ({
+  label,
+  value,
+  highlight = false,
+  showIfEmpty = false,
+}) => {
+  if (
+    !showIfEmpty &&
+    (!value ||
+      value === "N/A" ||
+      value === "null" ||
+      value === "undefined" ||
+      String(value).trim() === "")
+  ) {
     return null;
   }
   return (
@@ -114,8 +129,8 @@ export default function TrafficPassesPage() {
     tabQuery === "processed"
       ? "processed"
       : tabQuery === "pass_updates"
-      ? "pass_updates"
-      : "pending"
+        ? "pass_updates"
+        : "pending",
   );
 
   useEffect(() => {
@@ -207,17 +222,28 @@ export default function TrafficPassesPage() {
   // Two-Wheeler Update Request States
   const [twoWheelerRequests, setTwoWheelerRequests] = useState([]);
   const [passUpdatesCount, setPassUpdatesCount] = useState(0);
-  const [rejectModal, setRejectModal] = useState({ isOpen: false, requestId: null, reason: "" });
+  const [rejectModal, setRejectModal] = useState({
+    isOpen: false,
+    requestId: null,
+    reason: "",
+  });
 
   const fetchTwoWheelerRequests = useCallback(async () => {
     try {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
-      const res = await axios.get(`${AGENT_API}/pass-request/two-wheeler-update-requests`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("hep_token");
+      const res = await axios.get(
+        `${AGENT_API}/pass-request/two-wheeler-update-requests`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       if (res.data && res.data.success) {
         setTwoWheelerRequests(res.data.data || []);
-        const pendingCount = (res.data.data || []).filter(r => r.status === "PENDING").length;
+        const pendingCount = (res.data.data || []).filter(
+          (r) => r.status === "PENDING",
+        ).length;
         setPassUpdatesCount(pendingCount);
       }
     } catch (err) {
@@ -231,31 +257,47 @@ export default function TrafficPassesPage() {
 
   const handleApproveTwoWheeler = async (id) => {
     try {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
-      await axios.put(`${AGENT_API}/pass-request/two-wheeler-update-requests/${id}/approve`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("hep_token");
+      await axios.put(
+        `${AGENT_API}/pass-request/two-wheeler-update-requests/${id}/approve`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       toast.success("Two-wheeler vehicle number update approved successfully!");
       fetchTwoWheelerRequests();
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Failed to approve two-wheeler update.");
+      toast.error(
+        err?.response?.data?.message || "Failed to approve two-wheeler update.",
+      );
     }
   };
 
   const handleRejectTwoWheeler = async () => {
     if (!rejectModal.requestId) return;
     try {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
-      await axios.put(`${AGENT_API}/pass-request/two-wheeler-update-requests/${rejectModal.requestId}/reject`, {
-        rejectedReason: rejectModal.reason,
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("hep_token");
+      await axios.put(
+        `${AGENT_API}/pass-request/two-wheeler-update-requests/${rejectModal.requestId}/reject`,
+        {
+          rejectedReason: rejectModal.reason,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       toast.success("Two-wheeler update request rejected.");
       setRejectModal({ isOpen: false, requestId: null, reason: "" });
       fetchTwoWheelerRequests();
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Failed to reject update request.");
+      toast.error(
+        err?.response?.data?.message || "Failed to reject update request.",
+      );
     }
   };
 
@@ -263,6 +305,64 @@ export default function TrafficPassesPage() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [companyProfile, setCompanyProfile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMarineFireSafety, setIsMarineFireSafety] = useState(false);
+  const [userDepartmentId, setUserDepartmentId] = useState(null);
+
+  const [essentialWorkflowStage, setEssentialWorkflowStage] = useState(null);
+  const [userContextReady, setUserContextReady] = useState(false);
+  const [isEssentialOilDockApprover, setIsEssentialOilDockApprover] =
+    useState(false);
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+
+    if (!userStr) {
+      setUserContextReady(true);
+      return;
+    }
+
+    try {
+      const user = JSON.parse(userStr);
+
+      const role = String(user?.role || "").trim();
+      const departmentId = Number(user?.departmentId);
+
+      setUserRole(role);
+      setUserDepartmentId(departmentId);
+
+      setIsMarineFireSafety(
+        role === "Fire Safety Officer" && departmentId === 7,
+      );
+
+      let essentialStage = null;
+
+      if (
+        departmentId === 7 &&
+        ["Dy. Conservator", "Fire Safety Officer"].includes(role)
+      ) {
+        essentialStage = "PENDING_MARINE_ESSENTIAL";
+      } else if (role === "Approval" && departmentId === 3) {
+        essentialStage = "PENDING_CIVIL_ESSENTIAL";
+      } else if (role === "Approval" && departmentId === 4) {
+        essentialStage = "PENDING_MECHANICAL_ESSENTIAL";
+      } else if (
+        ["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"].includes(
+          role,
+        )
+      ) {
+        essentialStage = "PENDING_CISF_ESSENTIAL";
+      } else if (role === "Approval" && departmentId === 9) {
+        essentialStage = "PENDING_PASS_SECTION_ESSENTIAL";
+      }
+
+      setEssentialWorkflowStage(essentialStage);
+      setIsEssentialOilDockApprover(Boolean(essentialStage));
+      setUserContextReady(true);
+    } catch (error) {
+      console.error("Failed to parse user:", error);
+      setUserContextReady(true);
+    }
+  }, []);
 
   const extractEntityIndex = (entityId) => {
     if (!entityId) return 0;
@@ -294,40 +394,191 @@ export default function TrafficPassesPage() {
     );
   };
 
+  // const canUserVerifyPerson = (p) => {
+  //   const personWorkflowState = String(p?.essentialWorkflowState || "")
+  //     .trim()
+  //     .toUpperCase();
+
+  //   const isEssentialOilDockPerson =
+  //     personWorkflowState.endsWith("_PERSON_ESSENTIAL") ||
+  //     (p?.essentialDepartmentId !== null &&
+  //       p?.essentialDepartmentId !== undefined);
+
+  //   /*
+  //    * ============================================================
+  //    * NEW PERSON ESSENTIAL OIL DOCK FLOW
+  //    * Civil/Mechanical -> Traffic
+  //    *
+  //    * Do NOT apply the old Sr. DTM rule to this new person flow.
+  //    * ============================================================
+  //    */
+  //   if (isEssentialOilDockPerson) {
+  //     return (
+  //       personWorkflowState ===
+  //       String(essentialWorkflowStage || "")
+  //         .trim()
+  //         .toUpperCase()
+  //     );
+  //   }
+
+  //   /*
+  //    * ============================================================
+  //    * EXISTING FLOW — DO NOT CHANGE
+  //    * ============================================================
+  //    */
+  //   if (userRole === "Senior Deputy Traffic Manager") {
+  //     return isOilDockArea(p.accessAreaId || p.accessArea);
+  //   }
+
+  //   if (userRole === "Approval") {
+  //     const needsDtm = isOilDockArea(p.accessAreaId || p.accessArea);
+  //     return !needsDtm || p.srDtmApproved;
+  //   }
+
+  //   return false;
+  // };
+
   const canUserVerifyPerson = (p) => {
+    // ============================================================
+    // ESSENTIAL OIL DOCK PERSON WORKFLOW
+    // Civil / Mechanical -> Traffic
+    // Traffic stage = PENDING_TRAFFIC_PERSON_ESSENTIAL
+    // ============================================================
+    const essentialPersonStage = String(p?.essentialWorkflowState || "")
+      .trim()
+      .toUpperCase();
+
+    if (
+      essentialPersonStage === "PENDING_CIVIL_PERSON_ESSENTIAL" &&
+      essentialWorkflowStage === "PENDING_CIVIL_ESSENTIAL"
+    ) {
+      return true;
+    }
+
+    if (
+      essentialPersonStage === "PENDING_MECHANICAL_PERSON_ESSENTIAL" &&
+      essentialWorkflowStage === "PENDING_MECHANICAL_ESSENTIAL"
+    ) {
+      return true;
+    }
+
+    if (
+      essentialPersonStage === "PENDING_TRAFFIC_PERSON_ESSENTIAL" &&
+      essentialWorkflowStage === "PENDING_PASS_SECTION_ESSENTIAL"
+    ) {
+      return true;
+    }
+
+    // ============================================================
+    // EXISTING PERSON FLOW — DO NOT CHANGE
+    // ============================================================
     if (userRole === "Senior Deputy Traffic Manager") {
       return isOilDockArea(p.accessAreaId || p.accessArea);
     }
+
     if (userRole === "Approval") {
       const needsDtm = isOilDockArea(p.accessAreaId || p.accessArea);
       return !needsDtm || p.srDtmApproved;
     }
+
     return false;
   };
 
   const canUserVerifyVehicle = (v) => {
+    const isEssentialOilDockVehicle =
+      Boolean(v?.essentialWorkflowState) ||
+      isOilDockArea(v?.accessAreaId || v?.accessArea);
+
+    // ============================================================
+    // ESSENTIAL OIL DOCK FLOW
+    // Fire Safety / Civil / Mechanical / CISF / Pass Section
+    // ============================================================
+    if (essentialWorkflowStage && isEssentialOilDockVehicle) {
+      return v.essentialWorkflowState === essentialWorkflowStage;
+    }
+
     if (userRole === "Safety Officer") {
-      return ["MONTHLY", "YEARLY", "ANNUAL"].includes(v.passType);
+      return ["MONTHLY", "YEARLY", "ANNUAL"].includes(
+        String(v.passType).toUpperCase(),
+      );
     }
-    if (userRole === "Fire Safety Officer") {
-      return isOilDockArea(v.accessAreaId || v.accessArea);
+
+    if (userRole === "Fire Safety Officer" && isMarineFireSafety) {
+      const passType = String(v.passType || "")
+        .trim()
+        .toUpperCase();
+
+      const vehicleType = String(v.vehicleTypeName || "")
+        .trim()
+        .toUpperCase();
+
+      const isAnnualTrailer =
+        ["YEARLY", "ANNUAL"].includes(passType) &&
+        ["TRAILORS", "TRAILER LORRY"].includes(vehicleType);
+
+      const vehicleStatus = String(v.status || "")
+        .trim()
+        .toLowerCase();
+
+      return (
+        isAnnualTrailer &&
+        (vehicleStatus === "approved" || vehicleStatus === "pending") &&
+        v.marineSafetyApproved !== true
+      );
     }
+
     if (userRole === "Senior Deputy Traffic Manager") {
       return isOilDockArea(v.accessAreaId || v.accessArea);
     }
+
     if (userRole === "Approval") {
+      const passType = String(v.passType || "")
+        .trim()
+        .toUpperCase();
+      const vehicleType = String(v.vehicleTypeName || "")
+        .trim()
+        .toUpperCase();
+
       const isMonthlyYearly = ["MONTHLY", "YEARLY", "ANNUAL"].includes(
-        v.passType,
+        passType,
       );
+
+      const isAnnualTrailer =
+        ["YEARLY", "ANNUAL"].includes(passType) &&
+        ["TRAILORS", "TRAILER LORRY"].includes(vehicleType);
+
       const isOilDock = isOilDockArea(v.accessAreaId || v.accessArea);
+
+      /*
+       * NEW FLOW:
+       * Annual Trailer / Trailer Lorry
+       * must be approved by Traffic first.
+       *
+       * Do NOT require:
+       * - Twist Lock
+       * - Spark Arrester
+       * - Sr. DTM
+       *
+       * Marine Fire Safety happens AFTER Traffic approval.
+       */
+      if (isAnnualTrailer) {
+        return v.status === "pending" || v.status === "reverted";
+      }
+
+      /*
+       * EXISTING FLOW — DO NOT CHANGE
+       */
       if (isMonthlyYearly && !v.twistLockCertified) {
         return false;
       }
+
       if (isOilDock && (!v.sparkArresterCertified || !v.srDtmApproved)) {
         return false;
       }
+
       return true;
     }
+
     return false;
   };
 
@@ -461,31 +712,644 @@ export default function TrafficPassesPage() {
 
   const fetchPassRequests = useCallback(
     async (isPoll = false) => {
+      if (!userContextReady) {
+        return;
+      }
+
       try {
         if (!isPoll) setLoading(true);
         const token = localStorage.getItem("accessToken");
+        // Pass Updates has its own API handled by fetchTwoWheelerRequests().
+        // Do not call the normal/M​​arine pass API for this tab.
+        if (activeTab === "pass_updates") {
+          setLoading(false);
+          return;
+        }
+        const requestParams = {
+          page: currentPage,
+          limit: pageSize,
+          search: debouncedSearch || undefined,
+          status: activeTab || undefined,
+          sortOrder:
+            sortBy === "DATE_ASC"
+              ? "ASC"
+              : sortBy === "EXPIRY_SOON"
+                ? "EXPIRY_SOON"
+                : "DESC",
+
+          processedByMe:
+            !isMarineFireSafety && processedByMe ? "true" : undefined,
+        };
+
+        // ------------------------------------------------------------
+        // FIRE SAFETY:
+        // Fetch BOTH workflows.
+        //
+        // 1. Normal vehicle Marine/Safety workflow
+        // 2. Essential Oil Dock workflow
+        //
+        // They must both appear in the same pending/processed screen.
+        // ------------------------------------------------------------
+        if (isMarineFireSafety) {
+          const [marineResponse, essentialResponse] = await Promise.all([
+            axios.get(`${AGENT_API}/pass-request/marine-safety-passes`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              params: requestParams,
+            }),
+
+            axios.get(`${AGENT_API}/pass-request/essential-oil-dock-passes`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              params: requestParams,
+            }),
+          ]);
+
+          const marineData = marineResponse.data?.success
+            ? marineResponse.data.data || []
+            : [];
+
+          const essentialData = essentialResponse.data?.success
+            ? essentialResponse.data.data || []
+            : [];
+
+          const normalizeRequest = (request) => ({
+            ...request,
+
+            entityName: request.entityName || request.companyName || null,
+
+            mobileNo: request.mobileNo || request.companyMobile || null,
+
+            email: request.email || request.companyEmail || null,
+
+            gstinNumber: request.gstinNumber || request.companyGst || null,
+
+            panNumber: request.panNumber || request.companyPan || null,
+          });
+
+          const mergedRequests = [
+            ...marineData.map(normalizeRequest),
+            ...essentialData.map(normalizeRequest),
+          ];
+
+          // Safety against duplicate pass requests.
+          const uniqueRequests = Array.from(
+            new Map(
+              mergedRequests.map((request) => [
+                request.id || request.referenceNo,
+                request,
+              ]),
+            ).values(),
+          );
+
+          const marineCounts = marineResponse.data?.counts || {
+            total: 0,
+            pending: 0,
+            processed: 0,
+          };
+
+          const essentialCounts = essentialResponse.data?.counts || {
+            total: 0,
+            pending: 0,
+            processed: 0,
+          };
+
+          const mergedCounts = {
+            total: marineCounts.total + essentialCounts.total,
+            pending: marineCounts.pending + essentialCounts.pending,
+            processed: marineCounts.processed + essentialCounts.processed,
+          };
+
+          const totalRecords = mergedCounts[activeTab] ?? uniqueRequests.length;
+
+          const mergedMeta = {
+            page: currentPage,
+            limit: pageSize,
+            totalRecords,
+            totalPages: Math.max(1, Math.ceil(totalRecords / pageSize)),
+            currentPage,
+          };
+
+          setRequests((prev) =>
+            JSON.stringify(uniqueRequests) === JSON.stringify(prev)
+              ? prev
+              : uniqueRequests,
+          );
+
+          setPaginationMeta((prev) =>
+            JSON.stringify(mergedMeta) === JSON.stringify(prev)
+              ? prev
+              : mergedMeta,
+          );
+
+          setGlobalCounts((prev) =>
+            JSON.stringify(mergedCounts) === JSON.stringify(prev)
+              ? prev
+              : mergedCounts,
+          );
+
+          return;
+        }
+
+        // ------------------------------------------------------------
+        // ESSENTIAL-ONLY USERS
+        // Civil / Mechanical / CISF / Essential Pass Section
+        // ------------------------------------------------------------
+        // if (essentialWorkflowStage) {
+        //   const response = await axios.get(
+        //     `${AGENT_API}/pass-request/essential-oil-dock-passes`,
+        //     {
+        //       headers: {
+        //         Authorization: `Bearer ${token}`,
+        //       },
+        //       params: requestParams,
+        //     },
+        //   );
+
+        //   if (response.data?.success) {
+        //     const newRequests = (response.data.data || []).map((request) => ({
+        //       ...request,
+
+        //       entityName: request.entityName || request.companyName || null,
+
+        //       mobileNo: request.mobileNo || request.companyMobile || null,
+
+        //       email: request.email || request.companyEmail || null,
+
+        //       gstinNumber: request.gstinNumber || request.companyGst || null,
+
+        //       panNumber: request.panNumber || request.companyPan || null,
+        //     }));
+
+        //     const newMeta = response.data.pagination || {};
+
+        //     const newCounts = response.data.counts || {
+        //       total: 0,
+        //       pending: 0,
+        //       processed: 0,
+        //     };
+
+        //     setRequests((prev) =>
+        //       JSON.stringify(newRequests) === JSON.stringify(prev)
+        //         ? prev
+        //         : newRequests,
+        //     );
+
+        //     setPaginationMeta((prev) =>
+        //       JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta,
+        //     );
+
+        //     setGlobalCounts((prev) =>
+        //       JSON.stringify(newCounts) === JSON.stringify(prev)
+        //         ? prev
+        //         : newCounts,
+        //     );
+        //   }
+
+        //   return;
+        // }
+        // ------------------------------------------------------------
+        // PASS SECTION
+        // ------------------------------------------------------------
+        // Pass Section must see BOTH:
+        // 1. Existing normal processed passes
+        // 2. Essential Oil Dock Pass Section workflow passes
+        //
+        // Civil / Mechanical / CISF remain Essential-only.
+        // ------------------------------------------------------------
+
+        if (essentialWorkflowStage === "PENDING_PASS_SECTION_ESSENTIAL") {
+          const [normalResult, essentialResult, essentialPersonResult] =
+            await Promise.allSettled([
+              // EXISTING NORMAL FLOW
+              axios.get(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+                params: requestParams,
+              }),
+
+              // EXISTING ESSENTIAL VEHICLE FLOW
+              axios.get(`${AGENT_API}/pass-request/essential-oil-dock-passes`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+                params: requestParams,
+              }),
+
+              // NEW ESSENTIAL PERSON FLOW
+              axios.get(
+                `${AGENT_API}/pass-request/essential-oil-dock-person-passes`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                  params: requestParams,
+                },
+              ),
+            ]);
+
+          const normalResponse =
+            normalResult.status === "fulfilled" ? normalResult.value : null;
+
+          const essentialResponse =
+            essentialResult.status === "fulfilled"
+              ? essentialResult.value
+              : null;
+
+          const essentialPersonResponse =
+            essentialPersonResult.status === "fulfilled"
+              ? essentialPersonResult.value
+              : null;
+
+          // Do not stop the whole Pass Section screen
+          // because one independent API failed.
+          if (normalResult.status === "rejected") {
+            console.error(
+              "Pass Section normal API failed:",
+              normalResult.reason,
+            );
+          }
+
+          if (essentialResult.status === "rejected") {
+            console.error(
+              "Pass Section essential vehicle API failed:",
+              essentialResult.reason,
+            );
+          }
+
+          if (essentialPersonResult.status === "rejected") {
+            console.error(
+              "Pass Section essential person API failed:",
+              essentialPersonResult.reason,
+            );
+          }
+
+          const normalData = normalResponse?.data?.success
+            ? normalResponse.data.data || []
+            : [];
+
+          const essentialData = essentialResponse?.data?.success
+            ? essentialResponse.data.data || []
+            : [];
+
+          const essentialPersonRows = essentialPersonResponse?.data?.success
+            ? essentialPersonResponse.data.data || []
+            : [];
+
+          const essentialPersonRequests = essentialPersonRows.map((person) => ({
+            id: person.passRequestId,
+            referenceNo: person.referenceNo,
+
+            entityName: person.companyName || null,
+            mobileNo: person.companyMobile || null,
+            email: person.companyEmail || null,
+            gstinNumber: person.companyGst || null,
+            panNumber: person.companyPan || null,
+
+            createdAt: person.createdAt || null,
+            amount: person.amount ?? null,
+            status: person.status,
+
+            persons: [
+              {
+                id: person.personId || person.id,
+                passRequestId: person.passRequestId,
+                personPassNo: person.personPassNo,
+                name: person.name,
+                accessAreaId: person.accessAreaId,
+                passType: person.passType,
+                passPeriod: person.passPeriod,
+                dateFrom: person.dateFrom,
+                dateTo: person.dateTo,
+                status: person.status,
+                essentialDepartmentId: person.essentialDepartmentId,
+                essentialWorkflowState: person.essentialWorkflowState,
+                essentialRevertStage: person.essentialRevertStage,
+                essentialAssignedUserId: person.essentialAssignedUserId,
+              },
+            ],
+
+            vehicles: [],
+          }));
+
+          const normalizeRequest = (request) => ({
+            ...request,
+
+            entityName: request.entityName || request.companyName || null,
+
+            mobileNo: request.mobileNo || request.companyMobile || null,
+
+            email: request.email || request.companyEmail || null,
+
+            gstinNumber: request.gstinNumber || request.companyGst || null,
+
+            panNumber: request.panNumber || request.companyPan || null,
+          });
+
+          const mergedRequests = [
+            ...normalData.map(normalizeRequest),
+            ...essentialData.map(normalizeRequest),
+            ...essentialPersonRequests.map(normalizeRequest),
+          ];
+
+          const requestMap = new Map();
+
+          for (const request of mergedRequests) {
+            const key = request.id || request.referenceNo;
+
+            if (!key) continue;
+
+            const existing = requestMap.get(key);
+
+            if (!existing) {
+              requestMap.set(key, {
+                ...request,
+
+                persons: Array.isArray(request.persons)
+                  ? [...request.persons]
+                  : [],
+
+                vehicles: Array.isArray(request.vehicles)
+                  ? [...request.vehicles]
+                  : [],
+              });
+
+              continue;
+            }
+
+            // Preserve company/request-level information
+            existing.entityName =
+              existing.entityName || request.entityName || null;
+
+            existing.mobileNo = existing.mobileNo || request.mobileNo || null;
+
+            existing.email = existing.email || request.email || null;
+
+            existing.gstinNumber =
+              existing.gstinNumber || request.gstinNumber || null;
+
+            existing.panNumber =
+              existing.panNumber || request.panNumber || null;
+
+            existing.createdAt =
+              existing.createdAt ||
+              request.createdAt ||
+              request.submittedAt ||
+              null;
+
+            existing.amount = existing.amount ?? request.amount ?? null;
+
+            const existingPersonIds = new Set(
+              (existing.persons || []).map((p) => String(p.id)),
+            );
+
+            for (const person of request.persons || []) {
+              if (!existingPersonIds.has(String(person.id))) {
+                existing.persons.push(person);
+              }
+            }
+
+            const existingVehicleIds = new Set(
+              (existing.vehicles || []).map((v) => String(v.id)),
+            );
+
+            for (const vehicle of request.vehicles || []) {
+              if (!existingVehicleIds.has(String(vehicle.id))) {
+                existing.vehicles.push(vehicle);
+              }
+            }
+          }
+
+          const uniqueRequests = Array.from(requestMap.values());
+
+          uniqueRequests.sort((a, b) => {
+            const da = new Date(a.createdAt || a.submittedAt || 0).getTime();
+
+            const db = new Date(b.createdAt || b.submittedAt || 0).getTime();
+
+            return sortBy === "DATE_ASC" ? da - db : db - da;
+          });
+
+          const normalCounts = normalResponse?.data?.counts || {
+            total: 0,
+            pending: 0,
+            processed: 0,
+          };
+
+          const essentialCounts = essentialResponse?.data?.counts || {
+            total: 0,
+            pending: 0,
+            processed: 0,
+          };
+
+          const essentialPersonCounts = essentialPersonResponse?.data
+            ?.counts || {
+            total: 0,
+            pending: 0,
+            processed: 0,
+          };
+
+          const mergedCounts = {
+            total:
+              Number(normalCounts.total || 0) +
+              Number(essentialCounts.total || 0) +
+              Number(essentialPersonCounts.total || 0),
+
+            pending:
+              Number(normalCounts.pending || 0) +
+              Number(essentialCounts.pending || 0) +
+              Number(essentialPersonCounts.pending || 0),
+
+            processed:
+              Number(normalCounts.processed || 0) +
+              Number(essentialCounts.processed || 0) +
+              Number(essentialPersonCounts.processed || 0),
+          };
+
+          const totalRecords = mergedCounts[activeTab] ?? uniqueRequests.length;
+
+          const mergedMeta = {
+            page: currentPage,
+            limit: pageSize,
+            totalRecords,
+            totalPages: Math.max(1, Math.ceil(totalRecords / pageSize)),
+            currentPage,
+          };
+
+          setRequests((prev) =>
+            JSON.stringify(uniqueRequests) === JSON.stringify(prev)
+              ? prev
+              : uniqueRequests,
+          );
+
+          setPaginationMeta((prev) =>
+            JSON.stringify(mergedMeta) === JSON.stringify(prev)
+              ? prev
+              : mergedMeta,
+          );
+
+          setGlobalCounts((prev) =>
+            JSON.stringify(mergedCounts) === JSON.stringify(prev)
+              ? prev
+              : mergedCounts,
+          );
+
+          return;
+        }
+
+        // ------------------------------------------------------------
+        // OTHER ESSENTIAL-ONLY USERS
+        // Civil / Mechanical / CISF
+        // ------------------------------------------------------------
+        if (essentialWorkflowStage) {
+          const response = await axios.get(
+            `${AGENT_API}/pass-request/essential-oil-dock-passes`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              params: requestParams,
+            },
+          );
+
+          if (response.data?.success) {
+            const newRequests = (response.data.data || []).map((request) => ({
+              ...request,
+
+              entityName: request.entityName || request.companyName || null,
+
+              mobileNo: request.mobileNo || request.companyMobile || null,
+
+              email: request.email || request.companyEmail || null,
+
+              gstinNumber: request.gstinNumber || request.companyGst || null,
+
+              panNumber: request.panNumber || request.companyPan || null,
+            }));
+
+            const newMeta = response.data.pagination || {};
+
+            const newCounts = response.data.counts || {
+              total: 0,
+              pending: 0,
+              processed: 0,
+            };
+
+            setRequests((prev) =>
+              JSON.stringify(newRequests) === JSON.stringify(prev)
+                ? prev
+                : newRequests,
+            );
+
+            setPaginationMeta((prev) =>
+              JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta,
+            );
+
+            setGlobalCounts((prev) =>
+              JSON.stringify(newCounts) === JSON.stringify(prev)
+                ? prev
+                : newCounts,
+            );
+          }
+
+          return;
+        }
+
+        // ------------------------------------------------------------
+        // EXISTING NORMAL USERS
+        // DO NOT CHANGE NORMAL FLOW
+        // ------------------------------------------------------------
         const response = await axios.get(
           `${AGENT_API}/pass-request/get-agent-pass-requests`,
           {
-            headers: { Authorization: `Bearer ${token}` },
-            params: {
-              page: currentPage,
-              limit: pageSize,
-              search: debouncedSearch || undefined,
-              status: activeTab || undefined,
-              sortOrder:
-                sortBy === "DATE_ASC"
-                  ? "ASC"
-                  : sortBy === "EXPIRY_SOON"
-                    ? "EXPIRY_SOON"
-                    : "DESC",
-              processedByMe: processedByMe ? "true" : undefined,
+            headers: {
+              Authorization: `Bearer ${token}`,
             },
+            params: requestParams,
           },
         );
 
         if (response.data && response.data.success) {
-          const newRequests = response.data.data || [];
+          const newRequests = (response.data.data || []).map((request) => ({
+            ...request,
+
+            entityName: request.entityName || request.companyName || null,
+
+            mobileNo: request.mobileNo || request.companyMobile || null,
+
+            email: request.email || request.companyEmail || null,
+
+            gstinNumber: request.gstinNumber || request.companyGst || null,
+
+            panNumber: request.panNumber || request.companyPan || null,
+          }));
+
+          const newMeta = response.data.pagination || {};
+
+          const newCounts = response.data.counts || {
+            total: 0,
+            pending: 0,
+            processed: 0,
+          };
+
+          setRequests((prev) =>
+            JSON.stringify(newRequests) === JSON.stringify(prev)
+              ? prev
+              : newRequests,
+          );
+
+          setPaginationMeta((prev) =>
+            JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta,
+          );
+
+          setGlobalCounts((prev) =>
+            JSON.stringify(newCounts) === JSON.stringify(prev)
+              ? prev
+              : newCounts,
+          );
+        }
+
+        // const response = await axios.get(endpoint, {
+        //   headers: { Authorization: `Bearer ${token}` },
+        //   params: {
+        //     page: currentPage,
+        //     limit: pageSize,
+        //     search: debouncedSearch || undefined,
+        //     status: activeTab || undefined,
+        //     sortOrder:
+        //       sortBy === "DATE_ASC"
+        //         ? "ASC"
+        //         : sortBy === "EXPIRY_SOON"
+        //           ? "EXPIRY_SOON"
+        //           : "DESC",
+
+        //     // IMPORTANT:
+        //     // Do not let Marine manually switch this.
+        //     processedByMe:
+        //       !isMarineFireSafety && processedByMe ? "true" : undefined,
+        //   },
+        // });
+
+        if (response.data && response.data.success) {
+          const newRequests = (response.data.data || []).map((request) => ({
+            ...request,
+
+            // Essential Oil Dock API returns company* fields.
+            // Keep the existing frontend field names so the
+            // existing table/modal continue to work.
+            entityName: request.entityName || request.companyName || null,
+
+            mobileNo: request.mobileNo || request.companyMobile || null,
+
+            email: request.email || request.companyEmail || null,
+
+            gstinNumber: request.gstinNumber || request.companyGst || null,
+
+            panNumber: request.panNumber || request.companyPan || null,
+          }));
           const newMeta = response.data.pagination || {};
           const newCounts = response.data.counts || {
             total: 0,
@@ -516,7 +1380,18 @@ export default function TrafficPassesPage() {
         if (!isPoll) setLoading(false);
       }
     },
-    [currentPage, pageSize, debouncedSearch, activeTab, sortBy, processedByMe],
+    [
+      currentPage,
+      pageSize,
+      debouncedSearch,
+      activeTab,
+      sortBy,
+      processedByMe,
+      isMarineFireSafety,
+      isEssentialOilDockApprover,
+      essentialWorkflowStage,
+      userContextReady,
+    ],
   );
 
   useEffect(() => {
@@ -616,8 +1491,40 @@ export default function TrafficPassesPage() {
   const handleSubmitReview = async () => {
     const persons = selectedRequest.persons || [];
     const vehicles = selectedRequest.vehicles || [];
+
     let reviewStatus = null;
     let responseMessage = null;
+
+    const requestWorkflowState = String(selectedRequest?.workflowState || "")
+      .trim()
+      .toUpperCase();
+
+    const currentEssentialWorkflowStage = String(essentialWorkflowStage || "")
+      .trim()
+      .toUpperCase();
+
+    const hasEssentialVehicle = vehicles.some((v) => {
+      const vehicleWorkflowState = String(v?.essentialWorkflowState || "")
+        .trim()
+        .toUpperCase();
+
+      const accessArea = String(v?.accessAreaId || v?.accessArea || "")
+        .trim()
+        .toUpperCase();
+
+      return (
+        vehicleWorkflowState.endsWith("_ESSENTIAL") ||
+        (v?.essentialDepartmentId !== null &&
+          v?.essentialDepartmentId !== undefined) ||
+        accessArea.includes("OIL JETTY") ||
+        accessArea.includes("OIL_JETTY")
+      );
+    });
+
+    const isEssentialWorkflowRequest =
+      requestWorkflowState.endsWith("_ESSENTIAL") ||
+      currentEssentialWorkflowStage.endsWith("_ESSENTIAL") ||
+      hasEssentialVehicle;
 
     // 1. VALIDATION: Only pending/reverted entities that the current user is authorized to verify need a decision
     const unverifiedPersons = persons.filter(
@@ -626,12 +1533,26 @@ export default function TrafficPassesPage() {
         !entityStatuses.persons[p.id] &&
         (p.status === "pending" || p.status === "reverted"),
     );
-    const unverifiedVehicles = vehicles.filter(
-      (v) =>
+
+    const unverifiedVehicles = vehicles.filter((v) => {
+      const isEssentialVehicle =
+        Boolean(v?.essentialWorkflowState) ||
+        (v?.essentialDepartmentId !== null &&
+          v?.essentialDepartmentId !== undefined);
+
+      if (isEssentialVehicle) {
+        return (
+          !entityStatuses.vehicles[v.id] &&
+          (v.status === "pending" || v.status === "reverted")
+        );
+      }
+
+      return (
         canUserVerifyVehicle(v) &&
         !entityStatuses.vehicles[v.id] &&
-        (v.status === "pending" || v.status === "reverted"),
-    );
+        (v.status === "pending" || v.status === "reverted")
+      );
+    });
 
     if (unverifiedPersons.length > 0 || unverifiedVehicles.length > 0) {
       toast.warning("Incomplete Verification", {
@@ -649,8 +1570,180 @@ export default function TrafficPassesPage() {
 
       // Check if this is a vendor pass
       const isVendorPass = selectedRequest.originType === "VENDOR";
+      console.log("WORKFLOW ROUTING CHECK:", {
+        selectedRequestId: selectedRequest?.id,
+        referenceNo: selectedRequest?.referenceNo,
+        requestWorkflowState,
+        essentialWorkflowStage,
+        currentEssentialWorkflowStage,
+        hasEssentialVehicle,
+        isEssentialWorkflowRequest,
+        userRole,
+        vehicles,
+      });
+      console.log("FINAL WORKFLOW ROUTING:", {
+        selectedRequestId: selectedRequest?.id,
+        referenceNo: selectedRequest?.referenceNo,
 
-      if (isVendorPass) {
+        userRole,
+
+        requestWorkflowState,
+        currentEssentialWorkflowStage,
+
+        essentialWorkflowStage,
+
+        hasEssentialVehicle,
+        isEssentialWorkflowRequest,
+
+        vehicles: vehicles.map((v) => ({
+          id: v?.id,
+          status: v?.status,
+          essentialWorkflowState: v?.essentialWorkflowState,
+          essentialDepartmentId: v?.essentialDepartmentId,
+          accessAreaId: v?.accessAreaId,
+        })),
+      });
+
+      const shouldUseEssentialWorkflow =
+        hasEssentialVehicle ||
+        requestWorkflowState.endsWith("_ESSENTIAL") ||
+        currentEssentialWorkflowStage.endsWith("_ESSENTIAL");
+
+      // if (shouldUseEssentialWorkflow) {
+      //         const shouldUseEssentialWorkflow =
+      //   hasEssentialVehicle ||
+      //   requestWorkflowState.endsWith("_ESSENTIAL") ||
+      //   currentEssentialWorkflowStage.endsWith("_ESSENTIAL");
+
+      if (shouldUseEssentialWorkflow) {
+        const essentialPersons = persons.filter((p) => {
+          const workflowState = String(p?.essentialWorkflowState || "")
+            .trim()
+            .toUpperCase();
+
+          return (
+            workflowState === "PENDING_CIVIL_PERSON_ESSENTIAL" ||
+            workflowState === "PENDING_MECHANICAL_PERSON_ESSENTIAL" ||
+            workflowState === "PENDING_TRAFFIC_PERSON_ESSENTIAL"
+          );
+        });
+
+        /*
+         * ============================================================
+         * ESSENTIAL OIL DOCK PERSON FLOW
+         * Only handle person-only Essential requests here.
+         * Existing Essential Vehicle flow remains unchanged below.
+         * ============================================================
+         */
+        if (essentialPersons.length > 0 && vehicles.length === 0) {
+          const personPromises = [];
+
+          essentialPersons.forEach((p) => {
+            const status = entityStatuses.persons[p.id];
+
+            if (!status) {
+              throw new Error(
+                `No decision recorded for person ${p.name || p.id}.`,
+              );
+            }
+
+            personPromises.push(
+              axios.put(
+                `${AGENT_API}/pass-request/essential-oil-dock/person-action`,
+                {
+                  personId: p.id,
+                  decision: String(status).trim().toUpperCase(),
+                  remarks: entityRemarks.persons[p.id] || null,
+                },
+                { headers },
+              ),
+            );
+          });
+
+          if (personPromises.length === 0) {
+            throw new Error(
+              "No Essential Oil Dock person action was prepared.",
+            );
+          }
+
+          await Promise.all(personPromises);
+
+          reviewStatus = "PROCESSED";
+          responseMessage =
+            "Essential Oil Dock person review processed successfully.";
+        } else {
+          /*
+           * ============================================================
+           * EXISTING ESSENTIAL OIL DOCK VEHICLE FLOW
+           * DO NOT CHANGE THE VEHICLE LOGIC
+           * ============================================================
+           */
+          const vehiclePromises = [];
+
+          const essentialVehicles = vehicles.filter((v) => {
+            const vehicleWorkflowState = String(v?.essentialWorkflowState || "")
+              .trim()
+              .toUpperCase();
+
+            const accessArea = String(v?.accessAreaId || v?.accessArea || "")
+              .trim()
+              .toUpperCase();
+
+            const hasEssentialDepartment =
+              v?.essentialDepartmentId !== null &&
+              v?.essentialDepartmentId !== undefined;
+
+            return (
+              vehicleWorkflowState.endsWith("_ESSENTIAL") ||
+              hasEssentialDepartment ||
+              accessArea.includes("OIL JETTY") ||
+              accessArea.includes("OIL_JETTY")
+            );
+          });
+
+          if (essentialVehicles.length === 0) {
+            throw new Error(
+              "No Essential Oil Dock vehicle found in this request.",
+            );
+          }
+
+          essentialVehicles.forEach((v) => {
+            const status = entityStatuses.vehicles[v.id];
+
+            if (!status) {
+              throw new Error(
+                `No decision recorded for vehicle ${v.registrationNo || v.id}.`,
+              );
+            }
+
+            const payload = {
+              vehicleId: v.id,
+              decision: String(status).trim().toUpperCase(),
+              remarks: entityRemarks.vehicles[v.id] || null,
+            };
+
+            vehiclePromises.push(
+              axios.put(
+                `${AGENT_API}/pass-request/essential-oil-dock/vehicle-action`,
+                payload,
+                { headers },
+              ),
+            );
+          });
+
+          if (vehiclePromises.length === 0) {
+            throw new Error(
+              "No Essential Oil Dock vehicle action was prepared.",
+            );
+          }
+
+          await Promise.all(vehiclePromises);
+
+          reviewStatus = "PROCESSED";
+          responseMessage =
+            "Essential Oil Dock vehicle review processed successfully.";
+        }
+      } else if (isVendorPass) {
         // --- VENDOR PASS APPROVAL FLOW ---
         const vendorPassId = selectedRequest.id;
 
@@ -1053,11 +2146,15 @@ export default function TrafficPassesPage() {
             label: "Processed Passes",
             count: globalCounts.processed,
           },
-          {
-            id: "pass_updates",
-            label: "Pass Updates",
-            count: passUpdatesCount,
-          },
+          ...(!isEssentialOilDockApprover
+            ? [
+                {
+                  id: "pass_updates",
+                  label: "Pass Updates",
+                  count: passUpdatesCount,
+                },
+              ]
+            : []),
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1107,7 +2204,7 @@ export default function TrafficPassesPage() {
           </h3>
 
           <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 items-center">
-            {activeTab === "processed" && (
+            {activeTab === "processed" && !isMarineFireSafety && (
               <label className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors select-none">
                 <input
                   type="checkbox"
@@ -1163,23 +2260,32 @@ export default function TrafficPassesPage() {
             <thead>
               <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
                 {(activeTab === "pass_updates"
-                  ? ["Pass No.", "Person Name", "Company", "Old Vehicle No.", "New Vehicle No.", "Requested On", "Status", "Actions"]
-                  : activeTab === "processed"
                   ? [
-                      "Ref No",
-                      "Company Details",
-                      "Entities Included",
-                      "Applied On",
-                      "Approved By",
+                      "Pass No.",
+                      "Person Name",
+                      "Company",
+                      "Old Vehicle No.",
+                      "New Vehicle No.",
+                      "Requested On",
                       "Status",
+                      "Actions",
                     ]
-                  : [
-                      "Ref No",
-                      "Company Details",
-                      "Entities Included",
-                      "Applied On",
-                      "Status",
-                    ]
+                  : activeTab === "processed"
+                    ? [
+                        "Ref No",
+                        "Company Details",
+                        "Entities Included",
+                        "Applied On",
+                        "Approved By",
+                        "Status",
+                      ]
+                    : [
+                        "Ref No",
+                        "Company Details",
+                        "Entities Included",
+                        "Applied On",
+                        "Status",
+                      ]
                 ).map((h) => (
                   <th
                     key={h}
@@ -1196,22 +2302,45 @@ export default function TrafficPassesPage() {
               {activeTab === "pass_updates" ? (
                 twoWheelerRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center text-slate-500">
+                    <td
+                      colSpan={8}
+                      className="py-16 text-center text-slate-500"
+                    >
                       <Search className="h-10 w-10 mx-auto text-slate-200 mb-3" />
-                      <p className="text-sm font-medium">No two-wheeler update requests found.</p>
+                      <p className="text-sm font-medium">
+                        No two-wheeler update requests found.
+                      </p>
                     </td>
                   </tr>
                 ) : (
                   twoWheelerRequests.map((req) => (
-                    <tr key={req.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="px-6 py-4 text-sm font-bold font-mono text-[#0a1e4d]">{req.personPassNo || `REQ-${req.passRequestId || req.id}`}</td>
-                      <td className="px-6 py-4 text-sm font-bold text-slate-800 dark:text-slate-200">{req.personName || "—"}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{req.companyName || "—"}</td>
-                      <td className="px-6 py-4 text-sm font-mono text-slate-500">{req.oldVehicleNo || "N/A"}</td>
-                      <td className="px-6 py-4 text-sm font-mono font-bold text-emerald-600">{req.newVehicleNo}</td>
-                      <td className="px-6 py-4 text-sm text-slate-500">{new Date(req.createdAt).toLocaleDateString("en-GB")}</td>
+                    <tr
+                      key={req.id}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                    >
+                      <td className="px-6 py-4 text-sm font-bold font-mono text-[#0a1e4d]">
+                        {req.personPassNo ||
+                          `REQ-${req.passRequestId || req.id}`}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-bold text-slate-800 dark:text-slate-200">
+                        {req.personName || "—"}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                        {req.companyName || "—"}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-mono text-slate-500">
+                        {req.oldVehicleNo || "N/A"}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-mono font-bold text-emerald-600">
+                        {req.newVehicleNo}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-500">
+                        {new Date(req.createdAt).toLocaleDateString("en-GB")}
+                      </td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : req.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : req.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                        >
                           {req.status}
                         </span>
                       </td>
@@ -1225,7 +2354,13 @@ export default function TrafficPassesPage() {
                               Approve
                             </button>
                             <button
-                              onClick={() => setRejectModal({ isOpen: true, requestId: req.id, reason: "" })}
+                              onClick={() =>
+                                setRejectModal({
+                                  isOpen: true,
+                                  requestId: req.id,
+                                  reason: "",
+                                })
+                              }
                               className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
                             >
                               Reject
@@ -1323,9 +2458,12 @@ export default function TrafficPassesPage() {
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 items-start">
                           <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-slate-200 dark:border-slate-700">
-                            {pass.persons?.length || 0} Persons | {pass.vehicles?.length || 0} Vehicles
+                            {pass.persons?.length || 0} Persons |{" "}
+                            {pass.vehicles?.length || 0} Vehicles
                           </span>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${catInfo.badgeClass}`}>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${catInfo.badgeClass}`}
+                          >
                             {catInfo.label}
                           </span>
                         </div>
@@ -1340,11 +2478,70 @@ export default function TrafficPassesPage() {
                       )}
                       <td className="px-6 py-4 text-center">
                         <div className="flex flex-col items-center gap-1">
-                          <span
-                            className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}
-                          >
-                            {(pass.status || "PENDING").toUpperCase()}
-                          </span>
+                          {(() => {
+                            let displayStatus = (
+                              pass.status || "PENDING"
+                            ).toUpperCase();
+
+                            let displayClass = statusClass;
+
+                            if (
+                              isMarineFireSafety &&
+                              activeTab === "processed"
+                            ) {
+                              const marineStatuses = [
+                                ...new Set(
+                                  (pass.vehicles || [])
+                                    .map((v) => {
+                                      const status = String(v.status || "")
+                                        .trim()
+                                        .toLowerCase();
+
+                                      if (v.marineSafetyApproved === true) {
+                                        return "APPROVED";
+                                      }
+
+                                      if (status === "rejected") {
+                                        return "REJECTED";
+                                      }
+
+                                      if (status === "reverted") {
+                                        return "REVERTED";
+                                      }
+
+                                      return null;
+                                    })
+                                    .filter(Boolean),
+                                ),
+                              ];
+
+                              if (marineStatuses.length === 1) {
+                                displayStatus = marineStatuses[0];
+                              } else if (marineStatuses.length > 1) {
+                                displayStatus = "MIXED";
+                              } else {
+                                displayStatus = "PROCESSED";
+                              }
+
+                              displayClass =
+                                displayStatus === "APPROVED"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : displayStatus === "REJECTED"
+                                    ? "bg-red-50 text-red-700 border-red-200"
+                                    : displayStatus === "REVERTED"
+                                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                                      : "bg-blue-50 text-blue-700 border-blue-200";
+                            }
+
+                            return (
+                              <span
+                                className={`px-3 py-1 rounded-full text-[11px] font-bold border ${displayClass}`}
+                              >
+                                {displayStatus}
+                              </span>
+                            );
+                          })()}
+
                           {isLocked && (
                             <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900 animate-pulse">
                               IN-USE BY {lock.userName.toUpperCase()}
@@ -1428,7 +2625,8 @@ export default function TrafficPassesPage() {
                         }
                         className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
                       >
-                        <FileText className="h-4 w-4 text-blue-600" /> View Requisition Letter
+                        <FileText className="h-4 w-4 text-blue-600" /> View
+                        Requisition Letter
                       </button>
                     )}
                     {selectedRequest.authLetterFilePath && (
@@ -1442,7 +2640,8 @@ export default function TrafficPassesPage() {
                         }
                         className="bg-orange-50 text-orange-700 border border-orange-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-orange-100 transition-colors shadow-sm"
                       >
-                        <FileCheck2 className="h-4 w-4 text-orange-600" /> View Licence / Work Order / Contract
+                        <FileCheck2 className="h-4 w-4 text-orange-600" /> View
+                        Licence / Work Order / Contract
                       </button>
                     )}
                   </div>
@@ -1516,7 +2715,7 @@ export default function TrafficPassesPage() {
                         <tr
                           key={p.id}
                           onClick={() => {
-                            if (!isViewMode && canUserVerifyPerson(p)) {
+                            if (isViewMode || canUserVerifyPerson(p)) {
                               setEntityModal({
                                 isOpen: true,
                                 data: p,
@@ -1530,7 +2729,7 @@ export default function TrafficPassesPage() {
                               );
                             }
                           }}
-                          className={`transition-all hover:shadow-sm ${!isViewMode && canUserVerifyPerson(p) ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/50 cursor-default"}`}
+                          className={`transition-all hover:shadow-sm ${isViewMode || canUserVerifyPerson(p) ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/50 cursor-default"}`}
                         >
                           <td className="p-3 text-slate-800 font-mono font-bold text-xs">
                             {p.personPassNo || "-"}
@@ -1538,28 +2737,31 @@ export default function TrafficPassesPage() {
                           <td className="p-3 font-bold text-[#0a1e4d]">
                             <span>{p.name}</span>
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {isOilDockArea(
-                                p.accessAreaId || p.accessArea,
-                              ) && (
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                    p.srDtmApproved ||
+                              {isOilDockArea(p.accessAreaId || p.accessArea) &&
+                                !String(p.essentialWorkflowState || "")
+                                  .trim()
+                                  .toUpperCase()
+                                  .endsWith("_PERSON_ESSENTIAL") && (
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                      p.srDtmApproved ||
+                                      (userRole ===
+                                        "Senior Deputy Traffic Manager" &&
+                                        entityStatuses.persons[p.id] ===
+                                          "APPROVED")
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : "bg-amber-100 text-amber-700"
+                                    }`}
+                                  >
+                                    {p.srDtmApproved ||
                                     (userRole ===
                                       "Senior Deputy Traffic Manager" &&
                                       entityStatuses.persons[p.id] ===
                                         "APPROVED")
-                                      ? "bg-emerald-100 text-emerald-700"
-                                      : "bg-amber-100 text-amber-700"
-                                  }`}
-                                >
-                                  {p.srDtmApproved ||
-                                  (userRole ===
-                                    "Senior Deputy Traffic Manager" &&
-                                    entityStatuses.persons[p.id] === "APPROVED")
-                                    ? "✓ Sr. DTM"
-                                    : "⏳ Pending Sr. DTM"}
-                                </span>
-                              )}
+                                      ? "✓ Sr. DTM"
+                                      : "⏳ Pending Sr. DTM"}
+                                  </span>
+                                )}
                               <span
                                 className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                   [
@@ -1617,10 +2819,14 @@ export default function TrafficPassesPage() {
                             {(() => {
                               const pCat = getItemCategoryTag(p, true);
                               return pCat ? (
-                                <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}>
+                                <span
+                                  className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}
+                                >
                                   {pCat.label}
                                 </span>
-                              ) : "-";
+                              ) : (
+                                "-"
+                              );
                             })()}
                           </td>
                           <td className="p-3 text-slate-600 font-mono text-xs">
@@ -1738,7 +2944,7 @@ export default function TrafficPassesPage() {
                         <tr
                           key={v.id}
                           onClick={() => {
-                            if (!isViewMode && canUserVerifyVehicle(v)) {
+                            if (isViewMode || canUserVerifyVehicle(v)) {
                               setEntityModal({
                                 isOpen: true,
                                 data: v,
@@ -1752,7 +2958,7 @@ export default function TrafficPassesPage() {
                               );
                             }
                           }}
-                          className={`transition-all hover:shadow-sm ${!isViewMode && canUserVerifyVehicle(v) ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/50 cursor-default"}`}
+                          className={`transition-all hover:shadow-sm ${isViewMode || canUserVerifyVehicle(v) ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/50 cursor-default"}`}
                         >
                           <td className="p-3 text-slate-800 font-mono font-bold text-xs">
                             {v.vehiclePassNo || "-"}
@@ -1764,10 +2970,14 @@ export default function TrafficPassesPage() {
                             {(() => {
                               const vCat = getItemCategoryTag(v, false);
                               return vCat ? (
-                                <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}>
+                                <span
+                                  className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}
+                                >
                                   {vCat.label}
                                 </span>
-                              ) : "-";
+                              ) : (
+                                "-"
+                              );
                             })()}
                           </td>
                           <td className="p-3 text-slate-600 text-xs font-medium">
@@ -1775,6 +2985,114 @@ export default function TrafficPassesPage() {
                               {v.vehicleTypeName} • {v.passType}
                             </div>
                             <div className="flex flex-wrap gap-1 mt-1">
+                              {isMarineFireSafety &&
+                              ["YEARLY", "ANNUAL"].includes(
+                                String(v.passType || "").toUpperCase(),
+                              ) &&
+                              ["TRAILORS", "TRAILER LORRY"].includes(
+                                String(v.vehicleTypeName || "")
+                                  .trim()
+                                  .toUpperCase(),
+                              ) ? (
+                                <>
+                                  {/* Traffic / Pass Section */}
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                      String(v.status || "").toLowerCase() ===
+                                      "approved"
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : String(
+                                              v.status || "",
+                                            ).toLowerCase() === "rejected"
+                                          ? "bg-red-100 text-red-700"
+                                          : String(
+                                                v.status || "",
+                                              ).toLowerCase() === "reverted"
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-amber-100 text-amber-700"
+                                    }`}
+                                  >
+                                    {String(v.status || "").toLowerCase() ===
+                                    "approved"
+                                      ? "✓ Pass Section"
+                                      : String(v.status || "").toLowerCase() ===
+                                          "rejected"
+                                        ? "✕ Pass Section Rejected"
+                                        : String(
+                                              v.status || "",
+                                            ).toLowerCase() === "reverted"
+                                          ? "↩ Pass Section Reverted"
+                                          : "⏳ Pending Pass Section"}
+                                  </span>
+
+                                  {/* Marine Fire Safety */}
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                      v.marineSafetyApproved === true
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : String(
+                                              v.status || "",
+                                            ).toLowerCase() === "rejected"
+                                          ? "bg-red-100 text-red-700"
+                                          : String(
+                                                v.status || "",
+                                              ).toLowerCase() === "reverted"
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-amber-100 text-amber-700"
+                                    }`}
+                                  >
+                                    {v.marineSafetyApproved === true
+                                      ? "✓ Marine Safety"
+                                      : String(v.status || "").toLowerCase() ===
+                                          "rejected"
+                                        ? "✕ Marine Safety Rejected"
+                                        : String(
+                                              v.status || "",
+                                            ).toLowerCase() === "reverted"
+                                          ? "↩ Marine Safety Reverted"
+                                          : "⏳ Pending Marine Safety"}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  {/* EXISTING NON-MARINE FLOW */}
+                                  {["MONTHLY", "YEARLY", "ANNUAL"].includes(
+                                    v.passType,
+                                  ) && (
+                                    <span
+                                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                        v.twistLockCertified ||
+                                        (userRole === "Safety Officer" &&
+                                          entityStatuses.vehicles[v.id] ===
+                                            "APPROVED")
+                                          ? "bg-emerald-100 text-emerald-700"
+                                          : "bg-amber-100 text-amber-700"
+                                      }`}
+                                    >
+                                      {v.twistLockCertified ||
+                                      (userRole === "Safety Officer" &&
+                                        entityStatuses.vehicles[v.id] ===
+                                          "APPROVED")
+                                        ? "✓ Safety"
+                                        : "⏳ Pending Safety"}
+                                    </span>
+                                  )}
+
+                                  {isOilDockArea(
+                                    v.accessAreaId || v.accessArea,
+                                  ) && (
+                                    <>
+                                      {/* keep your existing Fire Safety badge */}
+
+                                      {/* keep your existing Sr. DTM badge */}
+                                    </>
+                                  )}
+
+                                  {/* Keep your existing Pass Section badge */}
+                                </>
+                              )}
+                            </div>
+                            {/* <div className="flex flex-wrap gap-1 mt-1">
                               {["MONTHLY", "YEARLY", "ANNUAL"].includes(
                                 v.passType,
                               ) && (
@@ -1890,7 +3208,7 @@ export default function TrafficPassesPage() {
                                   ? "✓ Pass Section"
                                   : "⏳ Pending Pass Section"}
                               </span>
-                            </div>
+                            </div> */}
                           </td>
                           <td className="p-3 text-right">
                             <div className="flex justify-end items-center gap-3">
@@ -2139,10 +3457,13 @@ export default function TrafficPassesPage() {
                           "-"
                         }
                       />
-                      {/* <DetailItem
-                        label="QR Pass Reference"
-                        value={entityModal.data.qrCode || entityModal.data.qrPassReference || entityModal.data.rfidCardNumber}
-                      /> */}
+                      {entityModal.data.essentialDepartmentName && (
+                        <DetailItem
+                          label="Selected Department"
+                          value={entityModal.data.essentialDepartmentName}
+                          highlight
+                        />
+                      )}
                       <DetailItem
                         label="Insurance Expiry"
                         value={entityModal.data.insuranceExpiry}
@@ -2155,99 +3476,27 @@ export default function TrafficPassesPage() {
                   )}
 
                   {/* Oil Dock Workflow Status */}
-                  {isOilDockArea(
-                    entityModal.data.accessAreaId ||
-                      entityModal.data.accessArea,
-                  ) && (
-                    <div className="col-span-2 md:col-span-4 border-t border-slate-100 pt-4 mt-2">
-                      <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-                        Essential Entry Permit Certifications
-                      </h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {entityModal.type === "person" ? (
-                          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase">
-                              Sr. DTM Approval
-                            </span>
-                            <div className="flex items-center gap-2 mt-1">
-                              {entityModal.data.srDtmApproved ? (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                  AUTHORIZED
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                                  PENDING AUTHORIZATION
-                                </span>
-                              )}
-                            </div>
-                            {entityModal.data.srDtmRemarks && (
-                              <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
-                                Remarks: {entityModal.data.srDtmRemarks}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <>
-                            {/* Safety Officer badge — shown only for MONTHLY, YEARLY, ANNUAL oil dock vehicles */}
-                            {["MONTHLY", "YEARLY", "ANNUAL"].includes(
-                              entityModal.data.passType,
-                            ) && (
-                              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase">
-                                  Safety Officer (Twist Lock & Fitness)
-                                </span>
-                                <div className="flex items-center gap-2 mt-1">
-                                  {entityModal.data.twistLockCertified ? (
-                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                      APPROVED
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                                      PENDING APPROVAL
-                                    </span>
-                                  )}
-                                </div>
-                                {entityModal.data.twistLockRemarks && (
-                                  <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
-                                    Remarks: {entityModal.data.twistLockRemarks}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-
-                            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase">
-                                Fire Safety Officer (Spark Arrester)
-                              </span>
-                              <div className="flex items-center gap-2 mt-1">
-                                {entityModal.data.sparkArresterCertified ? (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                    CERTIFIED
-                                  </span>
-                                ) : (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                                    PENDING CERTIFICATION
-                                  </span>
-                                )}
-                              </div>
-                              {entityModal.data.sparkArresterRemarks && (
-                                <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
-                                  Remarks:{" "}
-                                  {entityModal.data.sparkArresterRemarks}
-                                </p>
-                              )}
-                            </div>
-
+                  {!isMarineFireSafety &&
+                    isOilDockArea(
+                      entityModal.data.accessAreaId ||
+                        entityModal.data.accessArea,
+                    ) &&
+                    !String(entityModal.data.essentialWorkflowState || "")
+                      .trim()
+                      .toUpperCase()
+                      .endsWith("_PERSON_ESSENTIAL") && (
+                      <div className="col-span-2 md:col-span-4 border-t border-slate-100 pt-4 mt-2">
+                        <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
+                          Essential Entry Permit Certifications
+                        </h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {entityModal.type === "person" ? (
                             <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                               <span className="text-[10px] font-bold text-slate-500 uppercase">
                                 Sr. DTM Approval
                               </span>
                               <div className="flex items-center gap-2 mt-1">
-                                {entityModal.data.srDtmApproved ||
-                                (userRole === "Senior Deputy Traffic Manager" &&
-                                  entityStatuses.vehicles[
-                                    entityModal.data.id
-                                  ] === "APPROVED") ? (
+                                {entityModal.data.srDtmApproved ? (
                                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
                                     AUTHORIZED
                                   </span>
@@ -2263,11 +3512,226 @@ export default function TrafficPassesPage() {
                                 </p>
                               )}
                             </div>
-                          </>
-                        )}
+                          ) : (
+                            <>
+                              {/* Safety Officer badge — shown only for MONTHLY, YEARLY, ANNUAL oil dock vehicles */}
+                              {["MONTHLY", "YEARLY", "ANNUAL"].includes(
+                                entityModal.data.passType,
+                              ) && (
+                                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                                  <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                    Safety Officer (Twist Lock & Fitness)
+                                  </span>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {entityModal.data.twistLockCertified ? (
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                        APPROVED
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                        PENDING APPROVAL
+                                      </span>
+                                    )}
+                                  </div>
+                                  {entityModal.data.twistLockRemarks && (
+                                    <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                      Remarks:{" "}
+                                      {entityModal.data.twistLockRemarks}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                  Fire Safety Officer (Spark Arrester)
+                                </span>
+                                <div className="flex items-center gap-2 mt-1">
+                                  {entityModal.data.sparkArresterCertified ? (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                      CERTIFIED
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                      PENDING CERTIFICATION
+                                    </span>
+                                  )}
+                                </div>
+                                {entityModal.data.sparkArresterRemarks && (
+                                  <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                    Remarks:{" "}
+                                    {entityModal.data.sparkArresterRemarks}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                  Sr. DTM Approval
+                                </span>
+                                <div className="flex items-center gap-2 mt-1">
+                                  {entityModal.data.srDtmApproved ||
+                                  (userRole ===
+                                    "Senior Deputy Traffic Manager" &&
+                                    entityStatuses.vehicles[
+                                      entityModal.data.id
+                                    ] === "APPROVED") ? (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                      AUTHORIZED
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                      PENDING AUTHORIZATION
+                                    </span>
+                                  )}
+                                </div>
+                                {entityModal.data.srDtmRemarks && (
+                                  <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                    Remarks: {entityModal.data.srDtmRemarks}
+                                  </p>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  {Array.isArray(entityModal.data.workflowHistory) &&
+                    entityModal.data.workflowHistory.length > 0 && (
+                      <div className="col-span-2 md:col-span-4 border-t border-slate-200 pt-4 mt-3">
+                        <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
+                          Approval History
+                        </h5>
+
+                        <div className="space-y-2">
+                          {entityModal.data.workflowHistory.map(
+                            (history, index) => (
+                              <div
+                                key={`${history.actionedAt}-${index}`}
+                                className="bg-slate-50 border border-slate-200 rounded-lg p-3"
+                              >
+                                <div className="flex justify-between gap-3">
+                                  <div>
+                                    <p className="text-xs font-black text-slate-800">
+                                      {history.stage}
+                                    </p>
+
+                                    <p className="text-[11px] text-slate-600">
+                                      {history.action} by{" "}
+                                      <span className="font-bold">
+                                        {history.actorName || "-"}
+                                      </span>
+                                    </p>
+
+                                    <p className="text-[10px] text-slate-500">
+                                      {history.roleName || "-"} •{" "}
+                                      {history.departmentName || "-"}
+                                    </p>
+                                  </div>
+
+                                  <span className="text-[10px] font-semibold text-slate-500">
+                                    {history.actionedAt
+                                      ? new Date(
+                                          history.actionedAt,
+                                        ).toLocaleString("en-IN")
+                                      : "-"}
+                                  </span>
+                                </div>
+
+                                {history.remarks && (
+                                  <p className="text-[10px] text-slate-600 mt-2 border-t pt-2">
+                                    Remarks: {history.remarks}
+                                  </p>
+                                )}
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                  {/* MARINE FIRE SAFETY WORKFLOW */}
+                  {isMarineFireSafety &&
+                    ["YEARLY", "ANNUAL"].includes(
+                      String(entityModal.data.passType || "").toUpperCase(),
+                    ) &&
+                    ["TRAILORS", "TRAILER LORRY"].includes(
+                      String(entityModal.data.vehicleTypeName || "")
+                        .trim()
+                        .toUpperCase(),
+                    ) && (
+                      <div className="col-span-2 md:col-span-4 border-t border-slate-100 pt-4 mt-2">
+                        <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
+                          Marine Fire Safety Approval
+                        </h5>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase">
+                              Marine Safety Status
+                            </span>
+
+                            <div className="flex items-center gap-2 mt-1">
+                              {entityModal.data.marineSafetyApproved ===
+                              true ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                  APPROVED
+                                </span>
+                              ) : String(
+                                  entityModal.data.status || "",
+                                ).toLowerCase() === "rejected" ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800">
+                                  REJECTED
+                                </span>
+                              ) : String(
+                                  entityModal.data.status || "",
+                                ).toLowerCase() === "reverted" ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                  REVERTED
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                  PENDING
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase">
+                              Remarks
+                            </span>
+
+                            <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                              {entityModal.data.marineSafetyRemarks ||
+                                entityModal.data.rejectedReason ||
+                                entityModal.data.revertReason ||
+                                "-"}
+                            </p>
+                          </div>
+
+                          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase">
+                              Approved / Actioned By
+                            </span>
+
+                            <p className="text-sm font-semibold text-slate-700 mt-1">
+                              {entityModal.data.marineSafetyApprovedBy || "-"}
+                            </p>
+                          </div>
+
+                          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase">
+                              Actioned At
+                            </span>
+
+                            <p className="text-sm font-semibold text-slate-700 mt-1">
+                              {entityModal.data.marineSafetyApprovedAt || "-"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                 </div>
               </div>
 
@@ -2309,7 +3773,11 @@ export default function TrafficPassesPage() {
                   )}
                   <DetailItem
                     label="Calculated Amount"
-                    value={`₹${entityModal.data.amount}`}
+                    value={`₹${
+                      entityModal.data.amount ??
+                      selectedRequest?.amount ??
+                      "0.00"
+                    }`}
                   />
                 </div>
               </div>
@@ -2693,7 +4161,9 @@ export default function TrafficPassesPage() {
                 Reject Two-Wheeler Update
               </h3>
               <button
-                onClick={() => setRejectModal({ isOpen: false, requestId: null, reason: "" })}
+                onClick={() =>
+                  setRejectModal({ isOpen: false, requestId: null, reason: "" })
+                }
                 className="text-white/70 hover:text-white"
               >
                 <X className="h-5 w-5" />
@@ -2706,14 +4176,18 @@ export default function TrafficPassesPage() {
               <textarea
                 rows={3}
                 value={rejectModal.reason}
-                onChange={(e) => setRejectModal({ ...rejectModal, reason: e.target.value })}
+                onChange={(e) =>
+                  setRejectModal({ ...rejectModal, reason: e.target.value })
+                }
                 placeholder="Enter rejection reason..."
                 className="w-full border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500 bg-white dark:bg-slate-800"
               />
             </div>
             <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex justify-end gap-3">
               <button
-                onClick={() => setRejectModal({ isOpen: false, requestId: null, reason: "" })}
+                onClick={() =>
+                  setRejectModal({ isOpen: false, requestId: null, reason: "" })
+                }
                 className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold transition-colors"
               >
                 Cancel
