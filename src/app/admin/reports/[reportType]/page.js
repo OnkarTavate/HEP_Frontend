@@ -889,9 +889,11 @@ async function AllPassIssuanceReport({ report, searchParams }) {
     fromDate: getParam(searchParams, "fromDate") || formatDateTimeLocal(periodStart),
     toDate: getParam(searchParams, "toDate") || formatDateTimeLocal(periodEnd),
   };
-  const searched = true;
+  const searched = hasAnySearch(searchParams, filterKeys);
   const query = buildQuery(effectiveSearchParams, [...filterKeys, "page"]);
-  const reportData = await getJson(`/reports/all-pass-issuance?${query}`);
+  const reportData = searched
+    ? await getJson(`/reports/all-pass-issuance?${query}`)
+    : null;
   const rows = Array.isArray(reportData?.data) ? reportData.data : [];
   const pagination = reportData?.pagination || {};
   const totalPages = Math.max(
@@ -1014,7 +1016,12 @@ async function AllPassIssuanceReport({ report, searchParams }) {
               />
               </div>
           </div>
-        ) : null}
+        ) : (
+          <EmptyReportState>
+            <p className="text-base font-semibold">Enter filters and click Search</p>
+            <p className="mt-1 text-sm">All pass issuance results will appear here.</p>
+          </EmptyReportState>
+        )}
       </section>
     </ReportShell>
   );
@@ -1677,8 +1684,10 @@ export default async function ReportPage({ params, searchParams }) {
 
   const companyTypes = await getCompanyTypesFromReportOptions();
   const query = buildQuery(resolvedSearchParams, ["companyCode", "companyType", "find", "page"]);
-  const searched = true;
-  const reportData = await getJson(`/reports/registered-users?${query}`);
+  const searched = hasAnySearch(resolvedSearchParams, ["companyCode", "companyType", "find"]);
+  const reportData = searched
+    ? await getJson(`/reports/registered-users?${query}`)
+    : null;
   const rows = Array.isArray(reportData?.data) ? reportData.data : [];
   const pagination = reportData?.pagination || {};
   const currentPage = pagination.page || 1;
