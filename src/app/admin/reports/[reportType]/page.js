@@ -534,14 +534,14 @@ async function RevenueReport({ report, searchParams }) {
   const options = await getAllPassIssuanceOptions();
 
   return (
-    <SimpleFilterReport report={report} endpoint="/reports/revenue-report" searchParams={searchParams} filterKeys={["companyCode", "paymentType", "transactionType", "paidFromDate", "paidToDate", "paymentStatus"]}>
+    <SimpleFilterReport report={report} endpoint="/reports/revenue-report" searchParams={searchParams} filterKeys={["companyCodeOrName", "paymentType", "fromDate", "toDate", "approvalStatus", "passHolderType", "passType"]}>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <label className="space-y-1.5">
-          <ReportLabel>Company Code</ReportLabel>
+          <ReportLabel>Company Code / Name</ReportLabel>
           <input
-            name="companyCode"
+            name="companyCodeOrName"
             type="text"
-            defaultValue={getParam(searchParams, "companyCode")}
+            defaultValue={getParam(searchParams, "companyCodeOrName")}
             className={fieldClass}
           />
         </label>
@@ -559,14 +559,14 @@ async function RevenueReport({ report, searchParams }) {
         </label>
 
         <label className="space-y-1.5">
-          <ReportLabel>Transaction Type</ReportLabel>
+          <ReportLabel>Approval Status</ReportLabel>
           <select
-            name="transactionType"
-            defaultValue={getParam(searchParams, "transactionType")}
+            name="approvalStatus"
+            defaultValue={getParam(searchParams, "approvalStatus")}
             className={fieldClass}
           >
             <option value="">-- Select --</option>
-            {options.transactionTypes.map((value) => (
+            {options.approvalStatuses.map((value) => (
               <option key={value} value={value}>
                 {value}
               </option>
@@ -575,37 +575,44 @@ async function RevenueReport({ report, searchParams }) {
         </label>
 
         <label className="space-y-1.5">
-          <ReportLabel>Paid From Date</ReportLabel>
+          <ReportLabel>Issued From Date</ReportLabel>
           <input
-            name="paidFromDate"
+            name="fromDate"
             type="date"
-            defaultValue={getParam(searchParams, "paidFromDate") || today}
+            defaultValue={getParam(searchParams, "fromDate") || today}
             className={fieldClass}
           />
         </label>
 
         <label className="space-y-1.5">
-          <ReportLabel>Paid To Date</ReportLabel>
+          <ReportLabel>Issued To Date</ReportLabel>
           <input
-            name="paidToDate"
+            name="toDate"
             type="date"
-            defaultValue={getParam(searchParams, "paidToDate") || today}
+            defaultValue={getParam(searchParams, "toDate") || today}
             className={fieldClass}
           />
         </label>
 
         <label className="space-y-1.5">
-          <ReportLabel>Payment Status</ReportLabel>
+          <ReportLabel>Pass Holder Type</ReportLabel>
           <select
-            name="paymentStatus"
-            defaultValue={getParam(searchParams, "paymentStatus")}
+            name="passHolderType"
+            defaultValue={getParam(searchParams, "passHolderType")}
             className={fieldClass}
-            disabled={!options.paymentStatuses.length}
           >
-            <option value="">
-              {options.paymentStatuses.length ? "-- Select --" : "No database options configured"}
-            </option>
-            {options.paymentStatuses.map((value) => (
+            <option value="">-- Select --</option>
+            {options.passHolderTypes.map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1.5">
+          <ReportLabel>Pass Type</ReportLabel>
+          <select name="passType" defaultValue={getParam(searchParams, "passType")} className={fieldClass}>
+            <option value="">-- Select --</option>
+            {options.passTypes.map((value) => (
               <option key={value} value={value}>{value}</option>
             ))}
           </select>
@@ -1139,7 +1146,7 @@ async function RemainingReportPage({ report, searchParams, reportType }) {
   const now = new Date();
   const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
   const today = now.toISOString().slice(0, 10);
-  const options = reportType === "transaction-report-in-out"
+  const options = ["transaction-report-in-out", "pass-approval-report"].includes(reportType)
     ? await getAllPassIssuanceOptions()
     : null;
   const commonDate = (withTime = true) => [
@@ -1168,7 +1175,7 @@ async function RemainingReportPage({ report, searchParams, reportType }) {
         <TextField key="request" label="Request Number" name="requestNumber" defaultValue={getParam(searchParams, "requestNumber")} />,
         <TextField key="holder" label="Vehicle/Person Name" name="vehicleOrPersonName" defaultValue={getParam(searchParams, "vehicleOrPersonName")} />,
         <TextField key="transporter" label="Transporter Name/Code" name="transporterNameOrCode" defaultValue={getParam(searchParams, "transporterNameOrCode")} />,
-        <SelectField key="status" label="Approval Status" name="approvalStatus" defaultValue={getParam(searchParams, "approvalStatus")} options={["Waiting for approval", "Approved", "Rejected", "Canceled"]} />],
+        <SelectField key="status" label="Approval Status" name="approvalStatus" defaultValue={getParam(searchParams, "approvalStatus")} options={options?.approvalStatuses || []} />],
     },
     "cargo-summary-report": {
       keys: ["companyNameOrCode", "fromDate", "toDate"],
@@ -1670,10 +1677,8 @@ export default async function ReportPage({ params, searchParams }) {
 
   const companyTypes = await getCompanyTypesFromReportOptions();
   const query = buildQuery(resolvedSearchParams, ["companyCode", "companyType", "find", "page"]);
-  const searched = hasAnySearch(resolvedSearchParams, ["companyCode", "companyType", "find"]);
-  const reportData = searched
-    ? await getJson(`/reports/registered-users?${query}`)
-    : null;
+  const searched = true;
+  const reportData = await getJson(`/reports/registered-users?${query}`);
   const rows = Array.isArray(reportData?.data) ? reportData.data : [];
   const pagination = reportData?.pagination || {};
   const currentPage = pagination.page || 1;

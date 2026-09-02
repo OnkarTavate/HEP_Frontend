@@ -652,11 +652,11 @@ export default function AdminLayout({ children }) {
           Global Menu
         </p>
         {navigationItems.map((item) => {
-          const isActive = pathname === item.href;
-          const isReports = item.href.startsWith("/admin/reports");
-          const NavItem = isReports ? "a" : Link;
+          const isActive =
+            pathname === item.href ||
+            (item.href === "/admin/reports" && pathname?.startsWith("/admin/reports/"));
           return (
-            <NavItem
+            <Link
               key={item.name}
               href={item.href}
               className={cn(
@@ -675,7 +675,7 @@ export default function AdminLayout({ children }) {
                 )}
               />
               <span className="flex-1">{item.name}</span>
-            </NavItem>
+            </Link>
           );
         })}
       </nav>
@@ -788,11 +788,11 @@ export default function AdminLayout({ children }) {
           )}
         >
           {navigationItems.map((item) => {
-            const isActive = pathname === item.href;
-            const isReports = item.href.startsWith("/admin/reports");
-            const NavItem = isReports ? "a" : Link;
+            const isActive =
+              pathname === item.href ||
+              (item.href === "/admin/reports" && pathname?.startsWith("/admin/reports/"));
             return (
-              <NavItem
+              <Link
                 key={item.name}
                 href={item.href}
                 title={item.name}
@@ -814,7 +814,7 @@ export default function AdminLayout({ children }) {
                 {expanded && (
                   <span className="flex-1 truncate">{item.name}</span>
                 )}
-              </NavItem>
+              </Link>
             );
           })}
         </div>

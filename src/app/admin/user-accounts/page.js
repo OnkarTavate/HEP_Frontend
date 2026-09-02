@@ -23,7 +23,8 @@ import {
 import { toast } from "sonner";
 import PaginationBar from "@/components/ui/PaginationBar";
 
-const BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API;
+const BASE_URL =
+  process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 
 export default function UserAccountsPage() {
   const router = useRouter();

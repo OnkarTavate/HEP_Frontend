@@ -1,4 +1,5 @@
 import { ArrowRight, GripVertical, Users } from "lucide-react";
+import Link from "next/link";
 import {
   Card,
   CardAction,
@@ -9,7 +10,7 @@ import {
 
 export default function ReportCard({ report }) {
   return (
-    <a href={`/admin/reports/${report.slug}`}>
+    <Link href={`/admin/reports/${report.slug}`}>
       <Card
         size="sm"
         className="h-full cursor-pointer transition-colors hover:bg-orange-50 dark:hover:bg-orange-500/10"
@@ -26,6 +27,6 @@ export default function ReportCard({ report }) {
           </CardAction>
         </CardHeader>
       </Card>
-    </a>
+    </Link>
   );
 }
