@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getReport } from "@/lib/reports";
-import LiveReportSearchInput from "@/components/reports/LiveReportSearchInput";
+import ReportSearchForm from "@/components/reports/ReportSearchForm";
 import ReportViewerToolbar from "@/components/reports/ReportViewerToolbar";
 
 const AGENT_API =
@@ -148,7 +148,7 @@ async function SimpleFilterReport({ report, children, endpoint, filterKeys, sear
   return (
     <ReportShell report={report}>
       <section className="flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900">
-        <form className="shrink-0 px-4 sm:px-6 py-5 border-b border-slate-100 dark:border-slate-800">{children}</form>
+        <ReportSearchForm className="shrink-0 px-4 sm:px-6 py-5 border-b border-slate-100 dark:border-slate-800">{children}</ReportSearchForm>
         {searched ? (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {rows.length ? (
@@ -930,7 +930,7 @@ async function AllPassIssuanceReport({ report, searchParams }) {
     >
       <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900">
         <div className="shrink-0 border-b border-slate-100 dark:border-slate-800">
-        <form className="px-4 py-4 sm:px-6">
+        <ReportSearchForm className="px-4 py-4 sm:px-6">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto_auto] xl:items-end">
             <TextField label="From Date" name="fromDate" type="datetime-local" defaultValue={getParam(searchParams, "fromDate") || formatDateTimeLocal(periodStart)} />
             <TextField label="To Date" name="toDate" type="datetime-local" defaultValue={getParam(searchParams, "toDate") || formatDateTimeLocal(periodEnd)} />
@@ -964,7 +964,7 @@ async function AllPassIssuanceReport({ report, searchParams }) {
               <TextField label="Aadhaar" name="aadhaar" placeholder="Aadhaar No" defaultValue={getParam(searchParams, "aadhaar")} />
             </div>
           </details>
-        </form>
+        </ReportSearchForm>
         </div>
         {searched ? (
           <div className="flex min-h-0 flex-1 flex-col">
@@ -1422,7 +1422,7 @@ async function TypeOfPassIssuedReport({ report, searchParams }) {
     <ReportShell report={report}>
       <section className="h-full min-h-0 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900 flex flex-col">
         <div className="shrink-0 border-b border-slate-100 dark:border-slate-800">
-        <form className="max-h-[46vh] overflow-y-auto px-4 py-4 sm:px-6">
+        <ReportSearchForm className="max-h-[46vh] overflow-y-auto px-4 py-4 sm:px-6">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <label className="space-y-1.5">
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -1521,7 +1521,7 @@ async function TypeOfPassIssuedReport({ report, searchParams }) {
               </button>
             </div>
           </div>
-        </form>
+        </ReportSearchForm>
         </div>
 
         {searched ? (
@@ -1703,7 +1703,7 @@ export default async function ReportPage({ params, searchParams }) {
     <ReportShell report={report}>
       <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-xl overflow-hidden h-full min-h-0 flex flex-col">
         <div className="shrink-0 border-b border-slate-100 dark:border-slate-800">
-          <form className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row gap-3">
+          <ReportSearchForm className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row gap-3">
             <input
               name="companyCode"
               type="text"
@@ -1725,11 +1725,13 @@ export default async function ReportPage({ params, searchParams }) {
               ))}
             </select>
 
-            <LiveReportSearchInput
+            <input
               name="find"
+              type="search"
               placeholder="Search users"
               defaultValue={getParam(resolvedSearchParams, "find")}
               className="w-full sm:max-w-xs px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-400"
+              autoComplete="off"
             />
 
             <button
@@ -1745,7 +1747,7 @@ export default async function ReportPage({ params, searchParams }) {
             >
               Reset
             </Link>
-          </form>
+          </ReportSearchForm>
         </div>
 
         {searched ? (
