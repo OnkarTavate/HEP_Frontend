@@ -428,7 +428,7 @@ export default function BlacklistPenaltiesPage() {
 
         {/* Pass No */}
         <td className="px-5 py-4 font-mono text-sm font-semibold text-slate-600">
-          {charge.pass_no || "—"}
+          {charge.pass_no || "N/A"}
         </td>
 
         {/* Entry Date */}
@@ -466,20 +466,25 @@ export default function BlacklistPenaltiesPage() {
             <span className="text-slate-400 font-semibold text-sm">
               Not levied yet
             </span>
-          ) : (
-            <>
-              ₹
-              {parseFloat(
-                [
-                  "PENDING",
-                  "EXCEPTION_REQUESTED",
-                  "EXCEPTION_REJECTED",
-                ].includes(charge.status)
-                  ? charge.current_total_amount
-                  : charge.total_amount
-              ).toLocaleString("en-IN")}
-            </>
-          )}
+          ) : (() => {
+            const isLive = ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status);
+            const tot = parseFloat(isLive ? charge.current_total_amount : charge.total_amount) || 0;
+            const initDays = parseInt(charge.initial_overstay_days || charge.overstay_days || 0, 10);
+            const initAmt = parseFloat(charge.initial_total_amount || (charge.daily_rate * initDays)) || 0;
+            const addDays = parseInt(charge.additional_overstay_days || 0, 10);
+            const addAmt = parseFloat(charge.additional_penalty_amount || 0) || 0;
+
+            return (
+              <div className="flex flex-col">
+                <span>₹{tot.toLocaleString("en-IN")}</span>
+                {addDays > 0 && addAmt > 0 && (
+                  <span className="text-[11px] text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block mt-1 whitespace-nowrap">
+                    ₹{initAmt.toLocaleString("en-IN")} + ₹{addAmt.toLocaleString("en-IN")} (Additional penalty ({addDays} day{addDays > 1 ? "s" : ""}))
+                  </span>
+                )}
+              </div>
+            );
+          })()}
         </td>
 
         {/* Status */}
@@ -741,16 +746,36 @@ export default function BlacklistPenaltiesPage() {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Entity Details</p>
                 <p className="text-sm font-bold text-[#0a1e4d] uppercase">{selectedEntry.identifier}</p>
                 <p className="text-xs text-slate-500 mt-0.5">{selectedEntry.entity_name || "Port Pass Holder"}</p>
-                <div className="border-t border-slate-200/60 mt-3 pt-3 flex justify-between items-baseline">
-                  <span className="text-xs font-bold text-slate-500">Fine/Penalty Amount:</span>
-                  <span className="text-2xl font-black text-slate-800">
-                    ₹{parseFloat(
-                      isOverstayTarget
-                        ? (selectedEntry.current_total_amount ?? selectedEntry.total_amount)
-                        : selectedEntry.penalty_amount
-                    ).toLocaleString("en-IN")}
-                  </span>
-                </div>
+                
+                {isOverstayTarget && parseInt(selectedEntry.additional_overstay_days || 0, 10) > 0 ? (
+                  <div className="border-t border-slate-200 mt-3 pt-3 space-y-1.5 text-xs">
+                    <div className="flex justify-between text-slate-600 font-medium">
+                      <span>Initial Levy Fine ({selectedEntry.initial_overstay_days || selectedEntry.overstay_days} days):</span>
+                      <span className="font-bold">₹{parseFloat(selectedEntry.initial_total_amount || (selectedEntry.daily_rate * selectedEntry.initial_overstay_days) || 0).toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-amber-900 font-semibold bg-amber-50 px-2.5 py-1 rounded border border-amber-200">
+                      <span>Additional penalty ({selectedEntry.additional_overstay_days} extra day{selectedEntry.additional_overstay_days > 1 ? "s" : ""}):</span>
+                      <span className="font-bold">+ ₹{parseFloat(selectedEntry.additional_penalty_amount || 0).toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between items-baseline pt-2 border-t border-slate-200">
+                      <span className="text-xs font-black text-slate-700">Total Payable Amount:</span>
+                      <span className="text-2xl font-black text-red-700">
+                        ₹{parseFloat(selectedEntry.current_total_amount ?? selectedEntry.total_amount).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border-t border-slate-200/60 mt-3 pt-3 flex justify-between items-baseline">
+                    <span className="text-xs font-bold text-slate-500">Fine/Penalty Amount:</span>
+                    <span className="text-2xl font-black text-slate-800">
+                      ₹{parseFloat(
+                        isOverstayTarget
+                          ? (selectedEntry.current_total_amount ?? selectedEntry.total_amount)
+                          : selectedEntry.penalty_amount
+                      ).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Payment Mode Selection */}

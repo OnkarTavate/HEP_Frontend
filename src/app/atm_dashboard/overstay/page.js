@@ -40,6 +40,7 @@ import {
   ThumbsDown,
   Gavel,
   History,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -54,11 +55,11 @@ const getAuthHeaders = () => {
 
 /* ─── Formatters & Helpers ─── */
 const fmtDate = (d) => {
-  if (!d) return "—";
+  if (!d) return "N/A";
   return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 };
 const fmtDateTime = (d) => {
-  if (!d) return "—";
+  if (!d) return "N/A";
   return new Date(d).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 };
 const fmtTime = (d, isExpiry = false) => {
@@ -103,7 +104,7 @@ const formatPassType = (passType, dateFrom, dateTo) => {
     if (pt === "YEARLY" || pt === "ANNUAL" || pt === "3") return "Annual";
     return pt.charAt(0).toUpperCase() + pt.slice(1).toLowerCase();
   }
-  if (!dateFrom || !dateTo) return "—";
+  if (!dateFrom || !dateTo) return "N/A";
   const diff = Math.ceil((new Date(dateTo) - new Date(dateFrom)) / (1000 * 60 * 60 * 24));
   if (diff <= 7) return "Daily";
   if (diff <= 90) return "Monthly";
@@ -214,14 +215,12 @@ const ToggleSwitch = ({ checked, onChange, disabled, size = "md" }) => {
       aria-checked={checked}
       onClick={onChange}
       disabled={disabled}
-      className={`relative inline-flex ${dims} shrink-0 items-center rounded-full transition-colors duration-200 ${
-        checked ? "bg-emerald-500" : "bg-slate-300"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+      className={`relative inline-flex ${dims} shrink-0 items-center rounded-full transition-colors duration-200 ${checked ? "bg-emerald-500" : "bg-slate-300"
+        } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
     >
       <span
-        className={`inline-block ${knob} transform rounded-full bg-white shadow transition-transform duration-200 ${
-          checked ? translate : "translate-x-1"
-        }`}
+        className={`inline-block ${knob} transform rounded-full bg-white shadow transition-transform duration-200 ${checked ? translate : "translate-x-1"
+          }`}
       />
     </button>
   );
@@ -246,9 +245,8 @@ const DateRangeControl = ({
         <button
           key={opt.key}
           onClick={() => onChange(opt.key)}
-          className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
-            value === opt.key ? "bg-[#0a1e4d] text-white shadow-sm" : "text-slate-500 hover:text-slate-800 hover:bg-white"
-          }`}
+          className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${value === opt.key ? "bg-[#0a1e4d] text-white shadow-sm" : "text-slate-500 hover:text-slate-800 hover:bg-white"
+            }`}
         >
           {opt.label}
         </button>
@@ -331,6 +329,7 @@ export default function ATMOverstayPage() {
   const [appealsList, setAppealsList] = useState([]);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [passTypeFilter, setPassTypeFilter] = useState("ALL");
+  const [detectedActionFilter, setDetectedActionFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRangeFilter, setDateRangeFilter] = useState("ALL");
   // Draft values edited in the custom range inputs.
@@ -462,37 +461,37 @@ export default function ATMOverstayPage() {
     }
   };
 
-const handleTogglePassBlock = async () => {
-  const next = !passBlockEnabled;
-  if (
-    next &&
-    !confirm(
-      "Block every company with an unpaid fine from getting new passes?\n\nThis applies to ALL companies at once, not just one."
-    )
-  ) {
-    return;
-  }
-  setSavingPassBlock(true);
-  try {
-    const res = await axios.patch(
-      `${ADMIN_API}/overstay/settings/pass-block`,
-      { enabled: next },
-      { headers: getAuthHeaders() }
-    );
-    if (res.data?.success) {
-      setPassBlockEnabled(next);
-      toast.success(
-        next
-          ? "Done — every company with an unpaid fine is now blocked from new passes."
-          : "Done — companies can get new passes again, even with unpaid fines."
-      );
+  const handleTogglePassBlock = async () => {
+    const next = !passBlockEnabled;
+    if (
+      next &&
+      !confirm(
+        "Block every company with an unpaid fine from getting new passes?\n\nThis applies to ALL companies at once, not just one."
+      )
+    ) {
+      return;
     }
-  } catch (err) {
-    toast.error(err.response?.data?.message || "Couldn't update this setting — please try again");
-  } finally {
-    setSavingPassBlock(false);
-  }
-};
+    setSavingPassBlock(true);
+    try {
+      const res = await axios.patch(
+        `${ADMIN_API}/overstay/settings/pass-block`,
+        { enabled: next },
+        { headers: getAuthHeaders() }
+      );
+      if (res.data?.success) {
+        setPassBlockEnabled(next);
+        toast.success(
+          next
+            ? "Done — every company with an unpaid fine is now blocked from new passes."
+            : "Done — companies can get new passes again, even with unpaid fines."
+        );
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Couldn't update this setting — please try again");
+    } finally {
+      setSavingPassBlock(false);
+    }
+  };
 
   useEffect(() => {
     setPage(1);
@@ -595,7 +594,7 @@ const handleTogglePassBlock = async () => {
       };
       const res = await axios.post(`${ADMIN_API}/overstay/levy`, payload, { headers: getAuthHeaders() });
       if (res.data?.success) {
-        toast.success(`Levied ${fmtMoney(total)} on ${selectedEntity.identifier}`);
+        toast.success(res.data?.message || `${res.data?.isUpdated ? "Updated fine" : "Levied"} ${fmtMoney(total)} on ${selectedEntity.identifier}`);
         setLevyModalOpen(false);
         await fetchDetected();
         await fetchCharges();
@@ -773,31 +772,31 @@ const handleTogglePassBlock = async () => {
     setDetailModalOpen(true);
   };
 
-const handleToggleCompanyPassBlock = async () => {
-  if (passBlockEnabled) return;
-  if (!modalAgentId) return;
-  const next = !companyPassBlocked;
-  setSavingCompanyPassBlock(true);
-  try {
-    const res = await axios.patch(
-      `${ADMIN_API}/overstay/settings/pass-block/agent/${modalAgentId}`,
-      { enabled: next },
-      { headers: getAuthHeaders() }
-    );
-    if (res.data?.success) {
-      setCompanyPassBlocked(next);
-      toast.success(
-        next
-          ? "Done — this company can't get new passes until they pay."
-          : "Done — this company can get new passes again."
+  const handleToggleCompanyPassBlock = async () => {
+    if (passBlockEnabled) return;
+    if (!modalAgentId) return;
+    const next = !companyPassBlocked;
+    setSavingCompanyPassBlock(true);
+    try {
+      const res = await axios.patch(
+        `${ADMIN_API}/overstay/settings/pass-block/agent/${modalAgentId}`,
+        { enabled: next },
+        { headers: getAuthHeaders() }
       );
+      if (res.data?.success) {
+        setCompanyPassBlocked(next);
+        toast.success(
+          next
+            ? "Done — this company can't get new passes until they pay."
+            : "Done — this company can get new passes again."
+        );
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Couldn't update this setting — please try again");
+    } finally {
+      setSavingCompanyPassBlock(false);
     }
-  } catch (err) {
-    toast.error(err.response?.data?.message || "Couldn't update this setting — please try again");
-  } finally {
-    setSavingCompanyPassBlock(false);
-  }
-};
+  };
 
   /* ─── Bulk selection & bulk actions (Detected Overstays tab) ─── */
   const toggleSelectRow = (item) => {
@@ -948,26 +947,110 @@ const handleToggleCompanyPassBlock = async () => {
   };
 
   /* ─── FILTERS, DATE RANGE, SORT & PAGINATION ─── */
-  const notifiedIdentityKeys = useMemo(() => {
-    const keys = new Set();
-    chargesList
-      .filter((c) => c.status === "NOTIFIED")
-      .forEach((c) => keys.add(overstayIdentityKey(c)));
-    return keys;
+  const companyHistoryMap = useMemo(() => {
+    const map = new Map();
+    chargesList.forEach((c) => {
+      const keys = [
+        c.agent_id && `agent:${c.agent_id}`,
+        c.login_id && `login:${c.login_id.toLowerCase()}`,
+        c.company_name && `company:${c.company_name.toLowerCase()}`,
+      ].filter(Boolean);
+
+      keys.forEach((key) => {
+        if (!map.has(key)) {
+          map.set(key, { count: 0, totalAmount: 0 });
+        }
+        const record = map.get(key);
+        record.count += 1;
+        record.totalAmount += parseFloat(c.total_amount || 0);
+      });
+    });
+    return map;
   }, [chargesList]);
 
+  const getCompanyStats = (item) => {
+    if (!item) return { count: 0, totalAmount: 0 };
+    const key =
+      (item.agent_id && `agent:${item.agent_id}`) ||
+      (item.login_id && `login:${item.login_id.toLowerCase()}`) ||
+      (item.company_name && `company:${item.company_name.toLowerCase()}`);
+    return companyHistoryMap.get(key) || { count: 0, totalAmount: 0 };
+  };
+
+  const getItemStatus = useCallback((item) => {
+    if (item.charge_status) return item.charge_status;
+    const match = chargesList.find((c) => overstayIdentityKey(c) === overstayIdentityKey(item));
+    return match ? match.status : null;
+  }, [chargesList]);
+
+  const renderActionCircle = (status) => {
+    const st = String(status || "").toUpperCase();
+
+    if (st === "NOTIFIED") {
+      return (
+        <span
+          className="h-6 w-6 rounded-full inline-flex items-center justify-center font-black text-xs bg-indigo-600 text-white border border-indigo-700 shadow-sm shrink-0"
+          title="Action Status: N (Notified — Expiry reminder email sent to agent)"
+        >
+          N
+        </span>
+      );
+    }
+    if (st === "PENDING" || st === "EXCEPTION_REJECTED") {
+      return (
+        <span
+          className="h-6 w-6 rounded-full inline-flex items-center justify-center font-black text-xs bg-red-600 text-white border border-red-700 shadow-sm animate-pulse shrink-0"
+          title="Action Status: P (Payable — Overstay fine levied & pending payment)"
+        >
+          P
+        </span>
+      );
+    }
+    if (st === "PAID") {
+      return (
+        <span
+          className="h-6 w-6 rounded-full inline-flex items-center justify-center font-black text-xs bg-emerald-600 text-white border border-emerald-700 shadow-sm shrink-0"
+          title="Action Status: S (Paid & Settled)"
+        >
+          S
+        </span>
+      );
+    }
+    if (st === "WAIVED" || st === "EXCEPTION_APPROVED") {
+      return (
+        <span
+          className="h-6 w-6 rounded-full inline-flex items-center justify-center font-black text-xs bg-blue-600 text-white border border-blue-700 shadow-sm shrink-0"
+          title="Action Status: W (Waived — Exception approved)"
+        >
+          W
+        </span>
+      );
+    }
+    if (st === "EXCEPTION_REQUESTED") {
+      return (
+        <span
+          className="h-6 w-6 rounded-full inline-flex items-center justify-center font-black text-xs bg-amber-500 text-white border border-amber-600 shadow-sm animate-bounce shrink-0"
+          title="Action Status: A (Appeal — Exception requested)"
+        >
+          A
+        </span>
+      );
+    }
+
+    return null;
+  };
+
   const searchedDetected = useMemo(() => {
-    const visibleDetected = detectedList.filter((i) => !notifiedIdentityKeys.has(overstayIdentityKey(i)));
-    if (!searchQuery) return visibleDetected;
+    if (!searchQuery) return detectedList;
     const q = searchQuery.toLowerCase();
-    return visibleDetected.filter((i) =>
+    return detectedList.filter((i) =>
       i.identifier?.toLowerCase().includes(q) ||
       i.entity_name?.toLowerCase().includes(q) ||
       i.pass_no?.toLowerCase().includes(q) ||
       i.company_name?.toLowerCase().includes(q) ||
       i.login_id?.toLowerCase().includes(q)
     );
-  }, [detectedList, searchQuery, notifiedIdentityKeys]);
+  }, [detectedList, searchQuery]);
 
   // Charges log shows levied + reminder-only rows. Appeals in progress
   // live exclusively in the Appeals tab, while NOTIFIED remains visible here.
@@ -1000,6 +1083,23 @@ const handleToggleCompanyPassBlock = async () => {
       i.login_id?.toLowerCase().includes(q)
     );
   }, [appealsList, searchQuery]);
+
+  const getLastFineForCompany = useCallback((entity) => {
+    if (!entity) return null;
+    const matches = chargesList.filter((c) => {
+      if (entity.agent_id && c.agent_id) return c.agent_id === entity.agent_id;
+      if (entity.company_name && c.company_name) return c.company_name.toLowerCase() === entity.company_name.toLowerCase();
+      if (entity.login_id && c.login_id) return c.login_id.toLowerCase() === entity.login_id.toLowerCase();
+      return false;
+    });
+
+    if (matches.length === 0) return null;
+
+    const sorted = [...matches].sort(
+      (a, b) => new Date(b.created_at || b.createdAt || b.date_from || 0) - new Date(a.created_at || a.createdAt || a.date_from || 0)
+    );
+    return sorted[0];
+  }, [chargesList]);
 
   const applyDateRange = useCallback((list) => {
     if (dateRangeFilter === "CUSTOM") {
@@ -1034,9 +1134,23 @@ const handleToggleCompanyPassBlock = async () => {
     });
   }, [passTypeFilter]);
 
+  const applyDetectedActionFilter = useCallback((list) => {
+    if (detectedActionFilter === "ALL") return list;
+    return list.filter((i) => {
+      const st = String(getItemStatus(i) || "").toUpperCase();
+      if (detectedActionFilter === "NEW") return !st || st === "NULL" || st === "";
+      if (detectedActionFilter === "NOTIFIED") return st === "NOTIFIED";
+      if (detectedActionFilter === "PENDING") return st === "PENDING" || st === "EXCEPTION_REJECTED";
+      if (detectedActionFilter === "PAID") return st === "PAID";
+      if (detectedActionFilter === "WAIVED") return st === "WAIVED" || st === "EXCEPTION_APPROVED";
+      if (detectedActionFilter === "EXCEPTION_REQUESTED") return st === "EXCEPTION_REQUESTED";
+      return true;
+    });
+  }, [detectedActionFilter, getItemStatus]);
+
   const rangedDetected = useMemo(
-    () => applyPassTypeFilter(applyDateRange(searchedDetected)),
-    [searchedDetected, applyDateRange, applyPassTypeFilter]
+    () => applyPassTypeFilter(applyDateRange(applyDetectedActionFilter(searchedDetected))),
+    [searchedDetected, applyDateRange, applyPassTypeFilter, applyDetectedActionFilter]
   );
   const rangedCharges = useMemo(
     () => applyPassTypeFilter(applyDateRange(searchedCharges)),
@@ -1061,8 +1175,8 @@ const handleToggleCompanyPassBlock = async () => {
 
   const detectStats = useMemo(() => {
     const persons = rangedDetected.filter(
-                      (d) => ["PERSON", "DRIVER"].includes(d.entity_type)
-                    ).length;
+      (d) => ["PERSON", "DRIVER"].includes(d.entity_type)
+    ).length;
     const vehicles = rangedDetected.filter((d) => d.entity_type === "VEHICLE").length;
     const totalFine = rangedDetected.reduce((s, d) => s + (d.total_amount || 0), 0);
     const maxDays = rangedDetected.reduce((m, d) => Math.max(m, parseInt(d.overstay_days || 0, 10)), 0);
@@ -1149,8 +1263,8 @@ const handleToggleCompanyPassBlock = async () => {
   const chargeTableHead = (
     <tr>
       <th className="px-3 py-2.5 w-16 text-center">SI No.</th>
-      <SortTh label="Company / Agent" sortKey="company_name" sortConfig={sortConfig} onSort={onSort} />
-      <SortTh label="Entity & Identifier" sortKey="identifier" sortConfig={sortConfig} onSort={onSort} />
+      <SortTh label="Company / Agent" sortKey="company_name" sortConfig={sortConfig} onSort={onSort} className="w-64 max-w-[250px]" />
+      <SortTh label="Entity & Identifier" sortKey="identifier" sortConfig={sortConfig} onSort={onSort} className="w-56 max-w-[220px]" />
       <SortTh label="Pass No" sortKey="pass_no" sortConfig={sortConfig} onSort={onSort} />
       <SortTh label="Pass Entry Date" sortKey="date_from" sortConfig={sortConfig} onSort={onSort} />
       <SortTh label="Pass Expiry Date" sortKey="date_to" sortConfig={sortConfig} onSort={onSort} />
@@ -1187,6 +1301,18 @@ const handleToggleCompanyPassBlock = async () => {
         : charge.overstay_days
     );
 
+    const statusLetter =
+      eff === "NOTIFIED" ? "N" :
+        eff === "PAID" ? "S" :
+          eff === "WAIVED" ? "W" :
+            eff === "EXCEPTION_REQUESTED" ? "A" : "P";
+
+    const statusBadgeBg =
+      eff === "NOTIFIED" ? "bg-indigo-600" :
+        eff === "PAID" ? "bg-emerald-600" :
+          eff === "WAIVED" ? "bg-blue-600" :
+            eff === "EXCEPTION_REQUESTED" ? "bg-amber-500" : "bg-red-600";
+
     return (
       <tr
         key={charge.id}
@@ -1197,33 +1323,56 @@ const handleToggleCompanyPassBlock = async () => {
           {startIndex + idx + 1}
         </td>
 
-        <td className="px-3 py-2">
-          <p className="font-bold text-slate-800">{charge.company_name || "—"}</p>
-          <p className="text-[10px] text-slate-400 font-mono">{charge.login_id || "Agent #" + charge.agent_id}</p>
+        <td className="px-3 py-2 w-64 max-w-[250px]">
+          <p className="font-bold text-slate-800 truncate" title={charge.company_name || "N/A"}>
+            {charge.company_name || "N/A"}
+          </p>
+          <p className="text-[10px] text-slate-400 font-mono truncate" title={charge.login_id || "Agent #" + charge.agent_id}>
+            {charge.login_id || "Agent #" + charge.agent_id}
+          </p>
+          {(() => {
+            const stats = getCompanyStats(charge);
+            return stats.count > 0 ? (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 mt-1 rounded text-[9px] font-extrabold bg-rose-100 text-rose-800 border border-rose-200 cursor-help shrink-0"
+                title={`Company has received ${stats.count} overstay charge(s) totaling ${fmtMoney(stats.totalAmount)}`}
+              >
+                <AlertTriangle className="h-2.5 w-2.5 text-rose-600 shrink-0" />
+                Fined Before ({stats.count})
+              </span>
+            ) : (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 mt-1 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0"
+                title="No prior overstay charges recorded for this company"
+              >
+                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
+                No Prior Fines
+              </span>
+            );
+          })()}
         </td>
 
-        <td className="px-3 py-2">
-          <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-black text-[10px] tracking-wider border ${
-              charge.entity_type === "VEHICLE" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-teal-50 text-teal-700 border-teal-200"
-            }`}>
+        <td className="px-3 py-2 w-56 max-w-[220px]">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-black text-[10px] tracking-wider border shrink-0 ${charge.entity_type === "VEHICLE" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-teal-50 text-teal-700 border-teal-200"
+              }`}>
               {charge.entity_type === "VEHICLE" ? <Truck className="h-3 w-3" /> : <User className="h-3 w-3" />}
               {charge.entity_type === "VEHICLE" ? "VEH" : "PER"}
             </span>
-            <div>
+            <div className="min-w-0 flex-1">
               {charge.entity_name && charge.entity_name !== charge.identifier ? (
                 <>
-                  <p className="font-bold text-slate-800">{charge.entity_name}</p>
-                  <p className="text-[10px] text-slate-500 font-mono">{charge.identifier}</p>
+                  <p className="font-bold text-slate-800 truncate" title={charge.entity_name}>{charge.entity_name}</p>
+                  <p className="text-[10px] text-slate-500 font-mono truncate" title={charge.identifier}>{charge.identifier}</p>
                 </>
               ) : (
-                <p className="font-bold text-slate-800">{charge.identifier}</p>
+                <p className="font-bold text-slate-800 truncate" title={charge.identifier}>{charge.identifier}</p>
               )}
             </div>
           </div>
         </td>
 
-        <td className="px-3 py-2 font-mono font-semibold text-slate-600">{charge.pass_no || "—"}</td>
+        <td className="px-3 py-2 font-mono font-semibold text-slate-600">{charge.pass_no || "N/A"}</td>
 
         <td className="px-3 py-2 font-semibold text-emerald-700">
           <span className="inline-flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
@@ -1259,16 +1408,33 @@ const handleToggleCompanyPassBlock = async () => {
         </td>
 
         <td className="px-3 py-2 font-black text-slate-900 text-sm">
-          {fmtMoney(
-            ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status)
-              ? charge.current_total_amount
-              : charge.total_amount
-          )}
+          {(() => {
+            const isLive = ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(charge.status);
+            const tot = parseFloat(isLive ? charge.current_total_amount : charge.total_amount) || 0;
+            const initDays = parseInt(charge.initial_overstay_days || charge.overstay_days || 0, 10);
+            const initAmt = parseFloat(charge.initial_total_amount || (charge.daily_rate * initDays)) || 0;
+            const addDays = parseInt(charge.additional_overstay_days || 0, 10);
+            const addAmt = parseFloat(charge.additional_penalty_amount || 0) || 0;
+
+            if (addDays > 0 && addAmt > 0) {
+              return (
+                <div className="flex flex-col">
+                  <span>{fmtMoney(tot)}</span>
+                  <span className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block mt-0.5 whitespace-nowrap">
+                    {fmtMoney(initAmt)} + {fmtMoney(addAmt)} (Additional penalty ({addDays} day{addDays > 1 ? "s" : ""}))
+                  </span>
+                </div>
+              );
+            }
+            return <span>{fmtMoney(tot)}</span>;
+          })()}
         </td>
 
         <td className="px-3 py-2">
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${sc.bg}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${sc.dot}`} />
+            <span className={`h-4 w-4 rounded-full ${statusBadgeBg} text-white flex items-center justify-center text-[9px] font-black shadow-sm`}>
+              {statusLetter}
+            </span>
             {eff.replace(/_/g, " ")}
           </span>
         </td>
@@ -1344,9 +1510,8 @@ const handleToggleCompanyPassBlock = async () => {
         <div className="flex gap-1.5 p-1 bg-slate-100/80 rounded-lg overflow-x-auto">
           <button
             onClick={() => setActiveTab("detect")}
-            className={`px-3.5 py-1.5 text-[11px] font-black rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === "detect" ? "bg-[#0a1e4d] text-white shadow-md shadow-[#0a1e4d]/20" : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-            }`}
+            className={`px-3.5 py-1.5 text-[11px] font-black rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === "detect" ? "bg-[#0a1e4d] text-white shadow-md shadow-[#0a1e4d]/20" : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+              }`}
           >
             <AlertTriangle className="h-3 w-3 text-amber-400" />
             Detected Overstays
@@ -1357,9 +1522,8 @@ const handleToggleCompanyPassBlock = async () => {
 
           <button
             onClick={() => setActiveTab("charges")}
-            className={`px-3.5 py-1.5 text-[11px] font-black rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === "charges" ? "bg-[#0a1e4d] text-white shadow-md shadow-[#0a1e4d]/20" : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-            }`}
+            className={`px-3.5 py-1.5 text-[11px] font-black rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === "charges" ? "bg-[#0a1e4d] text-white shadow-md shadow-[#0a1e4d]/20" : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+              }`}
           >
             <FileText className="h-3 w-3 text-blue-400" />
             Levied/Notified Charges Log
@@ -1370,9 +1534,8 @@ const handleToggleCompanyPassBlock = async () => {
 
           <button
             onClick={() => setActiveTab("appeals")}
-            className={`px-3.5 py-1.5 text-[11px] font-black rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === "appeals" ? "bg-[#0a1e4d] text-white shadow-md shadow-[#0a1e4d]/20" : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-            }`}
+            className={`px-3.5 py-1.5 text-[11px] font-black rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === "appeals" ? "bg-[#0a1e4d] text-white shadow-md shadow-[#0a1e4d]/20" : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+              }`}
           >
             <Gavel className="h-3 w-3 text-amber-400" />
             Appeals
@@ -1387,7 +1550,7 @@ const handleToggleCompanyPassBlock = async () => {
             value={dateRangeFilter}
             onChange={(val) => { setDateRangeFilter(val); setPage(1); }}
             customFrom={customDateFrom}
-            customTo={customDateTo} 
+            customTo={customDateTo}
             onCustomFromChange={setCustomDateFrom}
             onCustomToChange={setCustomDateTo}
             onApplyCustom={applyCustomDateRange}
@@ -1412,6 +1575,28 @@ const handleToggleCompanyPassBlock = async () => {
               <option value="ANNUAL">Annual Pass</option>
             </select>
           </div>
+
+          {activeTab === "detect" && (
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+              <Filter className="h-3 w-3 text-slate-400" />
+              <select
+                value={detectedActionFilter}
+                onChange={(e) => {
+                  setDetectedActionFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-transparent text-[11px] font-bold text-slate-700 outline-none cursor-pointer"
+              >
+                <option value="ALL">All Action States</option>
+                <option value="NEW">No Action Taken</option>
+                <option value="NOTIFIED">(N) Notified</option>
+                <option value="PENDING">(P) Fine Levied</option>
+                <option value="PAID">(S) Paid &amp; Settled</option>
+                <option value="WAIVED">(W) Waived</option>
+                <option value="EXCEPTION_REQUESTED">(A) Appealed</option>
+              </select>
+            </div>
+          )}
 
           {activeTab === "charges" && (
             <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
@@ -1538,6 +1723,36 @@ const handleToggleCompanyPassBlock = async () => {
         </div>
       )}
 
+      {/* ══════════════ OVERSTAY STATUS LEGEND ══════════════ */}
+      <div className="bg-slate-50/90 border border-slate-200/90 rounded-xl px-3.5 py-2 shadow-sm flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-1.5 text-slate-800 font-extrabold text-[11px] uppercase tracking-wider">
+          <Info className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+          <span>Status Legend:</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 md:gap-4 text-[11px] font-semibold text-slate-700">
+          <div className="flex items-center gap-1.5" title="Expiry reminder email sent to agent">
+            <span className="h-4 w-4 rounded-full bg-indigo-600 text-white inline-flex items-center justify-center font-black text-[9px] shadow-sm">N</span>
+            <span>Notified</span>
+          </div>
+          <div className="flex items-center gap-1.5" title="Overstay fine levied by ATM; payment pending">
+            <span className="h-4 w-4 rounded-full bg-red-600 text-white inline-flex items-center justify-center font-black text-[9px] shadow-sm">P</span>
+            <span>Pending Fine</span>
+          </div>
+          <div className="flex items-center gap-1.5" title="Agent requested exception; under Traffic Dept review">
+            <span className="h-4 w-4 rounded-full bg-amber-500 text-white inline-flex items-center justify-center font-black text-[9px] shadow-sm">A</span>
+            <span>Appeal / Exception</span>
+          </div>
+          <div className="flex items-center gap-1.5" title="Overstay fine paid & settled by agent">
+            <span className="h-4 w-4 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center font-black text-[9px] shadow-sm">S</span>
+            <span>Settled (Paid)</span>
+          </div>
+          <div className="flex items-center gap-1.5" title="Overstay charge waived by ATM or approved exception">
+            <span className="h-4 w-4 rounded-full bg-blue-600 text-white inline-flex items-center justify-center font-black text-[9px] shadow-sm">W</span>
+            <span>Waived</span>
+          </div>
+        </div>
+      </div>
+
       {/* ═══════════════════════════════════════════════ */}
       {/* MAIN DATA TABLE (this now gets the bulk of the page) */}
       {/* ═══════════════════════════════════════════════ */}
@@ -1575,9 +1790,9 @@ const handleToggleCompanyPassBlock = async () => {
                     />
                   </th>
                   <th className="px-3 py-2.5 w-10 text-center">#</th>
-                  <SortTh label="Type" sortKey="entity_type" sortConfig={sortConfig} onSort={onSort} />
-                  <SortTh label="Identifier & Name" sortKey="identifier" sortConfig={sortConfig} onSort={onSort} />
-                  <SortTh label="Firm / Company" sortKey="company_name" sortConfig={sortConfig} onSort={onSort} />
+                  <SortTh label="Type" sortKey="entity_type" sortConfig={sortConfig} onSort={onSort} className="w-20" />
+                  <SortTh label="Identifier & Name" sortKey="identifier" sortConfig={sortConfig} onSort={onSort} className="w-56 max-w-[220px]" />
+                  <SortTh label="Firm / Company" sortKey="company_name" sortConfig={sortConfig} onSort={onSort} className="w-64 max-w-[250px]" />
                   <SortTh label="Pass Ref #" sortKey="pass_no" sortConfig={sortConfig} onSort={onSort} />
                   <SortTh label="Pass Entry Date" sortKey="date_from" sortConfig={sortConfig} onSort={onSort} />
                   <SortTh label="Pass Expiry Date" sortKey="date_to" sortConfig={sortConfig} onSort={onSort} />
@@ -1610,57 +1825,88 @@ const handleToggleCompanyPassBlock = async () => {
                       <td className="px-3 py-2 font-mono font-bold text-slate-400 text-center">{globalIdx}</td>
 
                       <td className="px-3 py-2">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-black text-[10px] tracking-wider border ${
-                          item.entity_type === "VEHICLE" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-teal-50 text-teal-700 border-teal-200"
-                        }`}>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-black text-[10px] tracking-wider border ${item.entity_type === "VEHICLE" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-teal-50 text-teal-700 border-teal-200"
+                          }`}>
                           {item.entity_type === "VEHICLE" ? <Truck className="h-3 w-3" /> : <User className="h-3 w-3" />}
                           {item.entity_type === "VEHICLE" ? "VEH" : "PER"}
                         </span>
                       </td>
 
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 w-56 max-w-[220px]">
                         {item.entity_type === "VEHICLE" ? (
                           <>
                             {/* Vehicle Number - Primary */}
-                            <p className="font-extrabold text-[#0a1e4d] uppercase font-mono text-sm">
-                              {item.identifier}
-                            </p>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <p className="font-extrabold text-[#0a1e4d] uppercase font-mono text-sm truncate" title={item.identifier}>
+                                {item.identifier}
+                              </p>
+                              {renderActionCircle(getItemStatus(item))}
+                            </div>
 
                             {/* Vehicle Name (Bus/Truck/etc.) */}
                             {item.entity_name && item.entity_name !== item.identifier && (
-                              <p className="text-[11px] text-slate-500 font-medium">
+                              <p className="text-[11px] text-slate-500 font-medium truncate" title={item.entity_name}>
                                 {item.entity_name}
                               </p>
                             )}
 
                             {item.vehicle_type_name && (
-                              <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5 font-medium">
-                                <Car className="h-2.5 w-2.5" />
-                                {item.vehicle_type_name}
+                              <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5 font-medium truncate" title={item.vehicle_type_name}>
+                                <Car className="h-2.5 w-2.5 shrink-0" />
+                                <span className="truncate">{item.vehicle_type_name}</span>
                               </p>
                             )}
                           </>
                         ) : (
                           <>
                             {/* Person Name - Primary */}
-                            <p className="font-extrabold text-[#0a1e4d] text-sm">
-                              {item.entity_name || item.identifier}
-                            </p>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <p className="font-extrabold text-[#0a1e4d] text-sm truncate" title={item.entity_name || item.identifier}>
+                                {item.entity_name || item.identifier}
+                              </p>
+                              {renderActionCircle(getItemStatus(item))}
+                            </div>
 
                             {/* Employee ID / Aadhaar / Identifier */}
-                            <p className="text-[11px] text-slate-500 font-mono uppercase">
+                            <p className="text-[11px] text-slate-500 font-mono uppercase truncate" title={item.identifier}>
                               {item.identifier}
                             </p>
                           </>
                         )}
                       </td>
 
-                      <td className="px-3 py-2">
-                        <p className="font-bold text-slate-800">{item.company_name || "—"}</p>
-                        {item.login_id && <p className="text-[10px] text-slate-400 font-mono">{item.login_id}</p>}
+                      <td className="px-3 py-2 w-64 max-w-[250px]">
+                        <p className="font-bold text-slate-800 truncate" title={item.company_name || "N/A"}>
+                          {item.company_name || "N/A"}
+                        </p>
+                        {item.login_id && (
+                          <p className="text-[10px] text-slate-400 font-mono truncate" title={item.login_id}>
+                            {item.login_id}
+                          </p>
+                        )}
+                        {(() => {
+                          const stats = getCompanyStats(item);
+                          return stats.count > 0 ? (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 mt-1 rounded text-[9px] font-extrabold bg-rose-100 text-rose-800 border border-rose-200 cursor-help shrink-0"
+                              title={`Company has received ${stats.count} overstay charge(s) totaling ${fmtMoney(stats.totalAmount)}`}
+                            >
+                              <AlertTriangle className="h-2.5 w-2.5 text-rose-600 shrink-0" />
+                              Fined Before ({stats.count})
+                            </span>
+                          ) : (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 mt-1 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0"
+                              title="No prior overstay charges recorded for this company"
+                            >
+                              <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
+                              No Prior Fines
+                            </span>
+                          );
+                        })()}
                       </td>
 
-                      <td className="px-3 py-2 font-mono font-semibold text-slate-600">{item.pass_no || "—"}</td>
+                      <td className="px-3 py-2 font-mono font-semibold text-slate-600">{item.pass_no || "N/A"}</td>
 
                       <td className="px-3 py-2 font-semibold text-emerald-700">
                         <span className="inline-flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
@@ -1697,13 +1943,59 @@ const handleToggleCompanyPassBlock = async () => {
                       <td className="px-3 py-2 font-black text-slate-900 text-sm">{fmtMoney(item.total_amount)}</td>
 
                       <td className="px-3 py-2 text-center">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openLevyModal(item); }}
-                          className="px-3 py-1.5 bg-gradient-to-r from-red-600 to-rose-700 text-white rounded-lg font-bold shadow-md hover:from-red-700 hover:to-rose-800 transition-all flex items-center gap-1.5 mx-auto active:scale-95"
-                        >
-                          <PlusCircle className="h-3.5 w-3.5" />
-                          Review & Levy
-                        </button>
+                        {(() => {
+                          const st = getItemStatus(item);
+                          if (st === "PENDING" || st === "EXCEPTION_REJECTED") {
+                            return (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const match = chargesList.find((c) => overstayIdentityKey(c) === overstayIdentityKey(item));
+                                  if (match) openDetailModal(match);
+                                  else openLevyModal(item);
+                                }}
+                                className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-300 rounded-lg font-bold hover:bg-amber-100 transition-all flex items-center gap-1.5 mx-auto active:scale-95 text-[11px]"
+                                title="Overstay fine already levied — click to view charge details"
+                              >
+                                <Clock className="h-3.5 w-3.5 text-amber-600" />
+                                Levied (Pending)
+                              </button>
+                            );
+                          }
+                          if (st === "PAID") {
+                            return (
+                              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold inline-flex items-center gap-1 text-[11px]">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                Settled (Paid)
+                              </span>
+                            );
+                          }
+                          if (st === "WAIVED" || st === "EXCEPTION_APPROVED") {
+                            return (
+                              <span className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold inline-flex items-center gap-1 text-[11px]">
+                                <Ban className="h-3.5 w-3.5 text-blue-600" />
+                                Waived
+                              </span>
+                            );
+                          }
+                          if (st === "EXCEPTION_REQUESTED") {
+                            return (
+                              <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-300 rounded-lg font-bold inline-flex items-center gap-1 text-[11px]">
+                                <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                                Appeal Pending
+                              </span>
+                            );
+                          }
+                          return (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openLevyModal(item); }}
+                              className="px-3 py-1.5 bg-gradient-to-r from-red-600 to-rose-700 text-white rounded-lg font-bold shadow-md hover:from-red-700 hover:to-rose-800 transition-all flex items-center gap-1.5 mx-auto active:scale-95 text-[11px]"
+                            >
+                              <PlusCircle className="h-3.5 w-3.5" />
+                              Review & Levy
+                            </button>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );
@@ -1783,9 +2075,8 @@ const handleToggleCompanyPassBlock = async () => {
                         {showEllipsis && <span className="px-1 text-slate-400 font-bold">…</span>}
                         <button
                           onClick={() => setPage(p)}
-                          className={`px-3 py-1 rounded-lg font-bold transition-all shadow-sm ${
-                            page === p ? "bg-gradient-to-r from-[#0a1e4d] to-[#122b68] text-white shadow-blue-950/20" : "bg-white border border-slate-200 hover:bg-slate-100 text-slate-700"
-                          }`}
+                          className={`px-3 py-1 rounded-lg font-bold transition-all shadow-sm ${page === p ? "bg-gradient-to-r from-[#0a1e4d] to-[#122b68] text-white shadow-blue-950/20" : "bg-white border border-slate-200 hover:bg-slate-100 text-slate-700"
+                            }`}
                         >
                           {p}
                         </button>
@@ -1819,7 +2110,7 @@ const handleToggleCompanyPassBlock = async () => {
       {/* ══════════════ LEVY CHARGE MODAL ══════════════ */}
       {levyModalOpen && selectedEntity && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
 
             <div className="px-6 py-4 bg-gradient-to-r from-[#0a1e4d] via-[#122b68] to-[#0a1e4d] text-white flex justify-between items-center border-b border-white/10">
               <h3 className="font-black text-base flex items-center gap-2.5">
@@ -1833,21 +2124,20 @@ const handleToggleCompanyPassBlock = async () => {
               </button>
             </div>
 
-<PassBlockToggleStrip
-  enabled={passBlockEnabled || companyPassBlocked}
-  saving={savingCompanyPassBlock}
-  onToggle={handleToggleCompanyPassBlock}
-  locked={passBlockEnabled}
-  lockedReason="Right now every company is blocked, because the site-wide setting is turned on. Turn that off first if you want to control this company on its own."
-/>
+            <PassBlockToggleStrip
+              enabled={passBlockEnabled || companyPassBlocked}
+              saving={savingCompanyPassBlock}
+              onToggle={handleToggleCompanyPassBlock}
+              locked={passBlockEnabled}
+              lockedReason="Right now every company is blocked, because the site-wide setting is turned on. Turn that off first if you want to control this company on its own."
+            />
 
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-xl border ${
-                    selectedEntity.entity_type === "VEHICLE" ? "bg-blue-50 border-blue-200 text-blue-600" : "bg-teal-50 border-teal-200 text-teal-600"
-                  }`}>
+                  <div className={`p-3 rounded-xl border ${selectedEntity.entity_type === "VEHICLE" ? "bg-blue-50 border-blue-200 text-blue-600" : "bg-teal-50 border-teal-200 text-teal-600"
+                    }`}>
                     {selectedEntity.entity_type === "VEHICLE" ? <Truck className="h-5 w-5" /> : <User className="h-5 w-5" />}
                   </div>
                   <div>
@@ -1883,6 +2173,57 @@ const handleToggleCompanyPassBlock = async () => {
                   </span>
                 </div>
               </div>
+
+              {/* Last Fine Levied on Company Details Card */}
+              {(() => {
+                const lastFine = getLastFineForCompany(selectedEntity);
+                if (!lastFine) {
+                  return (
+                    <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200/80 flex items-center justify-between text-xs text-emerald-800">
+                      <div className="flex items-center gap-2 font-bold">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                        <span>No Prior Overstay Fines Recorded for this Company</span>
+                      </div>
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-extrabold border border-emerald-200">First Offense</span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-extrabold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <History className="h-3.5 w-3.5 text-amber-600" />
+                        Last Fine Levied on Company
+                      </p>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded border ${lastFine.status === "PAID" ? "bg-emerald-100 text-emerald-800 border-emerald-300" :
+                        lastFine.status === "WAIVED" ? "bg-blue-100 text-blue-800 border-blue-300" :
+                          "bg-red-100 text-red-800 border-red-300"
+                        }`}>
+                        {lastFine.status}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div className="bg-white/90 p-2 rounded-lg border border-amber-200/60">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Pass No / Ref</p>
+                        <p className="font-mono font-bold text-slate-800 mt-0.5 truncate">{lastFine.pass_no || "N/A"}</p>
+                      </div>
+                      <div className="bg-white/90 p-2 rounded-lg border border-amber-200/60">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Overstay</p>
+                        <p className="font-bold text-amber-900 mt-0.5">{lastFine.overstay_days} Days</p>
+                      </div>
+                      <div className="bg-white/90 p-2 rounded-lg border border-amber-200/60">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Fine Amount</p>
+                        <p className="font-black text-red-700 mt-0.5">{fmtMoney(lastFine.total_amount)}</p>
+                      </div>
+                      <div className="bg-white/90 p-2 rounded-lg border border-amber-200/60">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Date Levied</p>
+                        <p className="font-mono font-bold text-slate-700 mt-0.5">{fmtDate(lastFine.created_at || lastFine.date_from)}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
@@ -1986,7 +2327,7 @@ const handleToggleCompanyPassBlock = async () => {
       {/* ══════════════ CHARGE DETAIL / EXCEPTION-DECISION MODAL ══════════════ */}
       {detailModalOpen && detailCharge && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 bg-gradient-to-r from-[#0a1e4d] via-[#122b68] to-[#0a1e4d] text-white flex justify-between items-center border-b border-white/10">
               <h3 className="font-black text-base flex items-center gap-2">
                 {detailCharge.status === "EXCEPTION_REQUESTED" ? (
@@ -2000,13 +2341,13 @@ const handleToggleCompanyPassBlock = async () => {
               </button>
             </div>
 
-<PassBlockToggleStrip
-  enabled={passBlockEnabled || companyPassBlocked}
-  saving={savingCompanyPassBlock}
-  onToggle={handleToggleCompanyPassBlock}
-  locked={passBlockEnabled}
-  lockedReason="Right now every company is blocked, because the site-wide setting is turned on. Turn that off first if you want to control this company on its own."
-/>
+            <PassBlockToggleStrip
+              enabled={passBlockEnabled || companyPassBlocked}
+              saving={savingCompanyPassBlock}
+              onToggle={handleToggleCompanyPassBlock}
+              locked={passBlockEnabled}
+              lockedReason="Right now every company is blocked, because the site-wide setting is turned on. Turn that off first if you want to control this company on its own."
+            />
 
             <div className="px-6 pt-2">
               <p className="text-[10px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5">
@@ -2068,30 +2409,94 @@ const handleToggleCompanyPassBlock = async () => {
                 </div>
               </div>
 
-              <div className="bg-red-50 p-4 rounded-2xl border border-red-200 flex justify-between items-end">
-                <div>
-                  <p className="text-[10px] font-extrabold text-red-600 uppercase mb-1">
-                    Penalty Breakdown {["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(detailCharge.status) && "(Live)"}
-                  </p>
-                  <p className="text-xs text-red-700 font-mono">
-                    {["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(detailCharge.status)
-                      ? detailCharge.current_overstay_days
-                      : detailCharge.overstay_days} days × {fmtMoney(detailCharge.daily_rate)}/day
+              {/* Last Fine Levied on Company Details Card */}
+              {(() => {
+                const lastFine = getLastFineForCompany(detailCharge);
+                if (!lastFine) return null;
+
+                return (
+                  <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-extrabold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <History className="h-3.5 w-3.5 text-amber-600" />
+                        Last Fine Levied on Company
+                      </p>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded border ${lastFine.status === "PAID" ? "bg-emerald-100 text-emerald-800 border-emerald-300" :
+                        lastFine.status === "WAIVED" ? "bg-blue-100 text-blue-800 border-blue-300" :
+                          "bg-red-100 text-red-800 border-red-300"
+                        }`}>
+                        {lastFine.status}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div className="bg-white/90 p-2 rounded-lg border border-amber-200/60">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Pass No / Ref</p>
+                        <p className="font-mono font-bold text-slate-800 mt-0.5 truncate">{lastFine.pass_no || "N/A"}</p>
+                      </div>
+                      <div className="bg-white/90 p-2 rounded-lg border border-amber-200/60">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Overstay</p>
+                        <p className="font-bold text-amber-900 mt-0.5">{lastFine.overstay_days} Days</p>
+                      </div>
+                      <div className="bg-white/90 p-2 rounded-lg border border-amber-200/60">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Fine Amount</p>
+                        <p className="font-black text-red-700 mt-0.5">{fmtMoney(lastFine.total_amount)}</p>
+                      </div>
+                      <div className="bg-white/90 p-2 rounded-lg border border-amber-200/60">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Date Levied</p>
+                        <p className="font-mono font-bold text-slate-700 mt-0.5">{fmtDate(lastFine.created_at || lastFine.date_from)}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="bg-red-50 p-4 rounded-2xl border border-red-200">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <p className="text-[10px] font-extrabold text-red-600 uppercase mb-1">
+                      Penalty Breakdown {["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(detailCharge.status) && "(Live)"}
+                    </p>
+                    <p className="text-xs text-red-700 font-mono">
+                      {["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(detailCharge.status)
+                        ? detailCharge.current_overstay_days
+                        : detailCharge.overstay_days} days total × {fmtMoney(detailCharge.daily_rate)}/day
+                    </p>
+                  </div>
+                  <p className="text-3xl font-black text-red-900">
+                    {fmtMoney(
+                      ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(detailCharge.status)
+                        ? detailCharge.current_total_amount
+                        : detailCharge.total_amount
+                    )}
                   </p>
                 </div>
-                <p className="text-3xl font-black text-red-900">
-                  {fmtMoney(
-                    ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(detailCharge.status)
-                      ? detailCharge.current_total_amount
-                      : detailCharge.total_amount
-                  )}
-                </p>
+                {(() => {
+                  const initDays = parseInt(detailCharge.initial_overstay_days || detailCharge.overstay_days || 0, 10);
+                  const initAmt = parseFloat(detailCharge.initial_total_amount || (detailCharge.daily_rate * initDays)) || 0;
+                  const addDays = parseInt(detailCharge.additional_overstay_days || 0, 10);
+                  const addAmt = parseFloat(detailCharge.additional_penalty_amount || 0) || 0;
+
+                  return (
+                    <div className="space-y-1 text-xs border-t border-red-200/80 pt-2.5 mt-2">
+                      <div className="flex justify-between text-slate-700 font-medium">
+                        <span>Initial Levy Fine ({initDays} days × {fmtMoney(detailCharge.daily_rate)}/day):</span>
+                        <span className="font-bold">{fmtMoney(initAmt)}</span>
+                      </div>
+                      {addDays > 0 && (
+                        <div className="flex justify-between text-amber-900 font-semibold bg-amber-100/70 px-2 py-1 rounded border border-amber-200/80">
+                          <span>Additional penalty ({addDays} day{addDays > 1 ? "s" : ""} delayed payment):</span>
+                          <span className="font-bold">+ {fmtMoney(addAmt)}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {detailCharge.payment_method && (
                 <div className="bg-emerald-50 p-3.5 rounded-2xl border border-emerald-200 text-xs">
                   <p className="text-[10px] font-extrabold text-emerald-600 uppercase mb-1">Payment Settlement</p>
-                  <p className="text-emerald-800 font-medium">Method: <strong>{detailCharge.payment_method}</strong> | Transaction Ref: <strong className="font-mono">{detailCharge.transaction_id || "—"}</strong></p>
+                  <p className="text-emerald-800 font-medium">Method: <strong>{detailCharge.payment_method}</strong> | Transaction Ref: <strong className="font-mono">{detailCharge.transaction_id || "N/A"}</strong></p>
                 </div>
               )}
 

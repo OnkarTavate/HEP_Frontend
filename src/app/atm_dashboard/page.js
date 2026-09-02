@@ -1374,7 +1374,7 @@ export default function ATMBlacklistPage() {
       {/* ════════════════════════════════════════════ */}
       {isCreateOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-white/95 backdrop-blur-xl w-full max-w-lg rounded-3xl shadow-2xl border border-white/20 overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+          <div className="bg-white/95 backdrop-blur-xl w-full max-w-3xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
             {/* Header */}
             <div className="flex justify-between items-center px-4 sm:px-6 py-4 sm:py-4.5 bg-gradient-to-r from-slate-950 via-red-950 to-slate-950 text-white shrink-0 border-b border-red-500/20 shadow-md">
               <div className="flex items-center gap-3">
@@ -1828,7 +1828,7 @@ export default function ATMBlacklistPage() {
       {/* ════════════════════════════════════════════ */}
       {isDetailOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-white/95 backdrop-blur-xl w-full max-w-2xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+          <div className="bg-white/95 backdrop-blur-xl w-full max-w-3xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
             {/* Header */}
             <div className="flex justify-between items-center px-4 sm:px-6 py-4 sm:py-4.5 bg-gradient-to-r from-slate-950 via-red-950 to-slate-950 text-white shrink-0 border-b border-red-500/20 shadow-md">
               <div className="flex items-center gap-3">
