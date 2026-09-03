@@ -5,11 +5,7 @@ import ReportSearchForm from "@/components/reports/ReportSearchForm";
 import ReportViewerToolbar from "@/components/reports/ReportViewerToolbar";
 
 const AGENT_API =
-  process.env.INTERNAL_AGENT_API ||
-  (process.env.NEXT_PUBLIC_AGENT_API &&
-  process.env.NEXT_PUBLIC_AGENT_API.startsWith("http")
-    ? process.env.NEXT_PUBLIC_AGENT_API
-    : "http://127.0.0.1:5001/api");
+  process.env.INTERNAL_AGENT_API || "http://127.0.0.1:5001/api";
 
 const registeredUsersReportContentId = "registered-users-report-content";
 
