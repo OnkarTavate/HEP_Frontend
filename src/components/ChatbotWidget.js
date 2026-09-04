@@ -417,51 +417,73 @@ export default function ChatbotWidget() {
           background: var(--orange);
         }
         .bub p {
-            margin: 0 0 8px;
+          margin: 0 0 8px;
+          font-size: 1rem;
+          line-height: 1.6;
         }
-
+        .bub p:last-child {
+          margin-bottom: 0;
+        }
         .bub :global(ol) {
-            list-style: decimal;
-            padding-left: 1.5rem;
+          list-style: decimal;
+          padding-left: 1.4rem;
+          margin: 0 0 8px;
+          font-size: 1rem;
+          line-height: 1.6;
         }
-
         .bub :global(ul) {
-            list-style: disc;
-            padding-left: 1.5rem;
+          list-style: disc;
+          padding-left: 1.4rem;
+          margin: 0 0 8px;
+          font-size: 1rem;
+          line-height: 1.6;
         }
-
+        .bub :global(ol:last-child),
+        .bub :global(ul:last-child) {
+          margin-bottom: 0;
+        }
         .bub :global(li) {
-            display: list-item;
+          display: list-item;
+          font-size: 1rem;
+          line-height: 1.6;
+          margin-bottom: 4px;
         }
+        .bub :global(li:last-child) {
+          margin-bottom: 0;
+        }
+        .bub :global(li p) {
+          margin: 0;
+          font-size: 1rem;
+          line-height: 1.6;
+        }
+        .bub :global(strong),
         .bub strong {
-            font-weight: 600;
+          font-weight: 600;
         }
         .bub :global(h1) {
-          font-size: 1.2rem;
+          font-size: 1.25rem;
           margin: 0 0 8px;
           font-weight: 600;
         }
-
         .bub :global(h2) {
-          font-size: 1.05rem;
+          font-size: 1.15rem;
           margin: 0 0 8px;
           font-weight: 600;
         }
-
         .bub :global(h3) {
-          font-size: 1rem;
+          font-size: 1.05rem;
           margin: 0 0 6px;
           font-weight: 600;
         }
         .bub :global(h4) {
-          font-size: 14px;
+          font-size: 1rem;
           font-weight: 600;
           margin: 0 0 4px;
         }
         .bub {
           max-width: 82%;
-          padding: 9px 13px;
-          font-size: 13px;
+          padding: 10px 14px;
+          font-size: 1rem;
           line-height: 1.6;
           border-radius: var(--r);
         }
