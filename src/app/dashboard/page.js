@@ -1563,12 +1563,15 @@ export default function DashboardPage() {
       departmentId === 4 ||
       ["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"]
         .includes(role) ||
-      role === "Approval";
+      role === "Approval" ||
+      role === "Safety Officer";
 
     if (isEssentialApprover) {
-      router.replace(
-        "/traffic_approval/passes?tab=pending",
-      );
+      if (role === "Safety Officer") {
+        router.replace("/traffic_approval/passes?tab=pending");
+      } else {
+        router.replace("/traffic_approval/dashboard");
+      }
     }
         } catch (error) {
       console.error("Failed to parse logged-in user:", error);

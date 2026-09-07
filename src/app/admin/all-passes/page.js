@@ -607,8 +607,8 @@ export default function AdminAllPassesPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-700/30">
-                        {selected.persons.map((p) => (
-                          <tr key={p.id}>
+                        {selected.persons.map((p, idx) => (
+                          <tr key={`person-${p.id || idx}-${idx}`}>
                             <td className="p-3 font-mono font-bold text-xs text-slate-800 dark:text-stone-200">
                               {p.personPassNo || "—"}
                             </td>
@@ -652,8 +652,8 @@ export default function AdminAllPassesPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-700/30">
-                        {selected.vehicles.map((v) => (
-                          <tr key={v.id}>
+                        {selected.vehicles.map((v, idx) => (
+                          <tr key={`vehicle-${v.id || idx}-${idx}`}>
                             <td className="p-3 font-mono font-bold text-xs text-slate-800 dark:text-stone-200">
                               {v.vehiclePassNo || "—"}
                             </td>

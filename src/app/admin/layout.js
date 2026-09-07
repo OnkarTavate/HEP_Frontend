@@ -600,24 +600,48 @@ export default function AdminLayout({ children }) {
   const canSeeBulkPass =
     isAdmin || BULK_PASS_DEPT_IDS.includes(Number(user?.departmentId));
 
+  const isSafetyOfficer =
+    user?.role?.toLowerCase() === "safety officer" ||
+    user?.role?.toLowerCase() === "fire safety officer";
+  
+  const userDeptId = Number(user?.departmentId);
+  const userDeptName = String(user?.departmentName || "").toLowerCase();
+
+  const isCivilOrMechanicalDept =
+    [3, 4].includes(userDeptId) ||
+    userDeptName.includes("civil") ||
+    userDeptName.includes("mechanical");
+
+  const isDepartmental =
+    user?.role?.toLowerCase() === "approval" && !isAdmin;
+
+  // Non-Civil & Non-Mechanical departmental officers (Finance, Medical, EDP, General Admin, etc.)
+  const isOtherDepartmental = isDepartmental && !isCivilOrMechanicalDept;
+
+  const baseConsoleHref = isAdmin 
+    ? "/admin" 
+    : (isSafetyOfficer || (isDepartmental && isCivilOrMechanicalDept))
+      ? "/admin/pass-approvals" 
+      : "/admin/vendor_pass";
+
   const navigationItems = [
-    {
+    ...(!isSafetyOfficer ? [{
       name: isAdmin ? "Admin Console" : "Vendor Pass",
-      href: consoleHref,
+      href: isAdmin ? "/admin" : "/admin/vendor_pass",
       icon: ShieldCheck,
-    },
+    }] : []),
     ...(isAdmin
       ? [{ name: "User Accounts", href: "/admin/user-accounts", icon: Users }]
       : []),
-    { name: "Pass Approvals", href: "/admin/pass-approvals", icon: FileText },
-    { name: "Company Approvals", href: "/admin/companies", icon: Building2 },
-    {
+    ...((!isOtherDepartmental || isAdmin) ? [{ name: "Pass Approvals", href: "/admin/pass-approvals", icon: FileText }] : []),
+    ...((!isSafetyOfficer && !isDepartmental) || isAdmin ? [{ name: "Company Approvals", href: "/admin/companies", icon: Building2 }] : []),
+    ...(!isSafetyOfficer ? [{
       name: "Material Approvals",
       href: "/admin/material-pass",
       icon: FileText,
-    },
-    { name: "All Passes", href: "/admin/all-passes", icon: FileText },
-    { name: "Bulk Pass", href: "/admin/bulk_pass", icon: Users },
+    }] : []),
+    ...((!isSafetyOfficer && !isDepartmental) || isAdmin ? [{ name: "All Passes", href: "/admin/all-passes", icon: FileText }] : []),
+    ...(!isSafetyOfficer ? [{ name: "Bulk Pass", href: "/admin/bulk_pass", icon: Users }] : []),
     ...(isAdmin
       ? [{ name: "Reports", href: "/admin/reports", icon: BarChart3 }]
       : []),

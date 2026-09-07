@@ -235,6 +235,66 @@ export default function AdminPassApprovalsPage() {
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  const isDepartmental = Boolean(
+    currentUser?.role?.toLowerCase() === "approval" ||
+    currentUser?.role?.toLowerCase() === "safety officer" ||
+    currentUser?.role?.toLowerCase() === "fire safety officer"
+  );
+
+  const canUserVerifyVehicle = useCallback((v) => {
+    if (!v) return false;
+    const role = currentUser?.role || "";
+    const userDeptId = Number(currentUser?.departmentId);
+    const userDeptName = String(currentUser?.departmentName || "").toLowerCase();
+
+    if (role === "Safety Officer") {
+      const passType = String(v.passType || "").toUpperCase();
+      const vehicleType = String(v.vehicleTypeName || "").toUpperCase();
+      return ["YEARLY", "ANNUAL"].includes(passType) && ["TRAILORS", "TRAILER LORRY"].includes(vehicleType);
+    }
+    if (role === "Fire Safety Officer") {
+      const passType = String(v.passType || "").toUpperCase();
+      const vehicleType = String(v.vehicleTypeName || "").toUpperCase();
+      const isAnnualTrailer = ["YEARLY", "ANNUAL"].includes(passType) && ["TRAILORS", "TRAILER LORRY"].includes(vehicleType);
+      const vehicleStatus = String(v.status || "").toLowerCase();
+      return isAnnualTrailer && (vehicleStatus === "approved" || vehicleStatus === "pending") && v.marineSafetyApproved !== true;
+    }
+    if (role === "Approval") {
+      if (v.essentialWorkflowState) {
+        if (v.essentialWorkflowState.includes("CIVIL") && (userDeptId === 3 || userDeptName.includes("civil"))) return true;
+        if (v.essentialWorkflowState.includes("MECHANICAL") && (userDeptId === 4 || userDeptName.includes("mechanical"))) return true;
+        if (v.essentialDepartmentId && Number(v.essentialDepartmentId) === userDeptId) return true;
+      }
+      const isOilDockArea = (val) => {
+        if (!val) return false;
+        const str = String(val).toUpperCase();
+        return str === "1" || str.includes("OIL JETTY") || str.includes("OIL_JETTY");
+      };
+      const isOilDock = isOilDockArea(v.accessAreaId || v.accessArea);
+      if (isOilDock && !v.sparkArresterCertified) return false;
+      return true;
+    }
+    return true;
+  }, [currentUser]);
+
+  const canUserVerifyPerson = useCallback((p) => {
+    if (!p) return false;
+    const role = currentUser?.role || "";
+    const userDeptId = Number(currentUser?.departmentId);
+    const userDeptName = String(currentUser?.departmentName || "").toLowerCase();
+
+    if (role === "Approval") {
+      if (p.essentialWorkflowState) {
+        if (p.essentialWorkflowState.includes("CIVIL") && (userDeptId === 3 || userDeptName.includes("civil"))) return true;
+        if (p.essentialWorkflowState.includes("MECHANICAL") && (userDeptId === 4 || userDeptName.includes("mechanical"))) return true;
+        if (p.essentialDepartmentId && Number(p.essentialDepartmentId) === userDeptId) return true;
+      }
+      return true;
+    }
+    return true;
+  }, [currentUser]);
 
   // Pagination state
   const [pageSize, setPageSize] = useState(20);
@@ -465,7 +525,7 @@ export default function AdminPassApprovalsPage() {
         if (storedUser) {
           try {
             const user = JSON.parse(storedUser);
-
+            setCurrentUser(user);
             userRole = String(user?.role || "").trim();
             userDepartmentId = Number(user?.departmentId);
           } catch (error) {
@@ -598,6 +658,13 @@ export default function AdminPassApprovalsPage() {
             total: 0,
             pending: 0,
             processed: 0,
+            reverted: 0,
+          };
+
+          const isOilDockArea = (val) => {
+            if (!val) return false;
+            const str = String(val).toUpperCase();
+            return str === "1" || str.includes("OIL JETTY") || str.includes("OIL_JETTY");
           };
 
           // ----------------------------------------------------------
@@ -608,28 +675,79 @@ export default function AdminPassApprovalsPage() {
             id: person.passRequestId,
             passRequestId: person.passRequestId,
             referenceNo: person.referenceNo,
-            companyName: person.companyName,
-            entityName: person.companyName || null,
+            companyName: person.companyName || person.entityName || null,
+            entityName: person.companyName || person.entityName || null,
+            email: person.companyEmail || person.email || null,
+            mobileNo: person.companyMobile || person.mobileNo || null,
+            approvedBy: person.approvedBy || person.approvedByName || null,
             status: person.status,
             workflowState: person.essentialWorkflowState,
-            createdAt: person.updatedAt || new Date().toISOString(),
+            createdAt: person.createdAt || person.updatedAt || new Date().toISOString(),
 
             persons: [
               {
-                id: person.personId,
+                id: person.personId || person.id,
                 passRequestId: person.passRequestId,
                 personPassNo: person.personPassNo,
                 name: person.name,
+                aadharNo: person.aadharNo,
+                mobile: person.mobile,
+                email: person.email,
+                nationality: person.nationality,
+                visaNo: person.visaNo,
+                dob: person.dob,
+                hepTypeId: person.hepTypeId,
+                hepType: person.hepType,
+                designationId: person.designationId,
+                designationOther: person.designationOther,
+                designationName: person.designationName,
+                cardNumber: person.cardNumber,
                 accessAreaId: person.accessAreaId,
+                withTwoWheeler: person.withTwoWheeler,
+                vehicleNo: person.vehicleNo,
+                idProofType: person.idProofType,
+                idProofNumber: person.idProofNumber,
                 passType: person.passType,
                 passPeriod: person.passPeriod,
                 dateFrom: person.dateFrom,
                 dateTo: person.dateTo,
+                amount: person.amount,
                 status: person.status,
+                cdcNumber: person.cdcNumber,
+                countryId: person.countryId,
+                countryName: person.countryName,
                 essentialDepartmentId: person.essentialDepartmentId,
+                essentialDepartmentName: person.essentialDepartmentName,
                 essentialWorkflowState: person.essentialWorkflowState,
                 essentialRevertStage: person.essentialRevertStage,
                 essentialAssignedUserId: person.essentialAssignedUserId,
+                rejectedReason: person.rejectedReason,
+                revertReason: person.revertReason,
+                // Document paths
+                photoFilePath: person.photoFilePath,
+                photoFileName: person.photoFileName,
+                aadharPDFFilePATH: person.aadharPDFFilePATH,
+                aadharPDFFileName: person.aadharPDFFileName,
+                idProofFilePath: person.idProofFilePath,
+                idProofFileName: person.idProofFileName,
+                driverLicensePath: person.driverLicensePath,
+                driverLicenseName: person.driverLicenseName,
+                policeVerificationPath: person.policeVerificationPath,
+                policeVerificationName: person.policeVerificationName,
+                employmentProofPath: person.employmentProofPath,
+                employmentProofName: person.employmentProofName,
+                chaLicensePath: person.chaLicensePath,
+                chaLicenseName: person.chaLicenseName,
+                passportPath: person.passportPath,
+                passportName: person.passportName,
+                visaDocPath: person.visaDocPath,
+                visaDocName: person.visaDocName,
+                immigrationDocPath: person.immigrationDocPath,
+                immigrationDocName: person.immigrationDocName,
+                cdcDocumentPath: person.cdcDocumentPath,
+                cdcDocumentName: person.cdcDocumentName,
+                entryAuthorizationFilePath: person.entryAuthorizationFilePath,
+                entryAuthorizationFileName: person.entryAuthorizationFileName,
               },
             ],
 
@@ -638,15 +756,17 @@ export default function AdminPassApprovalsPage() {
 
           // ----------------------------------------------------------
           // MERGE by passRequestId
-          //
-          // This prevents a request containing both a vehicle and a
-          // person from appearing twice in the table.
           // ----------------------------------------------------------
           const requestMap = new Map();
 
           vehicleData.forEach((request) => {
             requestMap.set(String(request.id), {
               ...request,
+              entityName: request.entityName || request.companyName || null,
+              companyName: request.companyName || request.entityName || null,
+              email: request.email || request.companyEmail || null,
+              mobileNo: request.mobileNo || request.companyMobile || null,
+              approvedBy: request.approvedBy || request.approvedByName || null,
               persons: Array.isArray(request.persons) ? request.persons : [],
               vehicles: Array.isArray(request.vehicles) ? request.vehicles : [],
             });
@@ -660,6 +780,11 @@ export default function AdminPassApprovalsPage() {
 
               requestMap.set(key, {
                 ...existing,
+                entityName: existing.entityName || request.entityName || request.companyName || null,
+                companyName: existing.companyName || request.companyName || request.entityName || null,
+                email: existing.email || request.email || request.companyEmail || null,
+                mobileNo: existing.mobileNo || request.mobileNo || request.companyMobile || null,
+                approvedBy: existing.approvedBy || request.approvedBy || null,
 
                 persons: [
                   ...(Array.isArray(existing.persons) ? existing.persons : []),
@@ -677,39 +802,27 @@ export default function AdminPassApprovalsPage() {
 
           newRequests = Array.from(requestMap.values());
 
-          // Keep the existing vehicle pagination/count structure as the
-          // base so the existing vehicle dashboard behaviour is preserved.
-          newMeta = vehicleMeta;
+          const totalMergedCount = Math.max(
+            newRequests.length,
+            Number(vehicleMeta.total || 0) + Number(personResponse.data?.pagination?.total || 0)
+          );
 
-          // newCounts = {
-          //   total:
-          //     Number(vehicleCounts.total || 0) +
-          //     Number(personResponse.data?.pagination?.total || 0),
+          const mergedCount = newRequests.length;
 
-          //   pending:
-          //     Number(vehicleCounts.pending || 0) +
-          //     (activeTab === "pending"
-          //       ? Number(personResponse.data?.pagination?.total || 0)
-          //       : 0),
+          newMeta = {
+            page: currentPage,
+            limit: pageSize,
+            total: mergedCount,
+            totalPages: Math.max(1, Math.ceil(mergedCount / pageSize)),
+            currentPage: currentPage,
+            pageSize: pageSize,
+            totalRecords: mergedCount,
+          };
 
-          //   processed:
-          //     Number(vehicleCounts.processed || 0) +
-          //     (activeTab === "processed"
-          //       ? Number(personResponse.data?.pagination?.total || 0)
-          //       : 0),
-          // };
-          newCounts = {
-            total:
-              Number(vehicleCounts.total || 0) +
-              Number(personResponse.data?.counts?.total || 0),
-
-            pending:
-              Number(vehicleCounts.pending || 0) +
-              Number(personResponse.data?.counts?.pending || 0),
-
-            processed:
-              Number(vehicleCounts.processed || 0) +
-              Number(personResponse.data?.counts?.processed || 0),
+          newCounts = personResponse.data?.counts || {
+            pending: activeTab === "pending" ? mergedCount : 0,
+            processed: activeTab === "processed" ? mergedCount : 0,
+            total: mergedCount,
           };
         } else {
           // ----------------------------------------------------------
@@ -1494,6 +1607,61 @@ export default function AdminPassApprovalsPage() {
       // DO NOT CHANGE THIS FLOW.
       // It remains exactly the same for normal non-essential passes.
       // ------------------------------------------------------------
+      // ------------------------------------------------------------
+      // 5. ESSENTIAL DEPARTMENT REVIEW
+      // ------------------------------------------------------------
+      else if (
+        isDepartmental
+      ) {
+        // Find entities that are pending/reverted and belong to this user's role
+        const unverifiedPersons = persons.filter(
+          (p) =>
+            canUserVerifyPerson(p) &&
+            !entityStatuses.persons[p.id] &&
+            (p.status === "pending" || p.status === "reverted")
+        );
+
+        const unverifiedVehicles = vehicles.filter(
+          (v) =>
+            canUserVerifyVehicle(v) &&
+            !entityStatuses.vehicles[v.id] &&
+            (v.status === "pending" || v.status === "reverted")
+        );
+
+        if (unverifiedPersons.length > 0 || unverifiedVehicles.length > 0) {
+          toast.warning("Incomplete Verification", {
+            description: "You must approve, reject, or revert all pending/reverted entities assigned to your role before submitting.",
+          });
+          return;
+        }
+
+        // Only submit the ones we actually verified
+        const personsToSubmit = persons.filter((p) => canUserVerifyPerson(p) && entityStatuses.persons[p.id]);
+        const vehiclesToSubmit = vehicles.filter((v) => canUserVerifyVehicle(v) && entityStatuses.vehicles[v.id]);
+
+        const personPromises = personsToSubmit.map((p) => {
+          const payload = {
+            personId: p.id,
+            decision: String(entityStatuses.persons[p.id]).trim().toUpperCase(),
+            remarks: entityRemarks.persons[p.id] || null,
+          };
+          return axios.put(`${AGENT_API}/pass-request/essential-oil-dock/person-action`, payload, { headers });
+        });
+
+        const vehiclePromises = vehiclesToSubmit.map((v) => {
+          const payload = {
+            vehicleId: v.id,
+            decision: String(entityStatuses.vehicles[v.id]).trim().toUpperCase(),
+            remarks: entityRemarks.vehicles[v.id] || null,
+          };
+          return axios.put(`${AGENT_API}/pass-request/essential-oil-dock/vehicle-action`, payload, { headers });
+        });
+
+        await Promise.all([...personPromises, ...vehiclePromises]);
+
+        reviewStatus = "PROCESSED";
+        responseMessage = "Departmental review processed successfully.";
+      }
       else {
         const actionUrl = `${ADMIN_API}/pass-request/agent-pass-request-action`;
 
@@ -1799,11 +1967,15 @@ export default function AdminPassApprovalsPage() {
             label: "Processed Passes",
             count: globalCounts.processed,
           },
-          {
-            id: "pass_updates",
-            label: "Pass Updates",
-            count: passUpdatesCount,
-          },
+          ...(currentUser?.role === "Approval" && Number(currentUser?.departmentId) === 9
+            ? [
+                {
+                  id: "pass_updates",
+                  label: "Pass Updates",
+                  count: passUpdatesCount,
+                },
+              ]
+            : []),
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1972,9 +2144,9 @@ export default function AdminPassApprovalsPage() {
                     </td>
                   </tr>
                 ) : (
-                  twoWheelerRequests.map((req) => (
+                  twoWheelerRequests.map((req, idx) => (
                     <tr
-                      key={req.id}
+                      key={`tw-${req.id || idx}-${idx}`}
                       className="hover:bg-slate-50 dark:hover:bg-slate-800/40"
                     >
                       <td className="px-4 sm:px-6 py-4 text-sm font-bold font-mono text-[#0a1e4d]">
@@ -2055,7 +2227,7 @@ export default function AdminPassApprovalsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredData.map((pass) => {
+                filteredData.map((pass, index) => {
                   const statusColors = {
                     approved:
                       "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
@@ -2085,11 +2257,7 @@ export default function AdminPassApprovalsPage() {
 
                   return (
                     <tr
-                      key={
-                        pass.originType === "VENDOR"
-                          ? `vpr-${pass.id}`
-                          : pass.id
-                      }
+                      key={`pass-${pass.originType || "NORMAL"}-${pass.id}-${index}`}
                       onClick={() =>
                         openReviewModal(pass, activeTab === "processed")
                       }
@@ -2101,14 +2269,14 @@ export default function AdminPassApprovalsPage() {
                       <td className="px-4 sm:px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-300 to-orange-400 dark:from-amber-400 dark:to-orange-500 flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0">
-                            {(pass.entityName || "?").charAt(0).toUpperCase()}
+                            {(pass.entityName || pass.companyName || "?").charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
                             <div className="text-sm font-bold text-slate-800 dark:text-stone-100 truncate">
-                              {pass.entityName || "—"}
+                              {pass.entityName || pass.companyName || "—"}
                             </div>
                             <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                              {pass.email || "—"}
+                              {pass.email || pass.companyEmail || "—"}
                             </div>
                             {/* Compact meta shown only on mobile where columns are hidden */}
                             <div className="sm:hidden mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
@@ -2146,15 +2314,23 @@ export default function AdminPassApprovalsPage() {
                       </td>
                       {activeTab === "processed" && (
                         <td className="px-4 sm:px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 hidden lg:table-cell">
-                          {pass.approvedBy || "—"}
+                          {pass.approvedBy || pass.approvedByName || "—"}
                         </td>
                       )}
                       <td className="px-4 sm:px-6 py-4 text-center">
                         <div className="flex flex-col items-center gap-1">
                           <span
-                            className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}
+                            className={`px-3 py-1 rounded-full text-[11px] font-bold border ${
+                              ["approved", "completed"].includes(String(pass.status || "").toLowerCase())
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20"
+                                : statusClass
+                            }`}
                           >
-                            {(pass.status || "PENDING").toUpperCase()}
+                            {(
+                              ["APPROVED", "COMPLETED", "ISSUED"].includes(String(pass.status || "").toUpperCase()) || activeTab === "processed"
+                                ? "COMPLETED"
+                                : (pass.status || "PENDING")
+                            ).toUpperCase()}
                           </span>
                           {isLocked && (
                             <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900 animate-pulse">
@@ -2326,13 +2502,13 @@ export default function AdminPassApprovalsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {selectedRequest.persons.map((p) => (
+                        {selectedRequest.persons.map((p, idx) => (
                           <tr
-                            key={p.id}
+                            key={`person-${p.id || idx}-${idx}`}
                             onClick={() => {
                               if (
-                                p.status === "pending" ||
-                                p.status === "reverted"
+                                (p.status === "pending" || p.status === "reverted") &&
+                                (!isDepartmental || canUserVerifyPerson(p))
                               ) {
                                 setEntityModal({
                                   isOpen: true,
@@ -2354,6 +2530,66 @@ export default function AdminPassApprovalsPage() {
                             </td>
                             <td className="p-3 font-bold text-[#0a1e4d]">
                               <span>{p.name}</span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {(() => {
+                                  const isEssential =
+                                    Boolean(p.essentialWorkflowState) ||
+                                    (p.essentialDepartmentId !== null && p.essentialDepartmentId !== undefined) ||
+                                    isOilDockArea(p.accessAreaId || p.accessArea);
+
+                                  if (isEssential) {
+                                    const workflowState = String(p.essentialWorkflowState || "").toUpperCase();
+                                    const deptId = Number(p.essentialDepartmentId);
+
+                                    const isCivilDept = deptId === 3 || workflowState.includes("CIVIL");
+                                    const isMechDept = deptId === 4 || workflowState.includes("MECHANICAL");
+
+                                    const civilDone =
+                                      isCivilDept &&
+                                      (!workflowState.includes("CIVIL") ||
+                                        ["PENDING_CISF_PERSON_ESSENTIAL", "PENDING_PASS_SECTION_ESSENTIAL", "COMPLETED_ESSENTIAL", "COMPLETED"].includes(workflowState));
+
+                                    const mechDone =
+                                      isMechDept &&
+                                      (!workflowState.includes("MECHANICAL") ||
+                                        ["PENDING_CISF_PERSON_ESSENTIAL", "PENDING_PASS_SECTION_ESSENTIAL", "COMPLETED_ESSENTIAL", "COMPLETED"].includes(workflowState));
+
+                                    const cisfDone =
+                                      ["PENDING_PASS_SECTION_ESSENTIAL", "COMPLETED_ESSENTIAL", "COMPLETED"].includes(workflowState) ||
+                                      String(p.status || "").toLowerCase() === "approved" ||
+                                      String(selectedRequest?.status || "").toLowerCase() === "approved" ||
+                                      String(selectedRequest?.status || "").toLowerCase() === "completed";
+
+                                    const passSectionDone =
+                                      ["COMPLETED_ESSENTIAL", "COMPLETED"].includes(workflowState) ||
+                                      String(p.status || "").toLowerCase() === "approved" ||
+                                      String(selectedRequest?.status || "").toLowerCase() === "approved" ||
+                                      String(selectedRequest?.status || "").toLowerCase() === "completed";
+
+                                    return (
+                                      <>
+                                        {isCivilDept && (
+                                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${civilDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                            {civilDone ? "✓ Civil Dept" : "⏳ Pending Civil Dept"}
+                                          </span>
+                                        )}
+                                        {isMechDept && (
+                                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${mechDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                            {mechDone ? "✓ Mech Dept" : "⏳ Pending Mech Dept"}
+                                          </span>
+                                        )}
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${cisfDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                          {cisfDone ? "✓ CISF" : "⏳ Pending CISF"}
+                                        </span>
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${passSectionDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                          {passSectionDone ? "✓ Pass Section" : "⏳ Pending Pass Section"}
+                                        </span>
+                                      </>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
                             </td>
                             <td className="p-3">
                               {(() => {
@@ -2375,10 +2611,17 @@ export default function AdminPassApprovalsPage() {
                             <td className="p-3 text-right">
                               <div className="flex justify-end items-center gap-3">
                                 {(() => {
+                                  const isPassApproved = ["approved", "completed", "issued"].includes(
+                                    String(selectedRequest?.status || "").toLowerCase(),
+                                  );
+
+                                  const rawPersonStatus =
+                                    entityStatuses.persons[p.id] || p.status || p.decision;
+
                                   const personStatus =
-                                    entityStatuses.persons[p.id] ||
-                                    p.status ||
-                                    p.decision;
+                                    isPassApproved && String(rawPersonStatus || "").toLowerCase() === "pending"
+                                      ? "APPROVED"
+                                      : String(rawPersonStatus || "").toUpperCase();
 
                                   const personRemark =
                                     entityRemarks.persons[p.id] ||
@@ -2481,13 +2724,13 @@ export default function AdminPassApprovalsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {selectedRequest.vehicles.map((v) => (
+                        {selectedRequest.vehicles.map((v, idx) => (
                           <tr
-                            key={v.id}
+                            key={`vehicle-${v.id || idx}-${idx}`}
                             onClick={() => {
                               if (
-                                v.status === "pending" ||
-                                v.status === "reverted"
+                                (v.status === "pending" || v.status === "reverted") &&
+                                (!isDepartmental || canUserVerifyVehicle(v))
                               ) {
                                 setEntityModal({
                                   isOpen: true,
@@ -2525,16 +2768,96 @@ export default function AdminPassApprovalsPage() {
                               })()}
                             </td>
                             <td className="p-3 text-slate-600 text-xs font-medium">
-                              {v.vehicleTypeName || v.vehicleTypeId} •{" "}
-                              {formatPassType(v.passType)}
+                              <div>{v.vehicleTypeName || v.vehicleTypeId} • {formatPassType(v.passType)}</div>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {(() => {
+                                  const userRole = currentUser?.role || "";
+                                  const isEssential =
+                                    Boolean(v.essentialWorkflowState) ||
+                                    (v.essentialDepartmentId !== null && v.essentialDepartmentId !== undefined) ||
+                                    isOilDockArea(v.accessAreaId || v.accessArea);
+
+                                  if (isEssential) {
+                                    const workflowState = String(v.essentialWorkflowState || "").toUpperCase();
+                                    const deptId = Number(v.essentialDepartmentId);
+                                    const sparkApproved =
+                                      v.sparkArresterCertified === true ||
+                                      v.marineSafetyApproved === true ||
+                                      (userRole === "Fire Safety Officer" && entityStatuses.vehicles[v.id] === "APPROVED");
+
+                                    const fireSafetyDone = sparkApproved || (workflowState !== "" && !workflowState.includes("FIRE_SAFETY"));
+
+                                    const isCivilDept = deptId === 3 || workflowState.includes("CIVIL");
+                                    const isMechDept = deptId === 4 || workflowState.includes("MECHANICAL");
+
+                                    const civilDone =
+                                      isCivilDept &&
+                                      (!workflowState.includes("CIVIL") ||
+                                        ["PENDING_CISF_ESSENTIAL", "PENDING_PASS_SECTION_ESSENTIAL", "COMPLETED_ESSENTIAL", "COMPLETED"].includes(workflowState));
+
+                                    const mechDone =
+                                      isMechDept &&
+                                      (!workflowState.includes("MECHANICAL") ||
+                                        ["PENDING_CISF_ESSENTIAL", "PENDING_PASS_SECTION_ESSENTIAL", "COMPLETED_ESSENTIAL", "COMPLETED"].includes(workflowState));
+
+                                    const cisfDone =
+                                      ["PENDING_PASS_SECTION_ESSENTIAL", "COMPLETED_ESSENTIAL", "COMPLETED"].includes(workflowState) ||
+                                      String(v.status || "").toLowerCase() === "approved" ||
+                                      String(selectedRequest?.status || "").toLowerCase() === "approved" ||
+                                      String(selectedRequest?.status || "").toLowerCase() === "completed";
+
+                                    const passSectionDone =
+                                      ["COMPLETED_ESSENTIAL", "COMPLETED"].includes(workflowState) ||
+                                      String(v.status || "").toLowerCase() === "approved" ||
+                                      String(selectedRequest?.status || "").toLowerCase() === "approved" ||
+                                      String(selectedRequest?.status || "").toLowerCase() === "completed";
+
+                                    return (
+                                      <>
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${fireSafetyDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                          {fireSafetyDone ? "✓ Fire Safety / Dy. Conservator" : "⏳ Pending Fire Safety / Dy. Conservator"}
+                                        </span>
+
+                                        {isCivilDept && (
+                                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${civilDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                            {civilDone ? "✓ Civil Dept" : "⏳ Pending Civil Dept"}
+                                          </span>
+                                        )}
+
+                                        {isMechDept && (
+                                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${mechDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                            {mechDone ? "✓ Mech Dept" : "⏳ Pending Mech Dept"}
+                                          </span>
+                                        )}
+
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${cisfDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                          {cisfDone ? "✓ CISF" : "⏳ Pending CISF"}
+                                        </span>
+
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${passSectionDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                          {passSectionDone ? "✓ Pass Section" : "⏳ Pending Pass Section"}
+                                        </span>
+                                      </>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
                             </td>
                             <td className="p-3 text-right">
                               <div className="flex justify-end items-center gap-3">
                                 {(() => {
+                                  const isPassApproved = ["approved", "completed", "issued"].includes(
+                                    String(selectedRequest?.status || "").toLowerCase(),
+                                  );
+
+                                  const rawVehicleStatus =
+                                    entityStatuses.vehicles[v.id] || v.status || v.decision;
+
                                   const vehicleStatus =
-                                    entityStatuses.vehicles[v.id] ||
-                                    v.status ||
-                                    v.decision;
+                                    isPassApproved && String(rawVehicleStatus || "").toLowerCase() === "pending"
+                                      ? "APPROVED"
+                                      : String(rawVehicleStatus || "").toUpperCase();
 
                                   const vehicleRemark =
                                     entityRemarks.vehicles[v.id] ||
@@ -2849,7 +3172,7 @@ export default function AdminPassApprovalsPage() {
                   )}
                   <DetailItem
                     label="Calculated Amount"
-                    value={`₹${entityModal.data.amount}`}
+                    value={`₹${entityModal.data.amount ?? selectedRequest?.amount ?? "0.00"}`}
                   />
                 </div>
               </div>

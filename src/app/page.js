@@ -566,8 +566,8 @@ const LoginPage = () => {
         const deptId = Number(tokenClaims.departmentId);
         const TRAFFIC_DEPT_IDS = [9, 10, 11, 12, 13, 14, 15];
         const MARINE_DEPT_ID = 7;
-        // Civil, Mechanical, Finance, General Admin → vendor pass only (no dedicated portal)
-        const VENDOR_ONLY_DEPT_IDS = [3, 4, 5, 6];
+        const ESSENTIAL_DEPT_IDS = [3, 4]; // Engineering Civil (3) & Engineering Mechanical (4)
+        const VENDOR_ONLY_DEPT_IDS = [2, 5, 6, 8]; // EDP (2), Finance (5), Gen Admin (6), Medical (8)
         const TRAFFIC_APPROVAL_ROLES = [
           "approval",
           "safety officer",
@@ -576,30 +576,6 @@ const LoginPage = () => {
         ];
         const CISF_DEPT_ID = 1;
         const CISF_APPROVAL_ROLE = "cisf.assistant commandant";
-        // if (role === "admin" || role === "administrator") {
-        //   router.push("/admin");
-        // } else if (role === "hod") {
-        //   router.push("/hod");
-        // } else if (role === "atm") {
-        //   router.push("/atm_dashboard");
-        // } else if (
-        //   TRAFFIC_APPROVAL_ROLES.includes(role) &&
-        //   TRAFFIC_DEPT_IDS.includes(deptId)
-        // ) {
-        //   router.push("/traffic_approval/dashboard");
-        // } else if (role === "approval" && deptId === MARINE_DEPT_ID) {
-        //   router.push("/marine_approval");
-        // } else if (
-        //   role === "approval" &&
-        //   VENDOR_ONLY_DEPT_IDS.includes(deptId)
-        // ) {
-        //   router.push("/admin/vendor_pass");
-        // } else if (role === "approval") {
-        //   // Catch-all for any other approval dept not explicitly listed above
-        //   router.push("/admin/vendor_pass");
-        // } else {
-        //   router.push("/dashboard");
-        // }
         if (role === "admin" || role === "administrator") {
           router.push("/admin");
         } else if (role === "hod") {
@@ -616,6 +592,9 @@ const LoginPage = () => {
           router.push("/traffic_approval/dashboard");
         } else if (role === "approval" && deptId === MARINE_DEPT_ID) {
           router.push("/marine_approval");
+        } else if (role === "approval" && ESSENTIAL_DEPT_IDS.includes(deptId)) {
+          // Civil & Mechanical Department Officers → Pass Approvals page
+          router.push("/admin/pass-approvals");
         } else if (
           role === "approval" &&
           VENDOR_ONLY_DEPT_IDS.includes(deptId)

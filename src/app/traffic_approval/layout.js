@@ -247,12 +247,27 @@ export default function TrafficLayout({ children }) {
         role.includes("traffic") ||
         ["safety officer", "fire safety officer", "senior deputy traffic manager"].includes(role);
       if (!isTrafficApprover) { alert("Unauthorized Access: Traffic Department Only."); setTimeout(() => router.push("/"), 0); return; }
+      const isSafetyOfficerUser =
+        role === "safety officer" || role === "fire safety officer";
+
+      if (
+        isSafetyOfficerUser &&
+        (pathname === "/traffic_approval" ||
+          pathname === "/traffic_approval/dashboard")
+      ) {
+        setTimeout(
+          () => router.replace("/traffic_approval/passes?tab=pending"),
+          0,
+        );
+        return;
+      }
+
       setUser(parsedUser);
       if (parsedUser.isPasswordChanged === false) setShowPasswordChangeModal(true);
     } else {
       setTimeout(() => router.push("/"), 0);
     }
-  }, [router]);
+  }, [router, pathname]);
 
   const handlePasswordChangeSubmit = async (e) => {
     e.preventDefault();
@@ -303,14 +318,18 @@ export default function TrafficLayout({ children }) {
 
   if (!user) return <div className="p-12 text-center">Loading...</div>;
 
+  const isSafetyOfficer =
+    user?.role?.toLowerCase() === "safety officer" ||
+    user?.role?.toLowerCase() === "fire safety officer";
+
   const navigationItems = [
-    { name: "Dashboard", href: "/traffic_approval/dashboard", icon: BarChart3 },
+    ...(!isSafetyOfficer ? [{ name: "Dashboard", href: "/traffic_approval/dashboard", icon: BarChart3 }] : []),
     { name: "Pass Approvals", href: "/traffic_approval/passes", icon: FileText },
-    { name: "VVIP Pass", href: "/traffic_approval/vvip-pass", icon: VvipIcon },
-    { name: "Company Approvals", href: "/traffic_approval/companies", icon: Building2 },
-    { name: "Blacklist Management", href: "/traffic_approval/blacklist", icon: ShieldBan },
-    { name: "Overstay Exceptions", href: "/traffic_approval/overstay", icon: ShieldCheck },
-    { name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users },
+    ...(!isSafetyOfficer ? [{ name: "VVIP Pass", href: "/traffic_approval/vvip-pass", icon: VvipIcon }] : []),
+    ...(!isSafetyOfficer ? [{ name: "Company Approvals", href: "/traffic_approval/companies", icon: Building2 }] : []),
+    ...(!isSafetyOfficer ? [{ name: "Blacklist Management", href: "/traffic_approval/blacklist", icon: ShieldBan }] : []),
+    ...(!isSafetyOfficer ? [{ name: "Overstay Exceptions", href: "/traffic_approval/overstay", icon: ShieldCheck }] : []),
+    ...(!isSafetyOfficer ? [{ name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users }] : []),
   ];
 
   const SidebarContent = ({ onNavigate, expanded = sidebarExpanded, showCollapseToggle = true }) => (
@@ -319,7 +338,7 @@ export default function TrafficLayout({ children }) {
         {/* Brand row — expanded: row with space-between. collapsed: logo centered, toggle below */}
         <div className="flex flex-col gap-2 px-4">
           <div className={cn("flex items-center", expanded ? "justify-between" : "justify-center")}>
-            <Link href="/traffic_approval/dashboard" className="flex items-center gap-3 group min-w-0" onClick={onNavigate}>
+            <Link href={isSafetyOfficer ? "/traffic_approval/passes?tab=pending" : "/traffic_approval/dashboard"} className="flex items-center gap-3 group min-w-0" onClick={onNavigate}>
               <span className="flex items-center justify-center w-11 h-11 rounded-xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
                 <Image src="/logo1.png" alt="Chennai Port Logo" width={44} height={44} className="w-full h-full object-contain" />
               </span>

@@ -10,6 +10,7 @@ import {
   X,
   ChevronRight,
   CheckCheck,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -69,10 +70,33 @@ export default function NotificationPanel({ role = "approver" }) {
         try {
           const saved = localStorage.getItem("read_notification_ids");
           if (saved) savedRead = JSON.parse(saved);
-        } catch (e) {}
+        } catch (e) { }
       }
 
+      let currentUser = null;
+      if (typeof window !== "undefined") {
+        try {
+          const userStr = localStorage.getItem("user");
+          if (userStr) currentUser = JSON.parse(userStr);
+        } catch (e) { }
+      }
+
+      const deptId = Number(currentUser?.departmentId || currentUser?.department_id);
+      const deptName = String(currentUser?.departmentName || currentUser?.department_name || "").toLowerCase();
+      const userRole = String(currentUser?.role || "").toLowerCase();
+      const isAdminUser = currentUser?.isAdmin === true || userRole === "admin";
+
+      const isTrafficPassSection =
+        isAdminUser ||
+        [9].includes(deptId);
       if (role === "approver") {
+        // Only Traffic Pass Section or Admin should receive profile and two-wheeler update notifications
+        if (!isTrafficPassSection) {
+          setNotifications([]);
+          setUnreadCount(0);
+          return;
+        }
+
         // Approver ONLY receives PENDING requests requiring approval action
         let profileItems = [];
         try {
@@ -344,10 +368,10 @@ export default function NotificationPanel({ role = "approver" }) {
                 <button
                   onClick={markAllAsRead}
                   className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
-                  title="Mark all as read"
+                  title="Clear All & Mark as read"
                 >
-                  <CheckCheck className="h-3.5 w-3.5" />
-                  Mark all read
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Clear All
                 </button>
               )}
               <button
@@ -361,48 +385,43 @@ export default function NotificationPanel({ role = "approver" }) {
 
           {/* List */}
           <div className="max-h-80 overflow-y-auto divide-y divide-stone-100 dark:divide-stone-800/60">
-            {notifications.length > 0 ? (
-              notifications.map((item) => {
-                const isRead = readIds.includes(item.id);
-                return (
-                  <div
-                    key={item.id}
-                    onClick={() => handleNotificationClick(item)}
-                    className={`p-3.5 hover:bg-stone-50 dark:hover:bg-white/5 cursor-pointer transition-all flex items-start gap-3 group ${
-                      !isRead
-                        ? "bg-amber-500/5 dark:bg-amber-500/10 border-l-4 border-l-amber-500"
-                        : "opacity-80"
-                    }`}
-                  >
-                    <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0 group-hover:scale-105 transition-transform relative">
-                      <UserCheck className="h-4 w-4" />
-                      {!isRead && (
+            {notifications.filter((item) => !readIds.includes(item.id)).length > 0 ? (
+              notifications
+                .filter((item) => !readIds.includes(item.id))
+                .map((item) => {
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => handleNotificationClick(item)}
+                      className="p-3.5 hover:bg-stone-50 dark:hover:bg-white/5 cursor-pointer transition-all flex items-start gap-3 group bg-amber-500/5 dark:bg-amber-500/10 border-l-4 border-l-amber-500"
+                    >
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0 group-hover:scale-105 transition-transform relative">
+                        <UserCheck className="h-4 w-4" />
                         <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-stone-900 animate-pulse" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className={`text-xs truncate ${!isRead ? "font-black text-stone-900 dark:text-white" : "font-semibold text-stone-600 dark:text-stone-300"}`}>
-                          {item.title}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs truncate font-black text-stone-900 dark:text-white">
+                            {item.title}
+                          </p>
+                          <span className="text-[10px] font-medium text-stone-400 shrink-0 flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {formatTimeAgo(item.time)}
+                          </span>
+                        </div>
+                        <p className="text-xs mt-1 leading-relaxed line-clamp-2 text-stone-800 dark:text-stone-200 font-medium">
+                          {item.message}
                         </p>
-                        <span className="text-[10px] font-medium text-stone-400 shrink-0 flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatTimeAgo(item.time)}
-                        </span>
-                      </div>
-                      <p className={`text-xs mt-1 leading-relaxed line-clamp-2 ${!isRead ? "text-stone-800 dark:text-stone-200 font-medium" : "text-stone-500 dark:text-stone-400"}`}>
-                        {item.message}
-                      </p>
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-100/60 dark:bg-amber-950/60 px-2 py-0.5 rounded-md">
-                          {item.badgeText || "Review Request"}
-                        </span>
-                        <ChevronRight className="h-3.5 w-3.5 text-stone-400 group-hover:translate-x-0.5 transition-transform" />
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-100/60 dark:bg-amber-950/60 px-2 py-0.5 rounded-md">
+                            {item.badgeText || "Review Request"}
+                          </span>
+                          <ChevronRight className="h-3.5 w-3.5 text-stone-400 group-hover:translate-x-0.5 transition-transform" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })
             ) : (
               <div className="p-8 text-center">
                 <Bell className="h-8 w-8 text-stone-300 dark:text-stone-600 mx-auto mb-2" />
@@ -416,27 +435,7 @@ export default function NotificationPanel({ role = "approver" }) {
             )}
           </div>
 
-          {/* Footer */}
-          {notifications.length > 0 && role === "approver" && (
-            <div className="p-2.5 bg-stone-50 dark:bg-stone-900/60 border-t border-stone-200 dark:border-stone-800 text-center">
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
-                  const target = currentPath.startsWith("/admin")
-                    ? "/admin/pass-approvals"
-                    : "/traffic_approval";
-                  if (typeof window !== "undefined") {
-                    window.dispatchEvent(new CustomEvent("switch_tab", { detail: "pass_updates" }));
-                  }
-                  router.push(target);
-                }}
-                className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-1"
-              >
-                View All Vehicle Updates <ChevronRight className="h-3 w-3" />
-              </button>
-            </div>
-          )}
+          {/* End List */}
         </div>
       )}
     </div>

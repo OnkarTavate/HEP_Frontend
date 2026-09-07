@@ -1033,15 +1033,23 @@ export default function PassRequestPage() {
       }
     }
 
+    const vehicleTypeName = String(entity?.vehicleTypeName || "")
+      .trim()
+      .toUpperCase();
+
     const isAnnualTrailer =
       (passType === "YEARLY" || passType === "ANNUAL") &&
-      (vehicleTypeId === 34 || vehicleTypeId === 35);
+      (vehicleTypeId === 34 || vehicleTypeId === 35 || ["TRAILORS", "TRAILER LORRY"].includes(vehicleTypeName));
 
     /*
      * Annual Trailer / Trailer Lorry:
-     * Marine approval is mandatory.
+     * Safety / Marine approval is mandatory.
      */
-    if (isAnnualTrailer && entity?.marineSafetyApproved !== true) {
+    if (
+      isAnnualTrailer &&
+      entity?.marineSafetyApproved !== true &&
+      entity?.twistLockCertified !== true
+    ) {
       return false;
     }
 
@@ -2595,6 +2603,19 @@ export default function PassRequestPage() {
       errors.photo = "Photo is required";
     }
 
+    // ---- Oil Jetty Department Validation ----
+    const isPersonOilDock =
+      String(personForm.accessArea).toUpperCase().includes("OIL JETTY") ||
+      String(personForm.accessArea) === "1";
+    if (isPersonOilDock) {
+      const selectedDepartmentId = Number(personForm.departmentId);
+      if (![3, 4, 9].includes(selectedDepartmentId)) {
+        return toast.error(
+          "Please select Civil, Mechanical, or Traffic department for Oil Jetty and Other Gates.",
+        );
+      }
+    }
+
     // ---- Driver Licence — mandatory for Drivers ----
     if (
       personForm.hepType === "1" &&
@@ -2640,18 +2661,7 @@ export default function PassRequestPage() {
       errors.policeVerification =
         "Police Verification is mandatory for Monthly/Yearly passes";
     }
-
-    // ---- Entry Authorization — mandatory for Oil Dock ----
-    const isPersonOilDock =
-      String(personForm.accessArea).toUpperCase().includes("OIL JETTY") ||
-      String(personForm.accessArea) === "1";
-    if (
-      isPersonOilDock &&
-      !(personForm.entryAuthorization || personForm.existingEntryAuthName)
-    ) {
-      errors.entryAuthorization =
-        "Entry Authorization is mandatory for Oil Dock passes";
-    }
+ 
 
     if (Object.keys(errors).length > 0) {
       setPersonErrors(errors);
@@ -7756,14 +7766,12 @@ export default function PassRequestPage() {
                 </table>
               </div>
 
-              {((personForm.hepType === "1" &&
-                personForm.idProofType !== "1") ||
+              {(personForm.hepType === "1" ||
                 String(personForm.passType) === "2" ||
                 String(personForm.passType) === "3" ||
-                String(personForm.accessArea)
-                  .toUpperCase()
-                  .includes("OIL JETTY") ||
-                String(personForm.accessArea) === "1") && (
+                String(personForm.passType).toUpperCase() === "YEARLY" ||
+                String(personForm.passType).toUpperCase() === "ANNUAL" ||
+                personForm.hepType === "3") && (
                 <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                   <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
                     <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
@@ -7794,7 +7802,10 @@ export default function PassRequestPage() {
                       />
                     )}
                     {(String(personForm.passType) === "2" ||
-                      String(personForm.passType) === "3") && (
+                      String(personForm.passType) === "3" ||
+                      ["MONTHLY", "YEARLY", "ANNUAL"].includes(
+                        String(personForm.passType || "").toUpperCase(),
+                      )) && (
                       <FileUploadBox
                         label="Police Verification"
                         isRequired
@@ -7838,32 +7849,6 @@ export default function PassRequestPage() {
                           })
                         }
                         error={personErrors.passportDoc}
-                      />
-                    )}
-                    {(String(personForm.accessArea)
-                      .toUpperCase()
-                      .includes("OIL JETTY") ||
-                      String(personForm.accessArea) === "1") && (
-                      <FileUploadBox
-                        label="Entry Authorization Document"
-                        isRequired
-                        file={personForm.entryAuthorization}
-                        existingFileName={personForm.existingEntryAuthName}
-                        onView={() =>
-                          handleViewDoc(
-                            personForm.existingPassRequestId,
-                            "entryAuthorization",
-                            personForm.existingEntryAuthName,
-                            personForm.editIndex,
-                          )
-                        }
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            entryAuthorization: e.target.files[0],
-                          })
-                        }
-                        error={personErrors.entryAuthorization}
                       />
                     )}
                   </div>
@@ -9178,24 +9163,57 @@ export default function PassRequestPage() {
                                     DISABLED
                                   </span>
                                 ) : (
-                                  <span
-                                    className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                                      String(v.status || "").toUpperCase() ===
-                                      "APPROVED"
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : String(
-                                              v.status || "",
-                                            ).toUpperCase() === "REJECTED"
-                                          ? "bg-red-100 text-red-700"
-                                          : String(
-                                                v.status || "",
-                                              ).toUpperCase() === "REVERTED"
-                                            ? "bg-amber-100 text-amber-700"
-                                            : "bg-blue-100 text-blue-700"
-                                    }`}
-                                  >
-                                    {(v.status || "PENDING").toUpperCase()}
-                                  </span>
+                                  (() => {
+                                    const passType = String(v.passType || "")
+                                      .trim()
+                                      .toUpperCase();
+                                    const vehicleTypeName = String(
+                                      v.vehicleTypeName || "",
+                                    )
+                                      .trim()
+                                      .toUpperCase();
+                                    const vehicleTypeId = Number(v.vehicleTypeId);
+
+                                    const isAnnualTrailer =
+                                      (passType === "YEARLY" ||
+                                        passType === "ANNUAL") &&
+                                      (vehicleTypeId === 34 ||
+                                        vehicleTypeId === 35 ||
+                                        [
+                                          "TRAILORS",
+                                          "TRAILER LORRY",
+                                        ].includes(vehicleTypeName));
+
+                                    let rawStatus = String(
+                                      v.status || "PENDING",
+                                    ).toUpperCase();
+
+                                    if (
+                                      isAnnualTrailer &&
+                                      !v.twistLockCertified &&
+                                      !v.marineSafetyApproved
+                                    ) {
+                                      if (rawStatus === "APPROVED") {
+                                        rawStatus = "PENDING";
+                                      }
+                                    }
+
+                                    return (
+                                      <span
+                                        className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                                          rawStatus === "APPROVED"
+                                            ? "bg-emerald-100 text-emerald-700"
+                                            : rawStatus === "REJECTED"
+                                              ? "bg-red-100 text-red-700"
+                                              : rawStatus === "REVERTED"
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-blue-100 text-blue-700"
+                                        }`}
+                                      >
+                                        {rawStatus}
+                                      </span>
+                                    );
+                                  })()
                                 )}
                               </td>
                               <td className="p-3 text-center">
