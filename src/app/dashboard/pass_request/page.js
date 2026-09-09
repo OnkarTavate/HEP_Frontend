@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import PaginationBar from "@/components/ui/PaginationBar";
 import FaceCaptureDialog from "@/components/face/FaceCaptureDialog";
+import ShareLinkModal from "@/components/ShareLinkModal";
+import { useLiveCaptureLink } from "@/hooks/useLiveCaptureLink";
 import axios from "axios";
 import { toast } from "sonner";
 import Select from "react-select";
@@ -40,6 +42,8 @@ import {
   Filter,
   Clock,
   Edit,
+  Link2,
+  Check,
 } from "lucide-react";
 
 import {
@@ -485,6 +489,8 @@ export default function PassRequestPage() {
   const [paymentMode, setPaymentMode] = useState("Account");
   const [loadingPasses, setLoadingPasses] = useState(false);
   const [faceCaptureOpen, setFaceCaptureOpen] = useState(false);
+  const [shareLinkOpen, setShareLinkOpen] = useState(false);
+  const liveCapture = useLiveCaptureLink();
   const [currentUser, setCurrentUser] = useState({});
   const [selectedPassDetails, setSelectedPassDetails] = useState(null);
   const [modals, setModals] = useState({
@@ -788,6 +794,11 @@ export default function PassRequestPage() {
     idProofType: "",
     idProofNumber: "",
     photo: null,
+    // Live photograph, kept separate from `photo` on purpose: the uploaded
+    // document and the live capture are two different things and the
+    // application needs both.
+    livePhoto: null,
+    faceVerified: false,
     idProofFile: null,
     requisitionLetter: null,
     policeVerification: null,
@@ -809,6 +820,78 @@ export default function PassRequestPage() {
     amount: DEFAULT_HEP_RATES.INDIVIDUAL.daily,
   };
   const [personForm, setPersonForm] = useState(initialPersonForm);
+
+  /*
+   * The person form as it stands right now.
+   *
+   * A live photo can arrive minutes after the link was shared, by which time
+   * the agent may have finished this person and started the next one. The
+   * handler below reads this ref to make sure the photograph is still going to
+   * the person it was taken for.
+   */
+  const personFormRef = React.useRef(personForm);
+  useEffect(() => {
+    personFormRef.current = personForm;
+  }, [personForm]);
+
+  /*
+   * Preview URL for the live photo.
+   *
+   * Built once per file and released when it is replaced, rather than created
+   * inline during render — this image can sit on screen for the whole time the
+   * agent is filling the form, and a fresh blob URL on every keystroke would
+   * pin every previous copy of the photograph in memory.
+   */
+  const livePhotoUrl = useMemo(
+    () =>
+      personForm.livePhoto instanceof File
+        ? URL.createObjectURL(personForm.livePhoto)
+        : null,
+    [personForm.livePhoto],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (livePhotoUrl) URL.revokeObjectURL(livePhotoUrl);
+    };
+  }, [livePhotoUrl]);
+
+  /**
+   * Issues a one-time capture link for the person currently being entered and
+   * listens for their photograph.
+   */
+  const handleShareCaptureLink = async () => {
+    const applicantName = (personForm.name || "").trim();
+
+    if (!applicantName) {
+      toast.error("Enter the person's name before sharing a capture link.");
+      return;
+    }
+
+    setShareLinkOpen(true);
+
+    try {
+      await liveCapture.createLink({
+        // The agent's own handle for this person. The pass reference does not
+        // exist yet — nothing has been submitted — so the name plus the moment
+        // of issue is what identifies the link.
+        referenceId: `PERSON-${Date.now()}`,
+        applicantName,
+        onPhoto: (file) => {
+          if ((personFormRef.current?.name || "").trim() !== applicantName) {
+            toast.error(
+              `A live photo arrived for ${applicantName}, but the form has moved on. It was not attached.`,
+            );
+            return;
+          }
+          setPersonForm((prev) => ({ ...prev, livePhoto: file, faceVerified: true }));
+          toast.success(`Live photo received from ${applicantName}.`);
+        },
+      });
+    } catch {
+      // Already reported through the modal's own error state.
+    }
+  };
   const [dlVerification, setDlVerification] = useState({
     loading: false,
     verified: false,
@@ -3577,6 +3660,9 @@ export default function PassRequestPage() {
 
       persons.forEach((p, idx) => {
         if (p.photo) formData.append(`personPhoto_${idx}`, p.photo);
+        // Held in the form since the person was added, and only sent now — the
+        // live photo reaches the database with the rest of the application.
+        if (p.livePhoto) formData.append(`personLivePhoto_${idx}`, p.livePhoto);
         if (p.aadharFile) formData.append(`personAadhar_${idx}`, p.aadharFile);
         if (p.idProofFile)
           formData.append(`personIdProof_${idx}`, p.idProofFile);
@@ -7371,28 +7457,39 @@ export default function PassRequestPage() {
                   )}
 
                   {/* Photo upload — always shown */}
+                  {/*
+                    Two photographs, never one.
+
+                    The uploaded photo is the document the agent submits. The
+                    live photo is proof that the person themselves sat in front
+                    of a camera — taken here, or on their own phone through a
+                    shared link when they cannot come to the office. They are
+                    kept in separate slots so neither can overwrite the other.
+                  */}
                   <div className="space-y-1.5 md:col-span-2 max-w-sm">
                     <label className="text-xs font-bold text-slate-700 uppercase">
-                      Upload Photo <span className="text-red-500">*</span>
+                      Photographs <span className="text-red-500">*</span>
                     </label>
 
-                    {!personForm.photo && !personForm.existingPhotoName && (
-                      <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          <FileUploadBox
-                            label="Upload Photo"
-                            fileType="image"
-                            isRequired={true}
-                            file={personForm.photo}
-                            existingFileName={personForm.existingPhotoName}
-                            onChange={(e) =>
-                              setPersonForm({
-                                ...personForm,
-                                photo: e.target.files[0],
-                              })
-                            }
-                          />
+                    <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {/* Always available — replacing the uploaded photo must
+                            not require clearing it first. */}
+                        <FileUploadBox
+                          label="Upload Photo"
+                          fileType="image"
+                          isRequired={true}
+                          file={personForm.photo}
+                          existingFileName={personForm.existingPhotoName}
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              photo: e.target.files[0],
+                            })
+                          }
+                        />
 
+                        <div className="flex flex-col gap-2">
                           <button
                             type="button"
                             onClick={() => setFaceCaptureOpen(true)}
@@ -7400,41 +7497,58 @@ export default function PassRequestPage() {
                           >
                             Capture Photo
                           </button>
+                          <button
+                            type="button"
+                            onClick={handleShareCaptureLink}
+                            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-600 transition-colors hover:border-[#0a1e4d] hover:text-[#0a1e4d]"
+                          >
+                            <Link2 className="h-3.5 w-3.5" />
+                            Share Capture Link
+                          </button>
                         </div>
                       </div>
-                    )}
+                    </div>
 
-                    {personForm.photo || personForm.existingPhotoName ? (
-                      <div className="relative w-24 h-28 rounded-xl border border-slate-300 overflow-hidden shadow-sm group">
-                        <img
-                          src={
-                            personForm.photo instanceof File
-                              ? URL.createObjectURL(personForm.photo)
-                              : personForm.masterId
-                                ? `${AGENT_API}/pass-request/viewMasterDocument?masterId=${personForm.masterId}&entityType=person&documentType=personPhoto`
-                                : personForm.existingPassRequestId
-                                  ? `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&entityType=person&entityId=${personForm.id}&documentType=personPhoto`
-                                  : ""
-                          }
-                          alt="Profile"
-                          className="w-full h-full object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPersonForm({
-                              ...personForm,
-                              photo: null,
-                              existingPhotoName: null,
-                            })
-                          }
-                          className="absolute top-1.5 right-1.5 bg-white/90 hover:bg-red-500 text-slate-700 hover:text-white p-1 rounded-full shadow-sm transition-colors"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ) : null}
+                    {/* Both photographs, side by side, right under the buttons
+                        that produce them. */}
+                    <div className="flex flex-wrap items-start gap-3 pt-1">
+                      {(personForm.photo || personForm.existingPhotoName) && (
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                            Uploaded Photo
+                          </p>
+                          <div className="relative w-24 h-28 rounded-xl border border-slate-300 overflow-hidden shadow-sm group">
+                            <img
+                              src={
+                                personForm.photo instanceof File
+                                  ? URL.createObjectURL(personForm.photo)
+                                  : personForm.masterId
+                                    ? `${AGENT_API}/pass-request/viewMasterDocument?masterId=${personForm.masterId}&entityType=person&documentType=personPhoto`
+                                    : personForm.existingPassRequestId
+                                      ? `${AGENT_API}/pass-request/viewPassRequestsDocument?passRequestId=${personForm.existingPassRequestId}&entityType=person&entityId=${personForm.id}&documentType=personPhoto`
+                                      : ""
+                              }
+                              alt="Uploaded photo"
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPersonForm({
+                                  ...personForm,
+                                  photo: null,
+                                  existingPhotoName: null,
+                                })
+                              }
+                              className="absolute top-1.5 right-1.5 bg-white/90 hover:bg-red-500 text-slate-700 hover:text-white p-1 rounded-full shadow-sm transition-colors"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
+<<<<<<< Updated upstream
                     {(personForm.photo || personForm.existingPhotoName) && (
                       <div className="pt-1">
                         <button
@@ -7451,6 +7565,56 @@ export default function PassRequestPage() {
                         {personErrors.photo}
                       </p>
                     )}
+=======
+                      {livePhotoUrl && (
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">
+                            Live Photo
+                          </p>
+                          <div className="relative w-24 h-28 rounded-xl border-2 border-emerald-400 overflow-hidden shadow-sm">
+                            <img
+                              src={livePhotoUrl}
+                              alt="Live captured photo"
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPersonForm({
+                                  ...personForm,
+                                  livePhoto: null,
+                                  faceVerified: false,
+                                })
+                              }
+                              className="absolute top-1.5 right-1.5 bg-white/90 hover:bg-red-500 text-slate-700 hover:text-white p-1 rounded-full shadow-sm transition-colors"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          {personForm.faceVerified && (
+                            <p className="flex items-center gap-1 text-[10px] font-bold text-emerald-600">
+                              <Check className="h-3 w-3" /> Face verified
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Says plainly that the second photograph is still
+                          missing, rather than leaving an unexplained gap. */}
+                      {!livePhotoUrl && (
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                            Live Photo
+                          </p>
+                          <div className="flex w-24 h-28 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-2 text-center">
+                            <span className="text-[10px] font-semibold text-slate-400">
+                              Not captured yet
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+>>>>>>> Stashed changes
                   </div>
                   {personForm.hepType !== "3" && (
                     <div className="space-y-1.5 md:col-span-2 max-w-sm">
@@ -9274,14 +9438,24 @@ export default function PassRequestPage() {
           null
         }
         onUsePhoto={(file) => {
+          // The live capture fills its own slot. It must never displace the
+          // uploaded photograph — both are submitted.
           setPersonForm((prev) => ({
             ...prev,
-            photo: file,
-            existingPhotoName: null,
-            existingPhotoPath: null,
+            livePhoto: file,
+            faceVerified: true,
           }));
-          toast.success("Captured photo attached successfully.");
+          toast.success("Live photo captured successfully.");
         }}
+      />
+      <ShareLinkModal
+        open={shareLinkOpen}
+        onClose={() => setShareLinkOpen(false)}
+        link={liveCapture.link}
+        status={liveCapture.status}
+        error={liveCapture.error}
+        personName={personForm.name || ""}
+        agentName={currentUser?.username || ""}
       />
       {/* RATE CARD MODAL */}
       {modals.rateCard && (
