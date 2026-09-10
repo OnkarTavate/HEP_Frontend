@@ -923,26 +923,81 @@ export default function VendorPassPublicPage() {
       }
 
       // Safe mapping for DB String values -> Dropdown IDs
-      const natObj = masterData.nationalities.find(
+      const natObj = (masterData.nationalities || []).find(
         (n) =>
           (n.label || n.name || "").toUpperCase() ===
-          String(data.nationality).toUpperCase(),
+            String(data.nationality).toUpperCase() ||
+          (n.value || "").toUpperCase() ===
+            String(data.nationality).toUpperCase() ||
+          String(n.id) === String(data.nationality),
       );
       const natVal = natObj ? String(natObj.id || natObj.value) : "1"; // Default Indian
 
-      const idObj = masterData.idProofTypes.find(
-        (t) =>
-          (t.label || t.name || "").toUpperCase() ===
-          String(data.idProofType).toUpperCase(),
-      );
-      const idVal = idObj
+      const rawHep = data.hepTypeId || data.hepType;
+      let resolvedHepType = "2";
+      if (
+        data.designationName === "Driver" ||
+        String(rawHep) === "1" ||
+        String(data.designationId) === "13"
+      ) {
+        resolvedHepType = "1";
+      } else if (String(rawHep) === "3") {
+        resolvedHepType = "3";
+      } else if (String(rawHep) === "4") {
+        resolvedHepType = "4";
+      } else if (rawHep) {
+        resolvedHepType = String(rawHep);
+      }
+
+      const rawIdProof = String(data.idProofType || "").trim().toUpperCase();
+      const idObj = (masterData.idProofTypes || []).find((t) => {
+        const tVal = String(t.value || "").trim().toUpperCase();
+        const tLabel = String(t.label || "").trim().toUpperCase();
+        const tName = String(t.name || "").trim().toUpperCase();
+        const tId = String(t.id || "").trim();
+        return (
+          tVal === rawIdProof ||
+          tLabel === rawIdProof ||
+          tName === rawIdProof ||
+          tId === rawIdProof
+        );
+      });
+      let idVal = idObj
         ? String(idObj.id || idObj.value)
         : data.idProofType || "";
 
-      const areaObj = masterData.accessAreas.find(
+      // Special overrides based on HEP type & nationality
+      if (resolvedHepType === "1") {
+        const dlObj = (masterData.idProofTypes || []).find(
+          (t) =>
+            (t.label || t.name || "").toLowerCase().includes("driver") ||
+            (t.label || t.name || "").toLowerCase().includes("licence") ||
+            String(t.id) === "1" ||
+            String(t.value || "").toUpperCase() === "DRIVING LICENSE",
+        );
+        idVal = dlObj ? String(dlObj.id || dlObj.value) : "1";
+      } else if (
+        natVal === "2" ||
+        String(data.nationality).toUpperCase() === "FOREIGNER"
+      ) {
+        const passportObj = (masterData.idProofTypes || []).find(
+          (t) =>
+            (t.label || t.name || "").toLowerCase().includes("passport") ||
+            String(t.id) === "3" ||
+            String(t.value || "").toUpperCase() === "PASSPORT",
+        );
+        idVal = passportObj
+          ? String(passportObj.id || passportObj.value)
+          : "3";
+      }
+
+      const areaObj = (masterData.accessAreas || []).find(
         (a) =>
           (a.label || a.name || "").toUpperCase() ===
-          String(data.accessAreaId).toUpperCase(),
+            String(data.accessAreaId).toUpperCase() ||
+          (a.value || "").toUpperCase() ===
+            String(data.accessAreaId).toUpperCase() ||
+          String(a.id) === String(data.accessAreaId),
       );
       const areaVal = areaObj ? String(areaObj.id || areaObj.value) : "";
 
@@ -954,26 +1009,34 @@ export default function VendorPassPublicPage() {
             ? "3"
             : "1";
 
+      const indiaObj = (masterData.countries || []).find(
+        (c) => String(c.name || "").trim().toUpperCase() === "INDIA",
+      );
+      const indiaId = indiaObj ? String(indiaObj.id || indiaObj.value) : "75";
+      const resolvedCountry = data.countryId
+        ? String(data.countryId)
+        : natVal === "1"
+          ? indiaId
+          : "";
+
+      const rawDob = data.dob
+        ? String(data.dob).includes("T")
+          ? String(data.dob).split("T")[0]
+          : String(data.dob)
+        : "";
+
       setPersonForm({
         ...initialPersonForm,
         masterId: id,
         existingPassRequestId: data.passRequestId, // Crucial for fetching old documents
-        hepType: data.hepTypeId
-          ? String(data.hepTypeId)
-          : data.designationName === "Driver"
-            ? "1"
-            : "2",
+        hepType: resolvedHepType,
         name: data.name || "",
+        dob: rawDob,
         aadharNo: data.aadharNo || "",
         mobile: data.mobile || "",
         email: data.email || "",
         nationality: natVal,
-        country: data.countryId ? String(data.countryId) : (() => {
-          const indiaObj = (masterData.countries || []).find(
-            (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
-          );
-          return indiaObj ? String(indiaObj.id || indiaObj.value) : "";
-        })(),
+        country: resolvedCountry,
         visaNo: data.visaNo || "",
         accessArea: areaVal,
         designation: data.designationId ? String(data.designationId) : "",
