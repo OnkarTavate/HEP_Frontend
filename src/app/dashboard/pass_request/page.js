@@ -7547,8 +7547,6 @@ export default function PassRequestPage() {
                           </div>
                         </div>
                       )}
-
-<<<<<<< Updated upstream
                     {(personForm.photo || personForm.existingPhotoName) && (
                       <div className="pt-1">
                         <button
@@ -7614,7 +7612,6 @@ export default function PassRequestPage() {
                         </div>
                       )}
                     </div>
->>>>>>> Stashed changes
                   </div>
                   {personForm.hepType !== "3" && (
                     <div className="space-y-1.5 md:col-span-2 max-w-sm">
