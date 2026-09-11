@@ -130,7 +130,7 @@ export default function NotificationPanel({ role = "approver" }) {
               });
           }
         } catch (e) {
-          console.error("Profile update notifications fetch error:", e);
+          if (e?.response?.status !== 404) console.error("Profile update notifications fetch error:", e);
         }
 
         // Fetch PENDING two-wheeler vehicle update requests for Approver
@@ -157,7 +157,7 @@ export default function NotificationPanel({ role = "approver" }) {
               }));
           }
         } catch (e) {
-          console.error("Two-wheeler notifications fetch error:", e);
+          if (e?.response?.status !== 404) console.error("Two-wheeler notifications fetch error:", e);
         }
 
         const combined = [...twoWheelerItems, ...profileItems].sort(
@@ -201,7 +201,7 @@ export default function NotificationPanel({ role = "approver" }) {
             });
           }
         } catch (e) {
-          console.error("Profile notifications error:", e);
+          if (e?.response?.status !== 404) console.error("Profile notifications error:", e);
         }
 
         // Fetch two-wheeler vehicle update status for Company / Agent
@@ -227,14 +227,14 @@ export default function NotificationPanel({ role = "approver" }) {
                 title: `Vehicle Update: ${statusText}`,
                 message: desc,
                 status: item.status,
-                time: item.createdAt || item.updatedAt,
+                time: item.createdAt,
                 link: "/dashboard/pass_request",
                 badgeText: "Vehicle Update",
               };
             });
           }
         } catch (e) {
-          console.error("Two-wheeler notifications error:", e);
+          if (e?.response?.status !== 404) console.error("Two-wheeler notifications error:", e);
         }
 
         const combined = [...twoWheelerItems, ...profileItems].sort(

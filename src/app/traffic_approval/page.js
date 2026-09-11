@@ -36,9 +36,13 @@ import {
   GripVertical,
   RotateCcw,
   Zap,
+  PackageCheck,
 } from "lucide-react";
 
-import { getPassRequestCategory, getItemCategoryTag } from "@/utils/passCategoryHelper";
+import {
+  getPassRequestCategory,
+  getItemCategoryTag,
+} from "@/utils/passCategoryHelper";
 
 const AGENT_API =
   process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
@@ -62,8 +66,20 @@ const extractEntityIndex = (entityId) => {
 };
 
 // --- Reusable UI Components ---
-const DetailItem = ({ label, value, highlight = false, showIfEmpty = false }) => {
-  if (!showIfEmpty && (!value || value === "N/A" || value === "null" || value === "undefined" || String(value).trim() === "")) {
+const DetailItem = ({
+  label,
+  value,
+  highlight = false,
+  showIfEmpty = false,
+}) => {
+  if (
+    !showIfEmpty &&
+    (!value ||
+      value === "N/A" ||
+      value === "null" ||
+      value === "undefined" ||
+      String(value).trim() === "")
+  ) {
     return null;
   }
   return (
@@ -200,17 +216,28 @@ export default function TrafficPassesPage() {
   // Two-Wheeler Update Request States
   const [twoWheelerRequests, setTwoWheelerRequests] = useState([]);
   const [passUpdatesCount, setPassUpdatesCount] = useState(0);
-  const [rejectModal, setRejectModal] = useState({ isOpen: false, requestId: null, reason: "" });
+  const [rejectModal, setRejectModal] = useState({
+    isOpen: false,
+    requestId: null,
+    reason: "",
+  });
 
   const fetchTwoWheelerRequests = useCallback(async () => {
     try {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
-      const res = await axios.get(`${AGENT_API}/pass-request/two-wheeler-update-requests`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("hep_token");
+      const res = await axios.get(
+        `${AGENT_API}/pass-request/two-wheeler-update-requests`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       if (res.data && res.data.success) {
         setTwoWheelerRequests(res.data.data || []);
-        const pendingCount = (res.data.data || []).filter(r => r.status === "PENDING").length;
+        const pendingCount = (res.data.data || []).filter(
+          (r) => r.status === "PENDING",
+        ).length;
         setPassUpdatesCount(pendingCount);
       }
     } catch (err) {
@@ -224,31 +251,47 @@ export default function TrafficPassesPage() {
 
   const handleApproveTwoWheeler = async (id) => {
     try {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
-      await axios.put(`${AGENT_API}/pass-request/two-wheeler-update-requests/${id}/approve`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("hep_token");
+      await axios.put(
+        `${AGENT_API}/pass-request/two-wheeler-update-requests/${id}/approve`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       toast.success("Two-wheeler vehicle number update approved successfully!");
       fetchTwoWheelerRequests();
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Failed to approve two-wheeler update.");
+      toast.error(
+        err?.response?.data?.message || "Failed to approve two-wheeler update.",
+      );
     }
   };
 
   const handleRejectTwoWheeler = async () => {
     if (!rejectModal.requestId) return;
     try {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
-      await axios.put(`${AGENT_API}/pass-request/two-wheeler-update-requests/${rejectModal.requestId}/reject`, {
-        rejectedReason: rejectModal.reason,
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("hep_token");
+      await axios.put(
+        `${AGENT_API}/pass-request/two-wheeler-update-requests/${rejectModal.requestId}/reject`,
+        {
+          rejectedReason: rejectModal.reason,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       toast.success("Two-wheeler update request rejected.");
       setRejectModal({ isOpen: false, requestId: null, reason: "" });
       fetchTwoWheelerRequests();
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Failed to reject update request.");
+      toast.error(
+        err?.response?.data?.message || "Failed to reject update request.",
+      );
     }
   };
 
@@ -490,6 +533,14 @@ export default function TrafficPassesPage() {
             processed: 0,
           };
 
+          console.log("📊 [PASS APPROVAL] Status Counts:", {
+            pending: newCounts.pending ?? 0,
+            processed: newCounts.processed ?? 0,
+            rejected: newCounts.rejected ?? 0,
+            reverted: newCounts.reverted ?? 0,
+            total: newCounts.total ?? 0,
+          });
+
           setRequests((prev) =>
             JSON.stringify(newRequests) === JSON.stringify(prev)
               ? prev
@@ -537,7 +588,10 @@ export default function TrafficPassesPage() {
     return () => {
       clearInterval(interval);
       if (typeof window !== "undefined") {
-        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange,
+        );
       }
     };
   }, [fetchPassRequests]);
@@ -928,146 +982,220 @@ export default function TrafficPassesPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 font-sans relative">
-      {/* ── Tip row ── */}
-      <div className="flex items-center justify-between gap-3 text-xs bg-orange-500/5 rounded-2xl px-4 py-2 border border-orange-500/10 shrink-0">
-        <p className="text-orange-700 dark:text-orange-400 font-medium flex items-center gap-1.5">
-          <Zap className="h-4 w-4 animate-bounce text-orange-500" />
-          Drag and drop stat cards using the grip icon to arrange your view.
-        </p>
-        <button
-          onClick={resetCardOrder}
-          className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-orange-750 hover:text-orange-855 dark:text-orange-300 dark:hover:text-orange-200 transition-colors shrink-0"
-        >
-          <RotateCcw className="h-3 w-3" />
-          Reset Order
-        </button>
-      </div>
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 font-sans">
+      {/* ── OFFICIAL CHENNAI PORT AUTHORITY HEADER STRIP ── */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0a1e4d] via-[#12275f] to-[#1b1856] p-6 text-white shadow-[0_12px_32px_-10px_rgba(10,30,77,0.65)] ring-1 ring-inset ring-white/15">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
+        <div className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full bg-orange-500/20 blur-3xl" />
+        <div className="pointer-events-none absolute left-1/3 -bottom-10 h-36 w-36 rounded-full bg-blue-500/15 blur-2xl" />
 
-      {/* ── Stat cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4 shrink-0">
-        {cardOrder.map((cardKey, index) => {
-          const cardData = {
-            total: {
-              label: "Total Passes",
-              value: globalCounts.total,
-              icon: Users,
-              color: "text-[#0a1e4d] dark:text-stone-300",
-              bgIcon: "bg-slate-100 dark:bg-slate-800",
-              onClick: () => handleCardClick("pending", "ALL"),
-            },
-            pending: {
-              label: "Pending",
-              value: globalCounts.pending,
-              icon: Clock,
-              color: "text-amber-650 dark:text-amber-405",
-              bgIcon: "bg-amber-50 dark:bg-amber-500/10",
-              onClick: () => handleCardClick("pending", "ALL"),
-            },
-            processed: {
-              label: "Processed",
-              value: globalCounts.processed,
-              icon: CheckCircle2,
-              color: "text-emerald-600 dark:text-emerald-400",
-              bgIcon: "bg-emerald-50 dark:bg-emerald-500/10",
-              onClick: () => handleCardClick("processed", "ALL"),
-            },
-          }[cardKey];
-
-          const isDragged = draggedIndex === index;
-          const isOver = dragOverIndex === index;
-
-          return (
-            <div
-              key={cardKey}
-              draggable
-              onDragStart={(e) => handleDragStart(e, index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDrop={(e) => handleDrop(e, index)}
-              onDragEnd={handleDragEnd}
-              className={
-                "transition-all duration-200 " +
-                (isDragged ? "opacity-30 scale-95" : "") +
-                (isOver
-                  ? "border-2 border-dashed border-orange-500 rounded-3xl p-1 bg-orange-500/5 shadow-inner scale-[1.02]"
-                  : "")
-              }
-            >
-              <div
-                onClick={cardData.onClick}
-                className="bg-white dark:bg-[#1e293b] rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.25)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_20px_40px_-5px_rgba(0,0,0,0.08),0_8px_20px_-6px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_30px_60px_-10px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out cursor-pointer flex flex-col gap-2 relative group"
-              >
-                {/* Grip Handle */}
-                <div className="absolute top-3 right-3 text-stone-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-400 transition-colors cursor-grab active:cursor-grabbing p-1 rounded hover:bg-slate-50 dark:hover:bg-white/5 z-10">
-                  <GripVertical className="h-4.5 w-4.5" />
-                </div>
-
-                <div className="flex items-center justify-between pr-6">
-                  <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                    {cardData.label}
-                  </span>
-                  <span
-                    className={`flex items-center justify-center h-8 w-8 rounded-xl ${cardData.bgIcon}`}
-                  >
-                    <cardData.icon
-                      className={`h-4 w-4 ${cardData.color}`}
-                      strokeWidth={2.5}
-                    />
-                  </span>
-                </div>
-                <p
-                  className={`text-3xl font-extrabold tabular-nums ${cardData.color}`}
-                >
-                  {cardData.value}
-                </p>
+        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30 ring-1 ring-white/30 shrink-0">
+              <ShieldCheck className="h-6 w-6" strokeWidth={2.4} />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-orange-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live Pass Processing
+                </span>
+                <span className="text-[10px] font-bold text-blue-200/70 hidden sm:inline">
+                  Traffic Authority · Chennai Port Authority
+                </span>
               </div>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white leading-tight mt-0.5">
+                PASS CLEARANCE &amp; APPROVALS
+              </h1>
             </div>
-          );
-        })}
-      </div>
+          </div>
 
-      {/* ── Page header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-extrabold text-[#0a1e4d] dark:text-stone-100 tracking-tight flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-[#ff6b00]" strokeWidth={2.5} />
-            Pass Approvals
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-stone-400 mt-0.5">
-            Review and authorize personnel and vehicle entry passes
-          </p>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={fetchPassRequests}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold ring-1 ring-inset ring-white/15 shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${loading ? "animate-spin text-orange-300" : ""}`}
+              />
+              Sync Passes
+            </button>
+          </div>
         </div>
-        <button
-          onClick={fetchPassRequests}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0a1e4d] hover:bg-blue-900 text-white text-sm font-bold shadow hover:opacity-90 active:scale-95 transition-all"
-        >
-          <RefreshCw className="h-4 w-4" strokeWidth={2.5} />
-          Refresh
-        </button>
       </div>
 
-      {/* ── Tabs ── */}
-      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700/50 pb-0">
+      {/* ── 4 PREMIUM STAT CARDS ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+
+        {/* ── Card 1: Total Applications ── */}
+        <div
+          onClick={() => handleCardClick("pending", "ALL")}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick("pending", "ALL")}
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1e3a8a] via-[#3730a3] to-[#4c1d95] p-5 text-white shadow-xl shadow-indigo-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-700/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+        >
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+          <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-blue-400/20 blur-2xl" />
+          <div className="pointer-events-none absolute -left-4 -bottom-4 h-20 w-20 rounded-full bg-violet-500/20 blur-xl" />
+          <div className="pointer-events-none absolute right-3 bottom-3 opacity-[0.08] group-hover:opacity-[0.13] transition-opacity duration-300">
+            <PackageCheck className="h-20 w-20 text-white" strokeWidth={1.2} />
+          </div>
+          <div className="relative flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shadow-inner shrink-0">
+                <PackageCheck className="h-4 w-4 text-blue-200" strokeWidth={2.2} />
+              </span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-blue-200/80 leading-tight">Total</span>
+            </div>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white/10 text-blue-200 border border-white/15">ALL</span>
+          </div>
+          <div className="relative mt-3">
+            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">{globalCounts.total}</p>
+            <p className="text-[11px] font-semibold text-blue-200/70 mt-1.5 leading-snug">{globalCounts.pending} pending · {globalCounts.processed} authorized</p>
+          </div>
+          <div className="relative mt-4">
+            <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-blue-300 via-indigo-300 to-violet-300 transition-all duration-700" style={{ width: globalCounts.total > 0 ? "100%" : "0%" }} />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Card 2: Pending Clearance ── */}
+        <div
+          onClick={() => handleCardClick("pending", "ALL")}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick("pending", "ALL")}
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#92400e] via-[#c2410c] to-[#b91c1c] p-5 text-white shadow-xl shadow-orange-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-orange-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+        >
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+          <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-amber-400/20 blur-2xl" />
+          <div className="pointer-events-none absolute -left-4 -bottom-4 h-20 w-20 rounded-full bg-red-600/25 blur-xl" />
+          <div className="pointer-events-none absolute right-3 bottom-3 opacity-[0.08] group-hover:opacity-[0.13] transition-opacity duration-300">
+            <Clock className="h-20 w-20 text-white" strokeWidth={1.2} />
+          </div>
+          <div className="relative flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shadow-inner shrink-0">
+                <Clock className="h-4 w-4 text-amber-200" strokeWidth={2.2} />
+              </span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-amber-200/80 leading-tight">Pending</span>
+            </div>
+            {globalCounts.pending > 0 && (
+              <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-orange-600 shadow-md animate-pulse">
+                <span className="h-1.5 w-1.5 rounded-full bg-orange-500 inline-block" />
+                Urgent
+              </span>
+            )}
+          </div>
+          <div className="relative mt-3">
+            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">{globalCounts.pending}</p>
+            <p className="text-[11px] font-semibold text-orange-200/70 mt-1.5 leading-snug">{globalCounts.pending} awaiting review of {globalCounts.total} total</p>
+          </div>
+          <div className="relative mt-4">
+            <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-amber-300 via-orange-300 to-red-300 transition-all duration-700" style={{ width: globalCounts.total > 0 ? `${Math.round((globalCounts.pending / globalCounts.total) * 100)}%` : "0%" }} />
+            </div>
+            <p className="text-[10px] text-orange-200/50 mt-1 tabular-nums">
+              {globalCounts.total > 0 ? `${Math.round((globalCounts.pending / globalCounts.total) * 100)}% of total` : "—"}
+            </p>
+          </div>
+        </div>
+
+        {/* ── Card 3: Processed & Authorized ── */}
+        <div
+          onClick={() => handleCardClick("processed", "ALL")}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick("processed", "ALL")}
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#064e3b] via-[#0f766e] to-[#0e7490] p-5 text-white shadow-xl shadow-emerald-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-emerald-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+        >
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+          <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-emerald-400/20 blur-2xl" />
+          <div className="pointer-events-none absolute -left-4 -bottom-4 h-20 w-20 rounded-full bg-cyan-500/20 blur-xl" />
+          <div className="pointer-events-none absolute right-3 bottom-3 opacity-[0.08] group-hover:opacity-[0.13] transition-opacity duration-300">
+            <CheckCircle2 className="h-20 w-20 text-white" strokeWidth={1.2} />
+          </div>
+          <div className="relative flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shadow-inner shrink-0">
+                <CheckCircle2 className="h-4 w-4 text-emerald-200" strokeWidth={2.2} />
+              </span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-200/80 leading-tight">Processed</span>
+            </div>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">Authorized</span>
+          </div>
+          <div className="relative mt-3">
+            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">{globalCounts.processed}</p>
+            <p className="text-[11px] font-semibold text-emerald-200/70 mt-1.5 leading-snug">{globalCounts.processed} authorized · {globalCounts.pending} awaiting</p>
+          </div>
+          <div className="relative mt-4">
+            <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 transition-all duration-700" style={{ width: globalCounts.total > 0 ? `${Math.round((globalCounts.processed / globalCounts.total) * 100)}%` : "0%" }} />
+            </div>
+            <p className="text-[10px] text-emerald-200/50 mt-1 tabular-nums">
+              {globalCounts.total > 0 ? `${Math.round((globalCounts.processed / globalCounts.total) * 100)}% clearance rate` : "—"}
+            </p>
+          </div>
+        </div>
+
+        {/* ── Card 4: Vehicle Updates ── */}
+        <div
+          onClick={() => handleCardClick("pass_updates", "ALL")}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick("pass_updates", "ALL")}
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#4a1d96] via-[#6d28d9] to-[#3730a3] p-5 text-white shadow-xl shadow-purple-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-violet-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+        >
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+          <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-violet-400/20 blur-2xl" />
+          <div className="pointer-events-none absolute -left-4 -bottom-4 h-20 w-20 rounded-full bg-indigo-600/25 blur-xl" />
+          <div className="pointer-events-none absolute right-3 bottom-3 opacity-[0.08] group-hover:opacity-[0.13] transition-opacity duration-300">
+            <RotateCcw className="h-20 w-20 text-white" strokeWidth={1.2} />
+          </div>
+          <div className="relative flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shadow-inner shrink-0">
+                <RotateCcw className="h-4 w-4 text-violet-200" strokeWidth={2.2} />
+              </span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-violet-200/80 leading-tight">Vehicle Updates</span>
+            </div>
+          </div>
+          <div className="relative mt-3">
+            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">{passUpdatesCount}</p>
+            <p className="text-[11px] font-semibold text-violet-200/70 mt-1.5 leading-snug">Two-wheeler change requests</p>
+          </div>
+          <div className="relative mt-4">
+            <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-violet-300 via-purple-300 to-indigo-300 transition-all duration-700" style={{ width: passUpdatesCount > 0 ? "60%" : "0%" }} />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── TABS BAR ── */}
+      <div className="flex items-center gap-2 border-b-2 border-slate-200 pb-0 overflow-x-auto">
         {[
           {
             id: "pending",
-            label: "Pending Approvals",
+            label: "Pending Clearance",
             count: globalCounts.pending,
+            icon: Clock,
           },
           {
             id: "processed",
             label: "Processed Passes",
             count: globalCounts.processed,
+            icon: CheckCircle2,
           },
-          ...(userRole === "Approval"
-            ? [
-                {
-                  id: "pass_updates",
-                  label: "Pass Updates",
-                  count: passUpdatesCount,
-                },
-              ]
-            : []),
+          {
+            id: "pass_updates",
+            label: "Pass Updates",
+            count: passUpdatesCount,
+          },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1173,23 +1301,32 @@ export default function TrafficPassesPage() {
             <thead>
               <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
                 {(activeTab === "pass_updates"
-                  ? ["Pass No.", "Person Name", "Company", "Old Vehicle No.", "New Vehicle No.", "Requested On", "Status", "Actions"]
-                  : activeTab === "processed"
                   ? [
-                      "Ref No",
-                      "Company Details",
-                      "Entities Included",
-                      "Applied On",
-                      "Approved By",
+                      "Pass No.",
+                      "Person Name",
+                      "Company",
+                      "Old Vehicle No.",
+                      "New Vehicle No.",
+                      "Requested On",
                       "Status",
+                      "Actions",
                     ]
-                  : [
-                      "Ref No",
-                      "Company Details",
-                      "Entities Included",
-                      "Applied On",
-                      "Status",
-                    ]
+                  : activeTab === "processed"
+                    ? [
+                        "Ref No",
+                        "Company Details",
+                        "Entities Included",
+                        "Applied On",
+                        "Approved By",
+                        "Status",
+                      ]
+                    : [
+                        "Ref No",
+                        "Company Details",
+                        "Entities Included",
+                        "Applied On",
+                        "Status",
+                      ]
                 ).map((h) => (
                   <th
                     key={h}
@@ -1206,22 +1343,45 @@ export default function TrafficPassesPage() {
               {activeTab === "pass_updates" ? (
                 twoWheelerRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center text-slate-500">
+                    <td
+                      colSpan={8}
+                      className="py-16 text-center text-slate-500"
+                    >
                       <Search className="h-10 w-10 mx-auto text-slate-200 mb-3" />
-                      <p className="text-sm font-medium">No two-wheeler update requests found.</p>
+                      <p className="text-sm font-medium">
+                        No two-wheeler update requests found.
+                      </p>
                     </td>
                   </tr>
                 ) : (
                   twoWheelerRequests.map((req) => (
-                    <tr key={req.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="px-6 py-4 text-sm font-bold font-mono text-[#0a1e4d]">{req.personPassNo || `REQ-${req.passRequestId || req.id}`}</td>
-                      <td className="px-6 py-4 text-sm font-bold text-slate-800 dark:text-slate-200">{req.personName || "—"}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{req.companyName || "—"}</td>
-                      <td className="px-6 py-4 text-sm font-mono text-slate-500">{req.oldVehicleNo || "N/A"}</td>
-                      <td className="px-6 py-4 text-sm font-mono font-bold text-emerald-600">{req.newVehicleNo}</td>
-                      <td className="px-6 py-4 text-sm text-slate-500">{new Date(req.createdAt).toLocaleDateString("en-GB")}</td>
+                    <tr
+                      key={req.id}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                    >
+                      <td className="px-6 py-4 text-sm font-bold font-mono text-[#0a1e4d]">
+                        {req.personPassNo ||
+                          `REQ-${req.passRequestId || req.id}`}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-bold text-slate-800 dark:text-slate-200">
+                        {req.personName || "—"}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                        {req.companyName || "—"}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-mono text-slate-500">
+                        {req.oldVehicleNo || "N/A"}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-mono font-bold text-emerald-600">
+                        {req.newVehicleNo}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-500">
+                        {new Date(req.createdAt).toLocaleDateString("en-GB")}
+                      </td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : req.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : req.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                        >
                           {req.status}
                         </span>
                       </td>
@@ -1235,7 +1395,13 @@ export default function TrafficPassesPage() {
                               Approve
                             </button>
                             <button
-                              onClick={() => setRejectModal({ isOpen: true, requestId: req.id, reason: "" })}
+                              onClick={() =>
+                                setRejectModal({
+                                  isOpen: true,
+                                  requestId: req.id,
+                                  reason: "",
+                                })
+                              }
                               className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
                             >
                               Reject
@@ -1333,9 +1499,12 @@ export default function TrafficPassesPage() {
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 items-start">
                           <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-slate-200 dark:border-slate-700">
-                            {pass.persons?.length || 0} Persons | {pass.vehicles?.length || 0} Vehicles
+                            {pass.persons?.length || 0} Persons |{" "}
+                            {pass.vehicles?.length || 0} Vehicles
                           </span>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${catInfo.badgeClass}`}>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${catInfo.badgeClass}`}
+                          >
                             {catInfo.label}
                           </span>
                         </div>
@@ -1438,7 +1607,8 @@ export default function TrafficPassesPage() {
                         }
                         className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
                       >
-                        <FileText className="h-4 w-4 text-blue-600" /> View Requisition Letter
+                        <FileText className="h-4 w-4 text-blue-600" /> View
+                        Requisition Letter
                       </button>
                     )}
                     {selectedRequest.authLetterFilePath && (
@@ -1452,7 +1622,8 @@ export default function TrafficPassesPage() {
                         }
                         className="bg-orange-50 text-orange-700 border border-orange-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-orange-100 transition-colors shadow-sm"
                       >
-                        <FileCheck2 className="h-4 w-4 text-orange-600" /> View Licence / Work Order / Contract
+                        <FileCheck2 className="h-4 w-4 text-orange-600" /> View
+                        Licence / Work Order / Contract
                       </button>
                     )}
                   </div>
@@ -1627,10 +1798,14 @@ export default function TrafficPassesPage() {
                             {(() => {
                               const pCat = getItemCategoryTag(p, true);
                               return pCat ? (
-                                <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}>
+                                <span
+                                  className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}
+                                >
                                   {pCat.label}
                                 </span>
-                              ) : "-";
+                              ) : (
+                                "-"
+                              );
                             })()}
                           </td>
                           <td className="p-3 text-slate-600 font-mono text-xs">
@@ -1774,10 +1949,14 @@ export default function TrafficPassesPage() {
                             {(() => {
                               const vCat = getItemCategoryTag(v, false);
                               return vCat ? (
-                                <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}>
+                                <span
+                                  className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}
+                                >
                                   {vCat.label}
                                 </span>
-                              ) : "-";
+                              ) : (
+                                "-"
+                              );
                             })()}
                           </td>
                           <td className="p-3 text-slate-600 text-xs font-medium">
@@ -1789,88 +1968,141 @@ export default function TrafficPassesPage() {
                               {(() => {
                                 const isEssential =
                                   Boolean(v.essentialWorkflowState) ||
-                                  (v.essentialDepartmentId !== null && v.essentialDepartmentId !== undefined) ||
+                                  (v.essentialDepartmentId !== null &&
+                                    v.essentialDepartmentId !== undefined) ||
                                   isOilDockArea(v.accessAreaId || v.accessArea);
 
                                 if (isEssential) {
-                                  const workflowState = String(v.essentialWorkflowState || "").toUpperCase();
-                                  const deptId = Number(v.essentialDepartmentId);
+                                  const workflowState = String(
+                                    v.essentialWorkflowState || "",
+                                  ).toUpperCase();
+                                  const deptId = Number(
+                                    v.essentialDepartmentId,
+                                  );
                                   const sparkApproved =
                                     v.sparkArresterCertified === true ||
                                     v.marineSafetyApproved === true ||
-                                    (userRole === "Fire Safety Officer" && entityStatuses.vehicles[v.id] === "APPROVED");
+                                    (userRole === "Fire Safety Officer" &&
+                                      entityStatuses.vehicles[v.id] ===
+                                        "APPROVED");
 
-                                  const fireSafetyDone = sparkApproved || (workflowState !== "" && !workflowState.includes("FIRE_SAFETY"));
+                                  const fireSafetyDone =
+                                    sparkApproved ||
+                                    (workflowState !== "" &&
+                                      !workflowState.includes("FIRE_SAFETY"));
 
-                                  const isCivilDept = deptId === 3 || workflowState.includes("CIVIL");
-                                  const isMechDept = deptId === 4 || workflowState.includes("MECHANICAL");
+                                  const isCivilDept =
+                                    deptId === 3 ||
+                                    workflowState.includes("CIVIL");
+                                  const isMechDept =
+                                    deptId === 4 ||
+                                    workflowState.includes("MECHANICAL");
 
                                   const civilDone =
                                     isCivilDept &&
                                     (!workflowState.includes("CIVIL") ||
-                                      ["PENDING_CISF_ESSENTIAL", "PENDING_PASS_SECTION_ESSENTIAL", "COMPLETED_ESSENTIAL", "COMPLETED"].includes(workflowState));
+                                      [
+                                        "PENDING_CISF_ESSENTIAL",
+                                        "PENDING_PASS_SECTION_ESSENTIAL",
+                                        "COMPLETED_ESSENTIAL",
+                                        "COMPLETED",
+                                      ].includes(workflowState));
 
                                   const mechDone =
                                     isMechDept &&
                                     (!workflowState.includes("MECHANICAL") ||
-                                      ["PENDING_CISF_ESSENTIAL", "PENDING_PASS_SECTION_ESSENTIAL", "COMPLETED_ESSENTIAL", "COMPLETED"].includes(workflowState));
+                                      [
+                                        "PENDING_CISF_ESSENTIAL",
+                                        "PENDING_PASS_SECTION_ESSENTIAL",
+                                        "COMPLETED_ESSENTIAL",
+                                        "COMPLETED",
+                                      ].includes(workflowState));
 
                                   const cisfDone =
-                                    ["PENDING_PASS_SECTION_ESSENTIAL", "COMPLETED_ESSENTIAL", "COMPLETED"].includes(workflowState) ||
-                                    String(v.status || "").toLowerCase() === "approved";
+                                    [
+                                      "PENDING_PASS_SECTION_ESSENTIAL",
+                                      "COMPLETED_ESSENTIAL",
+                                      "COMPLETED",
+                                    ].includes(workflowState) ||
+                                    String(v.status || "").toLowerCase() ===
+                                      "approved";
 
                                   const passSectionDone =
-                                    ["COMPLETED_ESSENTIAL", "COMPLETED"].includes(workflowState) ||
-                                    String(v.status || "").toLowerCase() === "approved";
+                                    [
+                                      "COMPLETED_ESSENTIAL",
+                                      "COMPLETED",
+                                    ].includes(workflowState) ||
+                                    String(v.status || "").toLowerCase() ===
+                                      "approved";
 
                                   return (
                                     <>
                                       {/* 1. Dy. Conservator / Fire Safety */}
                                       <span
                                         className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                          fireSafetyDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                          fireSafetyDone
+                                            ? "bg-emerald-100 text-emerald-700"
+                                            : "bg-amber-100 text-amber-700"
                                         }`}
                                       >
-                                        {fireSafetyDone ? "✓ Fire Safety / Dy. Conservator" : "⏳ Pending Fire Safety / Dy. Conservator"}
+                                        {fireSafetyDone
+                                          ? "✓ Fire Safety / Dy. Conservator"
+                                          : "⏳ Pending Fire Safety / Dy. Conservator"}
                                       </span>
 
                                       {/* 2. Department Approval (if Civil or Mech selected) */}
                                       {isCivilDept && (
                                         <span
                                           className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                            civilDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                            civilDone
+                                              ? "bg-emerald-100 text-emerald-700"
+                                              : "bg-amber-100 text-amber-700"
                                           }`}
                                         >
-                                          {civilDone ? "✓ Civil Dept" : "⏳ Pending Civil Dept"}
+                                          {civilDone
+                                            ? "✓ Civil Dept"
+                                            : "⏳ Pending Civil Dept"}
                                         </span>
                                       )}
 
                                       {isMechDept && (
                                         <span
                                           className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                            mechDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                            mechDone
+                                              ? "bg-emerald-100 text-emerald-700"
+                                              : "bg-amber-100 text-amber-700"
                                           }`}
                                         >
-                                          {mechDone ? "✓ Mech Dept" : "⏳ Pending Mech Dept"}
+                                          {mechDone
+                                            ? "✓ Mech Dept"
+                                            : "⏳ Pending Mech Dept"}
                                         </span>
                                       )}
 
                                       {/* 3. CISF Approval */}
                                       <span
                                         className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                          cisfDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                          cisfDone
+                                            ? "bg-emerald-100 text-emerald-700"
+                                            : "bg-amber-100 text-amber-700"
                                         }`}
                                       >
-                                        {cisfDone ? "✓ CISF Assistant Commandant" : "⏳ Pending CISF"}
+                                        {cisfDone
+                                          ? "✓ CISF Assistant Commandant"
+                                          : "⏳ Pending CISF"}
                                       </span>
 
                                       {/* 4. Pass Section Final Approval */}
                                       <span
                                         className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                          passSectionDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                          passSectionDone
+                                            ? "bg-emerald-100 text-emerald-700"
+                                            : "bg-amber-100 text-amber-700"
                                         }`}
                                       >
-                                        {passSectionDone ? "✓ Pass Section" : "⏳ Pending Pass Section"}
+                                        {passSectionDone
+                                          ? "✓ Pass Section"
+                                          : "⏳ Pending Pass Section"}
                                       </span>
                                     </>
                                   );
@@ -1881,35 +2113,49 @@ export default function TrafficPassesPage() {
                                   <>
                                     <span
                                       className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                        String(v.status || "").toLowerCase() === "approved"
+                                        String(v.status || "").toLowerCase() ===
+                                        "approved"
                                           ? "bg-emerald-100 text-emerald-700"
-                                          : String(v.status || "").toLowerCase() === "rejected"
-                                          ? "bg-red-100 text-red-700"
-                                          : String(v.status || "").toLowerCase() === "reverted"
-                                          ? "bg-amber-100 text-amber-700"
-                                          : "bg-amber-100 text-amber-700"
+                                          : String(
+                                                v.status || "",
+                                              ).toLowerCase() === "rejected"
+                                            ? "bg-red-100 text-red-700"
+                                            : String(
+                                                  v.status || "",
+                                                ).toLowerCase() === "reverted"
+                                              ? "bg-amber-100 text-amber-700"
+                                              : "bg-amber-100 text-amber-700"
                                       }`}
                                     >
-                                      {String(v.status || "").toLowerCase() === "approved"
+                                      {String(v.status || "").toLowerCase() ===
+                                      "approved"
                                         ? "✓ Pass Section"
-                                        : String(v.status || "").toLowerCase() === "rejected"
-                                        ? "✕ Pass Section Rejected"
-                                        : String(v.status || "").toLowerCase() === "reverted"
-                                        ? "↩ Pass Section Reverted"
-                                        : "⏳ Pending Pass Section"}
+                                        : String(
+                                              v.status || "",
+                                            ).toLowerCase() === "rejected"
+                                          ? "✕ Pass Section Rejected"
+                                          : String(
+                                                v.status || "",
+                                              ).toLowerCase() === "reverted"
+                                            ? "↩ Pass Section Reverted"
+                                            : "⏳ Pending Pass Section"}
                                     </span>
 
                                     {v.twistLockCertified && (
                                       <span
                                         className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                           v.twistLockCertified ||
-                                          (userRole === "Safety Officer" && entityStatuses.vehicles[v.id] === "APPROVED")
+                                          (userRole === "Safety Officer" &&
+                                            entityStatuses.vehicles[v.id] ===
+                                              "APPROVED")
                                             ? "bg-emerald-100 text-emerald-700"
                                             : "bg-amber-100 text-amber-700"
                                         }`}
                                       >
                                         {v.twistLockCertified ||
-                                        (userRole === "Safety Officer" && entityStatuses.vehicles[v.id] === "APPROVED")
+                                        (userRole === "Safety Officer" &&
+                                          entityStatuses.vehicles[v.id] ===
+                                            "APPROVED")
                                           ? "✓ Safety"
                                           : "⏳ Pending Safety"}
                                       </span>
@@ -2112,7 +2358,11 @@ export default function TrafficPassesPage() {
                       />
                       <DetailItem
                         label="Country"
-                        value={entityModal.data.countryName || entityModal.data.country || "-"}
+                        value={
+                          entityModal.data.countryName ||
+                          entityModal.data.country ||
+                          "-"
+                        }
                       />
                       <DetailItem
                         label="Visa No."
@@ -2130,11 +2380,11 @@ export default function TrafficPassesPage() {
                         label="ID Proof Type"
                         value={
                           {
-                            "1": "Driving License",
-                            "2": "PAN Card",
-                            "3": "Passport",
-                            "4": "Voter ID",
-                            "5": "Company ID Card",
+                            1: "Driving License",
+                            2: "PAN Card",
+                            3: "Passport",
+                            4: "Voter ID",
+                            5: "Company ID Card",
                           }[String(entityModal.data.idProofType)] ||
                           entityModal.data.idProofType ||
                           "-"
@@ -2210,7 +2460,11 @@ export default function TrafficPassesPage() {
                       />
                       <DetailItem
                         label="ULIP Verification"
-                        value={entityModal.data.ulip_verified ? "VERIFIED" : "NOT VERIFIED"}
+                        value={
+                          entityModal.data.ulip_verified
+                            ? "VERIFIED"
+                            : "NOT VERIFIED"
+                        }
                       />
                     </>
                   )}
@@ -2639,7 +2893,9 @@ export default function TrafficPassesPage() {
                 Reject Two-Wheeler Update
               </h3>
               <button
-                onClick={() => setRejectModal({ isOpen: false, requestId: null, reason: "" })}
+                onClick={() =>
+                  setRejectModal({ isOpen: false, requestId: null, reason: "" })
+                }
                 className="text-white/70 hover:text-white"
               >
                 <X className="h-5 w-5" />
@@ -2652,14 +2908,18 @@ export default function TrafficPassesPage() {
               <textarea
                 rows={3}
                 value={rejectModal.reason}
-                onChange={(e) => setRejectModal({ ...rejectModal, reason: e.target.value })}
+                onChange={(e) =>
+                  setRejectModal({ ...rejectModal, reason: e.target.value })
+                }
                 placeholder="Enter rejection reason..."
                 className="w-full border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500 bg-white dark:bg-slate-800"
               />
             </div>
             <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex justify-end gap-3">
               <button
-                onClick={() => setRejectModal({ isOpen: false, requestId: null, reason: "" })}
+                onClick={() =>
+                  setRejectModal({ isOpen: false, requestId: null, reason: "" })
+                }
                 className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold transition-colors"
               >
                 Cancel

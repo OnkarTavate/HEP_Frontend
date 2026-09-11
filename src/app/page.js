@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
+import { resolveHome } from "@/lib/roleRouting";
 import {
   Ship,
   Lock,
@@ -562,7 +563,6 @@ const LoginPage = () => {
         //   Engineering Civil : 3  |  Engineering Mechanical : 4
         //   Finance           : 5  |  General Administration : 6
         const role = (tokenClaims.role || "").toLowerCase();
-        // const deptId = tokenClaims.departmentId; // numeric — sourced from JWT claim
         const deptId = Number(tokenClaims.departmentId);
         const TRAFFIC_DEPT_IDS = [9, 10, 11, 12, 13, 14, 15];
         const MARINE_DEPT_ID = 7;
@@ -602,7 +602,33 @@ const LoginPage = () => {
           router.push("/admin/vendor_pass");
         } else if (role === "approval") {
           router.push("/admin/vendor_pass");
+        } else if (
+          role === "traffic manager" ||
+          role === "tm" ||
+          role === "traffic_manager"
+        ) {
+          // Traffic Manager Executive Dashboard
+          router.push("/traffic_manager");
+        } else if (
+          role === "pass admin" ||
+          role === "pass officer" ||
+          role === "pass section"
+        ) {
+          // Pass Section portal
+          router.push("/pass_section");
+        } else if (role === "ss" || role === "sm" || role === "asm") {
+          // Shipping Control roles
+          router.push("/traffic_approval/dashboard");
+        } else if (role === "gate operator" || role === "weigh bridge") {
+          router.push("/gate_dashboard");
+        } else if (role === "safety officer" || role === "fire safety officer") {
+          router.push("/safety_dashboard");
+        } else if (role === "finance") {
+          router.push("/finance_dashboard");
+        } else if (role === "cisf") {
+          router.push("/cisf_dashboard");
         } else {
+          // External agents / applicants (loginId starts with 190)
           router.push("/dashboard");
         }
       } else {

@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
+import { enforceRouteGuard } from "@/lib/roleRouting";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -264,32 +265,7 @@ export default function ATMDashboardLayout({ children }) {
   useSessionHeartbeat();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      const role = String(parsedUser.role || "").toLowerCase().trim();
-      const isATM = role === "atm";
-      if (!isATM) {
-        if (role === "approval") {
-          const deptId = Number(parsedUser.departmentId);
-          if ([9, 10, 11, 12, 13, 14, 15].includes(deptId)) {
-            setTimeout(() => router.push("/traffic_approval/dashboard"), 0);
-            return;
-          } else if (deptId === 7) {
-            setTimeout(() => router.push("/marine_approval"), 0);
-            return;
-          }
-        }
-        setTimeout(() => router.push("/"), 0);
-        return;
-      }
-      setUser(parsedUser);
-      if (parsedUser.isPasswordChanged === false) {
-        setShowPasswordChangeModal(true);
-      }
-    } else {
-      setTimeout(() => router.push("/"), 0);
-    }
+    enforceRouteGuard("atm_dashboard", router, setUser, setShowPasswordChangeModal);
   }, [router]);
 
   const handlePasswordChangeSubmit = async (e) => {
@@ -385,36 +361,21 @@ export default function ATMDashboardLayout({ children }) {
     expanded = sidebarExpanded,
     showCollapseToggle = true,
   }) => (
-    <div className="h-full flex flex-col justify-between py-5 bg-slate-950 text-white overflow-hidden">
+    <div className="h-full flex flex-col justify-between py-8 bg-[#0a0a0a] text-white overflow-hidden">
       <div className="flex flex-col gap-6">
         {/* Brand row */}
-        <div className="flex flex-col gap-3 px-4">
-          <div
-            className={cn(
-              "flex items-center",
-              expanded ? "justify-between" : "justify-center"
-            )}
-          >
-            <Link
-              href="/atm_dashboard"
-              className="flex items-center gap-3 group min-w-0"
-              onClick={onNavigate}
-            >
-              <span className="flex items-center justify-center w-11 h-11 rounded-xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 ring-1 ring-white/10 group-hover:scale-105 transition-transform duration-200">
-                <Image src="/logo1.png" alt="Chennai Port Logo" width={44} height={44} className="w-full h-full object-contain" />
+        <div className="flex flex-col gap-2 px-4">
+          <div className={cn("flex items-center", expanded ? "justify-between" : "justify-center")}>
+            <Link href="/atm_dashboard" className="flex items-center gap-3 group min-w-0" onClick={onNavigate}>
+              <span className="flex items-center justify-center w-12 h-12 rounded-2xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
+                <Image src="/logo1.png" alt="Chennai Port Logo" width={48} height={48} className="w-full h-full object-contain" />
               </span>
-              <span
-                className={cn(
-                  "flex flex-col leading-tight overflow-hidden transition-[opacity,max-width] duration-300 ease-in-out",
-                  expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0"
-                )}
-              >
-                <span className="font-extrabold text-white text-lg tracking-tight whitespace-nowrap">
-                  ATM Portal
-                </span>
-                <span className="text-[11px] uppercase tracking-wider text-red-400 font-bold whitespace-nowrap">
-                  Blacklist System
-                </span>
+              <span className={cn(
+                "flex flex-col leading-tight overflow-hidden transition-[opacity,max-width] duration-300 ease-in-out",
+                expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0"
+              )}>
+                <span className="font-extrabold text-white text-2xl tracking-tight whitespace-nowrap">APACS</span>
+                <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold whitespace-nowrap">ATM Portal</span>
               </span>
             </Link>
 
@@ -423,9 +384,9 @@ export default function ATMDashboardLayout({ children }) {
                 onClick={toggleSidebar}
                 title="Collapse sidebar"
                 aria-label="Collapse sidebar"
-                className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 text-slate-300 hover:bg-red-500 hover:text-white active:scale-95 transition-all duration-150 ring-1 ring-white/10 shrink-0"
+                className="hidden lg:flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 shadow-sm text-white hover:bg-amber-400 hover:text-black active:scale-95 transition-all duration-150 font-bold shrink-0"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-5 w-5" />
               </button>
             )}
           </div>
@@ -436,38 +397,21 @@ export default function ATMDashboardLayout({ children }) {
                 onClick={toggleSidebar}
                 title="Expand sidebar"
                 aria-label="Expand sidebar"
-                className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 text-slate-300 hover:bg-red-500 hover:text-white active:scale-95 transition-all duration-150 ring-1 ring-white/10"
+                className="hidden lg:flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 shadow-sm text-white hover:bg-amber-400 hover:text-black active:scale-95 transition-all duration-150 font-bold"
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-5 w-5" />
               </button>
             </div>
           )}
         </div>
 
-        {/* Divider */}
-        <div className="px-4">
-          <div className="h-px bg-gradient-to-r from-transparent via-slate-700/60 to-transparent" />
-        </div>
-
         {/* Section label */}
-        <div
-          className={cn(
-            "px-5 -mb-2 overflow-hidden transition-[opacity,max-height] duration-300 ease-in-out",
-            expanded ? "opacity-100 max-h-8" : "opacity-0 max-h-0"
-          )}
-        >
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.18em]">
-            Navigation
-          </p>
+        <div className={cn("px-4 overflow-hidden transition-[opacity,max-height] duration-300 ease-in-out", expanded ? "opacity-100 max-h-8" : "opacity-0 max-h-0")}>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest">Menu</p>
         </div>
 
         {/* Nav items */}
-        <nav
-          className={cn(
-            "flex flex-col gap-1.5 px-3",
-            expanded ? "items-stretch" : "items-center"
-          )}
-        >
+        <div className={cn("flex flex-col gap-1 px-3", expanded ? "items-stretch" : "items-center")}>
           {navigationItems.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -478,108 +422,60 @@ export default function ATMDashboardLayout({ children }) {
                 onClick={onNavigate}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "relative flex items-center rounded-xl transition-all duration-150 group",
-                  expanded ? "gap-3 px-3 py-2.5" : "justify-center w-11 h-11 mx-auto",
+                  "flex items-center rounded-2xl transition-colors duration-150",
+                  expanded ? "gap-3 px-4 py-3.5 text-base font-bold" : "justify-center w-12 h-12 mx-auto",
                   isActive
-                    ? "bg-gradient-to-r from-red-500/90 to-red-700/90 text-white font-semibold shadow-lg shadow-red-900/30 ring-1 ring-red-400/30"
-                    : "text-slate-400 hover:text-white hover:bg-white/[0.06]"
+                    ? "bg-amber-400 text-black shadow-lg"
+                    : "text-stone-300 hover:text-amber-300 hover:bg-white/10"
                 )}
               >
-                {/* Active accent bar (expanded only) */}
-                {isActive && expanded && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-white/80" />
-                )}
-                <item.icon
-                  className="shrink-0 h-5 w-5"
-                  strokeWidth={isActive ? 2.5 : 2}
-                />
-                <span
-                  className={cn(
-                    "text-sm font-medium truncate transition-[opacity,max-width] duration-300 ease-in-out",
-                    expanded
-                      ? "opacity-100 max-w-[180px]"
-                      : "opacity-0 max-w-0 overflow-hidden"
-                  )}
-                >
+                <item.icon className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")} strokeWidth={2.5} />
+                <span className={cn(
+                  "truncate transition-[opacity,max-width] duration-300 ease-in-out",
+                  expanded ? "opacity-100 max-w-[180px]" : "opacity-0 max-w-0 overflow-hidden"
+                )}>
                   {item.name}
                 </span>
               </Link>
             );
           })}
-        </nav>
+        </div>
       </div>
 
-      {/* Bottom */}
-      <div
-        className={cn(
-          "flex flex-col gap-3 px-3",
-          expanded ? "items-stretch" : "items-center"
-        )}
-      >
+      {/* Bottom help */}
+      <div className={cn("flex flex-col gap-2 px-3", expanded ? "items-stretch" : "items-center")}>
         <button
           title={!expanded ? "Help / Support" : undefined}
           className={cn(
-            "flex items-center rounded-xl bg-white/[0.04] text-slate-400 hover:bg-red-500/15 hover:text-red-300 transition-colors duration-150 font-medium ring-1 ring-white/5",
-            expanded ? "gap-3 px-3 py-2.5" : "justify-center w-11 h-11 mx-auto"
+            "flex items-center rounded-2xl bg-white/10 text-white hover:bg-amber-400 hover:text-black transition-colors duration-150 font-bold",
+            expanded ? "gap-3 px-4 py-3 text-base" : "justify-center w-12 h-12 mx-auto"
           )}
         >
-          <HelpCircle className="shrink-0 h-5 w-5" strokeWidth={2} />
-          <span
-            className={cn(
-              "text-sm truncate transition-[opacity,max-width] duration-300 ease-in-out",
-              expanded
-                ? "opacity-100 max-w-[180px]"
-                : "opacity-0 max-w-0 overflow-hidden"
-            )}
-          >
+          <HelpCircle className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")} strokeWidth={2.5} />
+          <span className={cn(
+            "truncate transition-[opacity,max-width] duration-300 ease-in-out",
+            expanded ? "opacity-100 max-w-[180px]" : "opacity-0 max-w-0 overflow-hidden"
+          )}>
             Help / Support
           </span>
         </button>
-
-        {/* User card */}
-        <div
-          className={cn(
-            "flex items-center rounded-xl bg-white/[0.04] ring-1 ring-white/5",
-            expanded ? "gap-3 px-3 py-2.5" : "justify-center w-11 h-11 mx-auto"
-          )}
-          title={!expanded ? displayName : undefined}
-        >
-          <Avatar className="h-8 w-8 shrink-0 ring-2 ring-red-500/30">
-            <AvatarFallback className="bg-gradient-to-br from-red-500 to-red-700 text-white text-xs font-bold">
-              {initial}
-            </AvatarFallback>
-          </Avatar>
-          <div
-            className={cn(
-              "flex flex-col leading-tight overflow-hidden transition-[opacity,max-width] duration-300 ease-in-out",
-              expanded ? "opacity-100 max-w-[170px]" : "opacity-0 max-w-0"
-            )}
-          >
-            <span className="text-sm font-semibold text-white truncate">
-              {displayName}
-            </span>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-red-400">
-              {user?.role || "ATM"}
-            </span>
-          </div>
-        </div>
       </div>
     </div>
   );
 
   return (
     <div
-      className="h-screen w-screen overflow-hidden flex bg-slate-100"
-      style={{ fontFamily: "'Montserrat', 'Inter', Arial, sans-serif" }}
+      className="h-screen w-screen overflow-hidden flex transition-colors duration-300 bg-[#d8d0c8]"
+      style={{ fontFamily: "'Plus Jakarta Sans', 'Montserrat', 'Inter', Arial, sans-serif" }}
     >
-      <div className="w-full h-full bg-slate-50 flex overflow-hidden">
+      <div className="w-full h-full bg-[#f5f1eb] flex overflow-hidden transition-colors duration-300">
         {/* Desktop sidebar */}
         <aside
           className={cn(
-            "hidden lg:flex flex-shrink-0 relative border-r border-slate-800/50 bg-slate-950 shadow-2xl shadow-black/40",
+            "hidden lg:flex flex-shrink-0 relative",
             "transition-[width] duration-300 ease-in-out will-change-[width] overflow-hidden"
           )}
-          style={{ width: sidebarExpanded ? "17rem" : "5rem" }}
+          style={{ width: sidebarExpanded ? "16rem" : "6rem" }}
         >
           <div className="absolute inset-0">
             <SidebarContent />
@@ -590,7 +486,7 @@ export default function ATMDashboardLayout({ children }) {
         <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
           <SheetContent
             side="left"
-            className="w-72 p-0 bg-slate-950 border-slate-800/50 text-white"
+            className="w-72 p-0 bg-[#0a0a0a] border-black/20 text-white"
             aria-describedby={undefined}
           >
             <SheetTitle className="sr-only">ATM Portal Navigation</SheetTitle>
@@ -606,45 +502,21 @@ export default function ATMDashboardLayout({ children }) {
         {/* Main content */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           {/* Header */}
-          <header className="px-3 sm:px-4 lg:px-8 flex items-center justify-between gap-3 h-16 shrink-0 bg-white/90 backdrop-blur-xl border-b border-slate-200/80 shadow-sm relative z-40">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <Button
+          <header className="px-4 sm:px-6 lg:px-8 pt-4 pb-3 flex items-center justify-between gap-3 shrink-0 relative z-40">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
                 onClick={() => setIsMobileMenuOpen(true)}
-                variant="ghost"
-                size="icon"
                 aria-label="Open menu"
-                className="hover:bg-slate-100 rounded-full text-slate-800 lg:hidden shrink-0"
+                className="lg:hidden p-2 rounded-xl hover:bg-white text-[#1f1f1f] active:scale-95 transition-all shrink-0"
               >
-                <Menu className="h-5 w-5 text-slate-800" />
-              </Button>
+                <Menu className="h-5 w-5" />
+              </button>
 
-              {/* Desktop: breadcrumb-style title */}
-              <div className="hidden lg:flex items-center gap-2.5 min-w-0">
-                <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-red-50 text-red-600 shrink-0">
-                  <activeItem.icon className="h-5 w-5" strokeWidth={2.2} />
-                </span>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
-                    <span>ATM</span>
-                    <ChevronCrumb className="h-3 w-3" />
-                    <span className="text-red-600 normal-case tracking-normal">
-                      {activeItem.short}
-                    </span>
-                  </div>
-                  <h2 className="text-[15px] font-bold text-slate-800 leading-tight truncate">
-                    {activeItem.name}
-                  </h2>
-                </div>
-              </div>
-
-              {/* Mobile: compact title */}
-              <div className="lg:hidden flex items-center gap-2 min-w-0">
-                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-50 text-red-600 shrink-0">
-                  <activeItem.icon className="h-4 w-4" strokeWidth={2.2} />
-                </span>
-                <h2 className="text-sm font-bold text-slate-800 truncate">
-                  {activeItem.short}
-                </h2>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-stone-400 uppercase tracking-widest hidden sm:block">ATM Portal</p>
+                <p className="text-base sm:text-lg font-extrabold text-[#1f1f1f] truncate leading-tight">
+                  {activeItem.name}
+                </p>
               </div>
             </div>
 
@@ -654,13 +526,13 @@ export default function ATMDashboardLayout({ children }) {
               onChangePassword={() => setShowPasswordChangeModal(true)}
               onLogout={handleLogout}
             />
-        </header>
+          </header>
 
-        <main className="flex-1 p-3 sm:p-4 lg:p-8 min-h-0 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.slate.300)_transparent]">
-          {children}
-        </main>
+          <main className="flex-1 px-4 sm:px-6 lg:px-8 pb-4 min-h-0 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.stone.300)_transparent]">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
 
       {/* ── Change Password Modal ───────────────────────────────────────────── */}
       {showPasswordChangeModal && (

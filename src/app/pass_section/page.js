@@ -262,7 +262,7 @@ export default function PassSectionDashboard() {
               </div>
             </div>
             <h1 className="shimmer-text" style={{ fontSize:"clamp(24px,4vw,36px)", fontWeight:900, margin:0, letterSpacing:"-0.03em", lineHeight:1.1 }}>
-              Management Dashboard
+              TRAFFIC PASS SECTION DASHBOARD
             </h1>
             <p style={{ color:"#475569", fontSize:13, marginTop:8, fontWeight:500 }}>
               Real-time approvals, registrations &amp; escalations

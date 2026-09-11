@@ -568,7 +568,10 @@ export default function PassRequestPage() {
         setTwoWheelerRequests(res.data.data || []);
       }
     } catch (err) {
-      console.error("fetchTwoWheelerRequests error:", err);
+      // 404 = endpoint not yet implemented in backend — silently ignore
+      if (err?.response?.status !== 404) {
+        console.error("fetchTwoWheelerRequests error:", err);
+      }
     }
   }, []);
 
@@ -2130,6 +2133,28 @@ export default function PassRequestPage() {
     (viewPage - 1) * viewPageSize + viewPageSize,
   );
 
+  // Financial summary across the filtered set
+  const viewTotals = useMemo(() => {
+    let totalAmount = 0;
+    let accountAmount = 0;
+    let ecashAmount = 0;
+    let totalPersons = 0;
+    let totalVehicles = 0;
+    filteredViewPasses.forEach((p) => {
+      const amt = parseFloat(
+        p.netAmount ?? p.net_amount ?? p.netamount ??
+        p.baseTotal ?? p.basetotal ?? 0
+      ) || 0;
+      totalAmount += amt;
+      const mode = String(p.paymentMode || p.payment_mode || p.paymentmode || "").toUpperCase();
+      if (mode === "E-CASH" || mode === "ECASH") ecashAmount += amt;
+      else accountAmount += amt;
+      totalPersons += (p.persons || []).length;
+      totalVehicles += (p.vehicles || []).length;
+    });
+    return { totalAmount, accountAmount, ecashAmount, totalPersons, totalVehicles };
+  }, [filteredViewPasses]);
+
   // Reset page to 1 and clear search when changing tabs
   useEffect(() => {
     setCurrentPage(1);
@@ -2216,16 +2241,9 @@ export default function PassRequestPage() {
   };
 
   const calculateTotals = () => {
-    // Amounts can arrive as strings when an existing entity is loaded for
-    // edit, so coerce before summing — otherwise `+=` concatenates.
-    const toNum = (v) => {
-      const n = parseFloat(v);
-      return Number.isFinite(n) ? n : 0;
-    };
     let base = 0;
-    persons.forEach((p) => (base += toNum(p.amount)));
-    vehicles.forEach((v) => (base += toNum(v.amount)));
-    // HEP rates are GST-inclusive, so there is no GST to add on top.
+    persons.forEach((p) => (base += p.amount));
+    vehicles.forEach((v) => (base += v.amount));
     return {
       base: base.toFixed(2),
       gst: (0.0).toFixed(2),
@@ -5827,6 +5845,64 @@ export default function PassRequestPage() {
                   </button>
                 );
               })}
+            </div>
+
+            {/* ── Financial summary bar ── */}
+            <div className="mx-6 mb-3 rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50/40 overflow-hidden">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x divide-slate-200">
+                {[
+                  {
+                    label: "Total Amount",
+                    value: `₹ ${viewTotals.totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    icon: Wallet,
+                    color: "text-[#0a1e4d]",
+                    bg: "bg-[#0a1e4d]/5",
+                    iconColor: "text-[#0a1e4d]",
+                  },
+                  {
+                    label: "Account (HEP)",
+                    value: `₹ ${viewTotals.accountAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    icon: Calculator,
+                    color: "text-emerald-700",
+                    bg: "bg-emerald-50",
+                    iconColor: "text-emerald-600",
+                  },
+                  {
+                    label: "E-Cash",
+                    value: `₹ ${viewTotals.ecashAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    icon: Wallet,
+                    color: "text-violet-700",
+                    bg: "bg-violet-50",
+                    iconColor: "text-violet-600",
+                  },
+                  {
+                    label: "Total Persons",
+                    value: viewTotals.totalPersons.toLocaleString("en-IN"),
+                    icon: Users,
+                    color: "text-blue-700",
+                    bg: "bg-blue-50",
+                    iconColor: "text-blue-600",
+                  },
+                  {
+                    label: "Total Vehicles",
+                    value: viewTotals.totalVehicles.toLocaleString("en-IN"),
+                    icon: Truck,
+                    color: "text-orange-700",
+                    bg: "bg-orange-50",
+                    iconColor: "text-orange-600",
+                  },
+                ].map((s) => (
+                  <div key={s.label} className={`flex flex-col gap-0.5 px-4 py-3 ${s.bg}`}>
+                    <span className="text-[9px] font-extrabold uppercase tracking-widest text-slate-500 flex items-center gap-1">
+                      <s.icon className={`h-3 w-3 ${s.iconColor}`} />{s.label}
+                    </span>
+                    {allViewLoading
+                      ? <div className="h-5 w-24 rounded bg-slate-200 animate-pulse mt-0.5" />
+                      : <span className={`text-base font-black tabular-nums ${s.color}`}>{s.value}</span>
+                    }
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* ── Date / period filter toolbar ── */}
@@ -9574,9 +9650,8 @@ export default function PassRequestPage() {
 
             <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
               <p className="text-sm font-semibold text-slate-700 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                Charges for Harbour Entry Permit (HEP) — period of validity of
-                HEP. All rates are in ₹ and <strong>include GST</strong>, so the
-                amount shown on your request is the amount payable.
+                The following are rates(Excluding GST) RFID based Harbour Entry
+                Permits.
               </p>
 
               <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
@@ -9602,9 +9677,9 @@ export default function PassRequestPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {[
-                      effectiveHepRates.INDIVIDUAL,
-                      effectiveHepRates.VEHICLE,
-                      effectiveHepRates.CARGO,
+                      HEP_RATES.INDIVIDUAL,
+                      HEP_RATES.VEHICLE,
+                      HEP_RATES.CARGO,
                     ].map((rate, idx) => (
                       <tr key={rate.label} className="hover:bg-slate-50">
                         <td className="p-3 text-sm text-slate-600 text-center border-r border-slate-100">
@@ -9634,11 +9709,6 @@ export default function PassRequestPage() {
                   </tbody>
                 </table>
               </div>
-
-              <p className="mt-4 text-xs text-slate-500 leading-relaxed">
-                Daily passes are charged per day (rate × number of days).
-                Monthly and yearly passes are flat rates for the full period.
-              </p>
             </div>
           </div>
         </div>

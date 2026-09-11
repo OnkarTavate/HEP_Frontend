@@ -38,9 +38,9 @@ import {
   ChevronUp,
   BarChart3,
   Building2,
-  GripVertical,
-  RotateCcw,
   Zap,
+  RotateCcw,
+  GripVertical,
 } from "lucide-react";
 
 const AGENT_API =
@@ -313,11 +313,6 @@ const StatCard = memo(function StatCard({
           <path d="M150,170 q22,-22 44,0 t44,0 t44,0 t44,0" />
         </svg>
       )}
-
-      {/* Grip drag handle icon (visible on hover) */}
-      <div className="absolute top-3 right-3 text-stone-300 dark:text-stone-600 group-hover:text-stone-400 dark:group-hover:text-stone-400 transition-colors cursor-grab active:cursor-grabbing p-1 rounded-md hover:bg-stone-50 dark:hover:bg-white/5 shrink-0 z-10">
-        <GripVertical className="h-4 w-4" />
-      </div>
 
       <CardHeader className="pb-3 relative pr-8">
         <div className="flex items-center justify-between">
@@ -1451,7 +1446,6 @@ export default function DashboardPage() {
     { name: "Driver", value: 0, color: "#a855f7" },
   ]);
 
-  // ── Drag & Drop Ordering state for the stat cards ──────────────────────────
   const [cardOrder, setCardOrder] = useState([
     "todayVehicles",
     "todayPasses",
@@ -1474,7 +1468,7 @@ export default function DashboardPage() {
         if (Array.isArray(parsed) && parsed.length === 8) {
           setCardOrder(parsed);
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }, []);
 

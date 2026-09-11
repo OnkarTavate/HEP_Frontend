@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
+import { enforceRouteGuard } from "@/lib/roleRouting";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -40,7 +41,7 @@ const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 
 const navigationItems = [
-  { name: "Management Dashboard", short: "Dashboard", href: "/pass_section", icon: LayoutDashboard, description: "Live overview of all pass activities" },
+  { name: "Dashboard", short: "Dashboard", href: "/pass_section", icon: LayoutDashboard, description: "Live overview of all pass activities" },
   { name: "Pass Approvals", short: "Approvals", href: "/pass_section/approvals", icon: FileText, description: "Review and approve pass applications" },
   { name: "Company Registrations", short: "Companies", href: "/pass_section/companies", icon: Building2, description: "Manage company registration requests" },
   { name: "Blacklist Management", short: "Blacklist", href: "/pass_section/blacklist", icon: ShieldBan, description: "Manage blacklisted entities" },
@@ -75,17 +76,17 @@ function UserProfilePanel({ user, onChangePassword, onLogout }) {
   const initials = username.substring(0, 2).toUpperCase();
 
   const DetailRow = ({ icon: Icon, label, value, copyKey }) => (
-    <div className="flex items-start gap-3 py-2.5 border-b border-gray-100 last:border-0">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-500 shrink-0 mt-0.5">
+    <div className="flex items-start gap-3 py-2.5 border-b border-stone-100 last:border-0">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-stone-100 text-stone-500 shrink-0 mt-0.5">
         <Icon className="h-4 w-4" />
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
-        <p className="text-sm font-semibold text-gray-800 truncate">{value || "—"}</p>
+        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">{label}</p>
+        <p className="text-sm font-semibold text-stone-800 truncate">{value || "—"}</p>
       </div>
       {value && value !== "—" && (
-        <button onClick={() => copyField(value, copyKey)} className="shrink-0 p-1 rounded text-gray-400 hover:text-blue-600 transition-colors">
-          {copiedField === copyKey ? <CheckCheck className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+        <button onClick={() => copyField(value, copyKey)} className="shrink-0 p-1 rounded text-stone-400 hover:text-amber-600 transition-colors">
+          {copiedField === copyKey ? <CheckCheck className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
         </button>
       )}
     </div>
@@ -95,29 +96,32 @@ function UserProfilePanel({ user, onChangePassword, onLogout }) {
     <div className="relative" ref={panelRef}>
       <button
         onClick={() => setOpen((p) => !p)}
-        className="flex items-center gap-2.5 rounded-xl px-3 py-2 bg-[#0a1e4d] hover:bg-[#0d2660] text-white shadow-md transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-400/40 active:scale-95"
+        className="flex items-center gap-2.5 rounded-2xl px-3 py-2 bg-black/90 hover:bg-black text-white shadow-md transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-amber-400/40 active:scale-95"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-extrabold shrink-0 shadow-md">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-base font-extrabold shrink-0 shadow-md ring-2 ring-amber-300/30">
           {initials}
         </span>
         <span className="hidden sm:flex flex-col text-left leading-tight min-w-0 pr-1">
-          <span className="text-sm font-extrabold truncate max-w-[120px]">{username}</span>
-          <span className="text-[10px] uppercase tracking-wider text-blue-300 font-bold truncate">Pass Section Manager</span>
+          <span className="text-sm font-extrabold truncate max-w-[140px]">{username}</span>
+          <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold truncate">Pass Section</span>
         </span>
-        <ChevronDown className={cn("h-4 w-4 text-blue-300 transition-transform duration-200 hidden sm:block", open && "rotate-180")} />
+        <ChevronDown className={cn("h-4 w-4 text-stone-400 transition-transform duration-200 hidden sm:block", open && "rotate-180")} />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+10px)] z-[9999] w-80 rounded-2xl bg-white shadow-[0_8px_40px_rgba(0,0,0,0.15)] ring-1 ring-gray-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-[#0a1e4d] to-[#1a3a8f] px-5 py-4 relative overflow-hidden">
+        <div className="absolute right-0 top-[calc(100%+10px)] z-[9999] w-80 rounded-3xl bg-white shadow-[0_8px_40px_rgba(0,0,0,0.18)] ring-1 ring-stone-200/70 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-gradient-to-r from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] px-5 py-4 relative overflow-hidden">
+            <svg aria-hidden viewBox="0 0 320 80" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-10 w-full text-amber-400/10">
+              <path fill="currentColor" d="M0,40 C80,80 160,0 240,40 C280,60 300,30 320,40 L320,80 L0,80 Z" />
+            </svg>
             <div className="relative flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 text-white text-lg font-extrabold shrink-0 shadow-lg ring-2 ring-white/20">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-xl font-extrabold shrink-0 shadow-lg ring-2 ring-amber-300/30">
                 {initials}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-base font-extrabold text-white leading-tight truncate">{displayName}</p>
-                <p className="text-xs text-blue-300 font-mono mt-0.5 truncate">{username}</p>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold mt-1 bg-green-500/20 text-green-300">
+                <p className="text-xs text-stone-400 font-mono mt-0.5 truncate">{username}</p>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold mt-1.5 bg-emerald-100 text-emerald-700">
                   <BadgeCheck className="h-3 w-3" /> Active
                 </span>
               </div>
@@ -128,17 +132,17 @@ function UserProfilePanel({ user, onChangePassword, onLogout }) {
           </div>
 
           <div className="px-4 pt-2 pb-1 max-h-[260px] overflow-y-auto [scrollbar-width:thin]">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 mt-2">Account Profile</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-2 mt-2">Account Profile</p>
             <DetailRow icon={User} label="Login ID" value={username} copyKey="lid" />
             <DetailRow icon={Briefcase} label="Role" value={role} copyKey="role" />
             <DetailRow icon={Building2} label="Department" value={department} copyKey="dept" />
           </div>
 
-          <div className="p-3 border-t border-gray-100 space-y-1">
-            <button onClick={() => { setOpen(false); onChangePassword(); }} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors text-left">
-              <KeyRound className="h-4 w-4 shrink-0" /> Change Password
+          <div className="p-3 border-t border-stone-100 space-y-1.5">
+            <button onClick={() => { setOpen(false); onChangePassword(); }} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors">
+              <KeyRound className="h-4 w-4 shrink-0 text-amber-600" /> Change Password
             </button>
-            <button onClick={() => { setOpen(false); onLogout(); }} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors text-left">
+            <button onClick={() => { setOpen(false); onLogout(); }} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors">
               <LogOut className="h-4 w-4 shrink-0" /> Sign Out
             </button>
           </div>
@@ -176,22 +180,7 @@ export default function PassSectionLayout({ children }) {
   useSessionHeartbeat();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      const role = String(parsedUser.role || "").toLowerCase().trim();
-      // Allow ATM role (which includes Pass Section Manager), Admin, or Approval roles
-      const allowedRoles = ["atm", "admin", "administrator", "approval", "pass admin", "pass officer"];
-      const isAllowed = allowedRoles.some(r => role === r) || role.includes("pass");
-      if (!isAllowed) {
-        setTimeout(() => router.push("/"), 0);
-        return;
-      }
-      setUser(parsedUser);
-      if (parsedUser.isPasswordChanged === false) setShowPasswordChangeModal(true);
-    } else {
-      setTimeout(() => router.push("/"), 0);
-    }
+    enforceRouteGuard("pass_section", router, setUser, setShowPasswordChangeModal);
   }, [router]);
 
   const handlePasswordChangeSubmit = async (e) => {
@@ -239,64 +228,64 @@ export default function PassSectionLayout({ children }) {
 
   if (!user) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-[#f0f4ff]" style={{ fontFamily: "'Inter', Arial, sans-serif" }}>
-        <div className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-white shadow-lg border border-blue-100">
-          <span className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-[#0a1e4d] text-white shrink-0">
+      <div className="h-screen w-screen flex items-center justify-center bg-[#f5f1eb]" style={{ fontFamily: "'Plus Jakarta Sans', 'Montserrat', 'Inter', Arial, sans-serif" }}>
+        <div className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-[#0a0a0a] shadow-lg">
+          <span className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-amber-400 text-black shrink-0">
             <LayoutDashboard className="h-4 w-4" />
-            <span className="absolute inset-0 rounded-xl ring-2 ring-blue-400/60 animate-ping" />
+            <span className="absolute inset-0 rounded-xl ring-2 ring-amber-400/60 animate-ping" />
           </span>
-          <span className="text-sm font-semibold text-gray-700">Loading Pass Section Dashboard</span>
+          <span className="text-sm font-semibold text-white">Loading Pass Section Dashboard</span>
           <span className="flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.3s]" />
-            <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.15s]" />
-            <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce" />
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-bounce [animation-delay:-0.3s]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-bounce [animation-delay:-0.15s]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-bounce" />
           </span>
         </div>
       </div>
     );
   }
 
-  const activeItem = navigationItems.find((item) => item.href === pathname) || navigationItems[0];
+  const activeItem =
+    navigationItems.find((item) => item.href === pathname || (item.href !== "/pass_section" && pathname?.startsWith(item.href))) ||
+    navigationItems[0] || { name: "Dashboard" };
 
   const SidebarContent = ({ onNavigate, expanded = sidebarExpanded, showCollapseToggle = true }) => (
-    <div className="h-full flex flex-col justify-between py-5 bg-[#0a1e4d] text-white overflow-hidden">
-      <div className="flex flex-col gap-5">
+    <div className="h-full flex flex-col justify-between py-8 bg-[#0a0a0a] text-white overflow-hidden">
+      <div className="flex flex-col gap-6">
         {/* Brand */}
-        <div className="flex flex-col gap-3 px-4">
+        <div className="flex flex-col gap-2 px-4">
           <div className={cn("flex items-center", expanded ? "justify-between" : "justify-center")}>
             <Link href="/pass_section" className="flex items-center gap-3 group min-w-0" onClick={onNavigate}>
-              <span className="flex items-center justify-center w-10 h-10 rounded-xl overflow-hidden bg-[#ff6b00] shadow-lg shrink-0 group-hover:scale-105 transition-transform duration-200">
-                <Image src="/logo1.png" alt="APACS" width={40} height={40} className="w-full h-full object-contain" />
+              <span className="flex items-center justify-center w-12 h-12 rounded-2xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
+                <Image src="/logo1.png" alt="APACS" width={48} height={48} className="w-full h-full object-contain" />
               </span>
               <span className={cn("flex flex-col leading-tight overflow-hidden transition-[opacity,max-width] duration-300 ease-in-out", expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0")}>
-                <span className="font-extrabold text-white text-base tracking-tight whitespace-nowrap">APACS</span>
-                <span className="text-[10px] uppercase tracking-wider text-blue-300 font-bold whitespace-nowrap">Pass Section</span>
+                <span className="font-extrabold text-white text-2xl tracking-tight whitespace-nowrap">APACS</span>
+                <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold whitespace-nowrap">Pass Section</span>
               </span>
             </Link>
 
             {showCollapseToggle && expanded && (
-              <button onClick={toggleSidebar} className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 text-blue-300 hover:bg-blue-500 hover:text-white active:scale-95 transition-all duration-150 ring-1 ring-white/10 shrink-0">
-                <ChevronLeft className="h-4 w-4" />
+              <button onClick={toggleSidebar} className="hidden lg:flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 shadow-sm text-white hover:bg-amber-400 hover:text-black active:scale-95 transition-all duration-150 font-bold shrink-0">
+                <ChevronLeft className="h-5 w-5" />
               </button>
             )}
           </div>
 
           {showCollapseToggle && !expanded && (
             <div className="flex justify-center">
-              <button onClick={toggleSidebar} className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 text-blue-300 hover:bg-blue-500 hover:text-white active:scale-95 transition-all duration-150 ring-1 ring-white/10">
-                <ChevronRight className="h-4 w-4" />
+              <button onClick={toggleSidebar} className="hidden lg:flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 shadow-sm text-white hover:bg-amber-400 hover:text-black active:scale-95 transition-all duration-150 font-bold">
+                <ChevronRight className="h-5 w-5" />
               </button>
             </div>
           )}
         </div>
 
-        <div className="px-4"><div className="h-px bg-white/10" /></div>
-
-        <div className={cn("px-5 -mb-2 overflow-hidden transition-[opacity,max-height] duration-300 ease-in-out", expanded ? "opacity-100 max-h-8" : "opacity-0 max-h-0")}>
-          <p className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.18em]">Navigation</p>
+        <div className={cn("px-4 overflow-hidden transition-[opacity,max-height] duration-300 ease-in-out", expanded ? "opacity-100 max-h-8" : "opacity-0 max-h-0")}>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest">Menu</p>
         </div>
 
-        <nav className={cn("flex flex-col gap-1 px-3", expanded ? "items-stretch" : "items-center")}>
+        <div className={cn("flex flex-col gap-1 px-3", expanded ? "items-stretch" : "items-center")}>
           {navigationItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== "/pass_section" && pathname.startsWith(item.href));
             return (
@@ -306,49 +295,38 @@ export default function PassSectionLayout({ children }) {
                 title={!expanded ? item.name : undefined}
                 onClick={onNavigate}
                 className={cn(
-                  "relative flex items-center rounded-xl transition-all duration-150 group",
-                  expanded ? "gap-3 px-3 py-2.5" : "justify-center w-11 h-11 mx-auto",
+                  "flex items-center rounded-2xl transition-colors duration-150",
+                  expanded ? "gap-3 px-4 py-3.5 text-base font-bold" : "justify-center w-12 h-12 mx-auto",
                   isActive
-                    ? "bg-gradient-to-r from-blue-500/90 to-blue-700/90 text-white font-semibold shadow-lg shadow-blue-900/40 ring-1 ring-blue-400/30"
-                    : "text-blue-300 hover:text-white hover:bg-white/[0.07]"
+                    ? "bg-amber-400 text-black shadow-lg"
+                    : "text-stone-300 hover:text-amber-300 hover:bg-white/10"
                 )}
               >
-                {isActive && expanded && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-white/80" />}
-                <item.icon className="shrink-0 h-5 w-5" strokeWidth={isActive ? 2.5 : 2} />
-                <span className={cn("text-sm font-medium truncate transition-[opacity,max-width] duration-300 ease-in-out", expanded ? "opacity-100 max-w-[180px]" : "opacity-0 max-w-0 overflow-hidden")}>
-                  {item.name}
+                <item.icon className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")} strokeWidth={2.5} />
+                <span className={cn("truncate transition-[opacity,max-width] duration-300 ease-in-out", expanded ? "opacity-100 max-w-[180px]" : "opacity-0 max-w-0 overflow-hidden")}>
+                  {item.name || "Dashboard"}
                 </span>
               </Link>
             );
           })}
-        </nav>
+        </div>
       </div>
 
-      {/* Bottom */}
-      <div className={cn("flex flex-col gap-3 px-3", expanded ? "items-stretch" : "items-center")}>
-        <button className={cn("flex items-center rounded-xl bg-white/[0.04] text-blue-400 hover:bg-blue-500/15 hover:text-blue-300 transition-colors duration-150 font-medium ring-1 ring-white/5", expanded ? "gap-3 px-3 py-2.5" : "justify-center w-11 h-11 mx-auto")}>
-          <HelpCircle className="shrink-0 h-5 w-5" strokeWidth={2} />
-          <span className={cn("text-sm truncate transition-[opacity,max-width] duration-300 ease-in-out", expanded ? "opacity-100 max-w-[180px]" : "opacity-0 max-w-0 overflow-hidden")}>Help / Support</span>
+      {/* Bottom help */}
+      <div className={cn("flex flex-col gap-2 px-3", expanded ? "items-stretch" : "items-center")}>
+        <button className={cn("flex items-center rounded-2xl bg-white/10 text-white hover:bg-amber-400 hover:text-black transition-colors duration-150 font-bold", expanded ? "gap-3 px-4 py-3 text-base" : "justify-center w-12 h-12 mx-auto")}>
+          <HelpCircle className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")} strokeWidth={2.5} />
+          <span className={cn("truncate transition-[opacity,max-width] duration-300 ease-in-out", expanded ? "opacity-100 max-w-[180px]" : "opacity-0 max-w-0 overflow-hidden")}>Help / Support</span>
         </button>
-
-        <div className={cn("flex items-center rounded-xl bg-white/[0.04] ring-1 ring-white/5", expanded ? "gap-3 px-3 py-2.5" : "justify-center w-11 h-11 mx-auto")} title={!expanded ? user?.username : undefined}>
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-400 to-indigo-600 text-white text-xs font-extrabold shrink-0 ring-2 ring-blue-400/30">
-            {(user?.username || "PS").substring(0, 2).toUpperCase()}
-          </span>
-          <div className={cn("flex flex-col leading-tight overflow-hidden transition-[opacity,max-width] duration-300 ease-in-out", expanded ? "opacity-100 max-w-[170px]" : "opacity-0 max-w-0")}>
-            <span className="text-sm font-semibold text-white truncate">{user?.username || "PSM001"}</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Pass Section Mgr</span>
-          </div>
-        </div>
       </div>
     </div>
   );
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex bg-[#eef2f7]" style={{ fontFamily: "'Inter', Arial, sans-serif" }}>
-      <div className="w-full h-full bg-[#f0f4f8] flex overflow-hidden">
+    <div className="h-screen w-screen overflow-hidden flex transition-colors duration-300 bg-[#d8d0c8]" style={{ fontFamily: "'Plus Jakarta Sans', 'Montserrat', 'Inter', Arial, sans-serif" }}>
+      <div className="w-full h-full bg-[#f5f1eb] flex overflow-hidden">
         {/* Desktop sidebar */}
-        <aside className={cn("hidden lg:flex flex-shrink-0 relative border-r border-[#0a1e4d]/20 bg-[#0a1e4d] shadow-2xl shadow-black/30", "transition-[width] duration-300 ease-in-out will-change-[width] overflow-hidden")} style={{ width: sidebarExpanded ? "16rem" : "5rem" }}>
+        <aside className={cn("hidden lg:flex flex-shrink-0 relative", "transition-[width] duration-300 ease-in-out will-change-[width] overflow-hidden")} style={{ width: sidebarExpanded ? "16rem" : "6rem" }}>
           <div className="absolute inset-0"><SidebarContent /></div>
         </aside>
 
@@ -356,7 +334,7 @@ export default function PassSectionLayout({ children }) {
         {isMobileMenuOpen && (
           <div className="fixed inset-0 z-[100] flex lg:hidden">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
-            <div className="relative w-64 h-full bg-[#0a1e4d] shadow-2xl">
+            <div className="relative w-72 h-full bg-[#0a0a0a] shadow-2xl">
               <SidebarContent onNavigate={() => setIsMobileMenuOpen(false)} expanded={true} showCollapseToggle={false} />
             </div>
           </div>
@@ -365,36 +343,32 @@ export default function PassSectionLayout({ children }) {
         {/* Main content */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           {/* Header */}
-          <header className="px-4 sm:px-6 flex items-center justify-between gap-3 h-14 shrink-0 bg-white border-b border-gray-200 shadow-sm relative z-40">
+          <header className="px-4 sm:px-6 lg:px-8 pt-4 pb-3 flex items-center justify-between gap-3 shrink-0 relative z-40">
             <div className="flex items-center gap-3 min-w-0">
-              <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden text-gray-600 hover:text-gray-900 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+              <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 rounded-xl hover:bg-white text-[#1f1f1f] active:scale-95 transition-all shrink-0">
                 <Menu className="h-5 w-5" />
               </button>
               <div className="min-w-0">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden sm:block">APACS — Pass Section</p>
-                <p className="text-sm sm:text-base font-extrabold text-[#0a1e4d] truncate leading-tight">PASS SECTION MANAGEMENT</p>
+                <p className="text-xs font-bold text-stone-400 uppercase tracking-widest hidden sm:block">APACS — Pass Section</p>
+                <p className="text-base sm:text-lg font-extrabold text-[#1f1f1f] truncate leading-tight">{activeItem.name || "Dashboard"}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Date/time chip */}
-              <div className="hidden md:flex items-center gap-2 text-xs text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg">
+            <div className="flex items-center gap-2.5">
+              <div className="hidden md:flex items-center gap-2 text-xs text-stone-500 bg-white shadow-sm px-3 py-2 rounded-full">
                 <span className="font-medium">{new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
-                <span className="w-px h-3 bg-gray-300" />
+                <span className="w-px h-3 bg-stone-300" />
                 <LiveClock />
               </div>
-
-              {/* Notifications */}
-              <button className="relative text-gray-500 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-100 transition-colors">
+              <button className="relative text-stone-500 hover:text-stone-700 p-2 rounded-full bg-white shadow-sm hover:bg-stone-50 transition-colors">
                 <Bell className="h-5 w-5" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" />
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-amber-500" />
               </button>
-
               <UserProfilePanel user={user} onChangePassword={() => setShowPasswordChangeModal(true)} onLogout={handleLogout} />
             </div>
           </header>
 
-          <main className="flex-1 min-h-0 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.gray.300)_transparent]">
+          <main className="flex-1 min-h-0 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.stone.300)_transparent]">
             {children}
           </main>
         </div>

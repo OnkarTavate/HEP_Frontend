@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
+import { enforceRouteGuard, resolveHome } from "@/lib/roleRouting";
 import NotificationPanel from "@/components/NotificationPanel";
 
 import { Button } from "@/components/ui/button";
@@ -386,29 +387,29 @@ export default function AdminLayout({ children }) {
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      // Access control: Admin OR any Approval department user
-      // Access control: Admin OR Approval OR CISF Assistant Commandant
-      const role = (parsedUser.role || "").toLowerCase();
-      const isAdmin = role === "admin" || role === "administrator";
-      const isApproval = role === "approval";
-      const isCisfAssistantCommandant = role === "cisf.assistant commandant";
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        // Access control: Admin OR Approval OR CISF Assistant Commandant
+        const role = String(parsedUser.role || "").toLowerCase().trim();
+        const isAdmin = role === "admin" || role === "administrator";
+        const isApproval = role === "approval";
+        const isCisfAssistantCommandant = role === "cisf.assistant commandant";
 
-      if (!isAdmin && !isApproval && !isCisfAssistantCommandant) {
-        router.push("/");
-        return;
-      }
-      if (!isAdmin && pathname?.startsWith("/admin/reports")) {
-        router.push("/admin/vendor_pass");
-        return;
-      }
-      const timer = setTimeout(() => {
+        if (!isAdmin && !isApproval && !isCisfAssistantCommandant) {
+          router.push("/");
+          return;
+        }
+        if (!isAdmin && pathname?.startsWith("/admin/reports")) {
+          router.push("/admin/vendor_pass");
+          return;
+        }
         setUser(parsedUser);
         if (parsedUser.isPasswordChanged === false) {
           setShowPasswordChangeModal(true);
         }
-      }, 0);
-      return () => clearTimeout(timer);
+      } catch {
+        router.push("/");
+      }
     } else {
       router.push("/");
     }

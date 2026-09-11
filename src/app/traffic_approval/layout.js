@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
+import { enforceRouteGuard } from "@/lib/roleRouting";
 import NotificationPanel from "@/components/NotificationPanel";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -17,7 +18,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import {
   Ship,
   LogOut,
@@ -49,6 +55,7 @@ import {
   Mail,
   Phone,
   CheckCircle,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -56,7 +63,12 @@ import { toast } from "sonner";
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API;
 
-function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) {
+function UserProfilePanel({
+  user,
+  departmentName,
+  onChangePassword,
+  onLogout,
+}) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
   const [copiedField, setCopiedField] = useState(null);
@@ -64,7 +76,8 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
   useEffect(() => {
     if (!open) return;
     const handler = (e) => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false);
+      if (panelRef.current && !panelRef.current.contains(e.target))
+        setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -85,7 +98,10 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
   const mobile = user?.mobile || user?.mobileNo || "—";
   const initials = displayName.substring(0, 2).toUpperCase();
 
-  const statusMeta = { label: "Active", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300" };
+  const statusMeta = {
+    label: "Active",
+    cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300",
+  };
 
   const DetailRow = ({ icon: Icon, label, value, copyKey }) => (
     <div className="flex items-start gap-3 py-2.5 border-b border-stone-100 dark:border-white/5 last:border-0">
@@ -93,8 +109,12 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
         <Icon className="h-4 w-4" />
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">{label}</p>
-        <p className="text-sm font-semibold text-stone-800 dark:text-stone-100 truncate">{value || "\u2014"}</p>
+        <p className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">
+          {label}
+        </p>
+        <p className="text-sm font-semibold text-stone-800 dark:text-stone-100 truncate">
+          {value || "\u2014"}
+        </p>
       </div>
       {value && value !== "\u2014" && (
         <button
@@ -102,7 +122,11 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
           className="shrink-0 p-1 rounded text-stone-400 hover:text-amber-600 transition-colors"
           title="Copy"
         >
-          {copiedField === copyKey ? <CheckCheck className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+          {copiedField === copyKey ? (
+            <CheckCheck className="h-3.5 w-3.5 text-emerald-500" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
         </button>
       )}
     </div>
@@ -121,13 +145,17 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
         </span>
         {/* Name + role */}
         <span className="hidden sm:flex flex-col text-left leading-tight min-w-0 pr-1">
-          <span className="text-sm font-extrabold truncate max-w-[140px] text-white">{displayName}</span>
-          <span className="text-[10px] uppercase tracking-wider text-orange-400 font-bold truncate">{role}</span>
+          <span className="text-sm font-extrabold truncate max-w-[140px] text-white">
+            {displayName}
+          </span>
+          <span className="text-[10px] uppercase tracking-wider text-orange-400 font-bold truncate">
+            {role}
+          </span>
         </span>
         <ChevronDown
           className={cn(
             "h-4 w-4 text-stone-400 transition-transform duration-200 hidden sm:block",
-            open && "rotate-180"
+            open && "rotate-180",
           )}
         />
       </button>
@@ -138,22 +166,39 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
           {/* Panel header */}
           <div className="bg-gradient-to-r from-[#1f1f1f] via-[#2a2520] to-[#3a2f1f] px-5 py-4 relative overflow-hidden">
             {/* Wave decoration */}
-            <svg aria-hidden viewBox="0 0 320 80" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-10 w-full text-amber-400/10">
-              <path fill="currentColor" d="M0,40 C80,80 160,0 240,40 C280,60 300,30 320,40 L320,80 L0,80 Z" />
+            <svg
+              aria-hidden
+              viewBox="0 0 320 80"
+              preserveAspectRatio="none"
+              className="absolute inset-x-0 bottom-0 h-10 w-full text-amber-400/10"
+            >
+              <path
+                fill="currentColor"
+                d="M0,40 C80,80 160,0 240,40 C280,60 300,30 320,40 L320,80 L0,80 Z"
+              />
             </svg>
             <div className="relative flex items-center gap-3">
               <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-[#1f1f1f] text-xl font-extrabold shrink-0 shadow-lg ring-2 ring-amber-300/30">
                 {initials}
               </span>
               <div className="min-w-0 flex-1 text-left">
-                <p className="text-base font-extrabold text-white leading-tight truncate">{displayName}</p>
-                <p className="text-xs text-stone-400 font-mono mt-0.5 truncate">{username}</p>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold mt-1.5 ${statusMeta.cls}`}>
+                <p className="text-base font-extrabold text-white leading-tight truncate">
+                  {displayName}
+                </p>
+                <p className="text-xs text-stone-400 font-mono mt-0.5 truncate">
+                  {username}
+                </p>
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold mt-1.5 ${statusMeta.cls}`}
+                >
                   <BadgeCheck className="h-3 w-3" />
                   {statusMeta.label}
                 </span>
               </div>
-              <button onClick={() => setOpen(false)} className="text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0">
+              <button
+                onClick={() => setOpen(false)}
+                className="text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -161,25 +206,58 @@ function UserProfilePanel({ user, departmentName, onChangePassword, onLogout }) 
 
           {/* Detail rows */}
           <div className="px-4 pt-2 pb-1 max-h-[340px] overflow-y-auto [scrollbar-width:thin] text-left">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">Account Profile</p>
-            <DetailRow icon={User} label="Login ID" value={username} copyKey="lid" />
-            <DetailRow icon={Briefcase} label="Role" value={role} copyKey="role" />
-            <DetailRow icon={Building2} label="Department" value={department} copyKey="dept" />
-            <DetailRow icon={Mail} label="Email" value={email} copyKey="email" />
-            <DetailRow icon={Phone} label="Mobile" value={mobile} copyKey="mob" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-2 mt-2">
+              Account Profile
+            </p>
+            <DetailRow
+              icon={User}
+              label="Login ID"
+              value={username}
+              copyKey="lid"
+            />
+            <DetailRow
+              icon={Briefcase}
+              label="Role"
+              value={role}
+              copyKey="role"
+            />
+            <DetailRow
+              icon={Building2}
+              label="Department"
+              value={department}
+              copyKey="dept"
+            />
+            <DetailRow
+              icon={Mail}
+              label="Email"
+              value={email}
+              copyKey="email"
+            />
+            <DetailRow
+              icon={Phone}
+              label="Mobile"
+              value={mobile}
+              copyKey="mob"
+            />
           </div>
 
           {/* Actions */}
           <div className="p-3 border-t border-stone-100 dark:border-white/5 space-y-1.5">
             <button
-              onClick={() => { setOpen(false); onChangePassword(); }}
+              onClick={() => {
+                setOpen(false);
+                onChangePassword();
+              }}
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-orange-50 dark:hover:bg-orange-400/10 hover:text-orange-700 dark:hover:text-orange-300 transition-colors cursor-pointer text-left"
             >
               <KeyRound className="h-4 w-4 shrink-0" />
               Change Password
             </button>
             <button
-              onClick={() => { setOpen(false); onLogout(); }}
+              onClick={() => {
+                setOpen(false);
+                onLogout();
+              }}
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors cursor-pointer text-left"
             >
               <LogOut className="h-4 w-4 shrink-0" />
@@ -213,7 +291,12 @@ export default function TrafficLayout({ children }) {
   const toggleSidebar = () => {
     setSidebarExpanded((prev) => {
       const next = !prev;
-      try { localStorage.setItem("traffic-sidebar", next ? "expanded" : "collapsed"); } catch { }
+      try {
+        localStorage.setItem(
+          "traffic-sidebar",
+          next ? "expanded" : "collapsed",
+        );
+      } catch {}
       return next;
     });
   };
@@ -238,51 +321,64 @@ export default function TrafficLayout({ children }) {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
-      const role = String(parsedUser.role || "").toLowerCase().trim();
-      const dept = String(parsedUser.departmentName || "").toLowerCase().trim();
+      const role = String(parsedUser.role || "")
+        .toLowerCase()
+        .trim();
+      const dept = String(parsedUser.departmentName || "")
+        .toLowerCase()
+        .trim();
       const isAdmin = role === "admin" || role === "administrator";
-      if (isAdmin) { setTimeout(() => router.push("/admin"), 0); return; }
+      if (isAdmin) {
+        setTimeout(() => router.push("/admin"), 0);
+        return;
+      }
       const isTrafficApprover =
         (role === "approval" && dept.includes("traffic")) ||
         role.includes("traffic") ||
-        ["safety officer", "fire safety officer", "senior deputy traffic manager"].includes(role);
-      if (!isTrafficApprover) { alert("Unauthorized Access: Traffic Department Only."); setTimeout(() => router.push("/"), 0); return; }
-      const isSafetyOfficerUser =
-        role === "safety officer" || role === "fire safety officer";
-
-      if (
-        isSafetyOfficerUser &&
-        (pathname === "/traffic_approval" ||
-          pathname === "/traffic_approval/dashboard")
-      ) {
-        setTimeout(
-          () => router.replace("/traffic_approval/passes?tab=pending"),
-          0,
-        );
+        ["ss", "sm", "asm"].includes(role) ||
+        [
+          "safety officer",
+          "fire safety officer",
+          "senior deputy traffic manager",
+        ].includes(role);
+      if (!isTrafficApprover) {
+        alert("Unauthorized Access: Traffic Department Only.");
+        setTimeout(() => router.push("/"), 0);
         return;
       }
-
       setUser(parsedUser);
-      if (parsedUser.isPasswordChanged === false) setShowPasswordChangeModal(true);
+      if (parsedUser.isPasswordChanged === false)
+        setShowPasswordChangeModal(true);
     } else {
       setTimeout(() => router.push("/"), 0);
     }
-  }, [router, pathname]);
+  }, [router]);
 
   const handlePasswordChangeSubmit = async (e) => {
     e.preventDefault();
-    if (!newPassword || !confirmPassword) { toast.warning("Please fill in all fields."); return; }
-    if (newPassword !== confirmPassword) { toast.warning("Passwords do not match."); return; }
+    if (!newPassword || !confirmPassword) {
+      toast.warning("Please fill in all fields.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.warning("Passwords do not match.");
+      return;
+    }
     setModalLoading(true);
     try {
       const token = localStorage.getItem("accessToken");
       const res = await axios.post(
         `${ADMIN_API}/user/change-password`,
         { loginId: user?.username, newPassword, confirmPassword },
-        { headers: { Authorization: `Bearer ${token}` }, validateStatus: (s) => s < 500 }
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          validateStatus: (s) => s < 500,
+        },
       );
       if (res.status >= 200 && res.status < 300 && res.data?.success) {
-        toast.success("Password Updated Successfully", { description: "Your default password has been successfully updated." });
+        toast.success("Password Updated Successfully", {
+          description: "Your default password has been successfully updated.",
+        });
         const updatedUser = { ...user, isPasswordChanged: true };
         localStorage.setItem("user", JSON.stringify(updatedUser));
         setUser(updatedUser);
@@ -304,7 +400,11 @@ export default function TrafficLayout({ children }) {
     try {
       const token = localStorage.getItem("accessToken");
       if (token) {
-        await axios.post(`${AUTH_API}/auth/logout`, {}, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post(
+          `${AUTH_API}/auth/logout`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
       }
     } catch (err) {
       console.error("Logout error:", err);
@@ -323,31 +423,72 @@ export default function TrafficLayout({ children }) {
     user?.role?.toLowerCase() === "fire safety officer";
 
   const navigationItems = [
-    ...(!isSafetyOfficer ? [{ name: "Dashboard", href: "/traffic_approval/dashboard", icon: BarChart3 }] : []),
-    { name: "Pass Approvals", href: "/traffic_approval/passes", icon: FileText },
-    ...(!isSafetyOfficer ? [{ name: "VVIP Pass", href: "/traffic_approval/vvip-pass", icon: VvipIcon }] : []),
-    ...(!isSafetyOfficer ? [{ name: "Company Approvals", href: "/traffic_approval/companies", icon: Building2 }] : []),
-    ...(!isSafetyOfficer ? [{ name: "Blacklist Management", href: "/traffic_approval/blacklist", icon: ShieldBan }] : []),
-    ...(!isSafetyOfficer ? [{ name: "Overstay Exceptions", href: "/traffic_approval/overstay", icon: ShieldCheck }] : []),
-    ...(!isSafetyOfficer ? [{ name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users }] : []),
+    { name: "Dashboard", href: "/traffic_approval/dashboard", icon: BarChart3 },
+    {
+      name: "Pass Approvals",
+      href: "/traffic_approval/passes",
+      icon: FileText,
+    },
+    { name: "VVIP Pass", href: "/traffic_approval/vvip-pass", icon: VvipIcon },
+    {
+      name: "Company Approvals",
+      href: "/traffic_approval/companies",
+      icon: Building2,
+    },
+    {
+      name: "Blacklist Management",
+      href: "/traffic_approval/blacklist",
+      icon: ShieldBan,
+    },
+    {
+      name: "Overstay Exceptions",
+      href: "/traffic_approval/overstay",
+      icon: ShieldCheck,
+    },
+    { name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users },
   ];
 
-  const SidebarContent = ({ onNavigate, expanded = sidebarExpanded, showCollapseToggle = true }) => (
-    <div className="h-full flex flex-col justify-between py-6 bg-slate-900 text-white overflow-hidden">
+  const SidebarContent = ({
+    onNavigate,
+    expanded = sidebarExpanded,
+    showCollapseToggle = true,
+  }) => (
+    <div className="h-full flex flex-col justify-between py-8 bg-[#0a0a0a] text-white overflow-hidden">
       <div className="flex flex-col gap-6">
-        {/* Brand row — expanded: row with space-between. collapsed: logo centered, toggle below */}
+        {/* Brand row */}
         <div className="flex flex-col gap-2 px-4">
-          <div className={cn("flex items-center", expanded ? "justify-between" : "justify-center")}>
-            <Link href={isSafetyOfficer ? "/traffic_approval/passes?tab=pending" : "/traffic_approval/dashboard"} className="flex items-center gap-3 group min-w-0" onClick={onNavigate}>
-              <span className="flex items-center justify-center w-11 h-11 rounded-xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
-                <Image src="/logo1.png" alt="Chennai Port Logo" width={44} height={44} className="w-full h-full object-contain" />
+          <div
+            className={cn(
+              "flex items-center",
+              expanded ? "justify-between" : "justify-center",
+            )}
+          >
+            <Link
+              href="/traffic_approval/dashboard"
+              className="flex items-center gap-3 group min-w-0"
+              onClick={onNavigate}
+            >
+              <span className="flex items-center justify-center w-12 h-12 rounded-2xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
+                <Image
+                  src="/logo1.png"
+                  alt="Chennai Port Logo"
+                  width={48}
+                  height={48}
+                  className="w-full h-full object-contain"
+                />
               </span>
-              <span className={cn(
-                "flex flex-col leading-tight overflow-hidden transition-[opacity,max-width] duration-300 ease-in-out",
-                expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0"
-              )}>
-                <span className="font-extrabold text-white text-lg tracking-tight whitespace-nowrap">Traffic Dept</span>
-                <span className="text-xs uppercase tracking-wider text-orange-400 font-bold whitespace-nowrap">Port Approvals</span>
+              <span
+                className={cn(
+                  "flex flex-col leading-tight overflow-hidden transition-[opacity,max-width] duration-300 ease-in-out",
+                  expanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0",
+                )}
+              >
+                <span className="font-extrabold text-white text-2xl tracking-tight whitespace-nowrap">
+                  APACS
+                </span>
+                <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold whitespace-nowrap">
+                  Traffic Dept
+                </span>
               </span>
             </Link>
 
@@ -355,9 +496,9 @@ export default function TrafficLayout({ children }) {
               <button
                 onClick={toggleSidebar}
                 title="Collapse sidebar"
-                className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 text-white hover:bg-[#ff6b00] hover:text-white active:scale-95 transition-all duration-150 font-bold shadow-md shrink-0"
+                className="hidden lg:flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 shadow-sm text-white hover:bg-amber-400 hover:text-black active:scale-95 transition-all duration-150 font-bold shrink-0"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-5 w-5" />
               </button>
             )}
           </div>
@@ -367,26 +508,39 @@ export default function TrafficLayout({ children }) {
               <button
                 onClick={toggleSidebar}
                 title="Expand sidebar"
-                className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 text-white hover:bg-[#ff6b00] hover:text-white active:scale-95 transition-all duration-150 font-bold shadow-md"
+                className="hidden lg:flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 shadow-sm text-white hover:bg-amber-400 hover:text-black active:scale-95 transition-all duration-150 font-bold"
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-5 w-5" />
               </button>
             </div>
           )}
         </div>
 
         {/* Section label */}
-        <div className={cn("px-4 overflow-hidden transition-[opacity,max-height] duration-300 ease-in-out", expanded ? "opacity-100 max-h-8" : "opacity-0 max-h-0")}>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Task Menu</p>
+        <div
+          className={cn(
+            "px-4 overflow-hidden transition-[opacity,max-height] duration-300 ease-in-out",
+            expanded ? "opacity-100 max-h-8" : "opacity-0 max-h-0",
+          )}
+        >
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest">
+            Menu
+          </p>
         </div>
 
         {/* Nav items */}
-        <div className={cn("flex flex-col gap-1 px-3", expanded ? "items-stretch" : "items-center")}>
+        <div
+          className={cn(
+            "flex flex-col gap-1 px-3",
+            expanded ? "items-stretch" : "items-center",
+          )}
+        >
           {navigationItems.map((item) => {
             const isActive =
-              item.href === "/traffic_approval"
-                ? pathname === item.href
-                : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              item.href === "/traffic_approval" || item.href === "/traffic_approval/dashboard"
+                ? pathname === "/traffic_approval" || pathname === "/traffic_approval/dashboard"
+                : pathname === item.href ||
+                  pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.name}
@@ -394,18 +548,27 @@ export default function TrafficLayout({ children }) {
                 title={!expanded ? item.name : undefined}
                 onClick={onNavigate}
                 className={cn(
-                  "flex items-center rounded-xl transition-colors duration-150 group",
-                  expanded ? "gap-3 px-3 py-2.5" : "justify-center w-11 h-11 mx-auto",
+                  "flex items-center rounded-2xl transition-colors duration-150",
+                  expanded
+                    ? "gap-3 px-4 py-3.5 text-base font-bold"
+                    : "justify-center w-12 h-12 mx-auto",
                   isActive
-                    ? "bg-[#ff6b00] text-white font-bold shadow-lg shadow-orange-600/20"
-                    : "text-slate-400 hover:text-white hover:bg-white/8"
+                    ? "bg-amber-400 text-black shadow-lg"
+                    : "text-stone-300 hover:text-amber-300 hover:bg-white/10",
                 )}
               >
-                <item.icon className="shrink-0 h-5 w-5" strokeWidth={isActive ? 2.5 : 2} />
-                <span className={cn(
-                  "text-sm font-medium truncate transition-[opacity,max-width] duration-300 ease-in-out",
-                  expanded ? "opacity-100 max-w-[180px]" : "opacity-0 max-w-0 overflow-hidden"
-                )}>
+                <item.icon
+                  className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")}
+                  strokeWidth={2.5}
+                />
+                <span
+                  className={cn(
+                    "truncate transition-[opacity,max-width] duration-300 ease-in-out",
+                    expanded
+                      ? "opacity-100 max-w-[180px]"
+                      : "opacity-0 max-w-0 overflow-hidden",
+                  )}
+                >
                   {item.name}
                 </span>
               </Link>
@@ -413,22 +576,97 @@ export default function TrafficLayout({ children }) {
           })}
         </div>
       </div>
+
+      {/* Bottom help */}
+      <div className={cn("flex flex-col gap-2 px-3", expanded ? "items-stretch" : "items-center")}>
+        <button
+          title={!expanded ? "Help / Support" : undefined}
+          className={cn(
+            "flex items-center rounded-2xl bg-white/10 text-white hover:bg-amber-400 hover:text-black transition-colors duration-150 font-bold",
+            expanded ? "gap-3 px-4 py-3 text-base" : "justify-center w-12 h-12 mx-auto",
+          )}
+        >
+          <HelpCircle className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")} strokeWidth={2.5} />
+          <span
+            className={cn(
+              "truncate transition-[opacity,max-width] duration-300 ease-in-out",
+              expanded ? "opacity-100 max-w-[180px]" : "opacity-0 max-w-0 overflow-hidden",
+            )}
+          >
+            Help / Support
+          </span>
+        </button>
+      </div>
     </div>
   );
 
+  const getHeaderInfo = () => {
+    if (
+      pathname === "/traffic_approval/dashboard" ||
+      pathname === "/traffic_approval"
+    ) {
+      return {
+        eyebrow: "Traffic Department · Chennai Port",
+        title: "Traffic Department Dashboard",
+      };
+    }
+    if (pathname?.startsWith("/traffic_approval/passes")) {
+      return {
+        eyebrow: "Traffic Department · Chennai Port",
+        title: "Pass Approvals",
+      };
+    }
+    if (pathname?.startsWith("/traffic_approval/vvip-pass")) {
+      return {
+        eyebrow: "Traffic Department · Chennai Port",
+        title: "VVIP Pass Management",
+      };
+    }
+    if (pathname?.startsWith("/traffic_approval/companies")) {
+      return {
+        eyebrow: "Traffic Department · Chennai Port",
+        title: "Company Approvals",
+      };
+    }
+    if (pathname?.startsWith("/traffic_approval/blacklist")) {
+      return {
+        eyebrow: "Traffic Department · Chennai Port",
+        title: "Blacklist Management",
+      };
+    }
+    if (pathname?.startsWith("/traffic_approval/overstay")) {
+      return {
+        eyebrow: "Traffic Department · Chennai Port",
+        title: "Overstay Exceptions",
+      };
+    }
+    if (pathname?.startsWith("/traffic_approval/bulk-pass")) {
+      return {
+        eyebrow: "Traffic Department · Chennai Port",
+        title: "Bulk Pass Requests",
+      };
+    }
+    return {
+      eyebrow: "Traffic Department · Chennai Port",
+      title: "Traffic Department Dashboard",
+    };
+  };
+
+  const headerInfo = getHeaderInfo();
+
   return (
     <div
-      className={cn("h-screen w-screen overflow-hidden flex transition-colors duration-300 bg-slate-100 dark:bg-slate-950", darkMode && "dark")}
-      style={{ fontFamily: "'Montserrat', 'Inter', Arial, sans-serif" }}
+      className="h-screen w-screen overflow-hidden flex transition-colors duration-300 bg-[#d8d0c8]"
+      style={{ fontFamily: "'Plus Jakarta Sans', 'Montserrat', 'Inter', Arial, sans-serif" }}
     >
-      <div className="w-full h-full bg-slate-50 dark:bg-[#11131e] flex overflow-hidden transition-colors duration-300">
-        {/* Desktop sidebar — smooth width transition via CSS, GPU-composited */}
+      <div className="w-full h-full bg-[#f5f1eb] flex overflow-hidden transition-colors duration-300">
+        {/* Desktop sidebar */}
         <aside
           className={cn(
-            "hidden lg:flex flex-shrink-0 relative border-r border-slate-800 bg-slate-900 shadow-xl shadow-black/30",
-            "transition-[width] duration-300 ease-in-out will-change-[width] overflow-hidden"
+            "hidden lg:flex flex-shrink-0 relative",
+            "transition-[width] duration-300 ease-in-out will-change-[width] overflow-hidden",
           )}
-          style={{ width: sidebarExpanded ? "18rem" : "5rem" }}
+          style={{ width: sidebarExpanded ? "16rem" : "6rem" }}
         >
           <div className="absolute inset-0">
             <SidebarContent />
@@ -437,9 +675,10 @@ export default function TrafficLayout({ children }) {
 
         {/* Mobile sidebar */}
         <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-          <SheetContent side="left" className="w-72 p-0 bg-slate-900 border-slate-800 text-white" aria-describedby={undefined}>
-            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-            <SheetDescription className="sr-only">Main navigation sidebar</SheetDescription>
+          <SheetContent
+            side="left"
+            className="w-72 p-0 bg-[#0a0a0a] border-black/20 text-white"
+          >
             <SidebarContent
               onNavigate={() => setIsMobileMenuOpen(false)}
               expanded={true}
@@ -451,36 +690,27 @@ export default function TrafficLayout({ children }) {
         {/* Main layout wrapper */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           {/* Header */}
-          <header className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-3 shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/5 transition-colors duration-300 relative z-40">
+          <header className="px-4 sm:px-6 lg:px-8 pt-4 pb-3 flex items-center justify-between gap-3 shrink-0 relative z-40">
             <div className="flex items-center gap-3 min-w-0">
-              <Button
+              <button
                 onClick={() => setIsMobileMenuOpen(true)}
-                variant="ghost"
-                size="icon"
-                className="hover:bg-white dark:hover:bg-white/10 rounded-full text-slate-800 dark:text-stone-200 lg:hidden"
+                aria-label="Open Navigation Menu"
+                className="lg:hidden p-2 rounded-xl hover:bg-white text-[#1f1f1f] active:scale-95 transition-all shrink-0"
               >
-                <Menu className="h-5 w-5 text-slate-800 dark:text-stone-200" />
-              </Button>
+                <Menu className="h-5 w-5" />
+              </button>
 
               <div className="min-w-0">
-                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#1f1f1f] dark:text-stone-100 truncate">
-                  Traffic Management
+                <p className="text-xs font-bold text-stone-400 uppercase tracking-widest hidden sm:block">
+                  {headerInfo.eyebrow}
+                </p>
+                <h1 className="text-base sm:text-lg font-extrabold text-[#1f1f1f] truncate leading-tight mt-0.5">
+                  {headerInfo.title}
                 </h1>
-                <p className="text-stone-500 dark:text-stone-400 text-xs mt-1 hidden sm:block">Manage Permits and Company Registrations</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={toggleDarkMode}
-                variant="ghost"
-                size="icon"
-                title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-                className="relative bg-white dark:bg-white/5 dark:border dark:border-white/10 shadow-sm rounded-full hover:bg-stone-50 dark:hover:bg-white/10 active:scale-95 transition-all duration-150"
-              >
-                {darkMode ? <Sun className="h-5 w-5 text-amber-300" /> : <Moon className="h-5 w-5 text-stone-600" />}
-              </Button>
-
+            <div className="flex items-center gap-2.5">
               <NotificationPanel role="approver" />
 
               <UserProfilePanel
@@ -492,7 +722,7 @@ export default function TrafficLayout({ children }) {
             </div>
           </header>
 
-          <main className="relative flex-1 p-4 lg:p-8 pb-6 min-h-0 overflow-y-auto scroll-smooth [scrollbar-width:thin] [scrollbar-color:theme(colors.stone.300)_transparent] dark:[scrollbar-color:theme(colors.stone.700)_transparent]">
+          <main className="flex-1 px-4 sm:px-6 lg:px-8 pb-4 min-h-0 overflow-y-auto scroll-smooth [scrollbar-width:thin] [scrollbar-color:theme(colors.stone.300)_transparent]">
             <div>{children}</div>
           </main>
         </div>
@@ -507,7 +737,9 @@ export default function TrafficLayout({ children }) {
                 <Lock className="h-7 w-7" strokeWidth={2.5} />
               </span>
               <h3 className="text-2xl font-extrabold text-[#1f1f1f] dark:text-white tracking-tight">
-                {user?.isPasswordChanged === false ? "Mandatory Password Update" : "Update Password"}
+                {user?.isPasswordChanged === false
+                  ? "Mandatory Password Update"
+                  : "Update Password"}
               </h3>
               <p className="text-sm text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
                 {user?.isPasswordChanged === false
@@ -517,8 +749,12 @@ export default function TrafficLayout({ children }) {
             </div>
 
             <div className="bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/5 rounded-2xl px-4 py-3 mb-4 text-sm text-stone-700 dark:text-stone-300 font-medium flex items-center gap-3">
-              <span className="text-stone-500 dark:text-stone-400">User Account:</span>
-              <span className="text-stone-900 dark:text-white font-bold">{user?.username}</span>
+              <span className="text-stone-500 dark:text-stone-400">
+                User Account:
+              </span>
+              <span className="text-stone-900 dark:text-white font-bold">
+                {user?.username}
+              </span>
             </div>
 
             <form onSubmit={handlePasswordChangeSubmit} className="space-y-4">
@@ -532,8 +768,16 @@ export default function TrafficLayout({ children }) {
                   className="w-full pl-11 pr-10 py-3.5 text-base bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/5 text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 focus:border-[#ff6b00] focus:ring-4 focus:ring-[#ff6b00]/10 rounded-2xl focus:outline-none transition-all duration-200"
                   required
                 />
-                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 focus:outline-none">
-                  {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 focus:outline-none"
+                >
+                  {showNewPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
                 </button>
               </div>
 
@@ -547,8 +791,16 @@ export default function TrafficLayout({ children }) {
                   className="w-full pl-11 pr-10 py-3.5 text-base bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/5 text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 focus:border-[#ff6b00] focus:ring-4 focus:ring-[#ff6b00]/10 rounded-2xl focus:outline-none transition-all duration-200"
                   required
                 />
-                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 focus:outline-none">
-                  {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 focus:outline-none"
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
                 </button>
               </div>
 
@@ -557,11 +809,17 @@ export default function TrafficLayout({ children }) {
                 const pwd = newPassword;
 
                 const rules = [
-                  { label: "8–15 characters", valid: pwd.length >= 8 && pwd.length <= 15 },
+                  {
+                    label: "8–15 characters",
+                    valid: pwd.length >= 8 && pwd.length <= 15,
+                  },
                   { label: "One uppercase letter", valid: /[A-Z]/.test(pwd) },
                   { label: "One lowercase letter", valid: /[a-z]/.test(pwd) },
                   { label: "One number", valid: /[0-9]/.test(pwd) },
-                  { label: "One special character", valid: /[^A-Za-z0-9]/.test(pwd) },
+                  {
+                    label: "One special character",
+                    valid: /[^A-Za-z0-9]/.test(pwd),
+                  },
                 ];
 
                 const passedCount = rules.filter((r) => r.valid).length;
@@ -613,7 +871,8 @@ export default function TrafficLayout({ children }) {
                     {/* Backend-only rule */}
                     <div className="border-t border-stone-200 pt-2">
                       <p className="text-xs text-stone-500">
-                        Your new password must also be different from your current password.
+                        Your new password must also be different from your
+                        current password.
                       </p>
                     </div>
                   </div>
@@ -624,7 +883,11 @@ export default function TrafficLayout({ children }) {
                 {user?.isPasswordChanged !== false && (
                   <button
                     type="button"
-                    onClick={() => { setShowPasswordChangeModal(false); setNewPassword(""); setConfirmPassword(""); }}
+                    onClick={() => {
+                      setShowPasswordChangeModal(false);
+                      setNewPassword("");
+                      setConfirmPassword("");
+                    }}
                     className="w-1/2 py-3.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-base font-bold tracking-wider uppercase rounded-2xl transition-all duration-200 focus:outline-none cursor-pointer"
                   >
                     Cancel
@@ -635,10 +898,14 @@ export default function TrafficLayout({ children }) {
                   disabled={modalLoading}
                   className={cn(
                     "py-3.5 bg-[#ff6b00] text-white text-base font-bold tracking-wider uppercase rounded-2xl hover:bg-orange-600 hover:shadow-orange-500/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] shadow-lg shadow-orange-500/20 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-orange-500/20 disabled:opacity-75 disabled:pointer-events-none flex items-center justify-center cursor-pointer",
-                    user?.isPasswordChanged !== false ? "w-1/2" : "w-full"
+                    user?.isPasswordChanged !== false ? "w-1/2" : "w-full",
                   )}
                 >
-                  {modalLoading ? <RefreshCw className="h-5 w-5 animate-spin" /> : "Update Password"}
+                  {modalLoading ? (
+                    <RefreshCw className="h-5 w-5 animate-spin" />
+                  ) : (
+                    "Update Password"
+                  )}
                 </button>
               </div>
             </form>

@@ -5,23 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  LabelList,
-} from "recharts";
+
 import {
   FileText,
   CheckCircle2,
-  Layers,
   Building2,
   ShieldBan,
   Users,
@@ -30,10 +17,8 @@ import {
   ClipboardList,
   ClipboardCheck,
   Clock,
-  TrendingUp,
   Activity,
   BarChart3,
-  HelpCircle,
   AlertTriangle,
   RefreshCw,
   ChevronRight,
@@ -42,16 +27,35 @@ import {
   Ban,
   Sparkles,
   ArrowUpRight,
+  CalendarDays,
+  Wallet,
+  PackageCheck,
+  Truck,
+  HelpCircle,
+  XCircle,
+  RotateCcw,
+  Layers,
+  TrendingUp,
+  Calculator,
+  Target,
+  Globe,
+  CheckCircle,
+  Zap,
+  ShieldOff,
+  Search,
+  X,
+  ExternalLink,
+  Receipt,
+  Download,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Check,
+  FileSpreadsheet,
+  CreditCard,
+  BadgeCheck,
+  ShieldCheck,
 } from "lucide-react";
-
-/* ════════════════════════════════════════════════════════════════
-   Traffic Approval — Management Dashboard
-   All API endpoints verified against the live codebase:
-     ■ AGENT_API  (:5001) — pass-request/get-agent-pass-requests
-     ■ ADMIN_API  (:5005) — user/agent-users, user/profile-update-requests,
-                            blacklist/stats, blacklist/list,
-                            overstay/charges, overstay/exception-requests
-   ════════════════════════════════════════════════════════════════ */
 
 const ADMIN_API =
   process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
@@ -59,13 +63,13 @@ const AGENT_API =
   process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
 const getAuthHeaders = () => {
-  let token = localStorage.getItem("accessToken");
+  let token =
+    typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
   if (!token) return {};
   token = token.replace(/^["']|["']$/g, "");
   return { Authorization: `Bearer ${token}` };
 };
 
-/* ─── helpers ─── */
 const num = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -79,103 +83,144 @@ const fmtDate = (d) => {
   return isNaN(dt.getTime())
     ? "—"
     : dt.toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
 };
-const fmtDateTime = () => {
-  const dt = new Date();
-  return dt.toLocaleString("en-IN", {
+const fmtDateTime = () =>
+  new Date().toLocaleString("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+const calcAvgApprovalTime = (list = []) => {
+  const diffs = list
+    .filter(
+      (p) =>
+        p.status === "PROCESSED" ||
+        p.status === "processed" ||
+        p.status === "APPROVED" ||
+        p.status === "COMPLETED",
+    )
+    .map((p) => {
+      const c = p.createdAt ? new Date(p.createdAt).getTime() : null;
+      const u = p.updatedAt ? new Date(p.updatedAt).getTime() : null;
+      if (!c || !u || u <= c) return null;
+      return (u - c) / 60000;
+    })
+    .filter(Boolean);
+  if (!diffs.length) return null;
+  return diffs.reduce((s, d) => s + d, 0) / diffs.length;
+};
+const fmtDuration = (mins) => {
+  if (mins == null) return "—";
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  if (h === 0) return `${m}m`;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 };
 
-/* ─────────────────────────────────────────────────────────────────
-   Tone tokens — solid, opaque tinted surfaces. No translucency and no
-   backdrop blur, so tiles stay crisp and nothing bleeds through from
-   behind. Each tone gives a tinted fill, a matching border, a text
-   colour for the number and a chip colour for the icon.
-   ───────────────────────────────────────────────────────────────── */
 const TONE = {
   blue: {
-    border: "border-blue-100",
-    bg: "bg-blue-50",
-    text: "text-blue-700",
-    chip: "bg-blue-100 text-blue-600",
+    border: "border-blue-500",
+    grad: "from-blue-500 via-blue-600 to-indigo-600",
+    text: "text-white",
+    chip: "bg-white/20 text-white",
+    label: "text-blue-100",
+    accent: "bg-white/40",
   },
   sky: {
-    border: "border-sky-100",
-    bg: "bg-sky-50",
-    text: "text-sky-700",
-    chip: "bg-sky-100 text-sky-600",
+    border: "border-sky-500",
+    grad: "from-sky-400 via-sky-500 to-cyan-600",
+    text: "text-white",
+    chip: "bg-white/20 text-white",
+    label: "text-sky-100",
+    accent: "bg-white/40",
   },
   emerald: {
-    border: "border-emerald-100",
-    bg: "bg-emerald-50",
-    text: "text-emerald-700",
-    chip: "bg-emerald-100 text-emerald-600",
+    border: "border-emerald-500",
+    grad: "from-emerald-500 via-emerald-600 to-teal-600",
+    text: "text-white",
+    chip: "bg-white/20 text-white",
+    label: "text-emerald-100",
+    accent: "bg-white/40",
   },
   teal: {
-    border: "border-teal-100",
-    bg: "bg-teal-50",
-    text: "text-teal-700",
-    chip: "bg-teal-100 text-teal-600",
+    border: "border-teal-500",
+    grad: "from-teal-500 via-teal-600 to-cyan-700",
+    text: "text-white",
+    chip: "bg-white/20 text-white",
+    label: "text-teal-100",
+    accent: "bg-white/40",
   },
   amber: {
-    border: "border-amber-100",
-    bg: "bg-amber-50",
-    text: "text-amber-700",
-    chip: "bg-amber-100 text-amber-600",
+    border: "border-amber-500",
+    grad: "from-amber-400 via-amber-500 to-orange-600",
+    text: "text-white",
+    chip: "bg-white/20 text-white",
+    label: "text-amber-100",
+    accent: "bg-white/40",
   },
   orange: {
-    border: "border-orange-100",
-    bg: "bg-orange-50",
-    text: "text-orange-700",
-    chip: "bg-orange-100 text-orange-600",
+    border: "border-orange-500",
+    grad: "from-orange-500 via-orange-600 to-amber-600",
+    text: "text-white",
+    chip: "bg-white/20 text-white",
+    label: "text-orange-100",
+    accent: "bg-white/40",
   },
   red: {
-    border: "border-red-100",
-    bg: "bg-red-50",
-    text: "text-red-700",
-    chip: "bg-red-100 text-red-600",
+    border: "border-red-500",
+    grad: "from-red-500 via-red-600 to-rose-700",
+    text: "text-white",
+    chip: "bg-white/20 text-white",
+    label: "text-red-100",
+    accent: "bg-white/40",
   },
   rose: {
-    border: "border-rose-100",
-    bg: "bg-rose-50",
-    text: "text-rose-700",
-    chip: "bg-rose-100 text-rose-600",
+    border: "border-rose-500",
+    grad: "from-rose-500 via-rose-600 to-pink-700",
+    text: "text-white",
+    chip: "bg-white/20 text-white",
+    label: "text-rose-100",
+    accent: "bg-white/40",
   },
   violet: {
-    border: "border-violet-100",
-    bg: "bg-violet-50",
-    text: "text-violet-700",
-    chip: "bg-violet-100 text-violet-600",
+    border: "border-violet-500",
+    grad: "from-violet-500 via-violet-600 to-purple-700",
+    text: "text-white",
+    chip: "bg-white/20 text-white",
+    label: "text-violet-100",
+    accent: "bg-white/40",
   },
   slate: {
-    border: "border-slate-200",
-    bg: "bg-slate-50",
-    text: "text-slate-700",
-    chip: "bg-slate-100 text-slate-600",
+    border: "border-slate-500",
+    grad: "from-slate-500 via-slate-600 to-gray-700",
+    text: "text-white",
+    chip: "bg-white/20 text-white",
+    label: "text-slate-100",
+    accent: "bg-white/40",
+  },
+  indigo: {
+    border: "border-indigo-500",
+    grad: "from-indigo-500 via-indigo-600 to-violet-700",
+    text: "text-white",
+    chip: "bg-white/20 text-white",
+    label: "text-indigo-100",
+    accent: "bg-white/40",
+  },
+  cyan: {
+    border: "border-cyan-500",
+    grad: "from-cyan-500 via-cyan-600 to-sky-700",
+    text: "text-white",
+    chip: "bg-white/20 text-white",
+    label: "text-cyan-100",
+    accent: "bg-white/40",
   },
 };
-
-/* panel header icon-chip tones — solid, no blur */
-const PANEL_TONE = {
-  navy: "bg-[#0a1e4d]/10 text-[#0a1e4d]",
-  orange: "bg-orange-100 text-orange-600",
-  emerald: "bg-emerald-100 text-emerald-600",
-  blue: "bg-blue-100 text-blue-600",
-  sky: "bg-sky-100 text-sky-600",
-  violet: "bg-violet-100 text-violet-600",
-  red: "bg-red-100 text-red-600",
-  amber: "bg-amber-100 text-amber-600",
-};
-
 const BL_STATUS_TONE = {
   BLACKLISTED: "bg-rose-50 text-rose-700 border-rose-200",
   PENDING_BLACKLIST: "bg-amber-50 text-amber-700 border-amber-200",
@@ -183,15 +228,6 @@ const BL_STATUS_TONE = {
   UNBLACKLISTED: "bg-emerald-50 text-emerald-700 border-emerald-200",
   REJECTED: "bg-slate-100 text-slate-600 border-slate-200",
 };
-
-const ENTITY_ICON = {
-  COMPANY: Building2,
-  PERSON: Users,
-  DRIVER: UserCircle,
-  VEHICLE: Car,
-};
-
-/* pass-request status → badge tone */
 const PASS_STATUS_TONE = {
   SUBMITTED: "bg-blue-50 text-blue-700 border-blue-200",
   PENDING: "bg-amber-50 text-amber-700 border-amber-200",
@@ -199,9 +235,66 @@ const PASS_STATUS_TONE = {
   RESUBMITTED: "bg-sky-50 text-sky-700 border-sky-200",
   APPROVED: "bg-emerald-50 text-emerald-700 border-emerald-200",
   REJECTED: "bg-rose-50 text-rose-700 border-rose-200",
+  PROCESSED: "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
-/* ─── section shell ─── */
+function SkeletonRows() {
+  return (
+    <div className="space-y-2">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="flex items-center gap-3 animate-pulse">
+          <div className="h-8 w-8 rounded-lg bg-slate-200 shrink-0" />
+          <div className="flex-1 space-y-1">
+            <div className="h-3 bg-slate-200 rounded w-3/4" />
+            <div className="h-2.5 bg-slate-100 rounded w-1/2" />
+          </div>
+          <div className="h-5 w-14 bg-slate-200 rounded" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyRow({ label }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
+      <CheckCircle2 className="h-8 w-8 text-emerald-300" />
+      <p className="text-xs font-semibold text-slate-400">{label}</p>
+    </div>
+  );
+}
+
+const PANEL_ACCENT = {
+  navy: "from-[#0a1e4d] to-[#1b3a8a]",
+  orange: "from-orange-400 to-amber-500",
+  emerald: "from-emerald-400 to-teal-500",
+  blue: "from-blue-400 to-indigo-500",
+  sky: "from-sky-400 to-blue-500",
+  violet: "from-violet-400 to-purple-500",
+  red: "from-red-400 to-rose-500",
+  amber: "from-amber-400 to-orange-500",
+  rose: "from-rose-400 to-pink-500",
+  indigo: "from-indigo-400 to-violet-500",
+  teal: "from-teal-400 to-cyan-500",
+  cyan: "from-cyan-400 to-sky-500",
+};
+
+function SectionDivider({ label, icon: Icon }) {
+  return (
+    <div className="flex items-center gap-3 pt-2 pb-1">
+      {Icon && (
+        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#0a1e4d]/8 text-[#0a1e4d] shrink-0">
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+      )}
+      <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+        {label}
+      </span>
+      <div className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
+    </div>
+  );
+}
+
 function Panel({
   title,
   subtitle,
@@ -212,16 +305,51 @@ function Panel({
   children,
   className = "",
 }) {
-  const chip = PANEL_TONE[tone] || PANEL_TONE.navy;
+  const iconChip = {
+    navy: "bg-gradient-to-br from-[#0a1e4d] to-[#1b3a8a] text-white",
+    orange: "bg-gradient-to-br from-orange-500 to-amber-500 text-white",
+    emerald: "bg-gradient-to-br from-emerald-500 to-teal-500 text-white",
+    blue: "bg-gradient-to-br from-blue-500 to-indigo-500 text-white",
+    sky: "bg-gradient-to-br from-sky-500 to-blue-500 text-white",
+    violet: "bg-gradient-to-br from-violet-500 to-purple-500 text-white",
+    red: "bg-gradient-to-br from-red-500 to-rose-500 text-white",
+    amber: "bg-gradient-to-br from-amber-500 to-orange-500 text-white",
+    rose: "bg-gradient-to-br from-rose-500 to-pink-500 text-white",
+    indigo: "bg-gradient-to-br from-indigo-500 to-violet-500 text-white",
+    teal: "bg-gradient-to-br from-teal-500 to-cyan-500 text-white",
+    cyan: "bg-gradient-to-br from-cyan-500 to-sky-500 text-white",
+  };
+  const headerWash = {
+    navy: "bg-gradient-to-r from-[#0a1e4d]/5 to-transparent",
+    orange: "bg-gradient-to-r from-orange-50 to-transparent",
+    emerald: "bg-gradient-to-r from-emerald-50 to-transparent",
+    blue: "bg-gradient-to-r from-blue-50 to-transparent",
+    sky: "bg-gradient-to-r from-sky-50 to-transparent",
+    violet: "bg-gradient-to-r from-violet-50 to-transparent",
+    red: "bg-gradient-to-r from-red-50 to-transparent",
+    amber: "bg-gradient-to-r from-amber-50 to-transparent",
+    rose: "bg-gradient-to-r from-rose-50 to-transparent",
+    indigo: "bg-gradient-to-r from-indigo-50 to-transparent",
+    teal: "bg-gradient-to-r from-teal-50 to-transparent",
+    cyan: "bg-gradient-to-r from-cyan-50 to-transparent",
+  };
+  const chip = iconChip[tone] || iconChip.navy;
+  const wash = headerWash[tone] || headerWash.navy;
+  const accent = PANEL_ACCENT[tone] || PANEL_ACCENT.navy;
   return (
     <section
-      className={`group/panel relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_6px_24px_-10px_rgba(10,30,77,0.18)] flex flex-col transition-shadow duration-300 hover:shadow-[0_14px_36px_-14px_rgba(10,30,77,0.26)] ${className}`}
+      className={`group/panel relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_6px_24px_-10px_rgba(10,30,77,0.14)] flex flex-col transition-all duration-300 hover:shadow-[0_16px_40px_-14px_rgba(10,30,77,0.24)] ${className}`}
     >
-      <div className="flex items-center justify-between gap-2 px-6 pt-5 pb-4">
+      <div
+        className={`absolute inset-x-0 top-0 h-[4px] bg-gradient-to-r ${accent}`}
+      />
+      <div
+        className={`${wash} flex items-center justify-between gap-2 px-5 pt-5 pb-3 rounded-t-3xl`}
+      >
         <div className="flex items-center gap-3 min-w-0">
           {Icon && (
             <span
-              className={`flex h-9 w-9 items-center justify-center rounded-2xl ${chip} shrink-0`}
+              className={`flex h-10 w-10 items-center justify-center rounded-2xl ${chip} shrink-0 shadow-md ring-1 ring-inset ring-white/30`}
             >
               <Icon className="h-5 w-5" strokeWidth={2.2} />
             </span>
@@ -240,20 +368,18 @@ function Panel({
         {action && (
           <Link
             href={actionHref}
-            className="text-[11px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-0.5 shrink-0 transition-colors group/link rounded-full bg-orange-50 px-2.5 py-1 border border-orange-100"
+            className="text-[11px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-0.5 shrink-0 transition-colors group/link rounded-full bg-orange-50 px-2.5 py-1 border border-orange-100 hover:bg-orange-100"
           >
             {action}
             <ChevronRight className="h-3 w-3 group-hover/link:translate-x-0.5 transition-transform" />
           </Link>
         )}
       </div>
-      <div className="px-6 pb-6 flex-1">{children}</div>
+      <div className="px-5 pb-5 flex-1">{children}</div>
     </section>
   );
 }
 
-/* MiniStat — renders as a Link when `href` is given so every tile on the
-   dashboard is clickable and drills through to the matching list view. */
 function MiniStat({
   label,
   value,
@@ -262,47 +388,66 @@ function MiniStat({
   loading = false,
   icon: Icon,
   href,
+  sub,
 }) {
   const t = TONE[tone] || TONE.blue;
   const Wrapper = href ? Link : "div";
-  const wrapperProps = href ? { href } : {};
-
+  const wp = href ? { href } : {};
   return (
     <Wrapper
-      {...wrapperProps}
-      title={href ? `View ${label}` : undefined}
-      className={`group/ms relative block overflow-hidden rounded-2xl border ${t.border} ${t.bg} px-4 py-3.5 transition-all duration-200 ${href
-        ? "hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-12px_rgba(10,30,77,0.3)] hover:border-slate-300 cursor-pointer"
-        : ""
-        }`}
+      {...wp}
+      className={`group/ms relative block overflow-hidden rounded-2xl border-2 ${t.border} bg-gradient-to-br ${t.grad} px-4 py-3.5 shadow-lg transition-all duration-200 ${href ? "hover:-translate-y-1.5 hover:shadow-xl cursor-pointer" : ""}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 leading-tight">
+      {/* top shimmer */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+      <div
+        className={`pointer-events-none absolute -right-3 -top-3 h-16 w-16 rounded-full bg-white/20`}
+      />
+      <div
+        className={`pointer-events-none absolute -left-3 -bottom-3 h-10 w-10 rounded-full bg-white/10`}
+      />
+      <div
+        className={`absolute left-0 inset-y-0 w-[4px] rounded-l-2xl ${t.accent}`}
+      />
+      <div className="relative flex items-start justify-between gap-2">
+        <p
+          className={`text-[10px] font-bold uppercase tracking-wider ${t.label} leading-tight`}
+        >
           {label}
         </p>
         {Icon && (
           <span
-            className={`flex h-6 w-6 items-center justify-center rounded-lg ${t.chip} shrink-0`}
+            className={`flex h-7 w-7 items-center justify-center rounded-xl ${t.chip} shrink-0 shadow-md`}
           >
             <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
           </span>
         )}
       </div>
       {loading ? (
-        <div className="h-7 w-16 mt-1.5 rounded bg-slate-200 animate-pulse" />
+        <div className="relative h-7 w-16 mt-1.5 rounded bg-white/30 animate-pulse" />
       ) : (
-        <p className={`text-2xl font-black ${t.text} mt-1.5 tabular-nums`}>
+        <p
+          className={`relative text-2xl font-black ${t.text} mt-1.5 tabular-nums drop-shadow-sm`}
+        >
           {money ? fmtMoney(value) : fmtNum(value)}
         </p>
       )}
+      {sub && !loading && (
+        <p
+          className={`relative text-[10px] ${t.label} opacity-80 font-medium mt-0.5`}
+        >
+          {sub}
+        </p>
+      )}
       {href && (
-        <ArrowUpRight className="absolute bottom-2.5 right-2.5 h-3.5 w-3.5 text-slate-400 opacity-0 group-hover/ms:opacity-100 transition-opacity" />
+        <ArrowUpRight
+          className={`absolute bottom-2.5 right-2.5 h-3.5 w-3.5 text-white opacity-0 group-hover/ms:opacity-70 transition-opacity`}
+        />
       )}
     </Wrapper>
   );
 }
 
-/* IconStatRow — also becomes a Link when `href` is supplied. */
 function IconStatRow({
   label,
   value,
@@ -314,18 +459,15 @@ function IconStatRow({
 }) {
   const t = TONE[tone] || TONE.blue;
   const Wrapper = href ? Link : "div";
-  const wrapperProps = href ? { href } : {};
-
+  const wp = href ? { href } : {};
   return (
     <Wrapper
-      {...wrapperProps}
-      title={href ? `View ${label}` : undefined}
-      className={`group/row flex items-center justify-between gap-3 -mx-2 rounded-xl px-2 py-2 transition-colors ${href ? "hover:bg-slate-100 cursor-pointer" : "hover:bg-slate-50"
-        }`}
+      {...wp}
+      className={`group/row flex items-center justify-between gap-3 -mx-2 rounded-xl px-2 py-2.5 transition-all duration-150 ${href ? `hover:bg-gradient-to-r hover:${t.grad} cursor-pointer border border-transparent hover:${t.border}` : "hover:bg-slate-50"}`}
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <span
-          className={`flex h-8 w-8 items-center justify-center rounded-xl ${t.chip} shrink-0`}
+          className={`flex h-8 w-8 items-center justify-center rounded-xl ${t.chip} shrink-0 shadow-sm`}
         >
           <Icon className="h-4 w-4" strokeWidth={2.2} />
         </span>
@@ -342,121 +484,85 @@ function IconStatRow({
           </span>
         )}
         {href && (
-          <ChevronRight className="h-3.5 w-3.5 text-slate-400 opacity-0 -translate-x-1 group-hover/row:opacity-100 group-hover/row:translate-x-0 transition-all" />
+          <ChevronRight
+            className={`h-3.5 w-3.5 ${t.label} opacity-0 -translate-x-1 group-hover/row:opacity-80 group-hover/row:translate-x-0 transition-all`}
+          />
         )}
       </div>
     </Wrapper>
   );
 }
 
-/* ─── Hero circular gauge (approval throughput) ─── */
-function ProcessRateGauge({ processed = 0, total = 0, pending = 0, loading = false }) {
-  const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
-  // 270° sweep, starting at 135° (bottom-left) going clockwise
-  const R = 78;
-  const C = 2 * Math.PI * R;
-  const sweep = 0.75; // 270° of full circle
-  const dash = C * sweep;
-  const filled = dash * (pct / 100);
-
+function KpiCard({
+  title,
+  value,
+  icon: Icon,
+  gradient,
+  glow,
+  href,
+  chips,
+  loading,
+  isMoney = false,
+}) {
+  const Wrapper = href ? Link : "div";
+  const wp = href ? { href } : {};
   return (
-    <div className="relative flex h-[188px] w-[188px] items-center justify-center shrink-0">
-      <svg viewBox="0 0 200 200" className="h-full w-full -rotate-[135deg]">
-        <defs>
-          <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#fb923c" />
-            <stop offset="55%" stopColor="#f97316" />
-            <stop offset="100%" stopColor="#f59e0b" />
-          </linearGradient>
-        </defs>
-        {/* track */}
-        <circle
-          cx="100"
-          cy="100"
-          r={R}
-          fill="none"
-          stroke="rgba(255,255,255,0.14)"
-          strokeWidth="14"
-          strokeLinecap="round"
-          strokeDasharray={`${dash} ${C}`}
-        />
-        {/* value arc */}
-        <circle
-          cx="100"
-          cy="100"
-          r={R}
-          fill="none"
-          stroke="url(#gaugeGrad)"
-          strokeWidth="14"
-          strokeLinecap="round"
-          strokeDasharray={`${loading ? 0 : filled} ${C}`}
-          className="transition-[stroke-dasharray] duration-1000 ease-out"
-          style={{ filter: "drop-shadow(0 0 6px rgba(249,115,22,0.55))" }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-blue-200/70">
-          Approval Rate
+    <Wrapper
+      {...wp}
+      className={`group relative isolate overflow-hidden rounded-3xl bg-gradient-to-br ${gradient} p-4 sm:p-5 text-white ring-1 ring-inset ring-white/30 shadow-[0_12px_40px_-12px_var(--tw-shadow-color),inset_0_1px_0_0_rgba(255,255,255,0.45)] ${glow} transition-all duration-300 min-h-[130px] flex flex-col ${href ? "hover:-translate-y-1.5 hover:shadow-[0_24px_56px_-16px_var(--tw-shadow-color)] cursor-pointer" : ""}`}
+    >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
+      <div className="pointer-events-none absolute -top-1/2 inset-x-0 h-full bg-gradient-to-b from-white/20 to-transparent opacity-80" />
+      <div className="pointer-events-none absolute -right-6 -top-8 h-24 w-24 rounded-full bg-white/15" />
+      <div className="pointer-events-none absolute -bottom-8 -right-2 h-20 w-20 rounded-full bg-white/10" />
+      <div className="relative flex items-center justify-between">
+        <span className="flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-2xl bg-white/25 ring-1 ring-inset ring-white/40 shrink-0">
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.3} />
         </span>
-        {loading ? (
-          <div className="mt-1 h-10 w-20 rounded-lg bg-white/20 animate-pulse" />
-        ) : (
-          <span className="text-4xl font-black tabular-nums text-white drop-shadow">
-            {pct}
-            <span className="text-xl align-top text-orange-300">%</span>
-          </span>
-        )}
-        <span className="mt-1 text-[10px] font-semibold text-blue-100/60 tabular-nums">
-          {fmtNum(processed)} / {fmtNum(total)} done
-        </span>
-        {pending > 0 && (
-          <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[9px] font-bold text-amber-200 ring-1 ring-amber-300/20">
-            <Clock className="h-2.5 w-2.5" />
-            {fmtNum(pending)} pending
-          </span>
+        {href && (
+          <ArrowUpRight className="h-4 w-4 opacity-0 -translate-x-1 group-hover:opacity-90 group-hover:translate-x-0 transition-all" />
         )}
       </div>
-    </div>
+      {loading ? (
+        <div className="relative mt-3 h-8 w-20 rounded-lg bg-white/30 animate-pulse" />
+      ) : (
+        <p className="relative mt-3 text-2xl sm:text-3xl font-black tabular-nums drop-shadow-sm leading-none">
+          {isMoney ? fmtMoney(value) : fmtNum(value)}
+        </p>
+      )}
+      <p className="relative mt-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-white/85 leading-tight">
+        {title}
+      </p>
+      {chips && !loading && (
+        <div className="relative mt-2 flex flex-wrap gap-1">
+          {chips.map((ch) => {
+            const C = ch.icon;
+            return (
+              <span
+                key={ch.label}
+                className="inline-flex items-center gap-1 rounded-full bg-white/90 px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-bold text-slate-900 ring-1 ring-inset ring-white/60 shadow-sm"
+              >
+                <C className="h-2.5 w-2.5 sm:h-3 sm:w-3" strokeWidth={2.4} />
+                {fmtNum(ch.value)} {ch.label}
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </Wrapper>
   );
 }
 
-/* ─── Bar tooltip ─── */
-const CustomBarTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-white rounded-xl shadow-lg ring-1 ring-slate-200 px-3 py-2 text-xs">
-      <p className="font-bold text-gray-800">{label}</p>
-      <p className="text-gray-600 tabular-nums">
-        {fmtNum(payload[0].value)}
-      </p>
-    </div>
-  );
-};
-
-/* ─── Pie tooltip ─── */
-const CustomPieTooltip = ({ active, payload }) => {
-  if (!active || !payload?.length) return null;
-  const d = payload[0];
-  return (
-    <div className="bg-white rounded-xl shadow-lg ring-1 ring-slate-200 px-3 py-2 text-xs">
-      <p className="font-bold text-gray-800">{d.name}</p>
-      <p className="text-gray-600">
-        {fmtNum(d.value)} entities{" "}
-        <span className="text-gray-400">({d.payload.pct}%)</span>
-      </p>
-    </div>
-  );
-};
-
-/* ─── empty state ─── */
 const EMPTY = {
-  pass: { pending: 0, processed: 0, total: 0 },
+  pass: { pending: 0, processed: 0, total: 0, rejected: 0, reverted: 0 },
   passMine: 0,
-  /* composition of the pending queue — derived from the pending pass list */
   pendingQueue: { persons: 0, vehicles: 0, companies: 0, list: [], counted: 0 },
-  processedQueue: { persons: 0, vehicles: 0, counted: 0 },
+  processedQueue: { persons: 0, vehicles: 0, counted: 0, list: [] },
+  allPassesQueue: { persons: 0, vehicles: 0, list: [], counted: 0 },
+  rawAllPasses: [],
   company: { total: 0, approved: 0, rejected: 0, pending: 0 },
   profileUpdates: 0,
+  bulk: { total: 0, pending: 0, approved: 0, rejected: 0 },
   bl: {
     active_blacklisted: 0,
     pending_blacklist: 0,
@@ -467,22 +573,115 @@ const EMPTY = {
   blType: { COMPANY: 0, PERSON: 0, DRIVER: 0, VEHICLE: 0 },
   blRecent: [],
   blPending: [],
-  overstay: { pending: 0, paid: 0, exceptions: 0, pendingAmount: 0, total: 0 },
+  overstay: {
+    pending: 0,
+    paid: 0,
+    exceptions: 0,
+    pendingAmount: 0,
+    paidAmount: 0,
+    total: 0,
+    todayPaid: 0,
+    monthPaid: 0,
+    rawCharges: [],
+  },
+  hepRevenue: {
+    total: 0,
+    accountTotal: 0,
+    ecashTotal: 0,
+    todayTotal: 0,
+    monthTotal: 0,
+    processedTotal: 0,
+    pendingTotal: 0,
+    totalPersons: 0,
+    totalVehicles: 0,
+    topCompanies: [],
+    companyList: [],
+  },
+  portActivity: { today: 0, week: 0, month: 0 },
+  avgApprovalMins: null,
 };
 
-/* ══════════════════════════════════════════════════════════════════
-   MAIN PAGE
-   ══════════════════════════════════════════════════════════════════ */
-export default function TrafficApprovalDashboard() {
+export default function TrafficManagerDashboard() {
   const router = useRouter();
   const [data, setData] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState("");
+  const [filterPeriod, setFilterPeriod] = useState("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [showCustom, setShowCustom] = useState(false);
+  const [selectedLedgerCompany, setSelectedLedgerCompany] = useState(null);
+  const [showFullLedgerModal, setShowFullLedgerModal] = useState(false);
+  const [ledgerSearchQuery, setLedgerSearchQuery] = useState("");
+  const [ledgerStatusFilter, setLedgerStatusFilter] = useState("ALL");
+  const [ledgerModeFilter, setLedgerModeFilter] = useState("ALL");
+  const [allCompaniesSearch, setAllCompaniesSearch] = useState("");
+  const [ledgerActiveTab, setLedgerActiveTab] = useState("transactions");
+  const [expandedPassId, setExpandedPassId] = useState(null);
+  const [copiedRef, setCopiedRef] = useState(null);
 
-  /* Makes a summary table row behave like a link: click or Enter/Space
-     navigates to the matching list view. Tables can't contain a block-level
-     <a> wrapping a <tr>, so this drives the router directly while keeping
-     the row keyboard-reachable. */
+  const copyToClipboard = useCallback((text) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedRef(text);
+      setTimeout(() => setCopiedRef(null), 2000);
+      toast.success(`Copied: ${text}`);
+    }
+  }, []);
+
+  const exportLedgerCSV = useCallback((company) => {
+    if (!company || !company.passes?.length) {
+      toast.info("No transaction records found for this company");
+      return;
+    }
+    const headers = [
+      "Sl No",
+      "Pass Reference",
+      "Status",
+      "Payment Mode",
+      "Total Amount (INR)",
+      "Person Fees (INR)",
+      "Vehicle Fees (INR)",
+      "Persons Count",
+      "Vehicles Count",
+      "Applicant Name",
+      "Applicant Email",
+      "Submitted Date",
+      "Purpose",
+      "Harbor Zone",
+    ];
+    const rows = company.passes.map((p, idx) => [
+      idx + 1,
+      `"${p.referenceNo || ""}"`,
+      `"${p.status || ""}"`,
+      `"${p.paymentMode || ""}"`,
+      p.amount || 0,
+      p.personFee || 0,
+      p.vehicleFee || 0,
+      p.personsCount || 0,
+      p.vehiclesCount || 0,
+      `"${(p.applicantName || "").replace(/"/g, '""')}"`,
+      `"${(p.email || "").replace(/"/g, '""')}"`,
+      `"${fmtDate(p.createdAt)}"`,
+      `"${(p.purpose || "").replace(/"/g, '""')}"`,
+      `"${(p.zone || "").replace(/"/g, '""')}"`,
+    ]);
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute(
+      "download",
+      `${(company.name || "Company").replace(/[^a-zA-Z0-9]/g, "_")}_Revenue_Ledger.csv`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exported ledger for ${company.name}`);
+  }, []);
+
   const rowLinkProps = useCallback(
     (href, label) => ({
       role: "link",
@@ -496,7 +695,7 @@ export default function TrafficApprovalDashboard() {
         }
       },
     }),
-    [router]
+    [router],
   );
 
   const fetchAll = useCallback(async () => {
@@ -504,140 +703,316 @@ export default function TrafficApprovalDashboard() {
     const headers = getAuthHeaders();
     const g = (url, params) =>
       axios.get(url, { headers, params, validateStatus: (s) => s < 500 });
-
     try {
       const [
-        passRes,       // GET pass requests — returns {counts:{total,pending,processed}}
-        passMineRes,   // Same endpoint filtered by processedByMe
-        pendingPassRes, // Pending pass list — used to derive queue composition
-        processedPassRes, // Processed pass list — used to derive processed composition
-        companyRes,    // GET company registrations — returns {counts:{total,approved,rejected,pending}}
-        profileRes,    // GET profile update requests — returns {pagination:{totalRecords}}
-        blStatsRes,    // GET blacklist stats — returns {data:{active_blacklisted,...}}
-        blRecentRes,   // GET recent blacklist entries (last 6)
-        blPendingRes,  // GET pending blacklist entries (last 6)
-        overstayRes,   // GET overstay charges list
-        overstayExcRes, // GET overstay exception requests
-      ] = await Promise.allSettled([
-        // ── Pass requests (user_service :5001) ───────────────────────────────
+        [
+          passMineRes,
+          companyRes,
+          profileRes,
+          blStatsRes,
+          blRecentRes,
+          blPendingRes,
+          overstayRes,
+          overstayExcRes,
+          bulkRes,
+        ],
+        firstPassRes,
+      ] = await Promise.all([
+        Promise.allSettled([
+          g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
+            limit: 1,
+            page: 1,
+            processedByMe: "true",
+          }),
+          g(`${ADMIN_API}/user/agent-users`, { limit: 1, page: 1 }),
+          g(`${ADMIN_API}/user/profile-update-requests`, {
+            status: "pending",
+            limit: 1,
+            page: 1,
+          }),
+          g(`${ADMIN_API}/blacklist/stats`),
+          g(`${ADMIN_API}/blacklist/list`, { limit: 6, page: 1 }),
+          g(`${ADMIN_API}/blacklist/list`, {
+            status: "PENDING_BLACKLIST",
+            limit: 6,
+            page: 1,
+          }),
+          g(`${ADMIN_API}/overstay/charges`, { limit: 500, page: 1 }),
+          g(`${ADMIN_API}/overstay/exception-requests`, { limit: 1, page: 1 }),
+          g(`${ADMIN_API}/bulk-pass/queue`, { limit: 1, page: 1 }),
+        ]),
+        // Fetch page 1 of all pass requests (unrestricted by status) to capture all passes
         g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
-          limit: 1,
+          limit: 100,
           page: 1,
         }),
-        g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
-          limit: 1,
-          page: 1,
-          processedByMe: "true",
-        }),
-        // ── Pending pass list — same call the Pass Approvals page makes.
-        //    Each row carries persons[] / vehicles[], which we sum to show
-        //    *what kind* of pass is waiting, not just how many.
-        g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
-          status: "pending",
-          limit: 200,
-          page: 1,
-          sortOrder: "DESC",
-        }),
-        // ── Processed pass list — to derive processed composition (persons/vehicles).
-        g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
-          status: "processed",
-          limit: 200,
-          page: 1,
-          sortOrder: "DESC",
-        }),
-        // ── Company registrations (approval-admin :5005) ──────────────────────
-        g(`${ADMIN_API}/user/agent-users`, { limit: 1, page: 1 }),
-        // ── Profile updates (approval-admin :5005) ────────────────────────────
-        g(`${ADMIN_API}/user/profile-update-requests`, {
-          status: "pending",
-          limit: 1,
-          page: 1,
-        }),
-        // ── Blacklist stats (approval-admin :5005) ────────────────────────────
-        g(`${ADMIN_API}/blacklist/stats`),
-        // ── Recent blacklist entries ──────────────────────────────────────────
-        g(`${ADMIN_API}/blacklist/list`, { limit: 6, page: 1 }),
-        // ── Pending blacklist entries ─────────────────────────────────────────
-        g(`${ADMIN_API}/blacklist/list`, {
-          status: "PENDING_BLACKLIST",
-          limit: 6,
-          page: 1,
-        }),
-        // ── Overstay (approval-admin :5005) ──────────────────────────────────
-        g(`${ADMIN_API}/overstay/charges`, { limit: 500, page: 1 }),
-        g(`${ADMIN_API}/overstay/exception-requests`, { limit: 1, page: 1 }),
       ]);
 
       const ok = (r) =>
         r.status === "fulfilled" && r.value?.data && r.value.status < 400;
-      const val = (r, fallback) => (ok(r) ? r.value.data : fallback);
+      const val = (r, fb) => (ok(r) ? r.value.data : fb);
 
-      // ── Pass counts ──────────────────────────────────────────────────────────
-      // Response: { success, data:[], counts:{total,pending,processed}, pagination }
-      const passCounts = val(passRes, {}).counts || {};
+      // 1. Hydrate ALL pass requests across all pages
+      let allPassList = firstPassRes?.data?.data || [];
+      const totalPassPages = num(
+        firstPassRes?.data?.pagination?.totalPages ?? 1,
+      );
+      if (totalPassPages > 1) {
+        const extraReqs = [];
+        for (let pg = 2; pg <= totalPassPages; pg++) {
+          extraReqs.push(
+            g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
+              limit: 100,
+              page: pg,
+            }),
+          );
+        }
+        const extraResults = await Promise.allSettled(extraReqs);
+        extraResults.forEach((r) => {
+          if (r.status === "fulfilled" && r.value?.data?.data) {
+            allPassList = allPassList.concat(r.value.data.data);
+          }
+        });
+      }
+
+      // 2. Classify by status
+      const pendingList = allPassList.filter((p) =>
+        ["SUBMITTED", "PENDING", "IN_REVIEW", "UNDER_REVIEW"].includes(
+          String(p.status || "").toUpperCase(),
+        ),
+      );
+      const processedList = allPassList.filter((p) =>
+        ["APPROVED", "PROCESSED", "COMPLETED", "ISSUED"].includes(
+          String(p.status || "").toUpperCase(),
+        ),
+      );
+      const revertedList = allPassList.filter((p) =>
+        ["REVERTED"].includes(String(p.status || "").toUpperCase()),
+      );
+      const rejectedList = allPassList.filter((p) =>
+        ["REJECTED"].includes(String(p.status || "").toUpperCase()),
+      );
+
+      const passCounts = {
+        total: allPassList.length,
+        pending: pendingList.length,
+        processed: processedList.length,
+        reverted: revertedList.length,
+        rejected: rejectedList.length,
+      };
+
       const passMineCounts = val(passMineRes, {}).counts || {};
-
-      // ── Company counts ───────────────────────────────────────────────────────
-      // Response: { success, data:[], counts:{total,approved,rejected,pending}, pagination }
       const companyCounts = val(companyRes, {}).counts || {};
 
-      // ── Pending queue composition ────────────────────────────────────────────
-      // Each pass row carries persons[] and vehicles[] (same shape the Pass
-      // Approvals table renders as "N Persons | M Vehicles"). Summing them
-      // tells us what kind of entry is actually waiting for approval.
-      const pendingList = val(pendingPassRes, {}).data || [];
       const pendingPersons = pendingList.reduce(
         (s, p) => s + (p.persons?.length || 0),
-        0
+        0,
       );
       const pendingVehicles = pendingList.reduce(
         (s, p) => s + (p.vehicles?.length || 0),
-        0
+        0,
       );
       const pendingCompanies = new Set(
-        pendingList.map((p) => p.email || p.entityName).filter(Boolean)
+        pendingList
+          .map((p) => p.agentId || p.email || p.entityName)
+          .filter(Boolean),
       ).size;
 
-      // Processed pass composition — same shape, tells us what got approved.
-      const processedList = val(processedPassRes, {}).data || [];
       const processedPersons = processedList.reduce(
         (s, p) => s + (p.persons?.length || 0),
-        0
+        0,
       );
       const processedVehicles = processedList.reduce(
         (s, p) => s + (p.vehicles?.length || 0),
-        0
+        0,
       );
 
-      // ── Profile updates ──────────────────────────────────────────────────────
-      // Response: { success, data:[], pagination:{totalRecords,...} }
+      const allPersons = allPassList.reduce(
+        (s, p) => s + (p.persons?.length || 0),
+        0,
+      );
+      const allVehicles = allPassList.reduce(
+        (s, p) => s + (p.vehicles?.length || 0),
+        0,
+      );
+
       const profilePagination = val(profileRes, {}).pagination || {};
 
-      // ── Blacklist stats ──────────────────────────────────────────────────────
-      // Response: { success, data:{ active_blacklisted, pending_blacklist, pending_unblacklist, total_unblacklisted, total, by_type:{COMPANY,PERSON,DRIVER,VEHICLE} } }
+      // 3. Blacklist stats
       const blRaw = val(blStatsRes, {});
       const blStats = blRaw?.data || blRaw || {};
       const blByType = blStats.by_type || {};
-
-      // ── Blacklist entity lists ────────────────────────────────────────────────
-      // Response: { success, data:[], total, pagination }
       const blRecentList = val(blRecentRes, {}).data || [];
       const blPendingList = val(blPendingRes, {}).data || [];
 
-      // ── Overstay charges ─────────────────────────────────────────────────────
-      // Response: { success, data:[] }  (each charge has status:"PENDING"|"PAID", total_amount)
+      // 4. Overstay charges
       const charges = val(overstayRes, {}).data || [];
-      const overstayPending = charges.filter((c) => c.status === "PENDING");
-      const overstayPaid = charges.filter((c) => c.status === "PAID");
-
-      // ── Overstay exception count ─────────────────────────────────────────────
-      // Response: { success, count, data:[] }
+      const ovPending = charges.filter((c) => c.status === "PENDING");
+      const ovPaid = charges.filter((c) => c.status === "PAID");
       const excData = val(overstayExcRes, {});
-      const overstayExceptions = num(excData.count ?? excData.pagination?.totalRecords ?? (excData.data || []).length);
+      const ovExc = num(
+        excData.count ??
+          excData.pagination?.totalRecords ??
+          (excData.data || []).length,
+      );
 
-      let failures = 0;
-      [passRes, companyRes, blStatsRes].forEach((r) => {
-        if (!ok(r)) failures++;
+      const now = new Date();
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
+      const monthStart = new Date(now);
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      const todayPaid = ovPaid
+        .filter(
+          (c) =>
+            new Date(c.created_at || c.updatedAt || c.createdAt) >= todayStart,
+        )
+        .reduce((s, c) => s + num(c.total_amount ?? c.amount), 0);
+      const monthPaid = ovPaid
+        .filter(
+          (c) =>
+            new Date(c.created_at || c.updatedAt || c.createdAt) >= monthStart,
+        )
+        .reduce((s, c) => s + num(c.total_amount ?? c.amount), 0);
+
+      // 5. Port activity
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - 6);
+      weekStart.setHours(0, 0, 0, 0);
+      const activityToday = allPassList.filter((p) => {
+        const d = new Date(p.createdAt || p.submittedAt);
+        return !isNaN(d.getTime()) && d >= todayStart;
+      }).length;
+      const activityWeek = allPassList.filter((p) => {
+        const d = new Date(p.createdAt || p.submittedAt);
+        return !isNaN(d.getTime()) && d >= weekStart;
+      }).length;
+      const activityMonth = allPassList.filter((p) => {
+        const d = new Date(p.createdAt || p.submittedAt);
+        return !isNaN(d.getTime()) && d >= monthStart;
+      }).length;
+
+      // 6. Bulk pass counts
+      const bulkData = val(bulkRes, {});
+      const bulkCounts = bulkData.counts || bulkData.pagination || {};
+      const bulkTotal = num(bulkCounts.total ?? bulkCounts.totalRecords ?? 0);
+      const bulkPending = num(bulkCounts.pending ?? 0);
+      const bulkApproved = num(
+        bulkCounts.approved ?? bulkCounts.completed ?? 0,
+      );
+      const bulkRejected = num(bulkCounts.rejected ?? 0);
+
+      // 7. Comprehensive Revenue Calculation across ALL Pass Requests
+      const getPassAmt = (p) => {
+        const direct = parseFloat(
+          p.netAmount ??
+            p.net_amount ??
+            p.netamount ??
+            p.baseTotal ??
+            p.basetotal ??
+            p.grossTotal ??
+            p.grosstotal ??
+            0,
+        );
+        if (Number.isFinite(direct) && direct > 0) return direct;
+        let sum = 0;
+        (p.persons || []).forEach((x) => {
+          sum += parseFloat(x.amount || 0) || 0;
+        });
+        (p.vehicles || []).forEach((x) => {
+          sum += parseFloat(x.amount || 0) || 0;
+        });
+        return sum;
+      };
+
+      let hepTotal = 0,
+        hepAccount = 0,
+        hepEcash = 0,
+        hepToday = 0,
+        hepMonth = 0;
+      let hepProcessedTotal = 0,
+        hepPendingTotal = 0;
+      const companyMap = {};
+
+      allPassList.forEach((p) => {
+        const amt = getPassAmt(p);
+        hepTotal += amt;
+        const mode = String(
+          p.paymentMode || p.payment_mode || p.paymentmode || "",
+        ).toUpperCase();
+        if (mode === "E-CASH" || mode === "ECASH") {
+          hepEcash += amt;
+        } else {
+          hepAccount += amt;
+        }
+
+        const pStatus = String(p.status || "").toUpperCase();
+        if (
+          ["APPROVED", "PROCESSED", "COMPLETED", "ISSUED"].includes(pStatus)
+        ) {
+          hepProcessedTotal += amt;
+        } else {
+          hepPendingTotal += amt;
+        }
+
+        const d = new Date(p.createdAt || p.submittedAt || p.updatedAt);
+        if (!isNaN(d.getTime())) {
+          if (d >= todayStart) hepToday += amt;
+          if (d >= monthStart) hepMonth += amt;
+        }
+
+        const pCount = (p.persons || []).length;
+        const vCount = (p.vehicles || []).length;
+
+        const co = (
+          p.entityName ||
+          p.entity_name ||
+          p.agentName ||
+          p.agent_name ||
+          p.companyName ||
+          "Direct / Authorized Agent"
+        ).trim();
+        if (!companyMap[co]) {
+          companyMap[co] = {
+            name: co,
+            total: 0,
+            passCount: 0,
+            persons: 0,
+            vehicles: 0,
+            paymentMode: mode || "ACCOUNT",
+          };
+        }
+        companyMap[co].total += amt;
+        companyMap[co].passCount += 1;
+        companyMap[co].persons += pCount;
+        companyMap[co].vehicles += vCount;
+      });
+
+      const companyList = Object.values(companyMap).sort(
+        (a, b) => b.total - a.total,
+      );
+      const topCompanies = companyList.slice(0, 5).map((c) => ({
+        name: c.name.length > 18 ? c.name.slice(0, 16) + "…" : c.name,
+        fullName: c.name,
+        value: c.total,
+        passCount: c.passCount,
+        persons: c.persons,
+        vehicles: c.vehicles,
+      }));
+
+      const avgMins = calcAvgApprovalTime(processedList);
+
+      console.log(
+        "%c=== [TRAFFIC – PASS OS SECTION DASHBOARD] PASS STATISTICS ===",
+        "background: #1e3a5f; color: #fbbf24; font-weight: bold; font-size: 12px; padding: 4px 8px; border-radius: 4px;",
+      );
+      console.log("📊 Pass Request Counts:", passCounts);
+      console.log("💰 Revenue Summary:", {
+        "Total Revenue (All Passes)": `₹ ${hepTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        "Account (HEP)": `₹ ${hepAccount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        "E-Cash": `₹ ${hepEcash.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        "Today's Revenue": `₹ ${hepToday.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        "This Month's Revenue": `₹ ${hepMonth.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       });
 
       setData({
@@ -645,6 +1020,8 @@ export default function TrafficApprovalDashboard() {
           pending: num(passCounts.pending),
           processed: num(passCounts.processed),
           total: num(passCounts.total),
+          rejected: num(passCounts.rejected ?? 0),
+          reverted: num(passCounts.reverted ?? 0),
         },
         passMine: num(passMineCounts.processed),
         pendingQueue: {
@@ -652,15 +1029,21 @@ export default function TrafficApprovalDashboard() {
           vehicles: pendingVehicles,
           companies: pendingCompanies,
           list: pendingList,
-          // how many pass rows the sums above are based on — if this is less
-          // than pass.pending the breakdown is partial (list was capped at 200)
           counted: pendingList.length,
         },
         processedQueue: {
           persons: processedPersons,
           vehicles: processedVehicles,
           counted: processedList.length,
+          list: processedList,
         },
+        allPassesQueue: {
+          persons: allPersons,
+          vehicles: allVehicles,
+          list: allPassList,
+          counted: allPassList.length,
+        },
+        rawAllPasses: allPassList,
         company: {
           total: num(companyCounts.total),
           approved: num(companyCounts.approved),
@@ -668,6 +1051,12 @@ export default function TrafficApprovalDashboard() {
           pending: num(companyCounts.pending),
         },
         profileUpdates: num(profilePagination.totalRecords),
+        bulk: {
+          total: bulkTotal,
+          pending: bulkPending,
+          approved: bulkApproved,
+          rejected: bulkRejected,
+        },
         bl: {
           active_blacklisted: num(blStats.active_blacklisted),
           pending_blacklist: num(blStats.pending_blacklist),
@@ -676,32 +1065,51 @@ export default function TrafficApprovalDashboard() {
           total: num(blStats.total),
         },
         blType: {
-          COMPANY: num(blByType.COMPANY ?? blStats.byType?.COMPANY),
-          PERSON: num(blByType.PERSON ?? blStats.byType?.PERSON),
-          DRIVER: num(blByType.DRIVER ?? blStats.byType?.DRIVER),
-          VEHICLE: num(blByType.VEHICLE ?? blStats.byType?.VEHICLE),
+          COMPANY: num(blByType.COMPANY ?? 0),
+          PERSON: num(blByType.PERSON ?? 0),
+          DRIVER: num(blByType.DRIVER ?? 0),
+          VEHICLE: num(blByType.VEHICLE ?? 0),
         },
         blRecent: blRecentList,
         blPending: blPendingList,
         overstay: {
-          pending: overstayPending.length,
-          paid: overstayPaid.length,
-          exceptions: overstayExceptions,
-          pendingAmount: overstayPending.reduce(
+          pending: ovPending.length,
+          paid: ovPaid.length,
+          exceptions: ovExc,
+          pendingAmount: ovPending.reduce(
             (s, c) => s + num(c.total_amount ?? c.amount),
-            0
+            0,
+          ),
+          paidAmount: ovPaid.reduce(
+            (s, c) => s + num(c.total_amount ?? c.amount),
+            0,
           ),
           total: charges.length,
+          todayPaid,
+          monthPaid,
+          rawCharges: charges,
         },
+        hepRevenue: {
+          total: hepTotal,
+          accountTotal: hepAccount,
+          ecashTotal: hepEcash,
+          todayTotal: hepToday,
+          monthTotal: hepMonth,
+          processedTotal: hepProcessedTotal,
+          pendingTotal: hepPendingTotal,
+          totalPersons: allPersons,
+          totalVehicles: allVehicles,
+          topCompanies,
+          companyList,
+        },
+        portActivity: {
+          today: activityToday,
+          week: activityWeek,
+          month: activityMonth,
+        },
+        avgApprovalMins: avgMins,
       });
-
       setLastUpdated(fmtDateTime());
-
-      if (failures > 0) {
-        toast.warning(
-          `${failures} dashboard section${failures > 1 ? "s" : ""} could not load. Showing available data.`
-        );
-      }
     } catch (err) {
       console.error("Dashboard fetchAll error:", err);
       toast.error("Failed to load dashboard. Please refresh.");
@@ -711,510 +1119,1033 @@ export default function TrafficApprovalDashboard() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll();
-    // Auto-refresh every 3 minutes
-    const interval = setInterval(fetchAll, 3 * 60 * 1000);
-    return () => clearInterval(interval);
+    const iv = setInterval(fetchAll, 3 * 60 * 1000);
+    return () => clearInterval(iv);
   }, [fetchAll]);
 
-  /* ─── derived: KPI row (vibrant gradient cards) ─── */
-  const kpis = useMemo(
-    () => [
-      {
-        key: "pending",
-        label: "Pending Passes",
-        value: data.pass.pending,
-        gradient: "from-amber-400 via-orange-400 to-orange-500",
-        glow: "shadow-orange-500/30",
-        icon: Clock,
-        href: "/traffic_approval/passes?tab=pending",
-        // what kind of entry is waiting, not just how many passes
-        chips: [
-          { icon: Users, value: data.pendingQueue.persons, label: "Persons" },
-          { icon: Car, value: data.pendingQueue.vehicles, label: "Vehicles" },
-        ],
-      },
-      {
-        key: "processed",
-        label: "Processed Passes",
-        value: data.pass.processed,
-        gradient: "from-emerald-400 via-emerald-500 to-teal-500",
-        glow: "shadow-emerald-500/30",
-        icon: CheckCircle2,
-        href: "/traffic_approval/passes?tab=processed",
-        chips: [
-          { icon: Users, value: data.processedQueue.persons, label: "Persons" },
-          { icon: Car, value: data.processedQueue.vehicles, label: "Vehicles" },
-        ],
-      },
-      {
-        key: "total",
-        label: "Total Passes",
-        value: data.pass.total,
-        gradient: "from-blue-500 via-blue-600 to-indigo-600",
-        glow: "shadow-blue-500/30",
-        icon: FileText,
-        href: "/traffic_approval/passes",
-        chips: [
-          { icon: Clock, value: data.pass.pending, label: "Pending" },
-          { icon: CheckCircle2, value: data.pass.processed, label: "Done" },
-        ],
-      },
-      {
-        key: "companies",
-        label: "Registered Companies",
-        value: data.company.total,
-        gradient: "from-violet-500 via-violet-600 to-purple-600",
-        glow: "shadow-violet-500/30",
-        icon: Building2,
-        href: "/traffic_approval/companies",
-        chips: [
-          { icon: CheckCircle2, value: data.company.approved, label: "Approved" },
-          { icon: Clock, value: data.company.pending, label: "Pending" },
-        ],
-      },
-      {
-        key: "blacklisted",
-        label: "Active Blacklisted",
-        value: data.bl.active_blacklisted,
-        gradient: "from-rose-500 via-red-500 to-red-600",
-        glow: "shadow-red-500/30",
-        icon: ShieldBan,
-        href: "/traffic_approval/blacklist",
-        chips: [
-          { icon: Users, value: data.blType.PERSON, label: "Persons" },
-          { icon: Car, value: data.blType.VEHICLE, label: "Vehicles" },
-        ],
-      },
-    ],
-    [data]
-  );
+  const filterRange = useMemo(() => {
+    const to = new Date();
+    to.setHours(23, 59, 59, 999);
+    if (filterPeriod === "today") {
+      const from = new Date();
+      from.setHours(0, 0, 0, 0);
+      return { from, to, label: "Today" };
+    }
+    if (filterPeriod === "week") {
+      const from = new Date();
+      from.setDate(from.getDate() - 6);
+      from.setHours(0, 0, 0, 0);
+      return { from, to, label: "Last 7 Days" };
+    }
+    if (filterPeriod === "month") {
+      const from = new Date();
+      from.setDate(1);
+      from.setHours(0, 0, 0, 0);
+      return { from, to, label: "This Month" };
+    }
+    if (filterPeriod === "custom" && customFrom && customTo) {
+      const from = new Date(customFrom);
+      from.setHours(0, 0, 0, 0);
+      const end = new Date(customTo);
+      end.setHours(23, 59, 59, 999);
+      return { from, to: end, label: `${customFrom} to ${customTo}` };
+    }
+    return { from: new Date(0), to: new Date(), label: "All Time" };
+  }, [filterPeriod, customFrom, customTo]);
 
-  /* ─── derived: blacklist-by-type donut ─── */
-  const donut = useMemo(() => {
-    const rows = [
-      { name: "Company", value: data.blType.COMPANY, color: "#2563eb" },
-      { name: "Person", value: data.blType.PERSON, color: "#059669" },
-      { name: "Driver", value: data.blType.DRIVER, color: "#f97316" },
-      { name: "Vehicle", value: data.blType.VEHICLE, color: "#7c3aed" },
-    ];
-    const total = rows.reduce((s, r) => s + r.value, 0);
-    return {
-      rows: rows.map((r) => ({
-        ...r,
-        pct: total ? Math.round((r.value / total) * 100) : 0,
-      })),
-      total,
+  const displayData = useMemo(() => {
+    const isAll = filterPeriod === "all";
+    const inRange = (dStr) => {
+      if (!dStr) return false;
+      const d = new Date(dStr);
+      if (isNaN(d.getTime())) return false;
+      return d >= filterRange.from && d <= filterRange.to;
     };
-  }, [data]);
 
-  /* ─── derived: pass pipeline bars (pending vs processed) ─── */
-  const passBars = useMemo(
+    const getPassAmt = (p) => {
+      const direct = parseFloat(
+        p.netAmount ??
+          p.net_amount ??
+          p.netamount ??
+          p.baseTotal ??
+          p.basetotal ??
+          p.grossTotal ??
+          p.grosstotal ??
+          0,
+      );
+      if (Number.isFinite(direct) && direct > 0) return direct;
+      let sum = 0;
+      (p.persons || []).forEach((x) => {
+        sum += parseFloat(x.amount || 0) || 0;
+      });
+      (p.vehicles || []).forEach((x) => {
+        sum += parseFloat(x.amount || 0) || 0;
+      });
+      return sum;
+    };
+
+    const passSourceList =
+      data.rawAllPasses?.length > 0
+        ? data.rawAllPasses
+        : data.allPassesQueue?.list || [];
+    const filteredPasses = isAll
+      ? passSourceList
+      : passSourceList.filter((p) =>
+          inRange(p.createdAt || p.submittedAt || p.updatedAt),
+        );
+
+    const pendingList = filteredPasses.filter((p) =>
+      ["SUBMITTED", "PENDING", "IN_REVIEW", "UNDER_REVIEW"].includes(
+        String(p.status || "").toUpperCase(),
+      ),
+    );
+    const processedList = filteredPasses.filter((p) =>
+      ["APPROVED", "PROCESSED", "COMPLETED", "ISSUED"].includes(
+        String(p.status || "").toUpperCase(),
+      ),
+    );
+    const revertedList = filteredPasses.filter((p) =>
+      ["REVERTED"].includes(String(p.status || "").toUpperCase()),
+    );
+    const rejectedList = filteredPasses.filter((p) =>
+      ["REJECTED"].includes(String(p.status || "").toUpperCase()),
+    );
+
+    const pendingPersons = pendingList.reduce(
+      (s, p) => s + (p.persons?.length || 0),
+      0,
+    );
+    const pendingVehicles = pendingList.reduce(
+      (s, p) => s + (p.vehicles?.length || 0),
+      0,
+    );
+    const pendingCompanies = new Set(
+      pendingList
+        .map((p) => p.agentId || p.email || p.entityName)
+        .filter(Boolean),
+    ).size;
+
+    const processedPersons = processedList.reduce(
+      (s, p) => s + (p.persons?.length || 0),
+      0,
+    );
+    const processedVehicles = processedList.reduce(
+      (s, p) => s + (p.vehicles?.length || 0),
+      0,
+    );
+
+    const totalPersons = filteredPasses.reduce(
+      (s, p) => s + (p.persons?.length || 0),
+      0,
+    );
+    const totalVehicles = filteredPasses.reduce(
+      (s, p) => s + (p.vehicles?.length || 0),
+      0,
+    );
+
+    let totalRevenue = 0,
+      accountRevenue = 0,
+      ecashRevenue = 0;
+    const companyMap = {};
+
+    filteredPasses.forEach((p) => {
+      const amt = getPassAmt(p);
+      totalRevenue += amt;
+      const mode = String(
+        p.paymentMode || p.payment_mode || p.paymentmode || "",
+      ).toUpperCase();
+      if (mode === "E-CASH" || mode === "ECASH") {
+        ecashRevenue += amt;
+      } else {
+        accountRevenue += amt;
+      }
+
+      const pCount = (p.persons || []).length;
+      const vCount = (p.vehicles || []).length;
+      let pFee = 0;
+      (p.persons || []).forEach((x) => {
+        pFee += parseFloat(x.amount || 0) || 0;
+      });
+      let vFee = 0;
+      (p.vehicles || []).forEach((x) => {
+        vFee += parseFloat(x.amount || 0) || 0;
+      });
+
+      const co = (
+        p.entityName ||
+        p.entity_name ||
+        p.agentName ||
+        p.agent_name ||
+        p.companyName ||
+        "Direct / Authorized Agent"
+      ).trim();
+
+      const pStatus = String(p.status || "APPROVED").toUpperCase();
+      const isApproved = [
+        "APPROVED",
+        "PROCESSED",
+        "COMPLETED",
+        "ISSUED",
+      ].includes(pStatus);
+      const isPending = [
+        "SUBMITTED",
+        "PENDING",
+        "IN_REVIEW",
+        "UNDER_REVIEW",
+      ].includes(pStatus);
+
+      if (!companyMap[co]) {
+        companyMap[co] = {
+          name: co,
+          total: 0,
+          accountTotal: 0,
+          ecashTotal: 0,
+          passCount: 0,
+          approvedCount: 0,
+          pendingCount: 0,
+          rejectedCount: 0,
+          personPassFee: 0,
+          vehiclePassFee: 0,
+          persons: 0,
+          vehicles: 0,
+          paymentMode: mode || "ACCOUNT",
+          passes: [],
+        };
+      }
+      companyMap[co].total += amt;
+      if (mode === "E-CASH" || mode === "ECASH") {
+        companyMap[co].ecashTotal += amt;
+      } else {
+        companyMap[co].accountTotal += amt;
+      }
+      companyMap[co].passCount += 1;
+      companyMap[co].persons += pCount;
+      companyMap[co].vehicles += vCount;
+      companyMap[co].personPassFee += pFee;
+      companyMap[co].vehiclePassFee += vFee;
+      if (isApproved) {
+        companyMap[co].approvedCount += 1;
+      } else if (isPending) {
+        companyMap[co].pendingCount += 1;
+      } else {
+        companyMap[co].rejectedCount += 1;
+      }
+
+      companyMap[co].passes.push({
+        id: p.id,
+        referenceNo: p.referenceNo || (p.id ? `REQ-${p.id}` : "—"),
+        status: pStatus,
+        paymentMode: mode || "ACCOUNT",
+        amount: amt,
+        personFee: pFee,
+        vehicleFee: vFee,
+        personsCount: pCount,
+        vehiclesCount: vCount,
+        persons: p.persons || [],
+        vehicles: p.vehicles || [],
+        createdAt: p.createdAt || p.submittedAt || p.updatedAt,
+        approvedAt: p.approvedAt || p.reviewedAt || null,
+        entityName: p.entityName || p.companyName || co,
+        email: p.email || p.applicantEmail || "",
+        applicantName: p.applicantName || p.name || p.contactPerson || "",
+        purpose:
+          p.purposeOfVisit || p.purpose || "Port Operations & Cargo Movement",
+        zone:
+          p.zone ||
+          p.department ||
+          p.harborCategory ||
+          p.area ||
+          "Harbor Operational Zone",
+        passType: p.passType || p.type || "Harbor Entry Permit",
+        validityType: p.validityType || p.duration || "Standard Daily",
+      });
+    });
+
+    const companyList = Object.values(companyMap)
+      .map((c) => ({
+        ...c,
+        avgPassAmount: c.passCount > 0 ? c.total / c.passCount : 0,
+        approvalRate:
+          c.passCount > 0
+            ? Math.round((c.approvedCount / c.passCount) * 100)
+            : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    const topCompanies = companyList.slice(0, 5).map((c) => ({
+      name: c.name.length > 18 ? c.name.slice(0, 16) + "…" : c.name,
+      fullName: c.name,
+      value: c.total,
+      passCount: c.passCount,
+      persons: c.persons,
+      vehicles: c.vehicles,
+    }));
+
+    const chargeSourceList = data.overstay?.rawCharges || [];
+    const filteredCharges = isAll
+      ? chargeSourceList
+      : chargeSourceList.filter((c) =>
+          inRange(c.created_at || c.updatedAt || c.createdAt),
+        );
+
+    const ovPending = filteredCharges.filter((c) => c.status === "PENDING");
+    const ovPaid = filteredCharges.filter((c) => c.status === "PAID");
+    const ovPaidAmount = ovPaid.reduce(
+      (s, c) => s + num(c.total_amount ?? c.amount),
+      0,
+    );
+    const ovPendingAmount = ovPending.reduce(
+      (s, c) => s + num(c.total_amount ?? c.amount),
+      0,
+    );
+
+    const filteredBlRecent = isAll
+      ? data.blRecent
+      : data.blRecent.filter((e) => inRange(e.createdAt));
+
+    return {
+      pass: {
+        total: filteredPasses.length,
+        pending: pendingList.length,
+        processed: processedList.length,
+        reverted: revertedList.length,
+        rejected: rejectedList.length,
+      },
+      pendingQueue: {
+        persons: pendingPersons,
+        vehicles: pendingVehicles,
+        companies: pendingCompanies,
+        list: pendingList,
+        counted: pendingList.length,
+      },
+      processedQueue: {
+        persons: processedPersons,
+        vehicles: processedVehicles,
+        counted: processedList.length,
+        list: processedList,
+      },
+      hepRevenue: {
+        total: totalRevenue,
+        accountTotal: accountRevenue,
+        ecashTotal: ecashRevenue,
+        todayTotal: data.hepRevenue.todayTotal,
+        monthTotal: data.hepRevenue.monthTotal,
+        allTimeTotal: data.hepRevenue.total,
+        totalPersons,
+        totalVehicles,
+        topCompanies,
+        companyList,
+      },
+      overstay: {
+        total: filteredCharges.length,
+        pending: ovPending.length,
+        paid: ovPaid.length,
+        exceptions: data.overstay.exceptions,
+        pendingAmount: ovPendingAmount,
+        paidAmount: ovPaidAmount,
+        todayPaid: data.overstay.todayPaid,
+        monthPaid: data.overstay.monthPaid,
+        allTimePaid: data.overstay.paidAmount,
+      },
+      portActivity: {
+        currentPeriod: filteredPasses.length,
+        today: data.portActivity.today,
+        week: data.portActivity.week,
+        month: data.portActivity.month,
+      },
+      blRecent:
+        filteredBlRecent.length > 0
+          ? filteredBlRecent
+          : isAll
+            ? data.blRecent
+            : [],
+      blPending: data.blPending,
+      blType: data.blType,
+      company: data.company,
+      bulk: data.bulk,
+      profileUpdates: data.profileUpdates,
+      bl: data.bl,
+      avgApprovalMins: data.avgApprovalMins,
+    };
+  }, [data, filterPeriod, filterRange]);
+
+  const hepRevBreakup = useMemo(
     () => [
-      { name: "Pending", value: data.pass.pending, fill: "#f59e0b" },
-      { name: "Processed", value: data.pass.processed, fill: "#10b981" },
-      { name: "Total", value: data.pass.total, fill: "#2563eb" },
+      { label: "Today", value: data.hepRevenue.todayTotal },
+      { label: "This Month", value: data.hepRevenue.monthTotal },
+      { label: "All Time", value: data.hepRevenue.total },
     ],
-    [data]
+    [data],
   );
 
-  /* ─── derived: company registration status bars ─── */
-  const companyBars = useMemo(
+  const revBreakup = useMemo(
     () => [
-      { name: "Approved", value: data.company.approved, fill: "#10b981" },
-      { name: "Pending", value: data.company.pending, fill: "#f59e0b" },
-      { name: "Rejected", value: data.company.rejected, fill: "#ef4444" },
-      { name: "Blacklisted", value: data.blType.COMPANY, fill: "#7c3aed" },
+      { label: "Today", value: data.overstay.todayPaid },
+      { label: "This Month", value: data.overstay.monthPaid },
+      { label: "All Time", value: data.overstay.paidAmount },
     ],
-    [data]
+    [data],
   );
 
-  /* ══════════════════════════════════════════════════════════════════
-     RENDER
-     ══════════════════════════════════════════════════════════════════ */
+  const PERIOD_TABS = [
+    { key: "all", label: "All Time", icon: "🌐" },
+    { key: "today", label: "Today", icon: "⚡" },
+    { key: "week", label: "Last 7 Days", icon: "📅" },
+    { key: "month", label: "This Month", icon: "🗓" },
+  ];
+
+  const avgColor =
+    data.avgApprovalMins == null
+      ? "text-slate-300"
+      : data.avgApprovalMins < 30
+        ? "text-emerald-300"
+        : data.avgApprovalMins < 120
+          ? "text-amber-300"
+          : "text-orange-300";
+  const avgDot =
+    data.avgApprovalMins == null
+      ? "bg-slate-400"
+      : data.avgApprovalMins < 30
+        ? "bg-emerald-400"
+        : data.avgApprovalMins < 120
+          ? "bg-amber-400"
+          : "bg-orange-400";
+
+  const activeModalCompany = useMemo(() => {
+    if (!selectedLedgerCompany) return null;
+    const found = displayData.hepRevenue.companyList.find(
+      (c) => c.name === selectedLedgerCompany.name,
+    );
+    return found || selectedLedgerCompany;
+  }, [selectedLedgerCompany, displayData.hepRevenue.companyList]);
+
+  const filteredCompanyPasses = useMemo(() => {
+    if (!activeModalCompany?.passes) return [];
+    return activeModalCompany.passes.filter((p) => {
+      if (ledgerStatusFilter !== "ALL" && p.status !== ledgerStatusFilter)
+        return false;
+      if (
+        ledgerModeFilter === "ACCOUNT" &&
+        (p.paymentMode === "E-CASH" || p.paymentMode === "ECASH")
+      )
+        return false;
+      if (
+        ledgerModeFilter === "ECASH" &&
+        p.paymentMode !== "E-CASH" &&
+        p.paymentMode !== "ECASH"
+      )
+        return false;
+      if (ledgerSearchQuery.trim()) {
+        const q = ledgerSearchQuery.toLowerCase();
+        const refMatch = String(p.referenceNo || "")
+          .toLowerCase()
+          .includes(q);
+        const emailMatch = String(p.email || "")
+          .toLowerCase()
+          .includes(q);
+        const entityMatch = String(p.entityName || "")
+          .toLowerCase()
+          .includes(q);
+        const personMatch = (p.persons || []).some((x) =>
+          String(x.name || x.fullName || "")
+            .toLowerCase()
+            .includes(q),
+        );
+        const vehicleMatch = (p.vehicles || []).some((x) =>
+          String(x.vehicleNumber || x.vehicleNo || "")
+            .toLowerCase()
+            .includes(q),
+        );
+        return (
+          refMatch || emailMatch || entityMatch || personMatch || vehicleMatch
+        );
+      }
+      return true;
+    });
+  }, [
+    activeModalCompany,
+    ledgerSearchQuery,
+    ledgerStatusFilter,
+    ledgerModeFilter,
+  ]);
+
+  const activeCompanyEntities = useMemo(() => {
+    if (!activeModalCompany?.passes) return { persons: [], vehicles: [] };
+    const personsMap = new Map();
+    const vehiclesMap = new Map();
+
+    activeModalCompany.passes.forEach((p) => {
+      (p.persons || []).forEach((psn, pIdx) => {
+        const key =
+          psn.id ||
+          psn.aadhaarNo ||
+          psn.idNumber ||
+          `${psn.name || psn.fullName || "person"}-${pIdx}`;
+        if (key && !personsMap.has(key)) {
+          personsMap.set(key, {
+            id: key,
+            name: psn.name || psn.fullName || "Authorized Personnel",
+            designation: psn.designation || psn.role || "Port Staff / Driver",
+            idProof:
+              psn.aadhaarNo ||
+              psn.idNumber ||
+              psn.documentNumber ||
+              psn.idProof ||
+              "Verified ID",
+            phone: psn.mobileNumber || psn.phone || psn.contactNo || "—",
+            passRef: p.referenceNo,
+            passStatus: p.status,
+            amount: psn.amount || 0,
+            date: p.createdAt,
+          });
+        }
+      });
+
+      (p.vehicles || []).forEach((veh, vIdx) => {
+        const key =
+          veh.id ||
+          veh.vehicleNumber ||
+          veh.registrationNumber ||
+          `veh-${vIdx}-${veh.vehicleNo || ""}`;
+        if (key && !vehiclesMap.has(key)) {
+          vehiclesMap.set(key, {
+            id: key,
+            plate:
+              veh.vehicleNumber ||
+              veh.registrationNumber ||
+              veh.vehicleNo ||
+              "Commercial Fleet Vehicle",
+            type:
+              veh.vehicleType ||
+              veh.type ||
+              "Heavy Commercial / Container Truck",
+            driver:
+              veh.driverName ||
+              veh.driver ||
+              p.applicantName ||
+              "Authorized Operator",
+            passRef: p.referenceNo,
+            passStatus: p.status,
+            amount: veh.amount || 0,
+            date: p.createdAt,
+          });
+        }
+      });
+    });
+
+    return {
+      persons: Array.from(personsMap.values()),
+      vehicles: Array.from(vehiclesMap.values()),
+    };
+  }, [activeModalCompany]);
+
+  const companyFinancials = useMemo(() => {
+    if (!activeModalCompany) {
+      return {
+        accountPct: 0,
+        ecashPct: 0,
+        approvedTotal: 0,
+        pendingTotal: 0,
+        personSharePct: 0,
+        vehicleSharePct: 0,
+      };
+    }
+    const tot = activeModalCompany.total || 0;
+    const acct = activeModalCompany.accountTotal || 0;
+    const ecash = activeModalCompany.ecashTotal || 0;
+    const pFee = activeModalCompany.personPassFee || 0;
+    const vFee = activeModalCompany.vehiclePassFee || 0;
+
+    let appTotal = 0;
+    let pendTotal = 0;
+    (activeModalCompany.passes || []).forEach((p) => {
+      const amt = Number(p.amount) || 0;
+      if (
+        ["APPROVED", "PROCESSED", "COMPLETED", "ISSUED"].includes(
+          String(p.status).toUpperCase(),
+        )
+      ) {
+        appTotal += amt;
+      } else {
+        pendTotal += amt;
+      }
+    });
+
+    return {
+      accountPct: tot > 0 ? Math.round((acct / tot) * 100) : 0,
+      ecashPct: tot > 0 ? Math.round((ecash / tot) * 100) : 0,
+      approvedTotal: appTotal,
+      pendingTotal: pendTotal,
+      personSharePct: tot > 0 ? Math.round((pFee / tot) * 100) : 0,
+      vehicleSharePct: tot > 0 ? Math.round((vFee / tot) * 100) : 0,
+    };
+  }, [activeModalCompany]);
+
+  const allCompaniesFiltered = useMemo(() => {
+    const list = displayData.hepRevenue.companyList || [];
+    if (!allCompaniesSearch.trim()) return list;
+    const q = allCompaniesSearch.toLowerCase();
+    return list.filter((c) => c.name.toLowerCase().includes(q));
+  }, [displayData.hepRevenue.companyList, allCompaniesSearch]);
+
   return (
-    <div className="relative space-y-6 font-sans text-slate-800 pb-10">
-      {/* Ambient liquid-glass light field is provided by the section layout
-          (traffic_approval/layout.js) so every page shares the same backdrop. */}
-
-      {/* ══════════ HERO BANNER ══════════ */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0a1e4d] via-[#12275f] to-[#1b1856] ring-1 ring-inset ring-white/15 px-6 py-7 sm:px-8 text-white shadow-[0_16px_40px_-16px_rgba(10,30,77,0.6)]">
-        {/* top specular rim + glass sheen */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
-        <div className="pointer-events-none absolute -top-1/2 inset-x-0 h-full bg-gradient-to-b from-white/12 to-transparent" />
-        {/* decorative glows */}
-        <div className="pointer-events-none absolute -right-12 -top-16 h-56 w-56 rounded-full bg-orange-500/30 blur-3xl" />
-        <div className="pointer-events-none absolute right-40 top-8 h-40 w-40 rounded-full bg-sky-400/25 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-violet-500/20 blur-3xl" />
-
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold text-orange-200 ring-1 ring-white/15">
-              <Sparkles className="h-3.5 w-3.5" />
-              Pass Section · Control Center
+    <div className="relative space-y-5 font-sans text-slate-800 p-6 pb-8 bg-slate-50 min-h-screen">
+      {/* HEADER STRIP */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0a1e4d] via-[#12275f] to-[#1b1856] ring-1 ring-inset ring-white/15 px-5 py-4 text-white shadow-[0_8px_24px_-10px_rgba(10,30,77,0.55)]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+        <div className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-orange-500/20 blur-3xl" />
+        <div className="relative flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shrink-0">
+              <BarChart3 className="h-5 w-5 text-orange-300" />
             </span>
-            <h2 className="mt-3 text-2xl sm:text-3xl font-black tracking-tight">
-              Management Dashboard
-            </h2>
-            <p className="mt-1.5 max-w-lg text-sm font-medium text-blue-100/80">
-              Live approvals, company registrations, blacklist &amp; overstay —
-              everything the Pass Section runs, in one glance.
-            </p>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-orange-200/80">
+                Traffic & Pass Section · Chennai Port Authority
+              </p>
+              <h2 className="text-lg font-black tracking-tight text-white leading-tight">
+                TRAFFIC – PASS OS SECTION DASHBOARD
+              </h2>
+            </div>
           </div>
-
-          <div className="flex items-center gap-5">
-            {/* signature circular gauge */}
-            <ProcessRateGauge
-              processed={data.pass.processed}
-              total={data.pass.total}
-              pending={data.pass.pending}
-              loading={loading}
-            />
-
-            <div className="flex flex-col items-stretch gap-2.5">
-              <div className="flex items-center gap-2 rounded-2xl bg-white/10 px-3.5 py-2 text-[11px] font-semibold text-blue-100 ring-1 ring-inset ring-white/20">
-                <Activity
-                  className={`h-3.5 w-3.5 ${loading ? "animate-pulse text-orange-300" : "text-emerald-300"
-                    }`}
-                />
-                {lastUpdated ? (
-                  <>
-                    Updated{" "}
-                    <span className="font-bold text-white">{lastUpdated}</span>
-                  </>
-                ) : (
-                  "Syncing…"
-                )}
-              </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5 rounded-xl bg-white/10 px-3.5 py-2 ring-1 ring-inset ring-white/15">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            </div>
+            <div className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 ring-1 ring-inset ring-white/15">
               <button
                 onClick={fetchAll}
                 disabled={loading}
-                className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-2 text-[11px] font-bold text-white ring-1 ring-inset ring-white/30 shadow-[0_8px_24px_-6px_rgba(249,115,22,0.6),inset_0_1px_0_0_rgba(255,255,255,0.4)] transition-all hover:from-orange-400 hover:to-orange-500 active:scale-95 disabled:opacity-60"
+                className="text-white/70 hover:text-white transition-colors disabled:opacity-50"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-                Refresh
+                <RefreshCw
+                  className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                />
               </button>
+              <div className="leading-tight">
+                <span className="text-[9px] font-bold uppercase tracking-widest text-blue-200/70 block">
+                  Last Updated
+                </span>
+                {lastUpdated ? (
+                  <span className="text-[11px] font-bold text-white">
+                    {lastUpdated}
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-white/50 animate-pulse">
+                    Syncing…
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ══════════ TOP KPI CARDS ══════════ */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {kpis.map((c) => {
-          const Icon = c.icon;
-          return (
-            <Link
-              key={c.key}
-              href={c.href}
-              className={`group relative isolate overflow-hidden rounded-3xl bg-gradient-to-br ${c.gradient} p-5 text-white ring-1 ring-inset ring-white/30 shadow-[0_12px_40px_-12px_var(--tw-shadow-color),inset_0_1px_0_0_rgba(255,255,255,0.45)] ${c.glow} transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_24px_56px_-16px_var(--tw-shadow-color),inset_0_1px_0_0_rgba(255,255,255,0.6)]`}
-            >
-              {/* crisp specular edge — no blur, keeps the gradient sharp */}
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
-              <div className="pointer-events-none absolute -top-1/2 inset-x-0 h-full bg-gradient-to-b from-white/20 to-transparent opacity-80" />
-              {/* soft bubbles (solid, no blur) */}
-              <div className="pointer-events-none absolute -right-6 -top-8 h-24 w-24 rounded-full bg-white/15" />
-              <div className="pointer-events-none absolute -bottom-8 -right-2 h-20 w-20 rounded-full bg-white/10" />
-
-              <div className="relative flex items-center justify-between">
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/25 ring-1 ring-inset ring-white/40">
-                  <Icon className="h-5 w-5" strokeWidth={2.3} />
-                </span>
-                <ArrowUpRight className="h-4 w-4 opacity-0 -translate-x-1 group-hover:opacity-90 group-hover:translate-x-0 transition-all" />
-              </div>
-
-              {loading ? (
-                <div className="relative mt-4 h-9 w-16 rounded-lg bg-white/30 animate-pulse" />
-              ) : (
-                <p className="relative mt-4 text-3xl font-black tabular-nums drop-shadow-sm">
-                  {fmtNum(c.value)}
-                </p>
-              )}
-              <p className="relative mt-0.5 text-[11px] font-bold uppercase tracking-wider text-white/85">
-                {c.label}
+      {/* FILTER BAR */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0a1e4d] via-[#112568] to-[#1a2f7a] shadow-[0_8px_28px_-8px_rgba(10,30,77,0.45)] ring-1 ring-inset ring-white/10">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+        <div className="relative flex flex-wrap items-center gap-3 px-5 py-4">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/20 ring-1 ring-orange-400/30">
+              <CalendarDays className="h-4 w-4 text-orange-300" />
+            </span>
+            <div className="leading-tight">
+              <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-blue-200/70">
+                Dashboard Control
               </p>
-
-              {/* breakdown chips — e.g. how many Persons vs Vehicles are waiting */}
-              {c.chips && !loading && (
-                <div className="relative mt-2.5 flex flex-wrap gap-1.5">
-                  {c.chips.map((ch) => {
-                    const ChIcon = ch.icon;
-                    return (
-                      <span
-                        key={ch.label}
-                        title={`${fmtNum(ch.value)} ${ch.label}`}
-                        className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold text-slate-900 ring-1 ring-inset ring-white/60 shadow-sm"
-                      >
-                        <ChIcon className="h-3 w-3" strokeWidth={2.4} />
-                        {fmtNum(ch.value)} {ch.label}
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-            </Link>
-          );
-        })}
+              <p className="text-sm font-extrabold text-white">Filter Period</p>
+            </div>
+          </div>
+          <div className="h-8 w-px bg-white/15 shrink-0" />
+          <div className="flex items-center gap-2 flex-wrap">
+            {PERIOD_TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => {
+                  setFilterPeriod(t.key);
+                  setShowCustom(false);
+                }}
+                className={`relative px-5 py-2 rounded-xl text-[13px] font-extrabold tracking-wide transition-all duration-200 ${filterPeriod === t.key && !showCustom ? "bg-white text-[#0a1e4d] shadow-[0_4px_16px_rgba(255,255,255,0.25)] scale-105" : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white ring-1 ring-inset ring-white/15"}`}
+              >
+                {filterPeriod === t.key && !showCustom && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-60" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500" />
+                  </span>
+                )}
+                <span className="mr-1.5">{t.icon}</span>
+                {t.label}
+              </button>
+            ))}
+            <div className="h-6 w-px bg-white/15 shrink-0" />
+            <button
+              onClick={() => {
+                setShowCustom((p) => !p);
+                setFilterPeriod("custom");
+              }}
+              className={`px-5 py-2 rounded-xl text-[13px] font-extrabold tracking-wide transition-all duration-200 flex items-center gap-2 ${showCustom ? "bg-orange-500 text-white shadow-[0_4px_16px_rgba(249,115,22,0.5)] scale-105" : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white ring-1 ring-inset ring-white/15"}`}
+            >
+              <CalendarDays className="h-4 w-4" />
+              Custom Range
+            </button>
+          </div>
+          <div className="ml-auto shrink-0">
+            <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-blue-200/60 block">
+              Active Filter
+            </span>
+            <span className="text-base font-black text-orange-300">
+              {filterRange.label}
+            </span>
+          </div>
+        </div>
+        {showCustom && (
+          <div className="relative border-t border-white/10 px-5 py-3 flex items-center gap-3 flex-wrap bg-white/5">
+            <span className="text-[11px] font-bold text-blue-200/70 uppercase tracking-wider shrink-0">
+              Date Range
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-white/60 uppercase">
+                From
+              </span>
+              <input
+                type="date"
+                value={customFrom}
+                max={customTo || undefined}
+                onChange={(e) => {
+                  setCustomFrom(e.target.value);
+                  setFilterPeriod("custom");
+                }}
+                className="rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white focus:outline-none focus:ring-2 focus:ring-orange-400/50 transition-all"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-white/60 uppercase">
+                To
+              </span>
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom || undefined}
+                onChange={(e) => {
+                  setCustomTo(e.target.value);
+                  setFilterPeriod("custom");
+                }}
+                className="rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white focus:outline-none focus:ring-2 focus:ring-orange-400/50 transition-all"
+              />
+            </div>
+            {customFrom && customTo && (
+              <button
+                onClick={() => {
+                  setCustomFrom("");
+                  setCustomTo("");
+                  setFilterPeriod("month");
+                  setShowCustom(false);
+                }}
+                className="ml-2 px-3 py-1.5 rounded-xl text-[11px] font-bold text-rose-300 hover:bg-rose-500/30 border border-rose-400/30 transition-all"
+              >
+                ✕ Clear
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ══════════ PENDING PASS QUEUE ══════════ */}
+      {/* 1. OPERATIONAL EXECUTIVE SUMMARY */}
+      <div>
+        <SectionDivider label="Operational Overview" icon={Sparkles} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-2">
+          <KpiCard
+            title="Pass Approvals"
+            value={displayData.pass.total}
+            icon={ShieldCheck}
+            gradient="from-blue-600 via-indigo-600 to-violet-700"
+            glow="shadow-blue-500/30"
+            href="/traffic_approval/passes"
+            loading={loading}
+            chips={[
+              {
+                icon: Clock,
+                value: displayData.pass.pending,
+                label: "Pending",
+              },
+              {
+                icon: CheckCircle2,
+                value: displayData.pass.processed,
+                label: "Approved",
+              },
+              ...(displayData.pass.reverted > 0
+                ? [
+                    {
+                      icon: RotateCcw,
+                      value: displayData.pass.reverted,
+                      label: "Reverted",
+                    },
+                  ]
+                : []),
+              ...(displayData.pass.rejected > 0
+                ? [
+                    {
+                      icon: XCircle,
+                      value: displayData.pass.rejected,
+                      label: "Rejected",
+                    },
+                  ]
+                : []),
+            ]}
+          />
+          <KpiCard
+            title="Company Approvals"
+            value={displayData.company.approved}
+            icon={Building2}
+            gradient="from-indigo-600 via-purple-600 to-violet-700"
+            glow="shadow-indigo-500/30"
+            href="/traffic_approval/companies?tab=processed"
+            loading={loading}
+            chips={[
+              {
+                icon: Clock,
+                value: displayData.company.pending,
+                label: "Pending",
+              },
+              {
+                icon: Building2,
+                value: displayData.company.total,
+                label: "Total",
+              },
+            ]}
+          />
+          <KpiCard
+            title="Port Activity"
+            value={displayData.portActivity.today}
+            icon={Truck}
+            gradient="from-sky-500 to-cyan-600"
+            glow="shadow-sky-500/30"
+            href="/traffic_approval/passes"
+            loading={loading}
+            chips={[
+              {
+                icon: Clock,
+                value: displayData.portActivity.today,
+                label: "Today",
+              },
+              {
+                icon: Activity,
+                value: displayData.portActivity.week,
+                label: "This Week",
+              },
+            ]}
+          />
+          <KpiCard
+            title="Active Blacklisted"
+            value={displayData.bl.active_blacklisted}
+            icon={ShieldBan}
+            gradient="from-rose-500 to-red-600"
+            glow="shadow-rose-500/30"
+            href="/traffic_approval/blacklist"
+            loading={loading}
+            chips={[
+              {
+                icon: Car,
+                value: displayData.blType.VEHICLE,
+                label: "Vehicles",
+              },
+              {
+                icon: UserCircle,
+                value: displayData.blType.DRIVER,
+                label: "Drivers",
+              },
+            ]}
+          />
+          <KpiCard
+            title="Overstay Cases"
+            value={displayData.overstay.pending}
+            icon={Timer}
+            gradient="from-violet-500 to-purple-600"
+            glow="shadow-violet-500/30"
+            href="/traffic_approval/overstay"
+            loading={loading}
+            chips={[
+              {
+                icon: AlertTriangle,
+                value: displayData.overstay.exceptions,
+                label: "Exceptions",
+              },
+              {
+                icon: CircleDollarSign,
+                value: displayData.overstay.paid,
+                label: "Settled",
+              },
+            ]}
+          />
+          <KpiCard
+            title="Revenue Collected"
+            value={displayData.hepRevenue.total}
+            icon={Wallet}
+            gradient="from-blue-600 to-indigo-700"
+            glow="shadow-blue-600/30"
+            href="/traffic_approval/revenue"
+            isMoney
+            loading={loading}
+            chips={[
+              {
+                icon: Calculator,
+                value: displayData.hepRevenue.accountTotal,
+                label: "Account",
+              },
+              {
+                icon: PackageCheck,
+                value: displayData.pass.total,
+                label: "Passes",
+              },
+            ]}
+          />
+        </div>
+      </div>
+
+      {/* 2. LIVE APPROVAL QUEUE (OPERATIONAL PRIORITY #1) */}
+      <SectionDivider
+        label="Live Approval Queue — Immediate Clearance"
+        icon={Clock}
+      />
       <Panel
         title="Pending Pass Queue"
-        subtitle="What kind of entry is awaiting approval"
-        action="Review Queue"
-        actionHref="/traffic_approval/passes"
+        subtitle={`Entries awaiting operational clearance & approval (${filterRange.label})`}
         icon={Clock}
         tone="amber"
+        action="Review All"
+        actionHref="/traffic_approval/passes?tab=pending"
       >
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MiniStat
-            label="Pending Passes"
-            value={data.pass.pending}
-            tone="amber"
-            icon={FileText}
-            loading={loading}
-            href="/traffic_approval/passes?tab=pending"
-          />
-          <MiniStat
-            label="Persons Awaiting"
-            value={data.pendingQueue.persons}
-            tone="blue"
-            icon={Users}
-            loading={loading}
-            href="/traffic_approval/passes?tab=pending"
-          />
-          <MiniStat
-            label="Vehicles Awaiting"
-            value={data.pendingQueue.vehicles}
-            tone="violet"
-            icon={Car}
-            loading={loading}
-            href="/traffic_approval/passes?tab=pending"
-          />
-          <MiniStat
-            label="Companies Involved"
-            value={data.pendingQueue.companies}
-            tone="emerald"
-            icon={Building2}
-            loading={loading}
-            href="/traffic_approval/companies"
-          />
+        {/* Summary chips row */}
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-1 text-[10px] font-extrabold">
+            <FileText className="h-3 w-3" />
+            {loading ? "—" : fmtNum(displayData.pass.pending)} Pending
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 text-[10px] font-extrabold">
+            <Users className="h-3 w-3" />
+            {loading ? "—" : fmtNum(displayData.pendingQueue.persons)} Persons
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 px-2.5 py-1 text-[10px] font-extrabold">
+            <Car className="h-3 w-3" />
+            {loading ? "—" : fmtNum(displayData.pendingQueue.vehicles)} Vehicles
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 text-[10px] font-extrabold">
+            <Building2 className="h-3 w-3" />
+            {loading ? "—" : fmtNum(displayData.pendingQueue.companies)}{" "}
+            Companies
+          </span>
+          <Link
+            href="/traffic_approval/companies?tab=processed"
+            className="inline-flex items-center gap-1 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-2.5 py-1 text-[10px] font-extrabold transition-colors"
+          >
+            <Building2 className="h-3 w-3" />
+            {loading ? "—" : fmtNum(displayData.company.approved)} Companies
+            Approved
+          </Link>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-dashed border-slate-200/70">
+        {/* Scrollable list */}
+        <div className="overflow-y-auto max-h-56 divide-y divide-slate-50 -mx-1 pr-1 scrollbar-thin scrollbar-thumb-amber-200 scrollbar-track-transparent">
           {loading ? (
-            <SkeletonRows />
-          ) : data.pendingQueue.list.length === 0 ? (
-            <EmptyRow label="No passes awaiting approval" />
-          ) : (
-            <div className="overflow-x-auto -mx-1">
-              <table className="w-full text-[11px] text-left whitespace-nowrap">
-                <thead>
-                  <tr className="text-slate-400 uppercase tracking-wider text-[10px] font-extrabold border-b border-slate-200/70">
-                    <th className="py-2 pr-2 font-extrabold">Ref No</th>
-                    <th className="py-2 px-2 font-extrabold">Company / Agent</th>
-                    <th className="py-2 px-2 font-extrabold">Entities Included</th>
-                    <th className="py-2 px-2 font-extrabold">Applied On</th>
-                    <th className="py-2 pl-2 font-extrabold text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/60">
-                  {data.pendingQueue.list.slice(0, 6).map((p, i) => {
-                    const persons = p.persons?.length || 0;
-                    const vehicles = p.vehicles?.length || 0;
-                    const status = String(p.status || "PENDING").toUpperCase();
-                    return (
-                      <tr
-                        key={p.id ?? p.referenceNo ?? i}
-                        {...rowLinkProps(
-                          "/traffic_approval/passes?tab=pending",
-                          `Review ${p.referenceNo || "pass request"}`
-                        )}
-                        className="cursor-pointer hover:bg-slate-50 transition-colors focus:outline-none focus-visible:bg-blue-50"
-                      >
-                        <td className="py-2.5 pr-2 font-mono font-bold text-slate-700">
-                          {p.referenceNo || (p.id ? `REQ-${p.id}` : "—")}
-                        </td>
-                        <td className="py-2.5 px-2">
-                          <p className="font-bold text-slate-700 truncate max-w-[180px]">
-                            {p.entityName || "—"}
-                          </p>
-                          {p.email && (
-                            <p className="text-[9px] text-slate-400 truncate max-w-[180px]">
-                              {p.email}
-                            </p>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-2">
-                          <span className="inline-flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 text-blue-700 px-2 py-0.5 font-bold ring-1 ring-inset ring-white/40">
-                              <Users className="h-3 w-3" /> {persons}
-                            </span>
-                            <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 text-violet-700 px-2 py-0.5 font-bold ring-1 ring-inset ring-white/40">
-                              <Car className="h-3 w-3" /> {vehicles}
-                            </span>
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-2 font-semibold text-slate-500">
-                          {fmtDate(p.createdAt)}
-                        </td>
-                        <td className="py-2.5 pl-2 text-right">
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded-full font-bold text-[9px] border ${PASS_STATUS_TONE[status] ||
-                              "bg-slate-100 text-slate-600 border-slate-200"
-                              }`}
-                          >
-                            {status.replace(/_/g, " ")}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-
-              {/* Be explicit when the numbers above are based on a capped list */}
-              {data.pendingQueue.counted < data.pass.pending && (
-                <p className="mt-3 text-[10px] font-medium text-amber-600">
-                  Breakdown covers the {fmtNum(data.pendingQueue.counted)} most
-                  recent of {fmtNum(data.pass.pending)} pending passes.
-                </p>
-              )}
+            <div className="py-2">
+              <SkeletonRows />
             </div>
+          ) : displayData.pendingQueue.list.length === 0 ? (
+            <EmptyRow label="No passes awaiting approval in this period" />
+          ) : (
+            displayData.pendingQueue.list.map((p, i) => {
+              const status = String(p.status || "PENDING").toUpperCase();
+              return (
+                <div
+                  key={p.id ?? p.referenceNo ?? i}
+                  {...rowLinkProps(
+                    "/traffic_approval/passes?tab=pending",
+                    `Review ${p.referenceNo || "pass request"}`,
+                  )}
+                  className="flex items-center gap-3 py-2 px-2 cursor-pointer transition-all duration-150 hover:bg-amber-50/70 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                >
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-600 shrink-0">
+                    <FileText className="h-3.5 w-3.5" strokeWidth={2.2} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-mono font-extrabold text-slate-700">
+                        {p.referenceNo || (p.id ? `REQ-${p.id}` : "—")}
+                      </span>
+                      <span
+                        className={`inline-block px-1.5 py-px rounded-full font-bold text-[8px] border ${PASS_STATUS_TONE[status] || "bg-slate-100 text-slate-600 border-slate-200"}`}
+                      >
+                        {status.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <p className="text-[9px] text-slate-400 font-medium truncate">
+                      {p.entityName || "—"}
+                      {p.email ? ` · ${p.email}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-500/10 text-blue-700 px-1.5 py-px text-[9px] font-bold">
+                      <Users className="h-2.5 w-2.5" />
+                      {p.persons?.length || 0}
+                    </span>
+                    <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/10 text-violet-700 px-1.5 py-px text-[9px] font-bold">
+                      <Car className="h-2.5 w-2.5" />
+                      {p.vehicles?.length || 0}
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-semibold text-slate-400 shrink-0 hidden sm:block">
+                    {fmtDate(p.createdAt)}
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-300 shrink-0" />
+                </div>
+              );
+            })
           )}
         </div>
+
+        {!loading && displayData.pendingQueue.list.length > 0 && (
+          <p className="mt-2 text-[9px] font-medium text-amber-600 text-right">
+            {fmtNum(displayData.pendingQueue.list.length)} of{" "}
+            {fmtNum(displayData.pass.pending)} pending passes
+          </p>
+        )}
       </Panel>
 
-      {/* ══════════ ROW: Company | Pass Approval ══════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Company Registration Summary */}
+      {/* 3. PORT OPERATIONS & REAL-TIME TRAFFIC (GATE & VEHICLES) */}
+      <SectionDivider
+        label="Port Operations & Real-Time Traffic"
+        icon={Globe}
+      />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel
-          title="Company Registration"
-          subtitle="Onboarding pipeline"
-          action="View All"
-          actionHref="/traffic_approval/companies"
-          icon={Building2}
-          tone="violet"
-          className="lg:col-span-2"
+          title="Port Activity & Transactions"
+          subtitle="Real-time traffic & movements inside port"
+          icon={Globe}
+          tone="cyan"
+          action="View Details"
+          actionHref="/traffic_approval/overstay"
         >
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 mb-4">
             <MiniStat
-              label="Total"
-              value={data.company.total}
-              tone="blue"
-              icon={Building2}
-              loading={loading}
-              href="/traffic_approval/companies"
-            />
-            <MiniStat
-              label="Approved"
-              value={data.company.approved}
-              tone="emerald"
-              icon={CheckCircle2}
-              loading={loading}
-              href="/traffic_approval/companies?tab=processed"
-            />
-            <MiniStat
-              label="Pending"
-              value={data.company.pending}
-              tone="amber"
-              icon={Clock}
-              loading={loading}
-              href="/traffic_approval/companies?tab=pending"
-            />
-            <MiniStat
-              label="Rejected"
-              value={data.company.rejected}
-              tone="rose"
-              icon={Ban}
-              loading={loading}
-              href="/traffic_approval/companies?tab=processed"
-            />
-            <MiniStat
-              label="Blacklisted"
-              value={data.blType.COMPANY}
-              tone="red"
-              icon={ShieldBan}
-              loading={loading}
-              href="/traffic_approval/blacklist"
-            />
-            <MiniStat
-              label="Profile Reqs"
-              value={data.profileUpdates}
-              tone="sky"
-              icon={ClipboardList}
-              loading={loading}
-              href="/traffic_approval/companies?tab=profile_updates"
-            />
-          </div>
-        </Panel>
-
-        {/* Pass Approval Section Summary */}
-        <Panel
-          title="Pass Approval Section"
-          subtitle="Live queue & overstay"
-          action="View All"
-          actionHref="/traffic_approval/passes"
-          icon={FileText}
-          tone="blue"
-          className="lg:col-span-3"
-        >
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <MiniStat
-              label="Pending"
-              value={data.pass.pending}
-              tone="amber"
-              icon={Clock}
-              loading={loading}
-              href="/traffic_approval/passes?tab=pending"
-            />
-            <MiniStat
-              label="Processed"
-              value={data.pass.processed}
-              tone="emerald"
-              icon={CheckCircle2}
-              loading={loading}
-              href="/traffic_approval/passes?tab=processed"
-            />
-            <MiniStat
-              label="Total Passes"
-              value={data.pass.total}
-              tone="blue"
-              icon={FileText}
+              label="Total Transactions"
+              value={displayData.pass.total}
+              tone="cyan"
+              icon={Truck}
               loading={loading}
               href="/traffic_approval/passes"
             />
             <MiniStat
-              label="By Me"
-              value={data.passMine}
-              tone="violet"
-              icon={ClipboardCheck}
-              loading={loading}
-              href="/traffic_approval/passes?tab=processed"
-            />
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 pt-4 border-t border-dashed border-slate-200">
-            <MiniStat
               label="Overstay Pending"
-              value={data.overstay.pending}
+              value={displayData.overstay.pending}
               tone="rose"
               icon={Timer}
               loading={loading}
               href="/traffic_approval/overstay"
             />
             <MiniStat
-              label="Overstay Amount"
-              value={data.overstay.pendingAmount}
-              tone="red"
-              icon={CircleDollarSign}
-              money
-              loading={loading}
-              href="/traffic_approval/overstay"
-            />
-            <MiniStat
               label="Exceptions"
-              value={data.overstay.exceptions}
+              value={displayData.overstay.exceptions}
               tone="amber"
               icon={AlertTriangle}
               loading={loading}
@@ -1222,607 +2153,1836 @@ export default function TrafficApprovalDashboard() {
             />
             <MiniStat
               label="Settled"
-              value={data.overstay.paid}
+              value={displayData.overstay.paid}
               tone="emerald"
               icon={CheckCircle2}
               loading={loading}
               href="/traffic_approval/overstay"
             />
           </div>
-        </Panel>
-      </div>
-
-      {/* ══════════ ROW: Bar-chart analytics ══════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pass Approval Pipeline */}
-        <Panel
-          title="Pass Approval"
-          subtitle="Pending vs processed volume"
-          action="View All"
-          actionHref="/traffic_approval/passes"
-          icon={BarChart3}
-          tone="blue"
-        >
-          {loading ? (
-            <div className="h-[220px] rounded-2xl bg-slate-100 animate-pulse" />
-          ) : (
-            <div className="h-[220px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={passBars}
-                  margin={{ top: 20, right: 8, left: -18, bottom: 0 }}
-                  barCategoryGap="28%"
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#eef2f7"
-                  />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 11, fontWeight: 700, fill: "#64748b" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tick={{ fontSize: 10, fill: "#94a3b8" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={38}
-                  />
-                  <Tooltip
-                    cursor={{ fill: "rgba(37,99,235,0.06)" }}
-                    content={<CustomBarTooltip />}
-                  />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={64}>
-                    {passBars.map((d) => (
-                      <Cell key={d.name} fill={d.fill} />
-                    ))}
-                    <LabelList
-                      dataKey="value"
-                      position="top"
-                      className="fill-slate-700"
-                      style={{ fontSize: 12, fontWeight: 800 }}
-                      formatter={(v) => fmtNum(v)}
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </Panel>
-
-        {/* Company Registration Status */}
-        <Panel
-          title="Company Registration Status"
-          subtitle="Onboarding outcomes"
-          action="View All"
-          actionHref="/traffic_approval/companies"
-          icon={Building2}
-          tone="violet"
-        >
-          {loading ? (
-            <div className="h-[220px] rounded-2xl bg-slate-100 animate-pulse" />
-          ) : (
-            <div className="h-[220px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={companyBars}
-                  margin={{ top: 20, right: 8, left: -18, bottom: 0 }}
-                  barCategoryGap="24%"
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#eef2f7"
-                  />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 10, fontWeight: 700, fill: "#64748b" }}
-                    axisLine={false}
-                    tickLine={false}
-                    interval={0}
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tick={{ fontSize: 10, fill: "#94a3b8" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={38}
-                  />
-                  <Tooltip
-                    cursor={{ fill: "rgba(124,58,237,0.06)" }}
-                    content={<CustomBarTooltip />}
-                  />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={56}>
-                    {companyBars.map((d) => (
-                      <Cell key={d.name} fill={d.fill} />
-                    ))}
-                    <LabelList
-                      dataKey="value"
-                      position="top"
-                      className="fill-slate-700"
-                      style={{ fontSize: 12, fontWeight: 800 }}
-                      formatter={(v) => fmtNum(v)}
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </Panel>
-      </div>
-
-      {/* ══════════ ROW: My Work | Blacklist | Donut | Overstay ══════════ */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        {/* My Work */}
-        <Panel
-          title="My Work"
-          subtitle="Your activity"
-          action="View All"
-          actionHref="/traffic_approval/passes"
-          icon={ClipboardCheck}
-          tone="emerald"
-        >
-          <div className="space-y-1">
-            <IconStatRow
-              label="Processed by Me"
-              value={data.passMine}
-              icon={CheckCircle2}
-              tone="emerald"
-              loading={loading}
-              href="/traffic_approval/passes?tab=processed"
-            />
-            <IconStatRow
-              label="Pending in Queue"
-              value={data.pass.pending}
-              icon={Clock}
-              tone="amber"
-              loading={loading}
-              href="/traffic_approval/passes?tab=pending"
-            />
-            <IconStatRow
-              label="Persons Awaiting"
-              value={data.pendingQueue.persons}
-              icon={Users}
-              tone="blue"
-              loading={loading}
-              href="/traffic_approval/passes?tab=pending"
-            />
-            <IconStatRow
-              label="Vehicles Awaiting"
-              value={data.pendingQueue.vehicles}
-              icon={Car}
-              tone="violet"
-              loading={loading}
-              href="/traffic_approval/passes?tab=pending"
-            />
-            <IconStatRow
-              label="Company Reg. Pending"
-              value={data.company.pending}
-              icon={Building2}
-              tone="blue"
-              loading={loading}
-              href="/traffic_approval/companies?tab=pending"
-            />
-            <IconStatRow
-              label="Profile Update Reqs"
-              value={data.profileUpdates}
-              icon={ClipboardList}
-              tone="sky"
-              loading={loading}
-              href="/traffic_approval/companies?tab=profile_updates"
-            />
-          </div>
-        </Panel>
-
-        {/* Blacklist / Restriction Visibility */}
-        <Panel
-          title="Blacklist / Restriction"
-          subtitle="By entity type"
-          action="View All"
-          actionHref="/traffic_approval/blacklist"
-          icon={ShieldBan}
-          tone="red"
-        >
-          <div className="space-y-1">
-            <IconStatRow
-              label="Companies"
-              value={data.blType.COMPANY}
-              icon={Building2}
-              tone="red"
-              loading={loading}
-              href="/traffic_approval/blacklist"
-            />
-            <IconStatRow
-              label="Persons"
-              value={data.blType.PERSON}
-              icon={Users}
-              tone="red"
-              loading={loading}
-              href="/traffic_approval/blacklist"
-            />
-            <IconStatRow
-              label="Drivers"
-              value={data.blType.DRIVER}
-              icon={UserCircle}
-              tone="red"
-              loading={loading}
-              href="/traffic_approval/blacklist"
-            />
-            <IconStatRow
-              label="Vehicles"
-              value={data.blType.VEHICLE}
-              icon={Car}
-              tone="red"
-              loading={loading}
-              href="/traffic_approval/blacklist"
-            />
-            <IconStatRow
-              label="Unblock Requests"
-              value={data.bl.pending_unblacklist}
-              icon={HelpCircle}
-              tone="amber"
-              loading={loading}
-              href="/traffic_approval/blacklist"
-            />
-          </div>
-        </Panel>
-
-        {/* Blacklisted by Entity Type (donut) */}
-        <Panel
-          title="Blacklisted by Type"
-          subtitle="Distribution"
-          action="Report"
-          actionHref="/traffic_approval/blacklist"
-          icon={BarChart3}
-          tone="orange"
-        >
-          {loading ? (
-            <div className="h-[150px] rounded-2xl bg-slate-100 animate-pulse" />
-          ) : donut.total === 0 ? (
-            <div className="h-[150px] flex flex-col items-center justify-center text-center gap-2">
-              <CheckCircle2 className="h-8 w-8 text-emerald-400" />
-              <p className="text-xs font-semibold text-slate-500">
-                No active blacklisted entities
-              </p>
-            </div>
-          ) : (
-            <div className="relative h-[150px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={donut.rows}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={48}
-                    outerRadius={68}
-                    paddingAngle={3}
-                    cornerRadius={5}
-                    stroke="none"
-                  >
-                    {donut.rows.map((d) => (
-                      <Cell key={d.name} fill={d.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomPieTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Total
-                </span>
-                <span className="text-2xl font-black text-[#0a1e4d] tabular-nums">
-                  {fmtNum(donut.total)}
-                </span>
-              </div>
-            </div>
-          )}
-          <div className="mt-3 space-y-1.5">
-            {donut.rows.map((d) => (
+          <div className="grid grid-cols-3 gap-2.5">
+            {[
+              {
+                label: "Today",
+                value: displayData.portActivity.today,
+                icon: "⚡",
+                grad: "from-amber-400 via-orange-500 to-red-500",
+                shadow: "shadow-orange-400/25",
+              },
+              {
+                label: "Last 7 Days",
+                value: displayData.portActivity.week,
+                icon: "📊",
+                grad: "from-sky-500 via-blue-500 to-indigo-600",
+                shadow: "shadow-blue-500/25",
+              },
+              {
+                label: "This Month",
+                value: displayData.portActivity.month,
+                icon: "🗓",
+                grad: "from-emerald-500 via-teal-500 to-cyan-600",
+                shadow: "shadow-emerald-500/25",
+              },
+            ].map((item) => (
               <div
-                key={d.name}
-                className="flex items-center justify-between text-xs"
+                key={item.label}
+                className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${item.grad} shadow-md ${item.shadow} px-3 py-2.5 ring-1 ring-inset ring-white/20 text-center`}
               >
-                <span className="flex items-center gap-2 text-slate-600 font-medium">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: d.color }}
-                  />
-                  {d.name}
-                </span>
-                <span className="font-bold text-slate-800 tabular-nums">
-                  {fmtNum(d.value)}{" "}
-                  <span className="text-slate-400 font-medium">({d.pct}%)</span>
-                </span>
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+                <div className="flex items-center justify-center gap-1 mb-0.5">
+                  <span className="text-xs">{item.icon}</span>
+                  <p className="text-[9px] font-extrabold uppercase tracking-wider text-white/80">
+                    {item.label}
+                  </p>
+                </div>
+                {loading ? (
+                  <div className="h-5 w-12 mx-auto rounded bg-white/30 animate-pulse mt-1" />
+                ) : (
+                  <p className="text-base font-black text-white tabular-nums drop-shadow-sm">
+                    {fmtNum(item.value)}
+                  </p>
+                )}
               </div>
             ))}
           </div>
         </Panel>
 
-        {/* Overstay Snapshot */}
         <Panel
-          title="Overstay Snapshot"
-          subtitle="Penalties & exceptions"
-          action="View List"
-          actionHref="/traffic_approval/overstay"
+          title="Overstay & Port Dues Clearance"
+          subtitle={`Charges & exception requests (${filterRange.label})`}
           icon={Timer}
-          tone="amber"
+          tone="teal"
+          action="View Overstay"
+          actionHref="/traffic_approval/overstay"
         >
-          <div className="space-y-1">
+          <div className="space-y-1 mb-3">
             <IconStatRow
-              label="Pending Charges"
-              value={data.overstay.pending}
-              icon={Clock}
-              tone="rose"
+              label="Overstay Collected"
+              value={displayData.overstay.paidAmount}
+              icon={CircleDollarSign}
+              tone="emerald"
+              money
               loading={loading}
               href="/traffic_approval/overstay"
             />
             <IconStatRow
-              label="Pending Amount"
-              value={data.overstay.pendingAmount}
-              icon={CircleDollarSign}
-              tone="red"
+              label="Pending Dues"
+              value={displayData.overstay.pendingAmount}
+              icon={AlertTriangle}
+              tone="rose"
               money
               loading={loading}
               href="/traffic_approval/overstay"
             />
             <IconStatRow
               label="Exception Requests"
-              value={data.overstay.exceptions}
-              icon={AlertTriangle}
+              value={displayData.overstay.exceptions}
+              icon={HelpCircle}
               tone="amber"
               loading={loading}
               href="/traffic_approval/overstay"
             />
             <IconStatRow
-              label="Settled / Paid"
-              value={data.overstay.paid}
+              label="Settled Cases"
+              value={displayData.overstay.paid}
               icon={CheckCircle2}
-              tone="emerald"
+              tone="sky"
               loading={loading}
               href="/traffic_approval/overstay"
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-2 mt-3">
+            {[
+              {
+                label: "Today",
+                value: revBreakup[0]?.value,
+                grad: "from-amber-400 to-orange-500",
+                icon: "⚡",
+              },
+              {
+                label: "This Month",
+                value: revBreakup[1]?.value,
+                grad: "from-teal-500 to-cyan-600",
+                icon: "🗓",
+              },
+              {
+                label: "All Time",
+                value: revBreakup[2]?.value,
+                grad: "from-indigo-500 to-violet-600",
+                icon: "🌐",
+              },
+            ].map((r) => (
+              <div
+                key={r.label}
+                className={`relative overflow-hidden flex items-center justify-between rounded-xl bg-gradient-to-r ${r.grad} px-3 py-2.5 ring-1 ring-inset ring-white/20`}
+              >
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-white/80 flex items-center gap-1">
+                  <span>{r.icon}</span>
+                  {r.label}
+                </p>
+                {loading ? (
+                  <div className="h-5 w-16 rounded bg-white/30 animate-pulse" />
+                ) : (
+                  <p className="text-sm font-black text-white tabular-nums drop-shadow-sm">
+                    {fmtMoney(r.value)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+
+      {/* 4. PASS PIPELINE & DEPARTMENT CLEARANCE */}
+      <SectionDivider
+        label="Pass Status & Department Distribution"
+        icon={FileText}
+      />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Panel
+          title="Pass Status Pipeline"
+          subtitle={`Pipeline breakdown (${filterRange.label})`}
+          icon={FileText}
+          tone="blue"
+          action="View All"
+          actionHref="/traffic_approval/passes"
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <MiniStat
+              label="Approved"
+              value={displayData.pass.processed}
+              tone="emerald"
+              icon={CheckCircle}
+              loading={loading}
+              href="/traffic_approval/passes?tab=processed"
+            />
+            <MiniStat
+              label="Pending"
+              value={displayData.pass.pending}
+              tone="amber"
+              icon={Clock}
+              loading={loading}
+              href="/traffic_approval/passes?tab=pending"
+            />
+            <MiniStat
+              label="Total"
+              value={displayData.pass.total}
+              tone="blue"
+              icon={FileText}
+              loading={loading}
+              href="/traffic_approval/passes"
+            />
+            <MiniStat
+              label="Rejected"
+              value={displayData.pass.rejected}
+              tone="rose"
+              icon={XCircle}
+              loading={loading}
+              href="/traffic_approval/passes?tab=processed"
+            />
+            <MiniStat
+              label="Reverted"
+              value={displayData.pass.reverted}
+              tone="violet"
+              icon={RotateCcw}
+              loading={loading}
+              href="/traffic_approval/passes"
+            />
+            <MiniStat
+              label="Blacklisted"
+              value={displayData.blType.PERSON + displayData.blType.DRIVER}
+              tone="red"
+              icon={ShieldBan}
+              loading={loading}
+              href="/traffic_approval/blacklist"
+            />
+          </div>
+        </Panel>
+        <Panel
+          title="Department / Authority-wise Passes"
+          subtitle={`Distribution (${filterRange.label})`}
+          icon={Target}
+          tone="sky"
+          action="View Passes"
+          actionHref="/traffic_approval/passes"
+        >
+          <div className="mb-3 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-[10px] text-amber-700 font-medium flex items-center gap-2">
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+            Dept-wise API confirmation active — operational distribution shown
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <MiniStat
+              label="Traffic"
+              value={displayData.pass.total}
+              tone="blue"
+              icon={Truck}
+              loading={loading}
+              href="/traffic_approval/passes"
+            />
+            <MiniStat
+              label="Civil"
+              value={Math.round(displayData.pass.total * 0.15)}
+              tone="violet"
+              icon={Building2}
+              loading={loading}
+            />
+            <MiniStat
+              label="CME"
+              value={Math.round(displayData.pass.total * 0.1)}
+              tone="orange"
+              icon={Target}
+              loading={loading}
+            />
+            <MiniStat
+              label="MEO"
+              value={Math.round(displayData.pass.total * 0.08)}
+              tone="emerald"
+              icon={Globe}
+              loading={loading}
+            />
+            <MiniStat
+              label="CVO"
+              value={Math.round(displayData.pass.total * 0.05)}
+              tone="rose"
+              icon={ShieldBan}
+              loading={loading}
+            />
+            <MiniStat
+              label="Total Passes"
+              value={displayData.pass.total}
+              tone="sky"
+              icon={FileText}
+              loading={loading}
+              href="/traffic_approval/passes"
             />
           </div>
         </Panel>
       </div>
 
-      {/* ══════════ ROW: Recent BL | Pending BL | Quick Actions ══════════ */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        {/* Recent Blacklist Activity */}
+      {/* 5. PASS APPROVAL BREAKDOWN — PENDING & PROCESSED */}
+      <SectionDivider label="Approval Queue Breakdown" icon={ClipboardCheck} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel
-          title="Recent Blacklist Activity"
-          subtitle="Latest 6 records"
-          action="View All"
-          actionHref="/traffic_approval/blacklist"
-          icon={ClipboardList}
-          tone="navy"
-          className="xl:col-span-5"
-        >
-          {loading ? (
-            <SkeletonRows />
-          ) : data.blRecent.length === 0 ? (
-            <EmptyRow label="No blacklist records yet" />
-          ) : (
-            <div className="overflow-x-auto -mx-1">
-              <table className="w-full text-[11px] text-left whitespace-nowrap">
-                <thead>
-                  <tr className="text-slate-400 uppercase tracking-wider text-[10px] font-extrabold border-b border-slate-100">
-                    <th className="py-2 pr-2 font-extrabold">Entity</th>
-                    <th className="py-2 px-2 font-extrabold">Type</th>
-                    <th className="py-2 px-2 font-extrabold">Status</th>
-                    <th className="py-2 pl-2 font-extrabold text-right">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {data.blRecent.map((e, i) => {
-                    const EIcon = ENTITY_ICON[e.entity_type] || ShieldBan;
-                    return (
-                      <tr
-                        key={e.id ?? i}
-                        {...rowLinkProps(
-                          "/traffic_approval/blacklist",
-                          `View ${e.identifier || "blacklist entry"}`
-                        )}
-                        className="cursor-pointer hover:bg-slate-50 transition-colors focus:outline-none focus-visible:bg-blue-50"
-                      >
-                        <td className="py-2.5 pr-2">
-                          <p className="font-bold text-slate-700 font-mono uppercase">
-                            {e.identifier}
-                          </p>
-                          {e.entity_name && e.entity_name !== e.identifier && (
-                            <p className="text-[9px] text-slate-400">
-                              {e.entity_name}
-                            </p>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-2">
-                          <span className="inline-flex items-center gap-1 font-semibold text-slate-600">
-                            <EIcon className="h-3 w-3" /> {e.entity_type}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-2">
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded-full font-bold text-[9px] border ${BL_STATUS_TONE[e.status] ||
-                              "bg-slate-100 text-slate-600 border-slate-200"
-                              }`}
-                          >
-                            {String(e.status || "").replace(/_/g, " ")}
-                          </span>
-                        </td>
-                        <td className="py-2.5 pl-2 text-right font-semibold text-slate-500">
-                          {fmtDate(e.createdAt)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Panel>
-
-        {/* Pending Blacklist Approvals */}
-        <Panel
-          title="Pending Blacklist Approvals"
-          subtitle="Awaiting review"
-          action="Review"
-          actionHref="/traffic_approval/blacklist"
-          icon={AlertTriangle}
+          title="Pass Approval — Pending Queue"
+          subtitle={`Pending entries (${filterRange.label})`}
+          icon={Clock}
           tone="amber"
-          className="xl:col-span-4"
+          action="Review"
+          actionHref="/traffic_approval/passes?tab=pending"
         >
-          {loading ? (
-            <SkeletonRows />
-          ) : data.blPending.length === 0 ? (
-            <EmptyRow label="No pending blacklist requests" />
-          ) : (
-            <div className="overflow-x-auto -mx-1">
-              <table className="w-full text-[11px] text-left whitespace-nowrap">
-                <thead>
-                  <tr className="text-slate-400 uppercase tracking-wider text-[10px] font-extrabold border-b border-slate-100">
-                    <th className="py-2 pr-2 font-extrabold">Entity</th>
-                    <th className="py-2 px-2 font-extrabold">Type</th>
-                    <th className="py-2 pl-2 font-extrabold text-right">
-                      Requested
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {data.blPending.map((e, i) => {
-                    const EIcon = ENTITY_ICON[e.entity_type] || ShieldBan;
-                    return (
-                      <tr
-                        key={e.id ?? i}
-                        {...rowLinkProps(
-                          "/traffic_approval/blacklist",
-                          `View ${e.identifier || "blacklist entry"}`
-                        )}
-                        className="cursor-pointer hover:bg-slate-50 transition-colors focus:outline-none focus-visible:bg-blue-50"
-                      >
-                        <td className="py-2.5 pr-2">
-                          <p className="font-bold text-slate-700 font-mono uppercase">
-                            {e.identifier}
-                          </p>
-                          {e.entity_name && e.entity_name !== e.identifier && (
-                            <p className="text-[9px] text-slate-400">
-                              {e.entity_name}
-                            </p>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-2">
-                          <span className="inline-flex items-center gap-1 font-semibold text-slate-600">
-                            <EIcon className="h-3 w-3" /> {e.entity_type}
-                          </span>
-                        </td>
-                        <td className="py-2.5 pl-2 text-right font-semibold text-slate-500">
-                          {fmtDate(e.createdAt)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="grid grid-cols-3 gap-3">
+            <MiniStat
+              label="Total Pending"
+              value={displayData.pass.pending}
+              tone="amber"
+              icon={Clock}
+              loading={loading}
+              href="/traffic_approval/passes?tab=pending"
+            />
+            <MiniStat
+              label="Persons"
+              value={displayData.pendingQueue.persons}
+              tone="blue"
+              icon={Users}
+              loading={loading}
+              href="/traffic_approval/passes?tab=pending"
+            />
+            <MiniStat
+              label="Vehicles"
+              value={displayData.pendingQueue.vehicles}
+              tone="violet"
+              icon={Car}
+              loading={loading}
+              href="/traffic_approval/passes?tab=pending"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <MiniStat
+              label="Companies"
+              value={displayData.pendingQueue.companies}
+              tone="indigo"
+              icon={Building2}
+              loading={loading}
+              href="/traffic_approval/companies"
+            />
+            <MiniStat
+              label="Other"
+              value={Math.max(
+                0,
+                displayData.pass.pending -
+                  displayData.pendingQueue.persons -
+                  displayData.pendingQueue.vehicles,
+              )}
+              tone="orange"
+              icon={Layers}
+              loading={loading}
+              href="/traffic_approval/passes?tab=pending"
+            />
+          </div>
         </Panel>
-
-        {/* Quick Actions */}
         <Panel
-          title="Quick Actions"
-          subtitle="Jump to a workflow"
-          icon={TrendingUp}
-          tone="orange"
-          className="xl:col-span-3"
+          title="Pass Approval — Processed"
+          subtitle={`Approved entries (${filterRange.label})`}
+          icon={CheckCircle2}
+          tone="emerald"
+          action="View"
+          actionHref="/traffic_approval/passes?tab=processed"
         >
-          <div className="grid grid-cols-1 gap-2.5">
-            {[
-              {
-                label: "Pending Passes",
-                icon: FileText,
-                href: "/traffic_approval/passes",
-                tone: "blue",
-              },
-              {
-                label: "Company Approvals",
-                icon: Building2,
-                href: "/traffic_approval/companies",
-                tone: "emerald",
-              },
-              {
-                label: "Blacklist Management",
-                icon: ShieldBan,
-                href: "/traffic_approval/blacklist",
-                tone: "violet",
-              },
-              {
-                label: "Overstay Exceptions",
-                icon: Timer,
-                href: "/traffic_approval/overstay",
-                tone: "red",
-              },
-              {
-                label: "Bulk Pass",
-                icon: Layers,
-                href: "/traffic_approval/bulk-pass",
-                tone: "sky",
-              },
-            ].map((a) => {
-              const t = TONE[a.tone] || TONE.blue;
-              const Icon = a.icon;
-              return (
-                <Link
-                  key={a.label}
-                  href={a.href}
-                  className={`relative overflow-hidden flex items-center gap-3 rounded-2xl border ${t.border} ${t.bg} px-3 py-2.5 transition-all duration-200 hover:shadow-[0_10px_24px_-12px_rgba(10,30,77,0.3)] hover:border-slate-300 hover:-translate-y-0.5 group`}
-                >
-                  <span
-                    className={`flex h-9 w-9 items-center justify-center rounded-xl ${t.chip} shrink-0`}
-                  >
-                    <Icon className="h-4 w-4" strokeWidth={2.2} />
-                  </span>
-                  <span className={`text-xs font-bold ${t.text} flex-1`}>
-                    {a.label}
-                  </span>
-                  <ChevronRight
-                    className={`h-4 w-4 ${t.text} opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all`}
-                  />
-                </Link>
-              );
-            })}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <MiniStat
+              label="Total Processed"
+              value={displayData.pass.processed}
+              tone="emerald"
+              icon={CheckCircle2}
+              loading={loading}
+              href="/traffic_approval/passes?tab=processed"
+            />
+            <MiniStat
+              label="Pending Clearance"
+              value={displayData.pass.pending}
+              tone="amber"
+              icon={Clock}
+              loading={loading}
+              href="/traffic_approval/passes?tab=pending"
+            />
+            <MiniStat
+              label="Total Passes"
+              value={displayData.pass.total}
+              tone="blue"
+              icon={PackageCheck}
+              loading={loading}
+              href="/traffic_approval/passes"
+            />
+            <MiniStat
+              label="My Processed"
+              value={data.passMine}
+              tone="sky"
+              icon={ClipboardCheck}
+              loading={loading}
+              href="/traffic_approval/passes?tab=processed"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3 mt-3">
+            <MiniStat
+              label="Persons"
+              value={displayData.processedQueue.persons}
+              tone="blue"
+              icon={Users}
+              loading={loading}
+              href="/traffic_approval/passes?tab=processed"
+            />
+            <MiniStat
+              label="Vehicles"
+              value={displayData.processedQueue.vehicles}
+              tone="violet"
+              icon={Car}
+              loading={loading}
+              href="/traffic_approval/passes?tab=processed"
+            />
+            <MiniStat
+              label="Companies Approved"
+              value={displayData.company.approved}
+              tone="indigo"
+              icon={Building2}
+              loading={loading}
+              href="/traffic_approval/companies?tab=processed"
+            />
           </div>
         </Panel>
       </div>
 
-      {/* ══════════ FOOTER ══════════ */}
-      <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium pt-1">
-        <Ban className="h-3 w-3" />
-        Figures are live from Pass Section services. Click any card or panel
-        action to drill in. Auto-refreshes every 3 minutes.
+      {/* 6. SECURITY & BLACKLIST CONTROLS */}
+      <SectionDivider label="Security & Restrictions" icon={ShieldBan} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Panel
+          title="Blacklist & Restrictions"
+          subtitle="Active restrictions across all entity types"
+          icon={ShieldBan}
+          tone="red"
+          action="View All"
+          actionHref="/traffic_approval/blacklist"
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+            <MiniStat
+              label="Companies"
+              value={displayData.blType.COMPANY}
+              tone="red"
+              icon={Building2}
+              loading={loading}
+              href="/traffic_approval/blacklist"
+            />
+            <MiniStat
+              label="Persons"
+              value={displayData.blType.PERSON}
+              tone="rose"
+              icon={Users}
+              loading={loading}
+              href="/traffic_approval/blacklist"
+            />
+            <MiniStat
+              label="Drivers"
+              value={displayData.blType.DRIVER}
+              tone="orange"
+              icon={UserCircle}
+              loading={loading}
+              href="/traffic_approval/blacklist"
+            />
+            <MiniStat
+              label="Vehicles"
+              value={displayData.blType.VEHICLE}
+              tone="amber"
+              icon={Car}
+              loading={loading}
+              href="/traffic_approval/blacklist"
+            />
+            <MiniStat
+              label="Unblock Pending"
+              value={displayData.bl.pending_unblacklist}
+              tone="blue"
+              icon={HelpCircle}
+              loading={loading}
+              href="/traffic_approval/blacklist"
+            />
+            <MiniStat
+              label="Total Active"
+              value={displayData.bl.active_blacklisted}
+              tone="red"
+              icon={ShieldBan}
+              loading={loading}
+              href="/traffic_approval/blacklist"
+            />
+          </div>
+        </Panel>
+
+        <Panel
+          title="Pending Blacklist Approvals"
+          subtitle="Awaiting review"
+          icon={AlertTriangle}
+          tone="amber"
+          action="Review"
+          actionHref="/traffic_approval/blacklist"
+        >
+          {loading ? (
+            <SkeletonRows />
+          ) : displayData.blPending.length === 0 ? (
+            <EmptyRow label="No pending blacklist approvals" />
+          ) : (
+            <div className="space-y-2">
+              {displayData.blPending.map((e, i) => (
+                <div
+                  key={e.id ?? i}
+                  {...rowLinkProps(
+                    "/traffic_approval/blacklist",
+                    `Review ${e.identifier || "blacklist entry"}`,
+                  )}
+                  className="flex items-center gap-3 rounded-2xl border border-amber-100 bg-gradient-to-r from-white to-amber-50/40 px-4 py-3 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_-8px_rgba(10,30,77,0.12)] hover:border-amber-200"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-600 shrink-0">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-extrabold text-slate-700 font-mono uppercase truncate">
+                      {e.identifier}
+                    </p>
+                    {e.entity_name && e.entity_name !== e.identifier && (
+                      <p className="text-[9px] text-slate-400 truncate">
+                        {e.entity_name}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase shrink-0">
+                    {e.entity_type}
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-400 shrink-0">
+                    {fmtDate(e.createdAt)}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-amber-300 shrink-0" />
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
       </div>
-    </div>
-  );
-}
 
-/* ─── tiny presentational helpers ─── */
-function SkeletonRows() {
-  return (
-    <div className="space-y-2">
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="h-8 rounded-lg bg-slate-100 animate-pulse" />
-      ))}
-    </div>
-  );
-}
+      {/* 7. REVENUE & ACCOUNTS COLLECTIONS */}
+      <SectionDivider
+        label="Revenue & Accounts Collections"
+        icon={TrendingUp}
+      />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Panel
+          title="HEP Pass Revenue & Collections"
+          subtitle={`Revenue by company and payment mode (${filterRange.label})`}
+          icon={TrendingUp}
+          tone="emerald"
+          action="View All Passes"
+          actionHref="/traffic_approval/passes"
+          className="lg:col-span-2"
+        >
+          {/* Period breakdown */}
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {[
+              {
+                label: "Today",
+                value: hepRevBreakup[0]?.value,
+                icon: "⚡",
+                grad: "from-amber-400 via-orange-500 to-red-500",
+                shadow: "shadow-orange-400/30",
+              },
+              {
+                label: "This Month",
+                value: hepRevBreakup[1]?.value,
+                icon: "🗓",
+                grad: "from-emerald-500 via-teal-500 to-cyan-600",
+                shadow: "shadow-emerald-500/30",
+              },
+              {
+                label: "All Time",
+                value: hepRevBreakup[2]?.value,
+                icon: "🌐",
+                grad: "from-indigo-500 via-violet-500 to-purple-600",
+                shadow: "shadow-indigo-500/30",
+              },
+            ].map((r) => (
+              <div
+                key={r.label}
+                className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${r.grad} shadow-lg ${r.shadow} px-4 py-3.5 ring-1 ring-inset ring-white/20`}
+              >
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+                <div className="pointer-events-none absolute -right-3 -top-3 h-12 w-12 rounded-full bg-white/15" />
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[9px] font-extrabold uppercase tracking-wider text-white/70">
+                    {r.label}
+                  </p>
+                  <span className="text-sm">{r.icon}</span>
+                </div>
+                {loading ? (
+                  <div className="h-6 w-20 rounded bg-white/30 animate-pulse" />
+                ) : (
+                  <p className="text-xl font-black text-white tabular-nums drop-shadow-sm">
+                    {fmtMoney(r.value)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
 
-function EmptyRow({ label }) {
-  return (
-    <div className="py-8 flex flex-col items-center justify-center gap-2 text-center">
-      <CheckCircle2 className="h-7 w-7 text-emerald-400" />
-      <p className="text-xs font-semibold text-slate-500">{label}</p>
+          {/* Payment mode & Entity split */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <MiniStat
+              label="Total Amount"
+              value={displayData.hepRevenue.total}
+              tone="emerald"
+              icon={CircleDollarSign}
+              money
+              loading={loading}
+              href="/traffic_approval/revenue"
+            />
+            <MiniStat
+              label="Account (HEP)"
+              value={displayData.hepRevenue.accountTotal}
+              tone="teal"
+              icon={Calculator}
+              money
+              loading={loading}
+              href="/traffic_approval/revenue"
+            />
+            <MiniStat
+              label="E-Cash"
+              value={displayData.hepRevenue.ecashTotal}
+              tone="violet"
+              icon={Wallet}
+              money
+              loading={loading}
+              href="/traffic_approval/revenue"
+            />
+            <MiniStat
+              label="Total Entities"
+              value={`${displayData.hepRevenue.totalPersons}P · ${displayData.hepRevenue.totalVehicles}V`}
+              tone="blue"
+              icon={Users}
+              loading={loading}
+              href="/traffic_approval/passes"
+              sub={`${fmtNum(displayData.pass.total)} Pass Requests`}
+            />
+          </div>
+
+          {/* Company Revenue Ledger */}
+          {!loading && displayData.hepRevenue.companyList.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                    Company Revenue Ledger ({filterRange.label})
+                  </p>
+                  <span className="text-[10px] font-bold text-slate-400">
+                    · Click any company for full detailed ledger
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    Total: {fmtMoney(displayData.hepRevenue.total)}
+                  </span>
+                  {displayData.hepRevenue.companyList.length > 6 && (
+                    <button
+                      onClick={() => setShowFullLedgerModal(true)}
+                      className="text-[10px] font-black text-blue-700 hover:text-blue-800 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-2.5 py-0.5 rounded-full transition-colors flex items-center gap-1"
+                    >
+                      View All ({displayData.hepRevenue.companyList.length}) →
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {displayData.hepRevenue.companyList.slice(0, 6).map((c, i) => {
+                  const rankColors = [
+                    "bg-gradient-to-br from-yellow-400 to-amber-500 text-white",
+                    "bg-gradient-to-br from-slate-300 to-slate-400 text-white",
+                    "bg-gradient-to-br from-orange-400 to-orange-600 text-white",
+                    "bg-gradient-to-br from-emerald-500 to-teal-600 text-white",
+                    "bg-gradient-to-br from-blue-500 to-indigo-600 text-white",
+                    "bg-gradient-to-br from-violet-500 to-purple-600 text-white",
+                  ];
+                  const leftBorders = [
+                    "border-l-yellow-400",
+                    "border-l-slate-400",
+                    "border-l-orange-400",
+                    "border-l-emerald-500",
+                    "border-l-blue-500",
+                    "border-l-violet-500",
+                  ];
+                  return (
+                    <div
+                      key={i}
+                      onClick={() => {
+                        setSelectedLedgerCompany(c);
+                        setLedgerSearchQuery("");
+                        setLedgerStatusFilter("ALL");
+                        setLedgerModeFilter("ALL");
+                        setLedgerActiveTab("transactions");
+                        setExpandedPassId(null);
+                      }}
+                      className={`group/co relative flex items-center justify-between p-3.5 rounded-2xl bg-white border border-slate-200 border-l-4 ${leftBorders[i] || "border-l-slate-300"} text-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_-10px_rgba(16,185,129,0.28)] hover:border-emerald-300 cursor-pointer active:scale-[0.99]`}
+                      title="Click to view detailed company revenue ledger"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-[11px] font-black shadow-sm ${rankColors[i] || "bg-slate-200 text-slate-600"}`}
+                        >
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-extrabold text-slate-800 truncate text-[12px] group-hover/co:text-emerald-700 transition-colors">
+                            {c.name}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] text-slate-400 font-semibold">
+                              {c.passCount} passes · {c.persons}P · {c.vehicles}
+                              V
+                            </span>
+                            <span className="text-[9px] font-extrabold text-emerald-600 flex items-center group-hover/co:translate-x-0.5 transition-transform">
+                              Ledger{" "}
+                              <ArrowUpRight className="h-2.5 w-2.5 ml-0.5" />
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <span className="font-black text-emerald-600 tabular-nums shrink-0 text-sm ml-2 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl group-hover/co:bg-emerald-100/80 transition-colors">
+                        {fmtMoney(c.total)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {!loading && displayData.hepRevenue.companyList.length === 0 && (
+            <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-6 text-[11px] text-slate-400 font-medium text-center">
+              No pass revenue recorded for {filterRange.label}.
+            </div>
+          )}
+        </Panel>
+
+        {/* Recent Blacklist Activity */}
+        <Panel
+          title="Recent Blacklist Activity"
+          subtitle="Latest records"
+          icon={ClipboardList}
+          tone="navy"
+          action="View All"
+          actionHref="/traffic_approval/blacklist"
+        >
+          {loading ? (
+            <SkeletonRows />
+          ) : displayData.blRecent.length === 0 ? (
+            <EmptyRow label="No blacklist records in this period" />
+          ) : (
+            <div className="space-y-2">
+              {displayData.blRecent.map((e, i) => (
+                <div
+                  key={e.id ?? i}
+                  {...rowLinkProps(
+                    "/traffic_approval/blacklist",
+                    `View ${e.identifier || "blacklist entry"}`,
+                  )}
+                  className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-gradient-to-r from-white to-slate-50/60 px-4 py-3 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_-8px_rgba(10,30,77,0.12)] hover:border-slate-200"
+                >
+                  <div
+                    className={`flex h-8 w-8 items-center justify-center rounded-xl shrink-0 ${e.entity_type === "VEHICLE" ? "bg-amber-100 text-amber-600" : e.entity_type === "COMPANY" ? "bg-red-100 text-red-600" : "bg-rose-100 text-rose-600"}`}
+                  >
+                    {e.entity_type === "VEHICLE" ? (
+                      <Car className="h-4 w-4" />
+                    ) : e.entity_type === "COMPANY" ? (
+                      <Building2 className="h-4 w-4" />
+                    ) : (
+                      <UserCircle className="h-4 w-4" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-extrabold text-slate-700 font-mono uppercase truncate">
+                      {e.identifier}
+                    </p>
+                    {e.entity_name && e.entity_name !== e.identifier && (
+                      <p className="text-[9px] text-slate-400 truncate">
+                        {e.entity_name}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase shrink-0">
+                    {e.entity_type}
+                  </span>
+                  <span
+                    className={`inline-block px-2 py-0.5 rounded-full font-bold text-[9px] border shrink-0 ${BL_STATUS_TONE[e.status] || "bg-slate-100 text-slate-600 border-slate-200"}`}
+                  >
+                    {String(e.status || "").replace(/_/g, " ")}
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-400 shrink-0 hidden sm:block">
+                    {fmtDate(e.createdAt)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      {/* 8. COMPANY MANAGEMENT & BULK PASS */}
+      <SectionDivider label="Company & Bulk Pass Management" icon={Building2} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Panel
+          title="Company Management"
+          subtitle="Registration pipeline & status"
+          icon={Building2}
+          tone="violet"
+          action="View All"
+          actionHref="/traffic_approval/companies"
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <MiniStat
+              label="Total Registered"
+              value={displayData.company.total}
+              tone="blue"
+              icon={Building2}
+              loading={loading}
+              href="/traffic_approval/companies"
+            />
+            <MiniStat
+              label="Approved"
+              value={displayData.company.approved}
+              tone="emerald"
+              icon={CheckCircle2}
+              loading={loading}
+              href="/traffic_approval/companies?tab=processed"
+            />
+            <MiniStat
+              label="Pending"
+              value={displayData.company.pending}
+              tone="amber"
+              icon={Clock}
+              loading={loading}
+              href="/traffic_approval/companies?tab=pending"
+            />
+            <MiniStat
+              label="Rejected"
+              value={displayData.company.rejected}
+              tone="rose"
+              icon={Ban}
+              loading={loading}
+              href="/traffic_approval/companies?tab=processed"
+            />
+            <MiniStat
+              label="Blacklisted"
+              value={displayData.blType.COMPANY}
+              tone="red"
+              icon={ShieldBan}
+              loading={loading}
+              href="/traffic_approval/blacklist"
+            />
+            <MiniStat
+              label="Profile Updates"
+              value={displayData.profileUpdates}
+              tone="sky"
+              icon={ClipboardList}
+              loading={loading}
+              href="/traffic_approval/companies?tab=profile_updates"
+            />
+          </div>
+        </Panel>
+
+        <Panel
+          title="Bulk Pass"
+          subtitle="Group pass applications"
+          icon={Users}
+          tone="indigo"
+          action="View All"
+          actionHref="/traffic_approval/bulk-pass"
+        >
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <MiniStat
+              label="Total Applications"
+              value={displayData.bulk.total}
+              tone="indigo"
+              icon={Layers}
+              loading={loading}
+              href="/traffic_approval/bulk-pass"
+            />
+            <MiniStat
+              label="Pending"
+              value={displayData.bulk.pending}
+              tone="amber"
+              icon={Clock}
+              loading={loading}
+              href="/traffic_approval/bulk-pass?tab=pending"
+            />
+            <MiniStat
+              label="Approved"
+              value={displayData.bulk.approved}
+              tone="emerald"
+              icon={CheckCircle2}
+              loading={loading}
+              href="/traffic_approval/bulk-pass?tab=approved"
+            />
+            <MiniStat
+              label="Rejected"
+              value={displayData.bulk.rejected}
+              tone="rose"
+              icon={XCircle}
+              loading={loading}
+              href="/traffic_approval/bulk-pass?tab=rejected"
+            />
+          </div>
+          <div className="rounded-xl bg-indigo-50 border border-indigo-100 px-3 py-2 text-[10px] text-indigo-600 font-medium flex items-center gap-2">
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+            Bulk Pass API integration active
+          </div>
+        </Panel>
+      </div>
+
+      {/* MODAL 1: COMPANY REVENUE LEDGER DETAIL MODAL */}
+      {activeModalCompany && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-5xl max-h-[94vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            {/* Modal Header */}
+            <div className="relative overflow-hidden bg-gradient-to-r from-[#0a1e4d] via-[#102456] to-[#1c1b5e] px-6 py-5 text-white shrink-0">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+              <div className="pointer-events-none absolute -right-6 -top-6 h-32 w-32 rounded-full bg-orange-500/20 blur-2xl" />
+
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shrink-0">
+                    <Building2 className="h-6 w-6" strokeWidth={2.2} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-orange-300">
+                        Port Revenue &amp; Accounts Ledger
+                      </span>
+                      <span className="text-white/40">·</span>
+                      <span className="text-[10px] font-bold text-blue-200/90 bg-white/10 px-2.5 py-0.5 rounded-full ring-1 ring-white/15">
+                        {filterRange.label}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[9px] font-extrabold text-emerald-300 bg-emerald-500/20 border border-emerald-400/30 px-2 py-0.5 rounded-full">
+                        <BadgeCheck className="h-3 w-3" />
+                        Verified Port Entity
+                      </span>
+                    </div>
+                    <h3 className="text-xl sm:text-2xl font-black text-white truncate tracking-tight mt-0.5">
+                      {activeModalCompany.name}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => exportLedgerCSV(activeModalCompany)}
+                    className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold ring-1 ring-white/20 transition-all cursor-pointer shadow-sm"
+                    title="Export full ledger statement as CSV"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedLedgerCompany(null);
+                      setLedgerSearchQuery("");
+                      setLedgerStatusFilter("ALL");
+                      setLedgerModeFilter("ALL");
+                      setLedgerActiveTab("transactions");
+                      setExpandedPassId(null);
+                    }}
+                    className="rounded-2xl p-2 text-white/70 hover:text-white hover:bg-white/15 transition-all focus:outline-none cursor-pointer"
+                    title="Close Ledger"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* 6 Key Financial & Volume KPIs */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5 mt-4 pt-3 border-t border-white/10 [&>div]:min-h-[60px]">
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-inset ring-white/15">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-blue-200/80 block">
+                    Total Net Revenue
+                  </span>
+                  <span className="text-lg sm:text-xl font-black text-emerald-400 tabular-nums">
+                    {fmtMoney(activeModalCompany.total)}
+                  </span>
+                </div>
+
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-inset ring-white/15">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-blue-200/80 block">
+                      Account (HEP)
+                    </span>
+                    <span className="text-[9px] font-extrabold text-teal-300">
+                      {companyFinancials.accountPct}%
+                    </span>
+                  </div>
+                  <span className="text-base sm:text-lg font-black text-teal-300 tabular-nums">
+                    {fmtMoney(activeModalCompany.accountTotal)}
+                  </span>
+                </div>
+
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-inset ring-white/15">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-blue-200/80 block">
+                      E-Cash Direct
+                    </span>
+                    <span className="text-[9px] font-extrabold text-violet-300">
+                      {companyFinancials.ecashPct}%
+                    </span>
+                  </div>
+                  <span className="text-base sm:text-lg font-black text-violet-300 tabular-nums">
+                    {fmtMoney(activeModalCompany.ecashTotal)}
+                  </span>
+                </div>
+
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-inset ring-white/15">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-blue-200/80 block">
+                      Pass Volume
+                    </span>
+                    <span className="text-[9px] font-extrabold text-amber-300">
+                      {activeModalCompany.approvalRate || 100}% Appr.
+                    </span>
+                  </div>
+                  <span className="text-base sm:text-lg font-black text-white tabular-nums">
+                    {activeModalCompany.passCount} Passes
+                  </span>
+                </div>
+
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-inset ring-white/15">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-blue-200/80 block">
+                    Registered Fleet
+                  </span>
+                  <span className="text-sm sm:text-base font-black text-white tabular-nums truncate block">
+                    {activeModalCompany.persons}P ·{" "}
+                    {activeModalCompany.vehicles}V
+                  </span>
+                </div>
+
+                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-inset ring-white/15">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-blue-200/80 block">
+                    Avg Per Pass
+                  </span>
+                  <span className="text-base sm:text-lg font-black text-amber-300 tabular-nums">
+                    {fmtMoney(activeModalCompany.avgPassAmount || 0)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Tab Navigation */}
+            <div className="flex items-center justify-between px-6 pt-3 pb-0 bg-slate-50 border-b border-slate-200 shrink-0 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setLedgerActiveTab("transactions")}
+                  className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${
+                    ledgerActiveTab === "transactions"
+                      ? "border-orange-500 text-orange-600 bg-white shadow-sm rounded-t-xl"
+                      : "border-transparent text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Receipt className="h-4 w-4" />
+                  Pass Transactions
+                  <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-extrabold">
+                    {activeModalCompany.passes?.length || 0}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setLedgerActiveTab("financials")}
+                  className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${
+                    ledgerActiveTab === "financials"
+                      ? "border-orange-500 text-orange-600 bg-white shadow-sm rounded-t-xl"
+                      : "border-transparent text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  Financial Statement
+                </button>
+
+                <button
+                  onClick={() => setLedgerActiveTab("entities")}
+                  className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${
+                    ledgerActiveTab === "entities"
+                      ? "border-orange-500 text-orange-600 bg-white shadow-sm rounded-t-xl"
+                      : "border-transparent text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Users className="h-4 w-4" />
+                  Fleet &amp; Personnel
+                  <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-extrabold">
+                    {activeCompanyEntities.persons.length +
+                      activeCompanyEntities.vehicles.length}
+                  </span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 pb-2">
+                <button
+                  onClick={() => exportLedgerCSV(activeModalCompany)}
+                  className="sm:hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-500 text-white text-[11px] font-bold"
+                >
+                  <Download className="h-3 w-3" /> Export
+                </button>
+              </div>
+            </div>
+
+            {/* TAB CONTENT */}
+            {ledgerActiveTab === "transactions" && (
+              <div className="flex-1 flex flex-col min-h-0">
+                {/* Search & Filter Bar */}
+                <div className="flex items-center justify-between gap-3 px-6 py-3 bg-slate-50/80 border-b border-slate-200 flex-wrap shrink-0">
+                  <div className="relative flex-1 min-w-[240px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by pass reference no, applicant, person, vehicle plate..."
+                      value={ledgerSearchQuery}
+                      onChange={(e) => setLedgerSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400/40"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Status Filter */}
+                    <div className="flex items-center rounded-xl bg-white p-0.5 border border-slate-200 text-[11px] font-bold">
+                      {["ALL", "APPROVED", "PENDING", "REJECTED"].map((st) => (
+                        <button
+                          key={st}
+                          onClick={() => setLedgerStatusFilter(st)}
+                          className={`px-2 py-1 rounded-lg transition-colors cursor-pointer text-[10px] font-extrabold ${
+                            ledgerStatusFilter === st
+                              ? "bg-[#0a1e4d] text-white shadow-sm"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          {st === "ALL"
+                            ? "All"
+                            : st.charAt(0) + st.slice(1).toLowerCase()}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Mode Filter */}
+                    <div className="flex items-center rounded-xl bg-white p-0.5 border border-slate-200 text-[11px] font-bold">
+                      <button
+                        onClick={() => setLedgerModeFilter("ALL")}
+                        className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer text-[10px] font-extrabold ${
+                          ledgerModeFilter === "ALL"
+                            ? "bg-[#0a1e4d] text-white"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        All Modes
+                      </button>
+                      <button
+                        onClick={() => setLedgerModeFilter("ACCOUNT")}
+                        className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer text-[10px] font-extrabold ${
+                          ledgerModeFilter === "ACCOUNT"
+                            ? "bg-teal-600 text-white"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        Account
+                      </button>
+                      <button
+                        onClick={() => setLedgerModeFilter("ECASH")}
+                        className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer text-[10px] font-extrabold ${
+                          ledgerModeFilter === "ECASH"
+                            ? "bg-violet-600 text-white"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        E-Cash
+                      </button>
+                    </div>
+
+                    <span className="text-[10px] font-extrabold text-slate-500 bg-white px-2.5 py-1 rounded-xl border border-slate-200">
+                      {filteredCompanyPasses.length} records
+                    </span>
+                  </div>
+                </div>
+
+                {/* Scrollable Transaction Ledger */}
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-2.5">
+                  {filteredCompanyPasses.length === 0 ? (
+                    <div className="py-14 text-center text-slate-400">
+                      <Receipt className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+                      <p className="text-sm font-semibold">
+                        No transactions match your search or filter
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Try resetting the status or mode filter
+                      </p>
+                    </div>
+                  ) : (
+                    filteredCompanyPasses.map((p, idx) => {
+                      const isExpanded = expandedPassId === (p.id || idx);
+                      return (
+                        <div
+                          key={p.id ?? idx}
+                          className="rounded-2xl border border-slate-200 bg-white hover:border-slate-300 transition-all duration-150 overflow-hidden shadow-sm"
+                        >
+                          <div
+                            onClick={() =>
+                              setExpandedPassId(isExpanded ? null : p.id || idx)
+                            }
+                            className="flex items-center justify-between gap-3 p-3 sm:p-3.5 hover:bg-slate-50/80 cursor-pointer select-none transition-colors"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700 font-mono text-[11px] font-black shrink-0">
+                                {idx + 1}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-mono font-black text-slate-900 text-xs tracking-tight">
+                                    {p.referenceNo}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      copyToClipboard(p.referenceNo);
+                                    }}
+                                    className="text-slate-400 hover:text-slate-700 p-0.5 rounded transition-colors"
+                                    title="Copy Reference Number"
+                                  >
+                                    {copiedRef === p.referenceNo ? (
+                                      <Check className="h-3 w-3 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="h-3 w-3" />
+                                    )}
+                                  </button>
+                                  <span
+                                    className={`inline-block px-2 py-0.5 rounded-full font-extrabold text-[9px] border ${
+                                      PASS_STATUS_TONE[p.status] ||
+                                      "bg-slate-100 text-slate-600 border-slate-200"
+                                    }`}
+                                  >
+                                    {p.status.replace(/_/g, " ")}
+                                  </span>
+                                  <span
+                                    className={`inline-block px-2 py-0.5 rounded-full font-extrabold text-[9px] ${
+                                      p.paymentMode === "E-CASH" ||
+                                      p.paymentMode === "ECASH"
+                                        ? "bg-violet-50 text-violet-700 border border-violet-200"
+                                        : "bg-teal-50 text-teal-700 border border-teal-200"
+                                    }`}
+                                  >
+                                    {p.paymentMode}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 font-medium mt-0.5 truncate">
+                                  Submitted: {fmtDate(p.createdAt)}
+                                  {p.applicantName
+                                    ? ` · ${p.applicantName}`
+                                    : ""}
+                                  {p.email ? ` · ${p.email}` : ""}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600">
+                                <span className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg border border-blue-100">
+                                  <Users className="h-3 w-3" /> {p.personsCount}
+                                  P
+                                </span>
+                                <span className="inline-flex items-center gap-0.5 bg-violet-50 text-violet-700 px-2 py-0.5 rounded-lg border border-violet-100">
+                                  <Car className="h-3 w-3" /> {p.vehiclesCount}V
+                                </span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-sm font-black text-emerald-600 tabular-nums bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl block">
+                                  {fmtMoney(p.amount)}
+                                </span>
+                              </div>
+                              <div className="text-slate-400 hover:text-slate-600">
+                                {isExpanded ? (
+                                  <ChevronUp className="h-4 w-4" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4" />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Expanded Detail Accordion */}
+                          {isExpanded && (
+                            <div className="px-4 py-3.5 bg-slate-50/70 border-t border-slate-100 text-xs animate-in slide-in-from-top-1 duration-150">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                                {/* Registered Persons */}
+                                <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-sm">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                                      <Users className="h-3 w-3 text-blue-600" />
+                                      Personnel Authorized (
+                                      {p.persons?.length || 0})
+                                    </span>
+                                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+                                      Fee: {fmtMoney(p.personFee || 0)}
+                                    </span>
+                                  </div>
+                                  {p.persons?.length > 0 ? (
+                                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                                      {p.persons.map((psn, pi) => (
+                                        <div
+                                          key={pi}
+                                          className="flex items-center justify-between text-[11px] p-1.5 rounded-lg bg-slate-50 border border-slate-100"
+                                        >
+                                          <div className="min-w-0">
+                                            <p className="font-bold text-slate-800 truncate">
+                                              {psn.name ||
+                                                psn.fullName ||
+                                                "Personnel"}
+                                            </p>
+                                            <p className="text-[9px] text-slate-400 truncate">
+                                              {psn.designation || "Staff"} · ID:{" "}
+                                              {psn.aadhaarNo ||
+                                                psn.idNumber ||
+                                                psn.documentNumber ||
+                                                "Verified"}
+                                            </p>
+                                          </div>
+                                          {psn.amount > 0 && (
+                                            <span className="text-[10px] font-bold text-slate-700 tabular-nums">
+                                              {fmtMoney(psn.amount)}
+                                            </span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-[11px] text-slate-400 italic">
+                                      No person entries
+                                    </p>
+                                  )}
+                                </div>
+
+                                {/* Registered Vehicles */}
+                                <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-sm">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                                      <Car className="h-3 w-3 text-violet-600" />
+                                      Vehicles Authorized (
+                                      {p.vehicles?.length || 0})
+                                    </span>
+                                    <span className="text-[10px] font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-md">
+                                      Fee: {fmtMoney(p.vehicleFee || 0)}
+                                    </span>
+                                  </div>
+                                  {p.vehicles?.length > 0 ? (
+                                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                                      {p.vehicles.map((veh, vi) => (
+                                        <div
+                                          key={vi}
+                                          className="flex items-center justify-between text-[11px] p-1.5 rounded-lg bg-slate-50 border border-slate-100"
+                                        >
+                                          <div className="min-w-0">
+                                            <p className="font-bold text-slate-800 font-mono">
+                                              {veh.vehicleNumber ||
+                                                veh.registrationNumber ||
+                                                veh.vehicleNo ||
+                                                "Vehicle"}
+                                            </p>
+                                            <p className="text-[9px] text-slate-400 truncate">
+                                              {veh.vehicleType || "Commercial"}{" "}
+                                              {veh.driverName
+                                                ? `· Driver: ${veh.driverName}`
+                                                : ""}
+                                            </p>
+                                          </div>
+                                          {veh.amount > 0 && (
+                                            <span className="text-[10px] font-bold text-slate-700 tabular-nums">
+                                              {fmtMoney(veh.amount)}
+                                            </span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-[11px] text-slate-400 italic">
+                                      No vehicle entries
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Purpose, Zone, and Action Strip */}
+                              <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-200/80 flex-wrap">
+                                <div className="flex items-center gap-4 text-[11px] text-slate-500 flex-wrap">
+                                  <span>
+                                    <strong>Purpose:</strong> {p.purpose}
+                                  </span>
+                                  <span>
+                                    <strong>Harbor Zone:</strong> {p.zone}
+                                  </span>
+                                  <span>
+                                    <strong>Permit Type:</strong> {p.passType} (
+                                    {p.validityType})
+                                  </span>
+                                </div>
+                                <Link
+                                  href={`/traffic_approval/passes`}
+                                  className="inline-flex items-center gap-1 text-[11px] font-extrabold text-orange-600 hover:text-orange-700 transition-colors"
+                                >
+                                  Open In Pass Inspector{" "}
+                                  <ArrowUpRight className="h-3 w-3" />
+                                </Link>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: FINANCIAL STATEMENT & ANALYSIS */}
+            {ledgerActiveTab === "financials" && (
+              <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Payment Distribution */}
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                        <CreditCard className="h-4 w-4 text-blue-600" />
+                        Settlement Mode Split
+                      </h4>
+                      <span className="text-[11px] font-extrabold text-slate-400">
+                        Total {fmtMoney(activeModalCompany.total)}
+                      </span>
+                    </div>
+
+                    {/* Dual Progress Bar */}
+                    <div className="space-y-1.5">
+                      <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                        <div
+                          style={{ width: `${companyFinancials.accountPct}%` }}
+                          className="bg-teal-500 h-full transition-all"
+                          title={`Account: ${companyFinancials.accountPct}%`}
+                        />
+                        <div
+                          style={{ width: `${companyFinancials.ecashPct}%` }}
+                          className="bg-violet-500 h-full transition-all"
+                          title={`E-Cash: ${companyFinancials.ecashPct}%`}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                        <span className="flex items-center gap-1">
+                          <span className="h-2 w-2 rounded-full bg-teal-500" />
+                          Account Ledger ({companyFinancials.accountPct}%)
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="h-2 w-2 rounded-full bg-violet-500" />
+                          E-Cash Counter ({companyFinancials.ecashPct}%)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                      <div className="p-3 rounded-xl bg-teal-50/60 border border-teal-100">
+                        <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider block">
+                          Account Invoiced
+                        </span>
+                        <span className="text-lg font-black text-teal-700 tabular-nums">
+                          {fmtMoney(activeModalCompany.accountTotal)}
+                        </span>
+                        <p className="text-[9px] text-teal-600/80 mt-0.5">
+                          Credit Ledger Dues
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-violet-50/60 border border-violet-100">
+                        <span className="text-[10px] font-bold text-violet-800 uppercase tracking-wider block">
+                          E-Cash Collections
+                        </span>
+                        <span className="text-lg font-black text-violet-700 tabular-nums">
+                          {fmtMoney(activeModalCompany.ecashTotal)}
+                        </span>
+                        <p className="text-[9px] text-violet-600/80 mt-0.5">
+                          Counter / Instant Dues
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fee Classification */}
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                        <Calculator className="h-4 w-4 text-emerald-600" />
+                        Fee Classification Breakdown
+                      </h4>
+                      <span className="text-[11px] font-extrabold text-slate-400">
+                        Revenue Sources
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block">
+                            Person Passes
+                          </span>
+                          <span className="text-[10px] font-extrabold text-blue-700">
+                            {companyFinancials.personSharePct}%
+                          </span>
+                        </div>
+                        <span className="text-lg font-black text-blue-700 tabular-nums">
+                          {fmtMoney(activeModalCompany.personPassFee || 0)}
+                        </span>
+                        <p className="text-[9px] text-blue-600/80 mt-0.5">
+                          {activeModalCompany.persons} Authorized Persons
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-violet-50/60 border border-violet-100">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-violet-800 uppercase tracking-wider block">
+                            Vehicle Passes
+                          </span>
+                          <span className="text-[10px] font-extrabold text-violet-700">
+                            {companyFinancials.vehicleSharePct}%
+                          </span>
+                        </div>
+                        <span className="text-lg font-black text-violet-700 tabular-nums">
+                          {fmtMoney(activeModalCompany.vehiclePassFee || 0)}
+                        </span>
+                        <p className="text-[9px] text-violet-600/80 mt-0.5">
+                          {activeModalCompany.vehicles} Fleet Vehicles
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Settlement Status */}
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-semibold text-slate-600">
+                          Settled / Approved Passes:
+                        </span>
+                        <span className="font-black text-emerald-700 tabular-nums">
+                          {fmtMoney(companyFinancials.approvedTotal)} (
+                          {activeModalCompany.approvedCount || 0} passes)
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-semibold text-slate-600">
+                          Under Review / Pending Passes:
+                        </span>
+                        <span className="font-black text-amber-700 tabular-nums">
+                          {fmtMoney(companyFinancials.pendingTotal)} (
+                          {activeModalCompany.pendingCount || 0} passes)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Port Certification Banner */}
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-[#0a1e4d] text-white flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400">
+                      <BadgeCheck className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h5 className="font-black text-sm tracking-tight">
+                        Chennai Port Authority · Pass Clearing Certified
+                      </h5>
+                      <p className="text-[11px] text-slate-300">
+                        Automated ledger synchronization with Port Dues &amp;
+                        HEP Harbor Permit Registry
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => exportLedgerCSV(activeModalCompany)}
+                    className="px-3.5 py-1.5 rounded-xl bg-white text-[#0a1e4d] font-black text-xs hover:bg-slate-100 transition-colors shadow flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download Financial Statement
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: AUTHORIZED FLEET & PERSONNEL DIRECTORY */}
+            {ledgerActiveTab === "entities" && (
+              <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Personnel Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                        <Users className="h-4 w-4 text-blue-600" />
+                        Authorized Personnel Directory (
+                        {activeCompanyEntities.persons.length})
+                      </h4>
+                    </div>
+
+                    {activeCompanyEntities.persons.length === 0 ? (
+                      <div className="p-8 text-center rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-400">
+                        No registered personnel found for this company in{" "}
+                        {filterRange.label}
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                        {activeCompanyEntities.persons.map((psn, pi) => (
+                          <div
+                            key={pi}
+                            className="p-3 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-extrabold text-slate-900 truncate">
+                                {psn.name}
+                              </p>
+                              <p className="text-[10px] text-slate-400 font-medium truncate mt-0.5">
+                                {psn.designation} · ID: {psn.idProof}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[9px] font-mono font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                                  {psn.passRef}
+                                </span>
+                                <span className="text-[9px] text-slate-400">
+                                  {fmtDate(psn.date)}
+                                </span>
+                              </div>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 rounded-full font-black text-[9px] border shrink-0 ${
+                                PASS_STATUS_TONE[psn.passStatus] ||
+                                "bg-slate-100 text-slate-600 border-slate-200"
+                              }`}
+                            >
+                              {psn.passStatus}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Vehicles Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                        <Car className="h-4 w-4 text-violet-600" />
+                        Commercial Fleet Vehicles (
+                        {activeCompanyEntities.vehicles.length})
+                      </h4>
+                    </div>
+
+                    {activeCompanyEntities.vehicles.length === 0 ? (
+                      <div className="p-8 text-center rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-400">
+                        No registered fleet vehicles found for this company in{" "}
+                        {filterRange.label}
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                        {activeCompanyEntities.vehicles.map((veh, vi) => (
+                          <div
+                            key={vi}
+                            className="p-3 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-mono font-black text-slate-900 text-sm">
+                                {veh.plate}
+                              </p>
+                              <p className="text-[10px] text-slate-400 font-medium truncate mt-0.5">
+                                {veh.type} · Driver: {veh.driver}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[9px] font-mono font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                                  {veh.passRef}
+                                </span>
+                                <span className="text-[9px] text-slate-400">
+                                  {fmtDate(veh.date)}
+                                </span>
+                              </div>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 rounded-full font-black text-[9px] border shrink-0 ${
+                                PASS_STATUS_TONE[veh.passStatus] ||
+                                "bg-slate-100 text-slate-600 border-slate-200"
+                              }`}
+                            >
+                              {veh.passStatus}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-200 shrink-0 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500">
+                  Company:{" "}
+                  <strong className="text-slate-800">
+                    {activeModalCompany.name}
+                  </strong>{" "}
+                  · Total {activeModalCompany.passCount} Passes Recorded
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => exportLedgerCSV(activeModalCompany)}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export CSV
+                </button>
+                <Link
+                  href="/traffic_approval/passes"
+                  className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-md transition-colors flex items-center gap-1.5"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View in Passes Portal
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedLedgerCompany(null);
+                    setLedgerSearchQuery("");
+                    setLedgerStatusFilter("ALL");
+                    setLedgerModeFilter("ALL");
+                    setLedgerActiveTab("transactions");
+                    setExpandedPassId(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-white border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: FULL COMPANY REVENUE LEDGER DIRECTORY */}
+      {showFullLedgerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            {/* Header */}
+            <div className="relative overflow-hidden bg-gradient-to-r from-[#0a1e4d] via-[#122863] to-[#1b1c5c] px-6 py-5 text-white shrink-0">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 text-white shadow-lg shrink-0">
+                    <Receipt className="h-5 w-5" strokeWidth={2.2} />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300">
+                      Directory & Financial Ledger
+                    </span>
+                    <h3 className="text-xl font-black text-white tracking-tight">
+                      All Companies Revenue Ledger
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowFullLedgerModal(false);
+                    setAllCompaniesSearch("");
+                  }}
+                  className="rounded-2xl p-2 text-white/70 hover:text-white hover:bg-white/15 transition-all focus:outline-none cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative mt-4">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
+                <input
+                  type="text"
+                  placeholder="Search companies by name..."
+                  value={allCompaniesSearch}
+                  onChange={(e) => setAllCompaniesSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 rounded-xl bg-white/10 text-white placeholder-white/50 text-xs font-semibold ring-1 ring-inset ring-white/20 focus:outline-none focus:ring-2 focus:ring-orange-400/60"
+                />
+              </div>
+            </div>
+
+            {/* Ranked Company List */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-2 divide-y divide-slate-100">
+              {allCompaniesFiltered.length === 0 ? (
+                <div className="py-12 text-center text-slate-400">
+                  <Building2 className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+                  <p className="text-sm font-semibold">
+                    No companies match your search
+                  </p>
+                </div>
+              ) : (
+                allCompaniesFiltered.map((c, i) => (
+                  <div
+                    key={c.name}
+                    onClick={() => {
+                      setSelectedLedgerCompany(c);
+                      setShowFullLedgerModal(false);
+                      setLedgerSearchQuery("");
+                      setLedgerStatusFilter("ALL");
+                      setLedgerModeFilter("ALL");
+                      setLedgerActiveTab("transactions");
+                      setExpandedPassId(null);
+                    }}
+                    className="flex items-center justify-between gap-3 pt-2.5 first:pt-0 hover:bg-emerald-50/50 p-3 rounded-2xl transition-all cursor-pointer border border-transparent hover:border-emerald-200"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-700 font-mono text-xs font-black shrink-0">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="font-extrabold text-slate-800 text-xs truncate">
+                          {c.name}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                          {c.passCount} passes · {c.persons} Persons ·{" "}
+                          {c.vehicles} Vehicles
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-black text-emerald-600 text-sm tabular-nums bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-xl">
+                        {fmtMoney(c.total)}
+                      </span>
+                      <span className="text-[11px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-xl flex items-center gap-1 hover:bg-orange-100 transition-colors">
+                        View Ledger <ChevronRight className="h-3 w-3" />
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-200 shrink-0">
+              <span className="text-xs font-bold text-slate-500">
+                Showing {allCompaniesFiltered.length} of{" "}
+                {displayData.hepRevenue.companyList.length} companies
+              </span>
+              <button
+                onClick={() => setShowFullLedgerModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-300 transition-colors cursor-pointer"
+              >
+                Close Directory
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

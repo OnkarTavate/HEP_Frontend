@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils";
 import axios from "axios";
 import { toast } from "sonner";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
+import { canAccess, resolveHome } from "@/lib/roleRouting";
 import NotificationPanel from "@/components/NotificationPanel";
 
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API;
@@ -327,19 +328,28 @@ export default function DashboardLayout({ children }) {
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      const role = String(parsedUser.role || "").toLowerCase().trim();
-      const isAdmin = role === "admin" || role === "administrator";
-      if (isAdmin) { setTimeout(() => router.push("/admin"), 0); return; }
-      setUser(parsedUser);
-      if (parsedUser.isPasswordChanged === false) setShowPasswordChangeModal(true);
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        const isAgent = canAccess("dashboard", parsedUser);
 
-      // Fetch company profile for the panel
-      const token = localStorage.getItem("accessToken");
-      if (token && (role === "user" || role === "applicant" || role === "agent")) {
-        axios.get(`${AGENT_API}/agents/profile`, { headers: { Authorization: `Bearer ${token}` } })
-          .then((res) => { if (res.data?.success) setProfileData(res.data.data); })
-          .catch(() => { });
+        if (!isAgent) {
+          toast.error("Access Restricted: External Applicant Dashboard only.");
+          router.push(resolveHome(parsedUser));
+          return;
+        }
+
+        setUser(parsedUser);
+        if (parsedUser.isPasswordChanged === false) setShowPasswordChangeModal(true);
+
+        // Fetch company profile for the panel
+        const token = localStorage.getItem("accessToken");
+        if (token) {
+          axios.get(`${AGENT_API}/agents/profile`, { headers: { Authorization: `Bearer ${token}` } })
+            .then((res) => { if (res.data?.success) setProfileData(res.data.data); })
+            .catch(() => { });
+        }
+      } catch {
+        router.push("/");
       }
     } else {
       setTimeout(() => router.push("/"), 0);

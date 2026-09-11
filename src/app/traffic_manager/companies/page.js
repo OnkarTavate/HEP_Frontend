@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import PaginationBar from "@/components/ui/PaginationBar";
 import axios from "axios";
 import { toast } from "sonner";
@@ -20,6 +20,17 @@ import {
   RefreshCw,
   Clock,
   Users,
+  Sparkles,
+  ArrowUpRight,
+  BadgeCheck,
+  Briefcase,
+  AlertCircle,
+  ChevronRight,
+  Filter,
+  X,
+  Calendar,
+  Layers,
+  ArrowRight,
 } from "lucide-react";
 
 // ── API constants ────────────────────────────────────────────────────────────
@@ -77,6 +88,7 @@ export default function TrafficCompanyApprovals() {
     rejected: 0,
     pending: 0,
   });
+  const [operatorTypeFilter, setOperatorTypeFilter] = useState("ALL");
 
   // Modal States
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -141,12 +153,25 @@ export default function TrafficCompanyApprovals() {
 
   useEffect(() => {
     fetchActiveLocks();
+    const interval = setInterval(fetchActiveLocks, 900); // every 900ms (< 1s)
+    return () => clearInterval(interval);
   }, [fetchActiveLocks]);
 
   useEffect(() => {
     if (!selectedRequest || isViewMode) return;
 
+    const interval = setInterval(async () => {
+      const lockRes = await acquireLock(selectedRequest.id, "company");
+      if (!lockRes.success) {
+        toast.error("Lock Lost", {
+          description: "This application lock has expired or was taken by another user.",
+        });
+        setSelectedRequest(null);
+      }
+    }, 10000); // refresh every 10 seconds
+
     return () => {
+      clearInterval(interval);
       releaseLock(selectedRequest.id, "company").then(() => {
         fetchActiveLocks();
       });
@@ -265,28 +290,8 @@ export default function TrafficCompanyApprovals() {
 
   useEffect(() => {
     fetchDashboardData(false);
-
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      fetchDashboardData(true);
-    }, 15000); // Poll every 15s without showing loading spinner
-
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        fetchDashboardData(true);
-      }
-    };
-
-    if (typeof window !== "undefined") {
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-    }
-
-    return () => {
-      clearInterval(interval);
-      if (typeof window !== "undefined") {
-        document.removeEventListener("visibilitychange", handleVisibilityChange);
-      }
-    };
+    const interval = setInterval(() => fetchDashboardData(true), 5000); // Poll every 5 seconds without showing loading spinner
+    return () => clearInterval(interval);
   }, [fetchDashboardData]);
 
   // ── Action helpers ────────────────────────────────────────────────────────
@@ -347,51 +352,46 @@ export default function TrafficCompanyApprovals() {
 
   // ── Derived data ──────────────────────────────────────────────────────────
   const pendingCount = globalCounts.pending;
-  const approvedCount = globalCounts.approved ?? Math.max(0, globalCounts.total - globalCounts.pending);
-  const rejectedCount = globalCounts.rejected ?? 0;
-  const processedCount = (globalCounts.approved ?? 0) + (globalCounts.rejected ?? 0) || Math.max(0, globalCounts.total - globalCounts.pending);
-  const displayedRequests = requests;
+  const processedCount = globalCounts.total - globalCounts.pending;
+  const approvedCount = globalCounts.approved;
+  const rejectedCount = globalCounts.rejected;
+
+  const availableOperatorTypes = useMemo(() => {
+    const set = new Set();
+    requests.forEach((r) => {
+      if (r.userTypeName) set.add(r.userTypeName);
+    });
+    return Array.from(set);
+  }, [requests]);
+
+  const displayedRequests = useMemo(() => {
+    if (operatorTypeFilter === "ALL") return requests;
+    return requests.filter((r) => r.userTypeName === operatorTypeFilter);
+  }, [requests, operatorTypeFilter]);
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="w-full flex flex-col gap-4 p-2">
-        {/* Stat cards skeleton */}
+      <div className="w-full space-y-5 p-6 bg-slate-50 min-h-screen">
+        <div className="h-20 rounded-2xl bg-slate-200 animate-pulse" />
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {[0, 1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="h-28 rounded-2xl bg-slate-200 dark:bg-slate-800/60 animate-pulse"
+              className="h-28 rounded-2xl bg-slate-200 animate-pulse"
               style={{ animationDelay: `${i * 100}ms` }}
             />
           ))}
         </div>
-        <div className="h-10 rounded-xl bg-slate-200 dark:bg-slate-800/40 animate-pulse" />
-        <div className="h-64 rounded-2xl bg-slate-200 dark:bg-slate-800/40 animate-pulse" />
-        {/* Floating loader */}
-        <div className="pointer-events-none absolute inset-x-0 top-[50%] flex justify-center">
-          <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-md ring-1 ring-slate-200/70 dark:ring-white/10 shadow-lg">
-            <span className="relative flex h-7 w-7 items-center justify-center rounded-xl bg-amber-400 text-[#1f1f1f] shrink-0">
-              <Building2 className="h-4 w-4" strokeWidth={2.5} />
-              <span className="absolute inset-0 rounded-xl ring-2 ring-amber-400/60 animate-ping" />
-            </span>
-            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200 tracking-wide">
-              Loading company data
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce [animation-delay:-0.3s]" />
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce [animation-delay:-0.15s]" />
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-bounce" />
-            </span>
-          </div>
-        </div>
+        <div className="h-12 rounded-xl bg-slate-200 animate-pulse" />
+        <div className="h-96 rounded-2xl bg-slate-200 animate-pulse" />
       </div>
     );
   }
 
   // ── Main render ────────────────────────────────────────────────────────────
   return (
-    <div className="w-full space-y-5 font-sans text-slate-800 p-2 sm:p-4 pb-8">
+    <div className="w-full space-y-5 font-sans text-slate-800 p-6 pb-8 bg-slate-50 min-h-screen">
       {/* ── HEADER STRIP ── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0a1e4d] via-[#12275f] to-[#1b1856] ring-1 ring-inset ring-white/15 px-6 py-5 text-white shadow-[0_8px_24px_-10px_rgba(10,30,77,0.55)]">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
@@ -554,6 +554,7 @@ export default function TrafficCompanyApprovals() {
               onClick={() => {
                 setActiveTab(tab.id);
                 setProcessedByMe(false);
+                setOperatorTypeFilter("ALL");
                 setCurrentPage(1);
               }}
               className={`relative flex items-center gap-2 px-5 py-3 text-xs font-black rounded-t-2xl transition-all cursor-pointer select-none whitespace-nowrap ${
@@ -568,7 +569,7 @@ export default function TrafficCompanyApprovals() {
                 className={`ml-1.5 inline-flex items-center justify-center min-w-[22px] h-5 px-2 rounded-full text-[10px] font-black ${
                   isActive
                     ? "bg-orange-500 text-white"
-                    : "bg-slate-200 text-slate-700"
+                    : "bg-slate-100 text-slate-600 border border-slate-200"
                 }`}
               >
                 {tab.count}
@@ -578,105 +579,157 @@ export default function TrafficCompanyApprovals() {
         })}
       </div>
 
-      {/* ── Table card ── */}
-      <div className="relative bg-white/55 dark:bg-white/5 backdrop-blur-2xl backdrop-saturate-150 rounded-2xl ring-1 ring-inset ring-white/50 dark:ring-white/10 border border-white/60 dark:border-white/10 shadow-[0_12px_40px_-12px_rgba(10,30,77,0.22),inset_0_1px_0_0_rgba(255,255,255,0.7)] overflow-hidden">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent" />
+      {/* ── TABLE CARD ── */}
+      <div className="relative rounded-3xl border border-slate-200 bg-white shadow-[0_8px_28px_-10px_rgba(10,30,77,0.12)] overflow-hidden">
         {/* Table toolbar */}
-        <div className="relative flex flex-col md:flex-row items-center justify-between gap-3 px-5 py-4 border-b border-white/50 dark:border-white/10 bg-white/30 dark:bg-white/5 backdrop-blur-xl">
-          <h3 className="font-bold text-slate-800 dark:text-stone-100 uppercase text-xs tracking-widest flex items-center gap-2">
-            {activeTab === "pending" ? (
-              <>
-                <ShieldAlert className="h-4 w-4 text-amber-500" /> Awaiting
-                Approval
-              </>
-            ) : (
-              <>
-                <History className="h-4 w-4 text-emerald-500" /> Processed
-                Companies
-              </>
-            )}
-          </h3>
-          <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 items-center">
-            {activeTab === "processed" && (
-              <label className="flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 ring-1 ring-inset ring-white/40 dark:ring-white/10 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-white/70 dark:hover:bg-white/10 transition-colors select-none">
+        <div className="flex flex-col gap-3 p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-white to-slate-50">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
+                {activeTab === "pending" ? (
+                  <ShieldAlert className="h-4 w-4" />
+                ) : activeTab === "processed" ? (
+                  <History className="h-4 w-4" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
+              </span>
+              <h3 className="font-extrabold text-slate-800 text-sm tracking-tight">
+                {activeTab === "pending"
+                  ? "Awaiting Authority Verification & Clearance"
+                  : activeTab === "processed"
+                    ? "Processed Port Operator Records"
+                    : "Company Profile Update Review Queue"}
+              </h3>
+              <span className="text-[11px] font-extrabold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-full ml-1">
+                {displayedRequests.length} loaded
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 items-center">
+              {activeTab === "processed" && (
+                <label className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-pointer hover:bg-slate-50 transition-colors select-none shadow-sm">
+                  <input
+                    type="checkbox"
+                    id="processed-by-me-filter"
+                    checked={processedByMe}
+                    onChange={(e) => {
+                      setProcessedByMe(e.target.checked);
+                      setCurrentPage(1);
+                    }}
+                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 h-4 w-4 cursor-pointer"
+                  />
+                  <span>Processed By Me</span>
+                </label>
+              )}
+              <div className="relative w-full sm:w-80">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
                 <input
-                  type="checkbox"
-                  id="processed-by-me-filter"
-                  checked={processedByMe}
-                  onChange={(e) => {
-                    setProcessedByMe(e.target.checked);
-                    setCurrentPage(1);
-                  }}
-                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 h-4 w-4 cursor-pointer"
+                  type="text"
+                  placeholder="Search company name, ref, email..."
+                  value={searchVal}
+                  onChange={(e) => setSearchVal(e.target.value)}
+                  className="w-full pl-10 pr-8 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400 shadow-sm transition"
                 />
-                <span>Processed By Me</span>
-              </label>
-            )}
-            <div className="relative w-full md:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-              <input
-                type="text"
-                placeholder="Search company or ref..."
-                value={searchVal}
-                onChange={(e) => setSearchVal(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 ring-1 ring-inset ring-white/40 dark:ring-white/10 rounded-xl text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-amber-400/70 dark:focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:bg-white/70 transition"
-              />
+                {searchVal && (
+                  <button
+                    onClick={() => setSearchVal("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
+
+          {/* Operator Type Quick Filter Pills */}
+          {activeTab !== "profile_updates" && availableOperatorTypes.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-100">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
+                <Filter className="h-3 w-3" /> Type:
+              </span>
+              <button
+                onClick={() => setOperatorTypeFilter("ALL")}
+                className={`px-3 py-1 rounded-lg text-[11px] font-black transition-colors cursor-pointer ${
+                  operatorTypeFilter === "ALL"
+                    ? "bg-[#0a1e4d] text-white shadow-sm"
+                    : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                All Types
+              </button>
+              {availableOperatorTypes.map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setOperatorTypeFilter(type)}
+                  className={`px-3 py-1 rounded-lg text-[11px] font-black transition-colors cursor-pointer ${
+                    operatorTypeFilter === type
+                      ? "bg-orange-500 text-white shadow-sm"
+                      : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="overflow-x-auto">
           {activeTab === "profile_updates" ? (
             <table className="w-full text-left">
               <thead>
-                <tr className="bg-white/35 dark:bg-white/5 backdrop-blur-xl border-b border-white/50 dark:border-white/10">
+                <tr className="bg-slate-100/90 border-b border-slate-200">
                   {["Ref No", "Company / Agent Name", "Submitted Date", "Status", "Action"].map((h) => (
                     <th
                       key={h}
-                      className={`px-5 py-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${h === "Action" || h === "Status" ? "text-center" : ""}`}
+                      className={`px-5 py-3.5 text-[11px] font-black text-slate-600 uppercase tracking-wider ${h === "Action" || h === "Status" ? "text-center" : ""}`}
                     >
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/50 dark:divide-white/5">
+              <tbody className="divide-y divide-slate-100">
                 {profileUpdateRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-16 text-center text-slate-400 dark:text-slate-500">
-                      <Building2 className="h-10 w-10 mx-auto text-slate-200 dark:text-slate-700 mb-3" />
-                      <p className="text-sm font-medium">No profile update requests found.</p>
+                    <td colSpan={5} className="py-16 text-center text-slate-400">
+                      <Building2 className="h-10 w-10 mx-auto text-slate-300 mb-3" />
+                      <p className="text-sm font-semibold">No profile update requests found.</p>
                     </td>
                   </tr>
                 ) : (
                   profileUpdateRequests.map((req) => (
                     <tr
                       key={req.id}
-                      className="hover:bg-white/55 dark:hover:bg-white/10 hover:backdrop-blur-sm transition-colors cursor-pointer"
+                      className="hover:bg-amber-50/50 transition-colors cursor-pointer"
                       onClick={() => {
                         setSelectedProfileUpdateRequest(req);
                         setIsProfileUpdateModalOpen(true);
                       }}
                     >
-                      <td className="px-5 py-4 text-sm font-bold text-slate-800 dark:text-stone-200 font-mono">
-                        {req.referenceNumber}
+                      <td className="px-5 py-4 text-xs font-mono font-black text-slate-900">
+                        <span className="bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
+                          {req.referenceNumber}
+                        </span>
                       </td>
                       <td className="px-5 py-4">
-                        <div className="text-sm font-bold text-slate-800 dark:text-stone-100">
+                        <div className="text-sm font-extrabold text-slate-900">
                           {req.currentEntityName || req.currentProfile?.entityName || req.entityName || `Agent ID #${req.agentId}`}
                         </div>
                         {req.remarks && req.remarks.trim() !== "" && req.remarks.trim() !== "-" && req.remarks.trim() !== "—" && (
-                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                          <div className="text-xs text-slate-500 mt-0.5">
                             Remarks: {req.remarks}
                           </div>
                         )}
                       </td>
-                      <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">
+                      <td className="px-5 py-4 text-xs font-semibold text-slate-600">
                         {new Date(req.createdAt).toLocaleDateString("en-GB")}
                       </td>
                       <td className="px-5 py-4 text-center">
                         <span
-                          className={`px-3 py-1 rounded-full text-[11px] font-bold border uppercase ${req.status === "approved"
+                          className={`px-3 py-1 rounded-full text-[10px] font-black border uppercase ${req.status === "approved"
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                             : req.status === "reverted"
                               ? "bg-amber-50 text-amber-700 border-amber-200"
@@ -696,9 +749,9 @@ export default function TrafficCompanyApprovals() {
                             setSelectedProfileUpdateRequest(req);
                             setIsProfileUpdateModalOpen(true);
                           }}
-                          className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-black font-extrabold text-xs shadow-sm"
+                          className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer"
                         >
-                          Review Diff & Process
+                          Review Diff &amp; Process
                         </button>
                       </td>
                     </tr>
@@ -709,130 +762,149 @@ export default function TrafficCompanyApprovals() {
           ) : (
             <table className="w-full text-left">
               <thead>
-                <tr className="bg-white/35 dark:bg-white/5 backdrop-blur-xl border-b border-white/50 dark:border-white/10">
+                <tr className="bg-slate-100/90 border-b border-slate-200">
                   {(activeTab === "processed"
-                    ? ["Ref No", "Company Name", "Operator Type", "Approved By", "Status"]
-                    : ["Ref No", "Company Name", "Operator Type", activeTab === "pending" ? "Action" : "Status"]
+                    ? ["Ref No", "Company / Operator Name", "Operator Type", "Approved By", "Status", "Action"]
+                    : ["Ref No", "Company / Operator Name", "Operator Type", "Status", "Action"]
                   ).map((h) => (
                     <th
                       key={h}
-                      className={`px-5 py-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${h === "Action" || h === "Status" ? "text-center" : ""}`}
+                      className={`px-5 py-3.5 text-[11px] font-black text-slate-600 uppercase tracking-wider ${h === "Action" || h === "Status" ? "text-center" : ""}`}
                     >
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/50 dark:divide-white/5">
+              <tbody className="divide-y divide-slate-100">
                 {displayedRequests.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={activeTab === "processed" ? 5 : 4}
-                      className="py-16 text-center text-slate-400 dark:text-slate-500"
+                      colSpan={activeTab === "processed" ? 6 : 5}
+                      className="py-16 text-center text-slate-400"
                     >
-                      <Building2 className="h-10 w-10 mx-auto text-slate-200 dark:text-slate-700 mb-3" />
-                      <p className="text-sm font-medium">No records found.</p>
+                      <Building2 className="h-10 w-10 mx-auto text-slate-300 mb-3" />
+                      <p className="text-sm font-semibold">No company registration records found.</p>
+                      <p className="text-xs text-slate-400 mt-1">Try clearing search or filter parameters</p>
                     </td>
                   </tr>
                 ) : (
                   displayedRequests.map((req) => {
                     const statusColors = {
-                      approved:
-                        "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
-                      reverted:
-                        "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
-                      rejected:
-                        "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
+                      approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                      reverted: "bg-amber-50 text-amber-700 border-amber-200",
+                      rejected: "bg-rose-50 text-rose-700 border-rose-200",
                     };
                     const statusClass =
-                      statusColors[req.status] ||
-                      "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+                      statusColors[req.status] || "bg-blue-50 text-blue-700 border-blue-200";
 
-                    const lock = activeLocks.company?.find(l => String(l.applicationId) === String(req.id));
+                    const lock = activeLocks.company?.find((l) => String(l.applicationId) === String(req.id));
                     const isLocked = !!lock;
 
                     const rowClass = isLocked
-                      ? "bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group"
-                      : "hover:bg-white/55 dark:hover:bg-white/10 hover:backdrop-blur-sm transition-colors cursor-pointer group";
+                      ? "bg-amber-50/70 hover:bg-amber-100/70 transition-colors cursor-pointer group"
+                      : "hover:bg-orange-50/40 transition-colors cursor-pointer group";
+
+                    const handleOpenModal = async () => {
+                      const viewOnly = activeTab === "processed";
+                      if (!viewOnly) {
+                        const lockRes = await acquireLock(req.id, "company");
+                        if (!lockRes.success) {
+                          toast.error("Application In-Use", {
+                            description: lockRes.message,
+                          });
+                          return;
+                        }
+                      }
+
+                      // On-demand fetch of complete agent profile for verification modal
+                      try {
+                        const token = localStorage.getItem("accessToken");
+                        const profileRes = await axios.get(`${ADMIN_API}/user/agent/${req.id}`, {
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        if (profileRes.data?.data) {
+                          setSelectedRequest({ ...req, ...profileRes.data.data });
+                        } else {
+                          setSelectedRequest(req);
+                        }
+                      } catch (err) {
+                        setSelectedRequest(req);
+                      }
+
+                      setIsViewMode(viewOnly);
+                      setRemarks(req.rejectedReason || "");
+                    };
 
                     return (
                       <tr
                         key={req.id}
-                        onClick={async () => {
-                          const viewOnly = activeTab === "processed";
-                          if (!viewOnly) {
-                            const lockRes = await acquireLock(req.id, "company");
-                            if (!lockRes.success) {
-                              toast.error("Application In-Use", {
-                                description: lockRes.message,
-                              });
-                              return;
-                            }
-                          }
-
-                          // On-demand fetch of complete agent profile for verification modal
-                          try {
-                            const token = localStorage.getItem("accessToken");
-                            const profileRes = await axios.get(`${ADMIN_API}/user/agent/${req.id}`, {
-                              headers: { Authorization: `Bearer ${token}` },
-                            });
-                            if (profileRes.data?.data) {
-                              setSelectedRequest({ ...req, ...profileRes.data.data });
-                            } else {
-                              setSelectedRequest(req);
-                            }
-                          } catch (err) {
-                            setSelectedRequest(req);
-                          }
-
-                          setIsViewMode(viewOnly);
-                          setRemarks(req.rejectedReason || "");
-                        }}
+                        onClick={handleOpenModal}
                         className={rowClass}
                       >
-                        <td className="px-5 py-4 text-sm font-bold text-slate-800 dark:text-stone-200 font-mono">
-                          {req.referenceNumber || "—"}
+                        <td className="px-5 py-4 text-xs font-mono font-black text-slate-900">
+                          <span className="bg-slate-100 px-2 py-1 rounded-md border border-slate-200 group-hover:bg-white transition-colors">
+                            {req.referenceNumber || "—"}
+                          </span>
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-300 to-orange-400 dark:from-amber-400 dark:to-orange-500 flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0">
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center font-black text-sm text-white shadow-sm shrink-0">
                               {(req.entityName || "?").charAt(0).toUpperCase()}
                             </div>
-                            <div>
-                              <div className="text-sm font-bold text-slate-800 dark:text-stone-100">
+                            <div className="min-w-0">
+                              <div className="text-sm font-black text-slate-900 truncate flex items-center gap-1.5">
                                 {req.entityName || "—"}
+                                <BadgeCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                               </div>
-                              {req.email && (
-                                <div className="text-xs text-slate-500 dark:text-slate-400">
-                                  {req.email}
-                                </div>
-                              )}
+                              <div className="text-xs text-slate-500 truncate mt-0.5">
+                                {req.email || "No email provided"}
+                                {req.mobileNo ? ` · ${req.mobileNo}` : ""}
+                              </div>
                             </div>
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <span className="bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-[11px] font-bold border border-blue-200 dark:border-blue-500/20">
-                            {req.userTypeName || "Agent"}
+                          <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full text-[11px] font-extrabold inline-block">
+                            {req.userTypeName || "Commercial Operator"}
                           </span>
                         </td>
                         {activeTab === "processed" && (
-                          <td className="px-5 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                            {req.approvedBy || "—"}
+                          <td className="px-5 py-4 text-xs font-bold text-slate-700">
+                            {req.approvedBy || "Traffic Authority"}
                           </td>
                         )}
                         <td className="px-5 py-4 text-center">
                           <div className="flex flex-col items-center gap-1">
                             <span
-                              className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}
+                              className={`px-3 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider ${statusClass}`}
                             >
                               {(req.status || "PENDING").toUpperCase()}
                             </span>
                             {isLocked && (
-                              <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900 animate-pulse">
-                                IN-USE BY {lock.userName.toUpperCase()}
+                              <span className="text-[9px] text-amber-700 font-black bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300 animate-pulse flex items-center gap-1">
+                                <AlertCircle className="h-2.5 w-2.5" />
+                                IN-USE: {lock.userName.toUpperCase()}
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td className="px-5 py-4 text-center">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenModal();
+                            }}
+                            className={`px-3.5 py-1.5 rounded-xl font-black text-xs transition-all shadow-sm flex items-center gap-1 mx-auto active:scale-95 ${
+                              activeTab === "pending"
+                                ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-orange-400/25"
+                                : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                            }`}
+                          >
+                            {activeTab === "pending" ? "Verify" : "Details"}
+                            <ArrowRight className="h-3 w-3" />
+                          </button>
                         </td>
                       </tr>
                     );

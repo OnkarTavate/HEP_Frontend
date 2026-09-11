@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import PaginationBar from "@/components/ui/PaginationBar";
 import axios from "axios";
@@ -36,6 +36,11 @@ import {
   RotateCcw,
   Zap,
   PackageCheck,
+  ChevronRight,
+  ArrowRight,
+  Sparkles,
+  BadgeCheck,
+  Car,
 } from "lucide-react";
 
 import {
@@ -306,64 +311,6 @@ export default function TrafficPassesPage() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [companyProfile, setCompanyProfile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isMarineFireSafety, setIsMarineFireSafety] = useState(false);
-  const [userDepartmentId, setUserDepartmentId] = useState(null);
-
-  const [essentialWorkflowStage, setEssentialWorkflowStage] = useState(null);
-  const [userContextReady, setUserContextReady] = useState(false);
-  const [isEssentialOilDockApprover, setIsEssentialOilDockApprover] =
-    useState(false);
-
-  useEffect(() => {
-    const userStr = localStorage.getItem("user");
-
-    if (!userStr) {
-      setUserContextReady(true);
-      return;
-    }
-
-    try {
-      const user = JSON.parse(userStr);
-
-      const role = String(user?.role || "").trim();
-      const departmentId = Number(user?.departmentId);
-
-      setUserRole(role);
-      setUserDepartmentId(departmentId);
-
-      setIsMarineFireSafety(
-        role === "Fire Safety Officer" && departmentId === 7,
-      );
-
-      let essentialStage = null;
-
-      if (
-        departmentId === 7 &&
-        ["Dy. Conservator", "Fire Safety Officer"].includes(role)
-      ) {
-        essentialStage = "PENDING_MARINE_ESSENTIAL";
-      } else if (role === "Approval" && departmentId === 3) {
-        essentialStage = "PENDING_CIVIL_ESSENTIAL";
-      } else if (role === "Approval" && departmentId === 4) {
-        essentialStage = "PENDING_MECHANICAL_ESSENTIAL";
-      } else if (
-        ["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"].includes(
-          role,
-        )
-      ) {
-        essentialStage = "PENDING_CISF_ESSENTIAL";
-      } else if (role === "Approval" && departmentId === 9) {
-        essentialStage = "PENDING_PASS_SECTION_ESSENTIAL";
-      }
-
-      setEssentialWorkflowStage(essentialStage);
-      setIsEssentialOilDockApprover(Boolean(essentialStage));
-      setUserContextReady(true);
-    } catch (error) {
-      console.error("Failed to parse user:", error);
-      setUserContextReady(true);
-    }
-  }, []);
 
   const extractEntityIndex = (entityId) => {
     if (!entityId) return 0;
@@ -395,190 +342,40 @@ export default function TrafficPassesPage() {
     );
   };
 
-  // const canUserVerifyPerson = (p) => {
-  //   const personWorkflowState = String(p?.essentialWorkflowState || "")
-  //     .trim()
-  //     .toUpperCase();
-
-  //   const isEssentialOilDockPerson =
-  //     personWorkflowState.endsWith("_PERSON_ESSENTIAL") ||
-  //     (p?.essentialDepartmentId !== null &&
-  //       p?.essentialDepartmentId !== undefined);
-
-  //   /*
-  //    * ============================================================
-  //    * NEW PERSON ESSENTIAL OIL DOCK FLOW
-  //    * Civil/Mechanical -> Traffic
-  //    *
-  //    * Do NOT apply the old Sr. DTM rule to this new person flow.
-  //    * ============================================================
-  //    */
-  //   if (isEssentialOilDockPerson) {
-  //     return (
-  //       personWorkflowState ===
-  //       String(essentialWorkflowStage || "")
-  //         .trim()
-  //         .toUpperCase()
-  //     );
-  //   }
-
-  //   /*
-  //    * ============================================================
-  //    * EXISTING FLOW — DO NOT CHANGE
-  //    * ============================================================
-  //    */
-  //   if (userRole === "Senior Deputy Traffic Manager") {
-  //     return isOilDockArea(p.accessAreaId || p.accessArea);
-  //   }
-
-  //   if (userRole === "Approval") {
-  //     const needsDtm = isOilDockArea(p.accessAreaId || p.accessArea);
-  //     return !needsDtm || p.srDtmApproved;
-  //   }
-
-  //   return false;
-  // };
-
   const canUserVerifyPerson = (p) => {
-    // ============================================================
-    // ESSENTIAL OIL DOCK PERSON WORKFLOW
-    // Civil / Mechanical -> Traffic
-    // Traffic stage = PENDING_TRAFFIC_PERSON_ESSENTIAL
-    // ============================================================
-    const essentialPersonStage = String(p?.essentialWorkflowState || "")
-      .trim()
-      .toUpperCase();
-
-    if (
-      essentialPersonStage === "PENDING_CIVIL_PERSON_ESSENTIAL" &&
-      essentialWorkflowStage === "PENDING_CIVIL_ESSENTIAL"
-    ) {
-      return true;
-    }
-
-    if (
-      essentialPersonStage === "PENDING_MECHANICAL_PERSON_ESSENTIAL" &&
-      essentialWorkflowStage === "PENDING_MECHANICAL_ESSENTIAL"
-    ) {
-      return true;
-    }
-
-    if (
-      essentialPersonStage === "PENDING_TRAFFIC_PERSON_ESSENTIAL" &&
-      essentialWorkflowStage === "PENDING_PASS_SECTION_ESSENTIAL"
-    ) {
-      return true;
-    }
-
-    // ============================================================
-    // EXISTING PERSON FLOW — DO NOT CHANGE
-    // ============================================================
     if (userRole === "Senior Deputy Traffic Manager") {
       return isOilDockArea(p.accessAreaId || p.accessArea);
     }
-
     if (userRole === "Approval") {
-      return true;
+      const needsDtm = isOilDockArea(p.accessAreaId || p.accessArea);
+      return !needsDtm || p.srDtmApproved;
     }
-
     return false;
   };
 
   const canUserVerifyVehicle = (v) => {
-    const isEssentialOilDockVehicle =
-      Boolean(v?.essentialWorkflowState) ||
-      isOilDockArea(v?.accessAreaId || v?.accessArea);
-
-    // ============================================================
-    // ESSENTIAL OIL DOCK FLOW
-    // Fire Safety / Civil / Mechanical / CISF / Pass Section
-    // ============================================================
-    if (essentialWorkflowStage && isEssentialOilDockVehicle) {
-      return v.essentialWorkflowState === essentialWorkflowStage;
-    }
-
     if (userRole === "Safety Officer") {
-      const passType = String(v.passType || "").toUpperCase();
-      const vehicleType = String(v.vehicleTypeName || "").toUpperCase();
-      return (
-        ["YEARLY", "ANNUAL"].includes(passType) &&
-        ["TRAILORS", "TRAILER LORRY"].includes(vehicleType)
-      );
+      return ["MONTHLY", "YEARLY", "ANNUAL"].includes(v.passType);
     }
-
-    if (userRole === "Fire Safety Officer" && isMarineFireSafety) {
-      const passType = String(v.passType || "")
-        .trim()
-        .toUpperCase();
-
-      const vehicleType = String(v.vehicleTypeName || "")
-        .trim()
-        .toUpperCase();
-
-      const isAnnualTrailer =
-        ["YEARLY", "ANNUAL"].includes(passType) &&
-        ["TRAILORS", "TRAILER LORRY"].includes(vehicleType);
-
-      const vehicleStatus = String(v.status || "")
-        .trim()
-        .toLowerCase();
-
-      return (
-        isAnnualTrailer &&
-        (vehicleStatus === "approved" || vehicleStatus === "pending") &&
-        v.marineSafetyApproved !== true
-      );
+    if (userRole === "Fire Safety Officer") {
+      return isOilDockArea(v.accessAreaId || v.accessArea);
     }
-
     if (userRole === "Senior Deputy Traffic Manager") {
       return isOilDockArea(v.accessAreaId || v.accessArea);
     }
-
     if (userRole === "Approval") {
-      const passType = String(v.passType || "")
-        .trim()
-        .toUpperCase();
-      const vehicleType = String(v.vehicleTypeName || "")
-        .trim()
-        .toUpperCase();
-
       const isMonthlyYearly = ["MONTHLY", "YEARLY", "ANNUAL"].includes(
-        passType,
+        v.passType,
       );
-
-      const isAnnualTrailer =
-        ["YEARLY", "ANNUAL"].includes(passType) &&
-        ["TRAILORS", "TRAILER LORRY"].includes(vehicleType);
-
       const isOilDock = isOilDockArea(v.accessAreaId || v.accessArea);
-
-      /*
-       * NEW FLOW:
-       * Annual Trailer / Trailer Lorry
-       * must be approved by Traffic first.
-       *
-       * Do NOT require:
-       * - Twist Lock
-       * - Spark Arrester
-       * - Sr. DTM
-       *
-       * Marine Fire Safety happens AFTER Traffic approval.
-       */
-      if (isAnnualTrailer) {
-        return v.status === "pending" || v.status === "reverted";
-      }
-
-      /*
-       * EXISTING FLOW — DO NOT CHANGE
-       */
-
-      if (isOilDock && !v.sparkArresterCertified) {
+      if (isMonthlyYearly && !v.twistLockCertified) {
         return false;
       }
-
+      if (isOilDock && (!v.sparkArresterCertified || !v.srDtmApproved)) {
+        return false;
+      }
       return true;
     }
-
     return false;
   };
 
@@ -656,6 +453,8 @@ export default function TrafficPassesPage() {
 
   useEffect(() => {
     fetchActiveLocks();
+    const interval = setInterval(fetchActiveLocks, 900); // every 900ms (< 1s)
+    return () => clearInterval(interval);
   }, [fetchActiveLocks]);
 
   useEffect(() => {
@@ -663,8 +462,19 @@ export default function TrafficPassesPage() {
 
     const lockType =
       selectedRequest.originType === "VENDOR" ? "vendor-pass" : "pass";
+    const interval = setInterval(async () => {
+      const lockRes = await acquireLock(selectedRequest.id, lockType);
+      if (!lockRes.success) {
+        toast.error("Lock Lost", {
+          description:
+            "This application lock has expired or was taken by another user.",
+        });
+        setIsModalOpen(false);
+      }
+    }, 10000); // refresh every 10 seconds
 
     return () => {
+      clearInterval(interval);
       releaseLock(selectedRequest.id, lockType).then(() => {
         fetchActiveLocks();
       });
@@ -712,631 +522,32 @@ export default function TrafficPassesPage() {
 
   const fetchPassRequests = useCallback(
     async (isPoll = false) => {
-      if (!userContextReady) {
-        return;
-      }
-
       try {
         if (!isPoll) setLoading(true);
         const token = localStorage.getItem("accessToken");
-        // Pass Updates has its own API handled by fetchTwoWheelerRequests().
-        // Do not call the normal/M​​arine pass API for this tab.
-        if (activeTab === "pass_updates") {
-          setLoading(false);
-          return;
-        }
-        const requestParams = {
-          page: currentPage,
-          limit: pageSize,
-          search: debouncedSearch || undefined,
-          status: activeTab || undefined,
-          sortOrder:
-            sortBy === "DATE_ASC"
-              ? "ASC"
-              : sortBy === "EXPIRY_SOON"
-                ? "EXPIRY_SOON"
-                : "DESC",
-
-          processedByMe:
-            !isMarineFireSafety && processedByMe ? "true" : undefined,
-        };
-
-        // ------------------------------------------------------------
-        // FIRE SAFETY:
-        // Fetch BOTH workflows.
-        //
-        // 1. Normal vehicle Marine/Safety workflow
-        // 2. Essential Oil Dock workflow
-        //
-        // They must both appear in the same pending/processed screen.
-        // ------------------------------------------------------------
-        if (isMarineFireSafety) {
-          const [marineResponse, essentialResponse] = await Promise.all([
-            axios.get(`${AGENT_API}/pass-request/marine-safety-passes`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-              params: requestParams,
-            }),
-
-            axios.get(`${AGENT_API}/pass-request/essential-oil-dock-passes`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-              params: requestParams,
-            }),
-          ]);
-
-          const marineData = marineResponse.data?.success
-            ? marineResponse.data.data || []
-            : [];
-
-          const essentialData = essentialResponse.data?.success
-            ? essentialResponse.data.data || []
-            : [];
-
-          const normalizeRequest = (request) => ({
-            ...request,
-
-            entityName: request.entityName || request.companyName || null,
-
-            mobileNo: request.mobileNo || request.companyMobile || null,
-
-            email: request.email || request.companyEmail || null,
-
-            gstinNumber: request.gstinNumber || request.companyGst || null,
-
-            panNumber: request.panNumber || request.companyPan || null,
-          });
-
-          const mergedRequests = [
-            ...marineData.map(normalizeRequest),
-            ...essentialData.map(normalizeRequest),
-          ];
-
-          // Safety against duplicate pass requests.
-          const uniqueRequests = Array.from(
-            new Map(
-              mergedRequests.map((request) => [
-                request.id || request.referenceNo,
-                request,
-              ]),
-            ).values(),
-          );
-
-          const marineCounts = marineResponse.data?.counts || {
-            total: 0,
-            pending: 0,
-            processed: 0,
-          };
-
-          const essentialCounts = essentialResponse.data?.counts || {
-            total: 0,
-            pending: 0,
-            processed: 0,
-          };
-
-          const mergedCounts = {
-            total: marineCounts.total + essentialCounts.total,
-            pending: marineCounts.pending + essentialCounts.pending,
-            processed: marineCounts.processed + essentialCounts.processed,
-          };
-
-          const totalRecords = mergedCounts[activeTab] ?? uniqueRequests.length;
-
-          const mergedMeta = {
-            page: currentPage,
-            limit: pageSize,
-            totalRecords,
-            totalPages: Math.max(1, Math.ceil(totalRecords / pageSize)),
-            currentPage,
-          };
-
-          setRequests((prev) =>
-            JSON.stringify(uniqueRequests) === JSON.stringify(prev)
-              ? prev
-              : uniqueRequests,
-          );
-
-          setPaginationMeta((prev) =>
-            JSON.stringify(mergedMeta) === JSON.stringify(prev)
-              ? prev
-              : mergedMeta,
-          );
-
-          setGlobalCounts((prev) =>
-            JSON.stringify(mergedCounts) === JSON.stringify(prev)
-              ? prev
-              : mergedCounts,
-          );
-
-          return;
-        }
-
-        // ------------------------------------------------------------
-        // ESSENTIAL-ONLY USERS
-        // Civil / Mechanical / CISF / Essential Pass Section
-        // ------------------------------------------------------------
-        // if (essentialWorkflowStage) {
-        //   const response = await axios.get(
-        //     `${AGENT_API}/pass-request/essential-oil-dock-passes`,
-        //     {
-        //       headers: {
-        //         Authorization: `Bearer ${token}`,
-        //       },
-        //       params: requestParams,
-        //     },
-        //   );
-
-        //   if (response.data?.success) {
-        //     const newRequests = (response.data.data || []).map((request) => ({
-        //       ...request,
-
-        //       entityName: request.entityName || request.companyName || null,
-
-        //       mobileNo: request.mobileNo || request.companyMobile || null,
-
-        //       email: request.email || request.companyEmail || null,
-
-        //       gstinNumber: request.gstinNumber || request.companyGst || null,
-
-        //       panNumber: request.panNumber || request.companyPan || null,
-        //     }));
-
-        //     const newMeta = response.data.pagination || {};
-
-        //     const newCounts = response.data.counts || {
-        //       total: 0,
-        //       pending: 0,
-        //       processed: 0,
-        //     };
-
-        //     setRequests((prev) =>
-        //       JSON.stringify(newRequests) === JSON.stringify(prev)
-        //         ? prev
-        //         : newRequests,
-        //     );
-
-        //     setPaginationMeta((prev) =>
-        //       JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta,
-        //     );
-
-        //     setGlobalCounts((prev) =>
-        //       JSON.stringify(newCounts) === JSON.stringify(prev)
-        //         ? prev
-        //         : newCounts,
-        //     );
-        //   }
-
-        //   return;
-        // }
-        // ------------------------------------------------------------
-        // PASS SECTION
-        // ------------------------------------------------------------
-        // Pass Section must see BOTH:
-        // 1. Existing normal processed passes
-        // 2. Essential Oil Dock Pass Section workflow passes
-        //
-        // Civil / Mechanical / CISF remain Essential-only.
-        // ------------------------------------------------------------
-
-        if (essentialWorkflowStage === "PENDING_PASS_SECTION_ESSENTIAL") {
-          const [normalResult, essentialResult, essentialPersonResult] =
-            await Promise.allSettled([
-              // EXISTING NORMAL FLOW
-              axios.get(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-                params: requestParams,
-              }),
-
-              // EXISTING ESSENTIAL VEHICLE FLOW
-              axios.get(`${AGENT_API}/pass-request/essential-oil-dock-passes`, {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-                params: requestParams,
-              }),
-
-              // NEW ESSENTIAL PERSON FLOW
-              axios.get(
-                `${AGENT_API}/pass-request/essential-oil-dock-person-passes`,
-                {
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                  },
-                  params: requestParams,
-                },
-              ),
-            ]);
-
-          const normalResponse =
-            normalResult.status === "fulfilled" ? normalResult.value : null;
-
-          const essentialResponse =
-            essentialResult.status === "fulfilled"
-              ? essentialResult.value
-              : null;
-
-          const essentialPersonResponse =
-            essentialPersonResult.status === "fulfilled"
-              ? essentialPersonResult.value
-              : null;
-
-          // Do not stop the whole Pass Section screen
-          // because one independent API failed.
-          if (normalResult.status === "rejected") {
-            console.error(
-              "Pass Section normal API failed:",
-              normalResult.reason,
-            );
-          }
-
-          if (essentialResult.status === "rejected") {
-            console.error(
-              "Pass Section essential vehicle API failed:",
-              essentialResult.reason,
-            );
-          }
-
-          if (essentialPersonResult.status === "rejected") {
-            console.error(
-              "Pass Section essential person API failed:",
-              essentialPersonResult.reason,
-            );
-          }
-
-          const normalData = normalResponse?.data?.success
-            ? normalResponse.data.data || []
-            : [];
-
-          const essentialData = essentialResponse?.data?.success
-            ? essentialResponse.data.data || []
-            : [];
-
-          const essentialPersonRows = essentialPersonResponse?.data?.success
-            ? essentialPersonResponse.data.data || []
-            : [];
-
-          const essentialPersonRequests = essentialPersonRows.map((person) => ({
-            id: person.passRequestId,
-            referenceNo: person.referenceNo,
-
-            entityName: person.companyName || null,
-            mobileNo: person.companyMobile || null,
-            email: person.companyEmail || null,
-            gstinNumber: person.companyGst || null,
-            panNumber: person.companyPan || null,
-
-            createdAt: person.createdAt || null,
-            amount: person.amount ?? null,
-            status: person.status,
-
-            persons: [
-              {
-                id: person.personId || person.id,
-                passRequestId: person.passRequestId,
-                personPassNo: person.personPassNo,
-                name: person.name,
-                aadharNo: person.aadharNo,
-                mobile: person.mobile,
-                email: person.email,
-                nationality: person.nationality,
-                visaNo: person.visaNo,
-                dob: person.dob,
-                hepTypeId: person.hepTypeId,
-                hepType: person.hepType,
-                designationId: person.designationId,
-                designationOther: person.designationOther,
-                designationName: person.designationName,
-                cardNumber: person.cardNumber,
-                accessAreaId: person.accessAreaId,
-                withTwoWheeler: person.withTwoWheeler,
-                vehicleNo: person.vehicleNo,
-                idProofType: person.idProofType,
-                idProofNumber: person.idProofNumber,
-                passType: person.passType,
-                passPeriod: person.passPeriod,
-                dateFrom: person.dateFrom,
-                dateTo: person.dateTo,
-                amount: person.amount,
-                status: person.status,
-                cdcNumber: person.cdcNumber,
-                countryId: person.countryId,
-                countryName: person.countryName,
-                essentialDepartmentId: person.essentialDepartmentId,
-                essentialDepartmentName: person.essentialDepartmentName,
-                essentialWorkflowState: person.essentialWorkflowState,
-                essentialRevertStage: person.essentialRevertStage,
-                essentialAssignedUserId: person.essentialAssignedUserId,
-                rejectedReason: person.rejectedReason,
-                revertReason: person.revertReason,
-                // Document paths
-                photoFilePath: person.photoFilePath,
-                photoFileName: person.photoFileName,
-                aadharPDFFilePATH: person.aadharPDFFilePATH,
-                aadharPDFFileName: person.aadharPDFFileName,
-                idProofFilePath: person.idProofFilePath,
-                idProofFileName: person.idProofFileName,
-                driverLicensePath: person.driverLicensePath,
-                driverLicenseName: person.driverLicenseName,
-                policeVerificationPath: person.policeVerificationPath,
-                policeVerificationName: person.policeVerificationName,
-                employmentProofPath: person.employmentProofPath,
-                employmentProofName: person.employmentProofName,
-                chaLicensePath: person.chaLicensePath,
-                chaLicenseName: person.chaLicenseName,
-                passportPath: person.passportPath,
-                passportName: person.passportName,
-                visaDocPath: person.visaDocPath,
-                visaDocName: person.visaDocName,
-                immigrationDocPath: person.immigrationDocPath,
-                immigrationDocName: person.immigrationDocName,
-                cdcDocumentPath: person.cdcDocumentPath,
-                cdcDocumentName: person.cdcDocumentName,
-                entryAuthorizationFilePath: person.entryAuthorizationFilePath,
-                entryAuthorizationFileName: person.entryAuthorizationFileName,
-              },
-            ],
-
-            vehicles: [],
-          }));
-
-          const normalizeRequest = (request) => ({
-            ...request,
-
-            entityName: request.entityName || request.companyName || null,
-
-            mobileNo: request.mobileNo || request.companyMobile || null,
-
-            email: request.email || request.companyEmail || null,
-
-            gstinNumber: request.gstinNumber || request.companyGst || null,
-
-            panNumber: request.panNumber || request.companyPan || null,
-          });
-
-          const mergedRequests = [
-            ...normalData.map(normalizeRequest),
-            ...essentialData.map(normalizeRequest),
-            ...essentialPersonRequests.map(normalizeRequest),
-          ];
-
-          const requestMap = new Map();
-
-          for (const request of mergedRequests) {
-            const key = request.id || request.referenceNo;
-
-            if (!key) continue;
-
-            const existing = requestMap.get(key);
-
-            if (!existing) {
-              requestMap.set(key, {
-                ...request,
-
-                persons: Array.isArray(request.persons)
-                  ? [...request.persons]
-                  : [],
-
-                vehicles: Array.isArray(request.vehicles)
-                  ? [...request.vehicles]
-                  : [],
-              });
-
-              continue;
-            }
-
-            // Preserve company/request-level information
-            existing.entityName =
-              existing.entityName || request.entityName || null;
-
-            existing.mobileNo = existing.mobileNo || request.mobileNo || null;
-
-            existing.email = existing.email || request.email || null;
-
-            existing.gstinNumber =
-              existing.gstinNumber || request.gstinNumber || null;
-
-            existing.panNumber =
-              existing.panNumber || request.panNumber || null;
-
-            existing.createdAt =
-              existing.createdAt ||
-              request.createdAt ||
-              request.submittedAt ||
-              null;
-
-            existing.amount = existing.amount ?? request.amount ?? null;
-
-            const existingPersonIds = new Set(
-              (existing.persons || []).map((p) => String(p.id)),
-            );
-
-            for (const person of request.persons || []) {
-              if (!existingPersonIds.has(String(person.id))) {
-                existing.persons.push(person);
-              }
-            }
-
-            const existingVehicleIds = new Set(
-              (existing.vehicles || []).map((v) => String(v.id)),
-            );
-
-            for (const vehicle of request.vehicles || []) {
-              if (!existingVehicleIds.has(String(vehicle.id))) {
-                existing.vehicles.push(vehicle);
-              }
-            }
-          }
-
-          const uniqueRequests = Array.from(requestMap.values());
-
-          uniqueRequests.sort((a, b) => {
-            const da = new Date(a.createdAt || a.submittedAt || 0).getTime();
-
-            const db = new Date(b.createdAt || b.submittedAt || 0).getTime();
-
-            return sortBy === "DATE_ASC" ? da - db : db - da;
-          });
-
-          const normalCounts = normalResponse?.data?.counts || {
-            total: 0,
-            pending: 0,
-            processed: 0,
-          };
-
-          const essentialCounts = essentialResponse?.data?.counts || {
-            total: 0,
-            pending: 0,
-            processed: 0,
-          };
-
-          const essentialPersonCounts = essentialPersonResponse?.data
-            ?.counts || {
-            total: 0,
-            pending: 0,
-            processed: 0,
-          };
-
-          const mergedCounts = {
-            total:
-              Number(normalCounts.total || 0) +
-              Number(essentialCounts.total || 0) +
-              Number(essentialPersonCounts.total || 0),
-
-            pending:
-              Number(normalCounts.pending || 0) +
-              Number(essentialCounts.pending || 0) +
-              Number(essentialPersonCounts.pending || 0),
-
-            processed:
-              Number(normalCounts.processed || 0) +
-              Number(essentialCounts.processed || 0) +
-              Number(essentialPersonCounts.processed || 0),
-          };
-
-          const totalRecords = mergedCounts[activeTab] ?? uniqueRequests.length;
-
-          const mergedMeta = {
-            page: currentPage,
-            limit: pageSize,
-            totalRecords,
-            totalPages: Math.max(1, Math.ceil(totalRecords / pageSize)),
-            currentPage,
-          };
-
-          setRequests((prev) =>
-            JSON.stringify(uniqueRequests) === JSON.stringify(prev)
-              ? prev
-              : uniqueRequests,
-          );
-
-          setPaginationMeta((prev) =>
-            JSON.stringify(mergedMeta) === JSON.stringify(prev)
-              ? prev
-              : mergedMeta,
-          );
-
-          setGlobalCounts((prev) =>
-            JSON.stringify(mergedCounts) === JSON.stringify(prev)
-              ? prev
-              : mergedCounts,
-          );
-
-          return;
-        }
-
-        // ------------------------------------------------------------
-        // OTHER ESSENTIAL-ONLY USERS
-        // Civil / Mechanical / CISF
-        // ------------------------------------------------------------
-        if (essentialWorkflowStage) {
-          const response = await axios.get(
-            `${AGENT_API}/pass-request/essential-oil-dock-passes`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-              params: requestParams,
-            },
-          );
-
-          if (response.data?.success) {
-            const newRequests = (response.data.data || []).map((request) => ({
-              ...request,
-
-              entityName: request.entityName || request.companyName || null,
-
-              mobileNo: request.mobileNo || request.companyMobile || null,
-
-              email: request.email || request.companyEmail || null,
-
-              gstinNumber: request.gstinNumber || request.companyGst || null,
-
-              panNumber: request.panNumber || request.companyPan || null,
-            }));
-
-            const newMeta = response.data.pagination || {};
-
-            const newCounts = response.data.counts || {
-              total: 0,
-              pending: 0,
-              processed: 0,
-            };
-
-            setRequests((prev) =>
-              JSON.stringify(newRequests) === JSON.stringify(prev)
-                ? prev
-                : newRequests,
-            );
-
-            setPaginationMeta((prev) =>
-              JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta,
-            );
-
-            setGlobalCounts((prev) =>
-              JSON.stringify(newCounts) === JSON.stringify(prev)
-                ? prev
-                : newCounts,
-            );
-          }
-
-          return;
-        }
-
-        // ------------------------------------------------------------
-        // EXISTING NORMAL USERS
-        // DO NOT CHANGE NORMAL FLOW
-        // ------------------------------------------------------------
         const response = await axios.get(
           `${AGENT_API}/pass-request/get-agent-pass-requests`,
           {
-            headers: {
-              Authorization: `Bearer ${token}`,
+            headers: { Authorization: `Bearer ${token}` },
+            params: {
+              page: currentPage,
+              limit: pageSize,
+              search: debouncedSearch || undefined,
+              status: activeTab || undefined,
+              sortOrder:
+                sortBy === "DATE_ASC"
+                  ? "ASC"
+                  : sortBy === "EXPIRY_SOON"
+                    ? "EXPIRY_SOON"
+                    : "DESC",
+              processedByMe: processedByMe ? "true" : undefined,
             },
-            params: requestParams,
           },
         );
 
         if (response.data && response.data.success) {
-          const newRequests = (response.data.data || []).map((request) => ({
-            ...request,
-
-            entityName: request.entityName || request.companyName || null,
-
-            mobileNo: request.mobileNo || request.companyMobile || null,
-
-            email: request.email || request.companyEmail || null,
-
-            gstinNumber: request.gstinNumber || request.companyGst || null,
-
-            panNumber: request.panNumber || request.companyPan || null,
-          }));
-
+          const newRequests = response.data.data || [];
           const newMeta = response.data.pagination || {};
-
           const newCounts = response.data.counts || {
             total: 0,
             pending: 0,
@@ -1366,47 +577,13 @@ export default function TrafficPassesPage() {
         if (!isPoll) setLoading(false);
       }
     },
-    [
-      currentPage,
-      pageSize,
-      debouncedSearch,
-      activeTab,
-      sortBy,
-      processedByMe,
-      isMarineFireSafety,
-      isEssentialOilDockApprover,
-      essentialWorkflowStage,
-      userContextReady,
-    ],
+    [currentPage, pageSize, debouncedSearch, activeTab, sortBy, processedByMe],
   );
 
   useEffect(() => {
     fetchPassRequests(false);
-
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      fetchPassRequests(true);
-    }, 15000); // Poll every 15s without showing loading spinner
-
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        fetchPassRequests(true);
-      }
-    };
-
-    if (typeof window !== "undefined") {
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-    }
-
-    return () => {
-      clearInterval(interval);
-      if (typeof window !== "undefined") {
-        document.removeEventListener(
-          "visibilitychange",
-          handleVisibilityChange,
-        );
-      }
-    };
+    const interval = setInterval(() => fetchPassRequests(true), 5000); // Poll every 5 seconds without showing loading spinner
+    return () => clearInterval(interval);
   }, [fetchPassRequests]);
 
   // const fetchCompanyProfile = async () => {
@@ -1480,36 +657,8 @@ export default function TrafficPassesPage() {
   const handleSubmitReview = async () => {
     const persons = selectedRequest.persons || [];
     const vehicles = selectedRequest.vehicles || [];
-
     let reviewStatus = null;
     let responseMessage = null;
-
-    const requestWorkflowState = String(selectedRequest?.workflowState || "")
-      .trim()
-      .toUpperCase();
-
-    const currentEssentialWorkflowStage = String(essentialWorkflowStage || "")
-      .trim()
-      .toUpperCase();
-
-    const hasEssentialVehicle = vehicles.some((v) => {
-      const vehicleWorkflowState = String(v?.essentialWorkflowState || "")
-        .trim()
-        .toUpperCase();
-
-      const accessArea = String(v?.accessAreaId || v?.accessArea || "")
-        .trim()
-        .toUpperCase();
-
-      return (
-        vehicleWorkflowState.endsWith("_ESSENTIAL") ||
-        (v?.essentialDepartmentId !== null &&
-          v?.essentialDepartmentId !== undefined)
-      );
-    });
-
-    const isEssentialWorkflowRequest =
-      requestWorkflowState.endsWith("_ESSENTIAL") || hasEssentialVehicle;
 
     // 1. VALIDATION: Only pending/reverted entities that the current user is authorized to verify need a decision
     const unverifiedPersons = persons.filter(
@@ -1518,29 +667,12 @@ export default function TrafficPassesPage() {
         !entityStatuses.persons[p.id] &&
         (p.status === "pending" || p.status === "reverted"),
     );
-
-    const unverifiedVehicles = vehicles.filter((v) => {
-      const isEssentialVehicle =
-        Boolean(v?.essentialWorkflowState) ||
-        (v?.essentialDepartmentId !== null &&
-          v?.essentialDepartmentId !== undefined);
-
-      if (isEssentialVehicle) {
-        return (
-          !entityStatuses.vehicles[v.id] &&
-          (v.status === "pending" || v.status === "reverted")
-        );
-      }
-
-      if (!canUserVerifyVehicle(v)) return false;
-      if (entityStatuses.vehicles[v.id]) return false;
-
-      if (userRole === "Safety Officer") return !v.twistLockCertified;
-      if (userRole === "Fire Safety Officer") return !v.sparkArresterCertified;
-      if (userRole === "Senior Deputy Traffic Manager") return !v.srDtmApproved;
-
-      return v.status === "pending" || v.status === "reverted";
-    });
+    const unverifiedVehicles = vehicles.filter(
+      (v) =>
+        canUserVerifyVehicle(v) &&
+        !entityStatuses.vehicles[v.id] &&
+        (v.status === "pending" || v.status === "reverted"),
+    );
 
     if (unverifiedPersons.length > 0 || unverifiedVehicles.length > 0) {
       toast.warning("Incomplete Verification", {
@@ -1558,170 +690,8 @@ export default function TrafficPassesPage() {
 
       // Check if this is a vendor pass
       const isVendorPass = selectedRequest.originType === "VENDOR";
-      console.log("WORKFLOW ROUTING CHECK:", {
-        selectedRequestId: selectedRequest?.id,
-        referenceNo: selectedRequest?.referenceNo,
-        requestWorkflowState,
-        essentialWorkflowStage,
-        currentEssentialWorkflowStage,
-        hasEssentialVehicle,
-        isEssentialWorkflowRequest,
-        userRole,
-        vehicles,
-      });
-      console.log("FINAL WORKFLOW ROUTING:", {
-        selectedRequestId: selectedRequest?.id,
-        referenceNo: selectedRequest?.referenceNo,
 
-        userRole,
-
-        requestWorkflowState,
-        currentEssentialWorkflowStage,
-
-        essentialWorkflowStage,
-
-        hasEssentialVehicle,
-        isEssentialWorkflowRequest,
-
-        vehicles: vehicles.map((v) => ({
-          id: v?.id,
-          status: v?.status,
-          essentialWorkflowState: v?.essentialWorkflowState,
-          essentialDepartmentId: v?.essentialDepartmentId,
-          accessAreaId: v?.accessAreaId,
-        })),
-      });
-
-      const shouldUseEssentialWorkflow =
-        hasEssentialVehicle || requestWorkflowState.endsWith("_ESSENTIAL");
-
-      if (shouldUseEssentialWorkflow) {
-        const essentialPersons = persons.filter((p) => {
-          const workflowState = String(p?.essentialWorkflowState || "")
-            .trim()
-            .toUpperCase();
-
-          return (
-            workflowState === "PENDING_CIVIL_PERSON_ESSENTIAL" ||
-            workflowState === "PENDING_MECHANICAL_PERSON_ESSENTIAL" ||
-            workflowState === "PENDING_TRAFFIC_PERSON_ESSENTIAL"
-          );
-        });
-
-        /*
-         * ============================================================
-         * ESSENTIAL OIL DOCK PERSON FLOW
-         * Only handle person-only Essential requests here.
-         * Existing Essential Vehicle flow remains unchanged below.
-         * ============================================================
-         */
-        if (essentialPersons.length > 0 && vehicles.length === 0) {
-          const personPromises = [];
-
-          essentialPersons.forEach((p) => {
-            const status = entityStatuses.persons[p.id];
-
-            if (!status) {
-              throw new Error(
-                `No decision recorded for person ${p.name || p.id}.`,
-              );
-            }
-
-            personPromises.push(
-              axios.put(
-                `${AGENT_API}/pass-request/essential-oil-dock/person-action`,
-                {
-                  personId: p.id,
-                  decision: String(status).trim().toUpperCase(),
-                  remarks: entityRemarks.persons[p.id] || null,
-                },
-                { headers },
-              ),
-            );
-          });
-
-          if (personPromises.length === 0) {
-            throw new Error(
-              "No Essential Oil Dock person action was prepared.",
-            );
-          }
-
-          await Promise.all(personPromises);
-
-          reviewStatus = "PROCESSED";
-          responseMessage =
-            "Essential Oil Dock person review processed successfully.";
-        } else {
-          /*
-           * ============================================================
-           * EXISTING ESSENTIAL OIL DOCK VEHICLE FLOW
-           * DO NOT CHANGE THE VEHICLE LOGIC
-           * ============================================================
-           */
-          const vehiclePromises = [];
-
-          const essentialVehicles = vehicles.filter((v) => {
-            const vehicleWorkflowState = String(v?.essentialWorkflowState || "")
-              .trim()
-              .toUpperCase();
-
-            const accessArea = String(v?.accessAreaId || v?.accessArea || "")
-              .trim()
-              .toUpperCase();
-
-            const hasEssentialDepartment =
-              v?.essentialDepartmentId !== null &&
-              v?.essentialDepartmentId !== undefined;
-
-            return (
-              vehicleWorkflowState.endsWith("_ESSENTIAL") ||
-              hasEssentialDepartment
-            );
-          });
-
-          if (essentialVehicles.length === 0) {
-            throw new Error(
-              "No Essential Oil Dock vehicle found in this request.",
-            );
-          }
-
-          essentialVehicles.forEach((v) => {
-            const status = entityStatuses.vehicles[v.id];
-
-            if (!status) {
-              throw new Error(
-                `No decision recorded for vehicle ${v.registrationNo || v.id}.`,
-              );
-            }
-
-            const payload = {
-              vehicleId: v.id,
-              decision: String(status).trim().toUpperCase(),
-              remarks: entityRemarks.vehicles[v.id] || null,
-            };
-
-            vehiclePromises.push(
-              axios.put(
-                `${AGENT_API}/pass-request/essential-oil-dock/vehicle-action`,
-                payload,
-                { headers },
-              ),
-            );
-          });
-
-          if (vehiclePromises.length === 0) {
-            throw new Error(
-              "No Essential Oil Dock vehicle action was prepared.",
-            );
-          }
-
-          await Promise.all(vehiclePromises);
-
-          reviewStatus = "PROCESSED";
-          responseMessage =
-            "Essential Oil Dock vehicle review processed successfully.";
-        }
-      } else if (isVendorPass) {
+      if (isVendorPass) {
         // --- VENDOR PASS APPROVAL FLOW ---
         const vendorPassId = selectedRequest.id;
 
@@ -1909,79 +879,10 @@ export default function TrafficPassesPage() {
     }
   };
 
-  const openReviewModal = async (pass, viewOnly = false) => {
-    if (!viewOnly) {
-      const lockType = pass.originType === "VENDOR" ? "vendor-pass" : "pass";
-      const lockRes = await acquireLock(pass.id, lockType);
-      if (!lockRes.success) {
-        toast.error("Application In-Use", {
-          description: lockRes.message,
-        });
-        return;
-      }
-    }
-
+  const openReviewModal = async (pass, viewOnly = true) => {
+    // Traffic Manager is an executive oversight role - strictly view-only inspection, no approval locks needed
     setSelectedRequest(pass);
-
-    if (!viewOnly) {
-      // Pre-populate entity statuses from DB for already-decided entities
-      // Only pending/reverted entities should need fresh review
-      const initialPersonStatuses = {};
-      const initialPersonRemarks = {};
-      const initialVehicleStatuses = {};
-      const initialVehicleRemarks = {};
-
-      (pass.persons || []).forEach((p) => {
-        if (p.status === "approved") {
-          // Pre-fill as APPROVED (read-only, approver cannot change)
-          initialPersonStatuses[p.id] = "APPROVED";
-        } else if (p.status === "rejected") {
-          initialPersonStatuses[p.id] = "REJECTED";
-          initialPersonRemarks[p.id] = p.rejectedReason || "";
-        }
-        // 'pending' and 'reverted' entities need fresh review — leave empty
-      });
-
-      (pass.vehicles || []).forEach((v) => {
-        if (userRole === "Safety Officer") {
-          if (
-            v.twistLockCertified === true ||
-            v.marineSafetyApproved === true
-          ) {
-            initialVehicleStatuses[v.id] = "APPROVED";
-          }
-        } else if (userRole === "Fire Safety Officer") {
-          if (
-            v.sparkArresterCertified === true ||
-            v.marineSafetyApproved === true
-          ) {
-            initialVehicleStatuses[v.id] = "APPROVED";
-          }
-        } else if (userRole === "Senior Deputy Traffic Manager") {
-          if (v.srDtmApproved === true) {
-            initialVehicleStatuses[v.id] = "APPROVED";
-          }
-        } else {
-          if (v.status === "approved") {
-            initialVehicleStatuses[v.id] = "APPROVED";
-          } else if (v.status === "rejected") {
-            initialVehicleStatuses[v.id] = "REJECTED";
-            initialVehicleRemarks[v.id] = v.rejectedReason || "";
-          }
-        }
-      });
-
-      setEntityStatuses({
-        persons: initialPersonStatuses,
-        vehicles: initialVehicleStatuses,
-      });
-      setEntityRemarks({
-        persons: initialPersonRemarks,
-        vehicles: initialVehicleRemarks,
-      });
-    }
-
-    setIsViewMode(viewOnly);
+    setIsViewMode(true);
     setIsModalOpen(true);
   };
 
@@ -2011,9 +912,9 @@ export default function TrafficPassesPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 font-sans">
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 font-sans relative">
       {/* ── OFFICIAL CHENNAI PORT AUTHORITY HEADER STRIP ── */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0a1e4d] via-[#12275f] to-[#1b1856] p-6 text-white shadow-[0_12px_32px_-10px_rgba(10,30,77,0.65)] ring-1 ring-inset ring-white/15">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0a1e4d] via-[#12275f] to-[#1b1856] p-6 text-white shadow-[0_12px_32px_-10px_rgba(10,30,77,0.65)] ring-1 ring-inset ring-white/15">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
         <div className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full bg-orange-500/20 blur-3xl" />
         <div className="pointer-events-none absolute left-1/3 -bottom-10 h-36 w-36 rounded-full bg-blue-500/15 blur-2xl" />
@@ -2026,15 +927,15 @@ export default function TrafficPassesPage() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-orange-200">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Live Pass Processing
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
+                  Pass Oversight
                 </span>
                 <span className="text-[10px] font-bold text-blue-200/70 hidden sm:inline">
                   Traffic Authority · Chennai Port Authority
                 </span>
               </div>
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white leading-tight mt-0.5">
-                PASS CLEARANCE &amp; APPROVALS
+                PASS APPROVALS &amp; OVERSIGHT
               </h1>
             </div>
           </div>
@@ -2055,7 +956,7 @@ export default function TrafficPassesPage() {
       </div>
 
       {/* ── 4 PREMIUM STAT CARDS ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 shrink-0">
 
         {/* ── Card 1: Total Applications ── */}
         <div
@@ -2063,30 +964,51 @@ export default function TrafficPassesPage() {
           role="button"
           tabIndex={0}
           onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick("pending", "ALL")}
-          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1e3a8a] via-[#3730a3] to-[#4c1d95] p-5 text-white shadow-xl shadow-indigo-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-700/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1e3a8a] via-[#3730a3] to-[#4c1d95] p-6 text-white shadow-xl shadow-indigo-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[160px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-700/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         >
+          {/* top-edge shimmer */}
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+          {/* large glow orb top-right */}
           <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-blue-400/20 blur-2xl" />
+          {/* second orb bottom-left */}
           <div className="pointer-events-none absolute -left-4 -bottom-4 h-20 w-20 rounded-full bg-violet-500/20 blur-xl" />
+          {/* giant watermark icon bottom-right */}
           <div className="pointer-events-none absolute right-3 bottom-3 opacity-[0.08] group-hover:opacity-[0.13] transition-opacity duration-300">
             <PackageCheck className="h-20 w-20 text-white" strokeWidth={1.2} />
           </div>
+
+          {/* top row: label + icon badge */}
           <div className="relative flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shadow-inner shrink-0">
                 <PackageCheck className="h-4 w-4 text-blue-200" strokeWidth={2.2} />
               </span>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-blue-200/80 leading-tight">Total</span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-blue-200/80 leading-tight">
+                Total
+              </span>
             </div>
-            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white/10 text-blue-200 border border-white/15">ALL</span>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white/10 text-blue-200 border border-white/15">
+              ALL
+            </span>
           </div>
+
+          {/* big number */}
           <div className="relative mt-3">
-            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">{globalCounts.total}</p>
-            <p className="text-[11px] font-semibold text-blue-200/70 mt-1.5 leading-snug">{globalCounts.pending} pending · {globalCounts.processed} authorized</p>
+            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">
+              {globalCounts.total}
+            </p>
+            <p className="text-[11px] font-semibold text-blue-200/70 mt-1.5 leading-snug">
+              Applications submitted
+            </p>
           </div>
+
+          {/* bottom progress bar */}
           <div className="relative mt-4">
             <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-blue-300 via-indigo-300 to-violet-300 transition-all duration-700" style={{ width: globalCounts.total > 0 ? "100%" : "0%" }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-blue-300 via-indigo-300 to-violet-300 transition-all duration-700"
+                style={{ width: globalCounts.total > 0 ? "100%" : "0%" }}
+              />
             </div>
           </div>
         </div>
@@ -2097,7 +1019,7 @@ export default function TrafficPassesPage() {
           role="button"
           tabIndex={0}
           onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick("pending", "ALL")}
-          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#92400e] via-[#c2410c] to-[#b91c1c] p-5 text-white shadow-xl shadow-orange-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-orange-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#92400e] via-[#c2410c] to-[#b91c1c] p-6 text-white shadow-xl shadow-orange-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[160px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-orange-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
           <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-amber-400/20 blur-2xl" />
@@ -2105,12 +1027,15 @@ export default function TrafficPassesPage() {
           <div className="pointer-events-none absolute right-3 bottom-3 opacity-[0.08] group-hover:opacity-[0.13] transition-opacity duration-300">
             <Clock className="h-20 w-20 text-white" strokeWidth={1.2} />
           </div>
+
           <div className="relative flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shadow-inner shrink-0">
                 <Clock className="h-4 w-4 text-amber-200" strokeWidth={2.2} />
               </span>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-amber-200/80 leading-tight">Pending</span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-amber-200/80 leading-tight">
+                Pending
+              </span>
             </div>
             {globalCounts.pending > 0 && (
               <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-orange-600 shadow-md animate-pulse">
@@ -2119,13 +1044,22 @@ export default function TrafficPassesPage() {
               </span>
             )}
           </div>
+
           <div className="relative mt-3">
-            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">{globalCounts.pending}</p>
-            <p className="text-[11px] font-semibold text-orange-200/70 mt-1.5 leading-snug">{globalCounts.pending} awaiting review of {globalCounts.total} total</p>
+            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">
+              {globalCounts.pending}
+            </p>
+            <p className="text-[11px] font-semibold text-orange-200/70 mt-1.5 leading-snug">
+              Awaiting manager review
+            </p>
           </div>
+
           <div className="relative mt-4">
             <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-amber-300 via-orange-300 to-red-300 transition-all duration-700" style={{ width: globalCounts.total > 0 ? `${Math.round((globalCounts.pending / globalCounts.total) * 100)}%` : "0%" }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-300 via-orange-300 to-red-300 transition-all duration-700"
+                style={{ width: globalCounts.total > 0 ? `${Math.round((globalCounts.pending / globalCounts.total) * 100)}%` : "0%" }}
+              />
             </div>
             <p className="text-[10px] text-orange-200/50 mt-1 tabular-nums">
               {globalCounts.total > 0 ? `${Math.round((globalCounts.pending / globalCounts.total) * 100)}% of total` : "—"}
@@ -2139,7 +1073,7 @@ export default function TrafficPassesPage() {
           role="button"
           tabIndex={0}
           onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick("processed", "ALL")}
-          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#064e3b] via-[#0f766e] to-[#0e7490] p-5 text-white shadow-xl shadow-emerald-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-emerald-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#064e3b] via-[#0f766e] to-[#0e7490] p-6 text-white shadow-xl shadow-emerald-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[160px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-emerald-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
           <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-emerald-400/20 blur-2xl" />
@@ -2147,22 +1081,36 @@ export default function TrafficPassesPage() {
           <div className="pointer-events-none absolute right-3 bottom-3 opacity-[0.08] group-hover:opacity-[0.13] transition-opacity duration-300">
             <CheckCircle2 className="h-20 w-20 text-white" strokeWidth={1.2} />
           </div>
+
           <div className="relative flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shadow-inner shrink-0">
                 <CheckCircle2 className="h-4 w-4 text-emerald-200" strokeWidth={2.2} />
               </span>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-200/80 leading-tight">Processed</span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-200/80 leading-tight">
+                Processed
+              </span>
             </div>
-            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">Authorized</span>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
+              Authorized
+            </span>
           </div>
+
           <div className="relative mt-3">
-            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">{globalCounts.processed}</p>
-            <p className="text-[11px] font-semibold text-emerald-200/70 mt-1.5 leading-snug">{globalCounts.processed} authorized · {globalCounts.pending} awaiting review</p>
+            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">
+              {globalCounts.processed}
+            </p>
+            <p className="text-[11px] font-semibold text-emerald-200/70 mt-1.5 leading-snug">
+              Approved &amp; issued passes
+            </p>
           </div>
+
           <div className="relative mt-4">
             <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 transition-all duration-700" style={{ width: globalCounts.total > 0 ? `${Math.round((globalCounts.processed / globalCounts.total) * 100)}%` : "0%" }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 transition-all duration-700"
+                style={{ width: globalCounts.total > 0 ? `${Math.round((globalCounts.processed / globalCounts.total) * 100)}%` : "0%" }}
+              />
             </div>
             <p className="text-[10px] text-emerald-200/50 mt-1 tabular-nums">
               {globalCounts.total > 0 ? `${Math.round((globalCounts.processed / globalCounts.total) * 100)}% clearance rate` : "—"}
@@ -2176,7 +1124,7 @@ export default function TrafficPassesPage() {
           role="button"
           tabIndex={0}
           onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick("pass_updates", "ALL")}
-          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#4a1d96] via-[#6d28d9] to-[#3730a3] p-5 text-white shadow-xl shadow-purple-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-violet-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#4a1d96] via-[#6d28d9] to-[#3730a3] p-6 text-white shadow-xl shadow-purple-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[160px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-violet-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
           <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-violet-400/20 blur-2xl" />
@@ -2184,21 +1132,33 @@ export default function TrafficPassesPage() {
           <div className="pointer-events-none absolute right-3 bottom-3 opacity-[0.08] group-hover:opacity-[0.13] transition-opacity duration-300">
             <RotateCcw className="h-20 w-20 text-white" strokeWidth={1.2} />
           </div>
+
           <div className="relative flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shadow-inner shrink-0">
                 <RotateCcw className="h-4 w-4 text-violet-200" strokeWidth={2.2} />
               </span>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-violet-200/80 leading-tight">Vehicle Updates</span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-violet-200/80 leading-tight">
+                Vehicle Updates
+              </span>
             </div>
           </div>
+
           <div className="relative mt-3">
-            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">{passUpdatesCount}</p>
-            <p className="text-[11px] font-semibold text-violet-200/70 mt-1.5 leading-snug">Two-wheeler change requests</p>
+            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">
+              {passUpdatesCount}
+            </p>
+            <p className="text-[11px] font-semibold text-violet-200/70 mt-1.5 leading-snug">
+              Two-wheeler change requests
+            </p>
           </div>
+
           <div className="relative mt-4">
             <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-violet-300 via-purple-300 to-indigo-300 transition-all duration-700" style={{ width: passUpdatesCount > 0 ? "60%" : "0%" }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-violet-300 via-purple-300 to-indigo-300 transition-all duration-700"
+                style={{ width: passUpdatesCount > 0 ? "60%" : "0%" }}
+              />
             </div>
           </div>
         </div>
@@ -2210,7 +1170,7 @@ export default function TrafficPassesPage() {
         {[
           {
             id: "pending",
-            label: "Pending Clearance",
+            label: "Pending Passes",
             count: globalCounts.pending,
             icon: Clock,
           },
@@ -2222,60 +1182,73 @@ export default function TrafficPassesPage() {
           },
           {
             id: "pass_updates",
-            label: "Pass Updates",
+            label: "Vehicle Updates",
             count: passUpdatesCount,
+            icon: RotateCcw,
           },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => {
-              setActiveTab(tab.id);
-              setCardFilter("ALL");
-              setSearchInput("");
-              setProcessedByMe(false);
-              setCurrentPage(1);
-            }}
-            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${
-              activeTab === tab.id
-                ? "bg-[#0a1e4d] text-white shadow"
-                : "text-slate-500 hover:text-[#0a1e4d] hover:bg-slate-100"
-            }`}
-          >
-            {tab.label}
-            <span
-              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
-                activeTab === tab.id
-                  ? "bg-white/20 text-white"
-                  : "bg-slate-200 text-slate-600"
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setCardFilter("ALL");
+                setSearchInput("");
+                setProcessedByMe(false);
+                setCurrentPage(1);
+              }}
+              className={`relative flex items-center gap-2 px-5 py-3 text-xs font-black rounded-t-2xl transition-all cursor-pointer select-none whitespace-nowrap ${
+                isActive
+                  ? "bg-[#0a1e4d] text-white shadow-[0_-2px_12px_rgba(10,30,77,0.15)] scale-[1.02]"
+                  : "bg-white/80 text-slate-600 hover:text-slate-900 hover:bg-white border-t border-x border-slate-200"
               }`}
             >
-              {tab.count}
-            </span>
-          </button>
-        ))}
+              <Icon
+                className={`h-4 w-4 ${isActive ? "text-orange-400" : "text-slate-400"}`}
+              />
+              {tab.label}
+              <span
+                className={`ml-1.5 inline-flex items-center justify-center min-w-[22px] h-5 px-2 rounded-full text-[10px] font-black ${
+                  isActive
+                    ? "bg-orange-500 text-white"
+                    : "bg-slate-100 text-slate-600 border border-slate-200"
+                }`}
+              >
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Table card ── */}
-      <div className="bg-white dark:bg-[#1e293b] rounded-2xl ring-1 ring-slate-200/60 dark:ring-white/5 shadow-xl overflow-hidden">
+      <div className="relative rounded-2xl ring-1 ring-slate-200/60 bg-white shadow-xl overflow-hidden">
         {/* Table toolbar */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/60 dark:bg-slate-800/30">
-          <h3 className="font-bold text-slate-800 dark:text-stone-100 uppercase text-xs tracking-widest flex items-center gap-2">
-            {activeTab === "pending" ? (
-              <>
-                <ShieldAlert className="h-4 w-4 text-[#ff6b00]" /> Awaiting
-                Review
-              </>
-            ) : (
-              <>
-                <History className="h-4 w-4 text-emerald-500" /> Processed
-                Passes
-              </>
-            )}
-          </h3>
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-white to-slate-50">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
+              {activeTab === "pending" ? (
+                <ShieldAlert className="h-4 w-4" />
+              ) : activeTab === "processed" ? (
+                <History className="h-4 w-4" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
+              )}
+            </span>
+            <h3 className="font-black text-slate-800 text-sm tracking-tight">
+              {activeTab === "pending"
+                ? "Pending Pass Applications — Oversight View"
+                : activeTab === "processed"
+                  ? "Processed & Authorized Pass Archive"
+                  : "Two-Wheeler Vehicle Registration Updates"}
+            </h3>
+          </div>
 
           <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 items-center">
-            {activeTab === "processed" && !isMarineFireSafety && (
-              <label className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors select-none">
+            {activeTab === "processed" && (
+              <label className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-pointer hover:bg-slate-50 transition-colors select-none shadow-sm">
                 <input
                   type="checkbox"
                   id="processed-by-me-filter"
@@ -2284,18 +1257,18 @@ export default function TrafficPassesPage() {
                     setProcessedByMe(e.target.checked);
                     setCurrentPage(1);
                   }}
-                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 h-4 w-4 cursor-pointer"
+                  className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 h-4 w-4 cursor-pointer"
                 />
                 <span>Processed By Me</span>
               </label>
             )}
 
-            <div className="relative w-full md:w-auto">
+            <div className="relative w-full sm:w-auto">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="w-full md:w-auto pl-9 pr-8 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 focus:outline-none focus:border-[#ff6b00] appearance-none cursor-pointer"
+                className="w-full sm:w-auto pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-orange-500 appearance-none cursor-pointer shadow-sm"
               >
                 <option value="DATE_DESC">Newest First</option>
                 <option value="DATE_ASC">Oldest First</option>
@@ -2303,22 +1276,22 @@ export default function TrafficPassesPage() {
               </select>
             </div>
 
-            <div className="relative w-full md:w-72">
+            <div className="relative w-full sm:w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
               <input
                 type="text"
-                placeholder="Search Ref ID, Name, Reg No..."
+                placeholder="Search Ref ID, Company, Pass..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value.toUpperCase())}
-                className="w-full pl-9 pr-10 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#ff6b00]"
+                className="w-full pl-9 pr-10 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400/50 shadow-sm"
               />
               {searchInput && (
                 <button
                   onClick={() => setSearchInput("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500 transition-colors"
                   title="Clear Search"
                 >
-                  <XCircle className="h-5 w-5" />
+                  <XCircle className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -2328,7 +1301,7 @@ export default function TrafficPassesPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
+              <tr className="bg-slate-50 border-b border-slate-200/80">
                 {(activeTab === "pass_updates"
                   ? [
                       "Pass No.",
@@ -2338,7 +1311,6 @@ export default function TrafficPassesPage() {
                       "New Vehicle No.",
                       "Requested On",
                       "Status",
-                      "Actions",
                     ]
                   : activeTab === "processed"
                     ? [
@@ -2348,6 +1320,7 @@ export default function TrafficPassesPage() {
                         "Applied On",
                         "Approved By",
                         "Status",
+                        "View",
                       ]
                     : [
                         "Ref No",
@@ -2355,12 +1328,15 @@ export default function TrafficPassesPage() {
                         "Entities Included",
                         "Applied On",
                         "Status",
+                        "View",
                       ]
                 ).map((h) => (
                   <th
                     key={h}
-                    className={`px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${
-                      h === "Status" ? "text-center" : ""
+                    className={`px-6 py-3.5 text-[11px] font-black text-slate-500 uppercase tracking-wider ${
+                      h === "Status" || h === "View"
+                        ? "text-center"
+                        : ""
                     }`}
                   >
                     {h}
@@ -2368,16 +1344,16 @@ export default function TrafficPassesPage() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50 dark:divide-slate-700/30">
+            <tbody className="divide-y divide-slate-100">
               {activeTab === "pass_updates" ? (
                 twoWheelerRequests.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
-                      className="py-16 text-center text-slate-500"
+                      colSpan={7}
+                      className="py-16 text-center text-slate-400"
                     >
                       <Search className="h-10 w-10 mx-auto text-slate-200 mb-3" />
-                      <p className="text-sm font-medium">
+                      <p className="text-xs font-bold text-slate-500">
                         No two-wheeler update requests found.
                       </p>
                     </td>
@@ -2386,81 +1362,57 @@ export default function TrafficPassesPage() {
                   twoWheelerRequests.map((req) => (
                     <tr
                       key={req.id}
-                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                      className="hover:bg-slate-50/80 transition-colors"
                     >
-                      <td className="px-6 py-4 text-sm font-bold font-mono text-[#0a1e4d]">
+                      <td className="px-6 py-4 text-xs font-mono font-black text-[#0a1e4d]">
                         {req.personPassNo ||
                           `REQ-${req.passRequestId || req.id}`}
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-slate-800 dark:text-slate-200">
+                      <td className="px-6 py-4 text-xs font-bold text-slate-800">
                         {req.personName || "—"}
                       </td>
-                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                      <td className="px-6 py-4 text-xs text-slate-600">
                         {req.companyName || "—"}
                       </td>
-                      <td className="px-6 py-4 text-sm font-mono text-slate-500">
+                      <td className="px-6 py-4 text-xs font-mono text-slate-500">
                         {req.oldVehicleNo || "N/A"}
                       </td>
-                      <td className="px-6 py-4 text-sm font-mono font-bold text-emerald-600">
+                      <td className="px-6 py-4 text-xs font-mono font-black text-emerald-600">
                         {req.newVehicleNo}
                       </td>
-                      <td className="px-6 py-4 text-sm text-slate-500">
+                      <td className="px-6 py-4 text-xs text-slate-500">
                         {new Date(req.createdAt).toLocaleDateString("en-GB")}
                       </td>
                       <td className="px-6 py-4 text-center">
                         <span
-                          className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : req.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-black border ${req.status === "APPROVED" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : req.status === "REJECTED" ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}
                         >
                           {req.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        {req.status === "PENDING" ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => handleApproveTwoWheeler(req.id)}
-                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() =>
-                                setRejectModal({
-                                  isOpen: true,
-                                  requestId: req.id,
-                                  reason: "",
-                                })
-                              }
-                              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-400">—</span>
-                        )}
-                      </td>
-                    </tr>
+                      </tr>
                   ))
                 )
               ) : loading ? (
                 <tr>
                   <td
-                    colSpan={activeTab === "processed" ? 6 : 5}
-                    className="py-16 text-center text-slate-500"
+                    colSpan={activeTab === "processed" ? 7 : 6}
+                    className="py-16 text-center text-slate-400"
                   >
-                    <Loader2 className="h-10 w-10 mx-auto text-slate-300 mb-3 animate-spin" />
-                    <p className="text-sm font-medium">Loading requests...</p>
+                    <Loader2 className="h-10 w-10 mx-auto text-orange-400 mb-3 animate-spin" />
+                    <p className="text-xs font-bold text-slate-600">
+                      Loading pass applications...
+                    </p>
                   </td>
                 </tr>
               ) : filteredData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={activeTab === "processed" ? 6 : 5}
-                    className="py-16 text-center text-slate-500"
+                    colSpan={activeTab === "processed" ? 7 : 6}
+                    className="py-16 text-center text-slate-400"
                   >
                     <Search className="h-10 w-10 mx-auto text-slate-200 mb-3" />
-                    <p className="text-sm font-medium">
+                    <p className="text-xs font-bold text-slate-500">
                       No records found for the current filter/search.
                     </p>
                   </td>
@@ -2469,18 +1421,16 @@ export default function TrafficPassesPage() {
                 filteredData.map((pass) => {
                   const statusColors = {
                     approved:
-                      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
+                      "bg-emerald-50 text-emerald-700 border-emerald-200",
                     processed:
-                      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
-                    reverted:
-                      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
-                    rejected:
-                      "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
+                      "bg-emerald-50 text-emerald-700 border-emerald-200",
+                    reverted: "bg-amber-50 text-amber-700 border-amber-200",
+                    rejected: "bg-rose-50 text-rose-700 border-rose-200",
                   };
                   const statusKey = (pass.status || "").toLowerCase();
                   const statusClass =
                     statusColors[statusKey] ||
-                    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+                    "bg-blue-50 text-blue-700 border-blue-200";
 
                   const lockType =
                     pass.originType === "VENDOR" ? "vendor-pass" : "pass";
@@ -2492,8 +1442,8 @@ export default function TrafficPassesPage() {
                   const catInfo = getPassRequestCategory(pass);
 
                   const rowClass = isLocked
-                    ? `bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group ${catInfo.borderAccent}`
-                    : `hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group ${catInfo.borderAccent}`;
+                    ? `bg-amber-50/70 hover:bg-amber-100/70 transition-colors cursor-pointer group ${catInfo.borderAccent}`
+                    : `hover:bg-slate-50 transition-colors cursor-pointer group ${catInfo.borderAccent}`;
 
                   return (
                     <tr
@@ -2503,23 +1453,25 @@ export default function TrafficPassesPage() {
                           : pass.id
                       }
                       onClick={() =>
-                        openReviewModal(pass, activeTab === "processed")
+                        openReviewModal(pass, true)
                       }
                       className={rowClass}
                     >
-                      <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d] dark:text-stone-200 font-mono">
-                        {pass.referenceNo || `REQ-${pass.id}`}
+                      <td className="px-6 py-4">
+                        <span className="font-mono font-black text-xs text-[#0a1e4d] bg-slate-100 hover:bg-blue-50 border border-slate-200 px-2.5 py-1 rounded-lg transition-colors">
+                          {pass.referenceNo || `REQ-${pass.id}`}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-300 to-orange-400 dark:from-amber-400 dark:to-orange-500 flex items-center justify-center font-bold text-sm text-white shadow-sm shrink-0">
+                          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#0a1e4d] to-[#1b3a8a] text-white flex items-center justify-center font-black text-xs shadow-sm shrink-0">
                             {(pass.entityName || "?").charAt(0).toUpperCase()}
                           </div>
-                          <div>
-                            <div className="text-sm font-bold text-slate-800 dark:text-stone-100">
+                          <div className="min-w-0">
+                            <div className="text-xs font-black text-slate-800 truncate">
                               {pass.entityName || "—"}
                             </div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                            <div className="text-[11px] text-slate-400 truncate">
                               {pass.email || "—"}
                             </div>
                           </div>
@@ -2527,97 +1479,55 @@ export default function TrafficPassesPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 items-start">
-                          <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-slate-200 dark:border-slate-700">
+                          <span className="bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border border-slate-200">
                             {pass.persons?.length || 0} Persons |{" "}
                             {pass.vehicles?.length || 0} Vehicles
                           </span>
                           <span
-                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${catInfo.badgeClass}`}
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${catInfo.badgeClass}`}
                           >
                             {catInfo.label}
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
-                        {new Date(pass.createdAt).toLocaleDateString()}
+                      <td className="px-6 py-4 text-xs font-semibold text-slate-500">
+                        {new Date(pass.createdAt).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
                       </td>
                       {activeTab === "processed" && (
-                        <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                        <td className="px-6 py-4 text-xs font-bold text-slate-700">
                           {pass.approvedBy || "—"}
                         </td>
                       )}
                       <td className="px-6 py-4 text-center">
                         <div className="flex flex-col items-center gap-1">
-                          {(() => {
-                            let displayStatus = (
-                              pass.status || "PENDING"
-                            ).toUpperCase();
-
-                            let displayClass = statusClass;
-
-                            if (
-                              isMarineFireSafety &&
-                              activeTab === "processed"
-                            ) {
-                              const marineStatuses = [
-                                ...new Set(
-                                  (pass.vehicles || [])
-                                    .map((v) => {
-                                      const status = String(v.status || "")
-                                        .trim()
-                                        .toLowerCase();
-
-                                      if (v.marineSafetyApproved === true) {
-                                        return "APPROVED";
-                                      }
-
-                                      if (status === "rejected") {
-                                        return "REJECTED";
-                                      }
-
-                                      if (status === "reverted") {
-                                        return "REVERTED";
-                                      }
-
-                                      return null;
-                                    })
-                                    .filter(Boolean),
-                                ),
-                              ];
-
-                              if (marineStatuses.length === 1) {
-                                displayStatus = marineStatuses[0];
-                              } else if (marineStatuses.length > 1) {
-                                displayStatus = "MIXED";
-                              } else {
-                                displayStatus = "PROCESSED";
-                              }
-
-                              displayClass =
-                                displayStatus === "APPROVED"
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : displayStatus === "REJECTED"
-                                    ? "bg-red-50 text-red-700 border-red-200"
-                                    : displayStatus === "REVERTED"
-                                      ? "bg-amber-50 text-amber-700 border-amber-200"
-                                      : "bg-blue-50 text-blue-700 border-blue-200";
-                            }
-
-                            return (
-                              <span
-                                className={`px-3 py-1 rounded-full text-[11px] font-bold border ${displayClass}`}
-                              >
-                                {displayStatus}
-                              </span>
-                            );
-                          })()}
-
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wide ${statusClass}`}
+                          >
+                            {(pass.status || "PENDING").toUpperCase()}
+                          </span>
                           {isLocked && (
-                            <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900 animate-pulse">
-                              IN-USE BY {lock.userName.toUpperCase()}
+                            <span className="text-[9px] text-amber-700 font-extrabold bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200 animate-pulse">
+                              LOCKED: {lock.userName.toUpperCase()}
                             </span>
                           )}
                         </div>
+                      </td>
+                      <td
+                        className="px-6 py-4 text-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => openReviewModal(pass, true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer bg-slate-100 hover:bg-[#0a1e4d] text-slate-700 hover:text-white border border-slate-200 hover:border-transparent"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>View</span>
+                          <ChevronRight className="h-3 w-3 opacity-70" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -2781,11 +1691,11 @@ export default function TrafficPassesPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {visiblePersons.map((p, idx) => (
+                      {visiblePersons.map((p) => (
                         <tr
-                          key={`person-${p.id || idx}-${idx}`}
+                          key={p.id}
                           onClick={() => {
-                            if (isViewMode || canUserVerifyPerson(p)) {
+                            if (!isViewMode && canUserVerifyPerson(p)) {
                               setEntityModal({
                                 isOpen: true,
                                 data: p,
@@ -2799,7 +1709,7 @@ export default function TrafficPassesPage() {
                               );
                             }
                           }}
-                          className={`transition-all hover:shadow-sm ${isViewMode || canUserVerifyPerson(p) ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/50 cursor-default"}`}
+                          className={`transition-all hover:shadow-sm ${!isViewMode && canUserVerifyPerson(p) ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/50 cursor-default"}`}
                         >
                           <td className="p-3 text-slate-800 font-mono font-bold text-xs">
                             {p.personPassNo || "-"}
@@ -2807,6 +1717,28 @@ export default function TrafficPassesPage() {
                           <td className="p-3 font-bold text-[#0a1e4d]">
                             <span>{p.name}</span>
                             <div className="flex flex-wrap gap-1 mt-1">
+                              {isOilDockArea(
+                                p.accessAreaId || p.accessArea,
+                              ) && (
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                    p.srDtmApproved ||
+                                    (userRole ===
+                                      "Senior Deputy Traffic Manager" &&
+                                      entityStatuses.persons[p.id] ===
+                                        "APPROVED")
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : "bg-amber-100 text-amber-700"
+                                  }`}
+                                >
+                                  {p.srDtmApproved ||
+                                  (userRole ===
+                                    "Senior Deputy Traffic Manager" &&
+                                    entityStatuses.persons[p.id] === "APPROVED")
+                                    ? "✓ Sr. DTM"
+                                    : "⏳ Pending Sr. DTM"}
+                                </span>
+                              )}
                               <span
                                 className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                   [
@@ -2985,11 +1917,11 @@ export default function TrafficPassesPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {visibleVehicles.map((v, idx) => (
+                      {visibleVehicles.map((v) => (
                         <tr
-                          key={`vehicle-${v.id || idx}-${idx}`}
+                          key={v.id}
                           onClick={() => {
-                            if (isViewMode || canUserVerifyVehicle(v)) {
+                            if (!isViewMode && canUserVerifyVehicle(v)) {
                               setEntityModal({
                                 isOpen: true,
                                 data: v,
@@ -3003,7 +1935,7 @@ export default function TrafficPassesPage() {
                               );
                             }
                           }}
-                          className={`transition-all hover:shadow-sm ${isViewMode || canUserVerifyVehicle(v) ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/50 cursor-default"}`}
+                          className={`transition-all hover:shadow-sm ${!isViewMode && canUserVerifyVehicle(v) ? "hover:bg-slate-50 cursor-pointer" : "bg-slate-50/50 cursor-default"}`}
                         >
                           <td className="p-3 text-slate-800 font-mono font-bold text-xs">
                             {v.vehiclePassNo || "-"}
@@ -3030,291 +1962,6 @@ export default function TrafficPassesPage() {
                               {v.vehicleTypeName} • {v.passType}
                             </div>
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {["YEARLY", "ANNUAL"].includes(
-                                String(v.passType || "").toUpperCase(),
-                              ) &&
-                              ["TRAILORS", "TRAILER LORRY"].includes(
-                                String(v.vehicleTypeName || "")
-                                  .trim()
-                                  .toUpperCase(),
-                              ) ? (
-                                <>
-                                  {/* Traffic / Pass Section */}
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                      String(v.status || "").toLowerCase() ===
-                                      "approved"
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : String(
-                                              v.status || "",
-                                            ).toLowerCase() === "rejected"
-                                          ? "bg-red-100 text-red-700"
-                                          : String(
-                                                v.status || "",
-                                              ).toLowerCase() === "reverted"
-                                            ? "bg-amber-100 text-amber-700"
-                                            : "bg-amber-100 text-amber-700"
-                                    }`}
-                                  >
-                                    {String(v.status || "").toLowerCase() ===
-                                    "approved"
-                                      ? "✓ Pass Section"
-                                      : String(v.status || "").toLowerCase() ===
-                                          "rejected"
-                                        ? "✕ Pass Section Rejected"
-                                        : String(
-                                              v.status || "",
-                                            ).toLowerCase() === "reverted"
-                                          ? "↩ Pass Section Reverted"
-                                          : "⏳ Pending Pass Section"}
-                                  </span>
-
-                                  {/* Safety Check */}
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                      v.marineSafetyApproved === true ||
-                                      v.twistLockCertified === true
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : String(
-                                              v.status || "",
-                                            ).toLowerCase() === "rejected"
-                                          ? "bg-red-100 text-red-700"
-                                          : String(
-                                                v.status || "",
-                                              ).toLowerCase() === "reverted"
-                                            ? "bg-amber-100 text-amber-700"
-                                            : "bg-amber-100 text-amber-700"
-                                    }`}
-                                  >
-                                    {v.marineSafetyApproved === true ||
-                                    v.twistLockCertified === true
-                                      ? "✓ Safety Check"
-                                      : String(v.status || "").toLowerCase() ===
-                                          "rejected"
-                                        ? "✕ Safety Check Rejected"
-                                        : String(
-                                              v.status || "",
-                                            ).toLowerCase() === "reverted"
-                                          ? "↩ Safety Check Reverted"
-                                          : "⏳ Pending Safety Check"}
-                                  </span>
-                                </>
-                              ) : (
-                                <>
-                                  {/* ESSENTIAL WORKFLOW VS NORMAL WORKFLOW STATUS BADGES */}
-                                  {(() => {
-                                    const isEssential =
-                                      Boolean(v.essentialWorkflowState) ||
-                                      (v.essentialDepartmentId !== null &&
-                                        v.essentialDepartmentId !==
-                                          undefined) ||
-                                      isOilDockArea(
-                                        v.accessAreaId || v.accessArea,
-                                      );
-
-                                    if (isEssential) {
-                                      const workflowState = String(
-                                        v.essentialWorkflowState || "",
-                                      ).toUpperCase();
-                                      const deptId = Number(
-                                        v.essentialDepartmentId,
-                                      );
-                                      const sparkApproved =
-                                        v.sparkArresterCertified === true ||
-                                        v.marineSafetyApproved === true ||
-                                        (userRole === "Fire Safety Officer" &&
-                                          entityStatuses.vehicles[v.id] ===
-                                            "APPROVED");
-
-                                      const fireSafetyDone =
-                                        sparkApproved ||
-                                        (workflowState !== "" &&
-                                          !workflowState.includes(
-                                            "FIRE_SAFETY",
-                                          ));
-
-                                      const isCivilDept =
-                                        deptId === 3 ||
-                                        workflowState.includes("CIVIL");
-                                      const isMechDept =
-                                        deptId === 4 ||
-                                        workflowState.includes("MECHANICAL");
-
-                                      const civilDone =
-                                        isCivilDept &&
-                                        (!workflowState.includes("CIVIL") ||
-                                          [
-                                            "PENDING_CISF_ESSENTIAL",
-                                            "PENDING_PASS_SECTION_ESSENTIAL",
-                                            "COMPLETED_ESSENTIAL",
-                                            "COMPLETED",
-                                          ].includes(workflowState));
-
-                                      const mechDone =
-                                        isMechDept &&
-                                        (!workflowState.includes(
-                                          "MECHANICAL",
-                                        ) ||
-                                          [
-                                            "PENDING_CISF_ESSENTIAL",
-                                            "PENDING_PASS_SECTION_ESSENTIAL",
-                                            "COMPLETED_ESSENTIAL",
-                                            "COMPLETED",
-                                          ].includes(workflowState));
-
-                                      const cisfDone =
-                                        [
-                                          "PENDING_PASS_SECTION_ESSENTIAL",
-                                          "COMPLETED_ESSENTIAL",
-                                          "COMPLETED",
-                                        ].includes(workflowState) ||
-                                        String(v.status || "").toLowerCase() ===
-                                          "approved";
-
-                                      const passSectionDone =
-                                        [
-                                          "COMPLETED_ESSENTIAL",
-                                          "COMPLETED",
-                                        ].includes(workflowState) ||
-                                        String(v.status || "").toLowerCase() ===
-                                          "approved";
-
-                                      return (
-                                        <>
-                                          {/* 1. Dy. Conservator / Fire Safety */}
-                                          <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                              fireSafetyDone
-                                                ? "bg-emerald-100 text-emerald-700"
-                                                : "bg-amber-100 text-amber-700"
-                                            }`}
-                                          >
-                                            {fireSafetyDone
-                                              ? "✓ Fire Safety / Dy. Conservator"
-                                              : "⏳ Pending Fire Safety / Dy. Conservator"}
-                                          </span>
-
-                                          {/* 2. Department Approval (if Civil or Mech selected) */}
-                                          {isCivilDept && (
-                                            <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                                civilDone
-                                                  ? "bg-emerald-100 text-emerald-700"
-                                                  : "bg-amber-100 text-amber-700"
-                                              }`}
-                                            >
-                                              {civilDone
-                                                ? "✓ Civil Dept"
-                                                : "⏳ Pending Civil Dept"}
-                                            </span>
-                                          )}
-
-                                          {isMechDept && (
-                                            <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                                mechDone
-                                                  ? "bg-emerald-100 text-emerald-700"
-                                                  : "bg-amber-100 text-amber-700"
-                                              }`}
-                                            >
-                                              {mechDone
-                                                ? "✓ Mech Dept"
-                                                : "⏳ Pending Mech Dept"}
-                                            </span>
-                                          )}
-
-                                          {/* 3. CISF Approval */}
-                                          <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                              cisfDone
-                                                ? "bg-emerald-100 text-emerald-700"
-                                                : "bg-amber-100 text-amber-700"
-                                            }`}
-                                          >
-                                            {cisfDone
-                                              ? "✓ CISF Assistant Commandant"
-                                              : "⏳ Pending CISF"}
-                                          </span>
-
-                                          {/* 4. Pass Section Final Approval */}
-                                          <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                              passSectionDone
-                                                ? "bg-emerald-100 text-emerald-700"
-                                                : "bg-amber-100 text-amber-700"
-                                            }`}
-                                          >
-                                            {passSectionDone
-                                              ? "✓ Pass Section"
-                                              : "⏳ Pending Pass Section"}
-                                          </span>
-                                        </>
-                                      );
-                                    }
-
-                                    // Normal flow
-                                    return (
-                                      <>
-                                        <span
-                                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                            String(
-                                              v.status || "",
-                                            ).toLowerCase() === "approved"
-                                              ? "bg-emerald-100 text-emerald-700"
-                                              : String(
-                                                    v.status || "",
-                                                  ).toLowerCase() === "rejected"
-                                                ? "bg-red-100 text-red-700"
-                                                : String(
-                                                      v.status || "",
-                                                    ).toLowerCase() ===
-                                                    "reverted"
-                                                  ? "bg-amber-100 text-amber-700"
-                                                  : "bg-amber-100 text-amber-700"
-                                          }`}
-                                        >
-                                          {String(
-                                            v.status || "",
-                                          ).toLowerCase() === "approved"
-                                            ? "✓ Pass Section"
-                                            : String(
-                                                  v.status || "",
-                                                ).toLowerCase() === "rejected"
-                                              ? "✕ Pass Section Rejected"
-                                              : String(
-                                                    v.status || "",
-                                                  ).toLowerCase() === "reverted"
-                                                ? "↩ Pass Section Reverted"
-                                                : "⏳ Pending Pass Section"}
-                                        </span>
-
-                                        {v.twistLockCertified && (
-                                          <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                              v.twistLockCertified ||
-                                              (userRole === "Safety Officer" &&
-                                                entityStatuses.vehicles[
-                                                  v.id
-                                                ] === "APPROVED")
-                                                ? "bg-emerald-100 text-emerald-700"
-                                                : "bg-amber-100 text-amber-700"
-                                            }`}
-                                          >
-                                            {v.twistLockCertified ||
-                                            (userRole === "Safety Officer" &&
-                                              entityStatuses.vehicles[v.id] ===
-                                                "APPROVED")
-                                              ? "✓ Safety"
-                                              : "⏳ Pending Safety"}
-                                          </span>
-                                        )}
-                                      </>
-                                    );
-                                  })()}
-                                </>
-                              )}
-                            </div>
-                            {/* <div className="flex flex-wrap gap-1 mt-1">
                               {["MONTHLY", "YEARLY", "ANNUAL"].includes(
                                 v.passType,
                               ) && (
@@ -3332,6 +1979,27 @@ export default function TrafficPassesPage() {
                                   (userRole === "Safety Officer" &&
                                     entityStatuses.vehicles[v.id] ===
                                       "APPROVED")
+                                    ? "✓ Safety"
+                                    : "⏳ Pending Safety"}
+                                </span>
+                              )}
+                              {isOilDockArea(
+                                v.accessAreaId || v.accessArea,
+                              ) && (
+                                <>
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                      v.sparkArresterCertified ||
+                                      (userRole === "Fire Safety Officer" &&
+                                        entityStatuses.vehicles[v.id] ===
+                                          "APPROVED")
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : "bg-amber-100 text-amber-700"
+                                    }`}
+                                  >
+                                    {v.sparkArresterCertified ||
+                                    (userRole === "Fire Safety Officer" &&
+                                      entityStatuses.vehicles[v.id] ===
                                         "APPROVED")
                                       ? "✓ Fire Safety"
                                       : "⏳ Pending Fire Safety"}
@@ -3409,44 +2077,15 @@ export default function TrafficPassesPage() {
                                   ? "✓ Pass Section"
                                   : "⏳ Pending Pass Section"}
                               </span>
-                            </div> */}
+                            </div>
                           </td>
                           <td className="p-3 text-right">
                             <div className="flex justify-end items-center gap-3">
                               {(() => {
-                                let vehicleStatus =
-                                  entityStatuses.vehicles[v.id];
-
-                                if (!vehicleStatus) {
-                                  if (userRole === "Safety Officer") {
-                                    vehicleStatus =
-                                      v.marineSafetyApproved === true ||
-                                      v.twistLockCertified === true
-                                        ? "APPROVED"
-                                        : "PENDING";
-                                  } else if (
-                                    userRole === "Fire Safety Officer"
-                                  ) {
-                                    vehicleStatus =
-                                      v.marineSafetyApproved === true ||
-                                      v.sparkArresterCertified === true
-                                        ? "APPROVED"
-                                        : "PENDING";
-                                  } else if (
-                                    userRole === "Senior Deputy Traffic Manager"
-                                  ) {
-                                    vehicleStatus =
-                                      v.srDtmApproved === true
-                                        ? "APPROVED"
-                                        : "PENDING";
-                                  } else {
-                                    vehicleStatus = (
-                                      v.status ||
-                                      v.decision ||
-                                      ""
-                                    ).toUpperCase();
-                                  }
-                                }
+                                const vehicleStatus =
+                                  entityStatuses.vehicles[v.id] ||
+                                  v.status ||
+                                  v.decision;
 
                                 const vehicleRemark =
                                   entityRemarks.vehicles[v.id] ||
@@ -3460,8 +2099,7 @@ export default function TrafficPassesPage() {
                                         className={`px-2 py-1 rounded text-[10px] font-bold ${
                                           vehicleStatus === "APPROVED"
                                             ? "bg-emerald-100 text-emerald-700"
-                                            : vehicleStatus === "REVERTED" ||
-                                                vehicleStatus === "PENDING"
+                                            : vehicleStatus === "REVERTED"
                                               ? "bg-amber-100 text-amber-700"
                                               : "bg-red-100 text-red-700"
                                         }`}
@@ -3504,34 +2142,11 @@ export default function TrafficPassesPage() {
                                   }}
                                   className={`${getItemCategoryTag(v, false)?.btnClass || "bg-blue-600 hover:bg-blue-700 text-white shadow-sm"} px-4 py-1.5 rounded-lg text-xs font-bold transition-colors`}
                                 >
-                                  {(() => {
-                                    if (entityStatuses.vehicles[v.id])
-                                      return "Re-verify";
-                                    if (
-                                      userRole === "Safety Officer" ||
-                                      userRole === "Fire Safety Officer"
-                                    ) {
-                                      if (
-                                        v.marineSafetyApproved === true ||
-                                        v.twistLockCertified === true ||
-                                        v.sparkArresterCertified === true
-                                      )
-                                        return "Re-verify";
-                                      return "Verify";
-                                    }
-                                    if (
-                                      userRole ===
-                                      "Senior Deputy Traffic Manager"
-                                    ) {
-                                      if (v.srDtmApproved === true)
-                                        return "Re-verify";
-                                      return "Verify";
-                                    }
-                                    return v.status === "approved" ||
-                                      v.status === "rejected"
-                                      ? "Re-verify"
-                                      : "Verify";
-                                  })()}
+                                  {entityStatuses.vehicles[v.id] ||
+                                  v.status === "approved" ||
+                                  v.status === "rejected"
+                                    ? "Re-verify"
+                                    : "Verify"}
                                 </button>
                               )}
                             </div>
@@ -3623,7 +2238,7 @@ export default function TrafficPassesPage() {
                       />
                       <DetailItem
                         label="Full Name"
-                        value={entityModal.data.name || "-"}
+                        value={entityModal.data.name}
                         highlight
                       />
                       <DetailItem
@@ -3632,11 +2247,7 @@ export default function TrafficPassesPage() {
                       />
                       <DetailItem
                         label="Designation"
-                        value={
-                          entityModal.data.designationName ||
-                          entityModal.data.designationId ||
-                          entityModal.data.designationOther
-                        }
+                        value={entityModal.data.designationId}
                       />
                       <DetailItem
                         label="Aadhar No."
@@ -3656,48 +2267,28 @@ export default function TrafficPassesPage() {
                       />
                       <DetailItem
                         label="Country"
-                        value={
-                          entityModal.data.countryName ||
-                          entityModal.data.country
-                        }
+                        value={entityModal.data.country}
                       />
                       <DetailItem
                         label="Visa No."
                         value={entityModal.data.visaNo}
                       />
                       <DetailItem
-                        label="Date of Birth"
-                        value={entityModal.data.dob}
-                      />
-                      <DetailItem
-                        label="CDC Number"
-                        value={entityModal.data.cdcNumber}
-                      />
-                      <DetailItem
                         label="ID Proof Type"
-                        value={
-                          {
-                            1: "Driving License",
-                            2: "PAN Card",
-                            3: "Passport",
-                            4: "Voter ID",
-                            5: "Company ID Card",
-                          }[String(entityModal.data.idProofType)] ||
-                          entityModal.data.idProofType
-                        }
+                        value={entityModal.data.idProofType}
                       />
                       <DetailItem
                         label="ID Proof No."
                         value={entityModal.data.idProofNumber}
                       />
-                      <DetailItem
-                        label="Card / QR Reference"
+                      {/* <DetailItem
+                        label="RFID Card"
                         value={entityModal.data.cardNumber}
-                      />
+                      /> */}
                       {entityModal.data.hepTypeId === "Seafarers" && (
                         <DetailItem
                           label="Seafarer Pass For"
-                          value={entityModal.data.seafarerPassFor || "-"}
+                          value={entityModal.data.seafarerPassFor}
                           highlight
                         />
                       )}
@@ -3708,7 +2299,7 @@ export default function TrafficPassesPage() {
                       {entityModal.data.withTwoWheeler && (
                         <DetailItem
                           label="Two-Wheeler No."
-                          value={entityModal.data.vehicleNo || "-"}
+                          value={entityModal.data.vehicleNo}
                         />
                       )}
                     </>
@@ -3721,7 +2312,7 @@ export default function TrafficPassesPage() {
                       />
                       <DetailItem
                         label="Registration No."
-                        value={entityModal.data.registrationNo || "-"}
+                        value={entityModal.data.registrationNo}
                         highlight
                       />
                       <DetailItem
@@ -3735,88 +2326,135 @@ export default function TrafficPassesPage() {
                           "-"
                         }
                       />
-                      {entityModal.data.essentialDepartmentName && (
-                        <DetailItem
-                          label="Selected Department"
-                          value={entityModal.data.essentialDepartmentName}
-                          highlight
-                        />
-                      )}
                       {/* <DetailItem
-                        label="RFID Card No."
-                        value={entityModal.data.rfidCardNumber || "-"}
+                        label="RFID Card"
+                        value={entityModal.data.rfidCardNumber}
                       /> */}
                       <DetailItem
                         label="Insurance Expiry"
-                        value={entityModal.data.insuranceExpiry || "-"}
+                        value={entityModal.data.insuranceExpiry}
                       />
                       <DetailItem
                         label="RC Validity"
-                        value={entityModal.data.rcValidity || "-"}
-                      />
-                      <DetailItem
-                        label="ULIP Verification"
-                        value={
-                          entityModal.data.ulip_verified
-                            ? "VERIFIED"
-                            : "NOT VERIFIED"
-                        }
+                        value={entityModal.data.rcValidity}
                       />
                     </>
                   )}
-                  {Array.isArray(entityModal.data.workflowHistory) &&
-                    entityModal.data.workflowHistory.length > 0 && (
-                      <div className="col-span-2 md:col-span-4 border-t border-slate-200 pt-4 mt-3">
-                        <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-                          Approval History
-                        </h5>
 
-                        <div className="space-y-2">
-                          {entityModal.data.workflowHistory.map(
-                            (history, index) => (
-                              <div
-                                key={`${history.actionedAt}-${index}`}
-                                className="bg-slate-50 border border-slate-200 rounded-lg p-3"
-                              >
-                                <div className="flex justify-between gap-3">
-                                  <div>
-                                    <p className="text-xs font-black text-slate-800">
-                                      {history.stage}
-                                    </p>
-
-                                    <p className="text-[11px] text-slate-600">
-                                      {history.action} by{" "}
-                                      <span className="font-bold">
-                                        {history.actorName || "-"}
-                                      </span>
-                                    </p>
-
-                                    <p className="text-[10px] text-slate-500">
-                                      {history.roleName || "-"} •{" "}
-                                      {history.departmentName || "-"}
-                                    </p>
-                                  </div>
-
-                                  <span className="text-[10px] font-semibold text-slate-500">
-                                    {history.actionedAt
-                                      ? new Date(
-                                          history.actionedAt,
-                                        ).toLocaleString("en-IN")
-                                      : "-"}
-                                  </span>
+                  {/* Oil Dock Workflow Status */}
+                  {isOilDockArea(
+                    entityModal.data.accessAreaId ||
+                      entityModal.data.accessArea,
+                  ) && (
+                    <div className="col-span-2 md:col-span-4 border-t border-slate-100 pt-4 mt-2">
+                      <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
+                        Essential Entry Permit Certifications
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {entityModal.type === "person" ? (
+                          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase">
+                              Sr. DTM Approval
+                            </span>
+                            <div className="flex items-center gap-2 mt-1">
+                              {entityModal.data.srDtmApproved ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                  AUTHORIZED
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                  PENDING AUTHORIZATION
+                                </span>
+                              )}
+                            </div>
+                            {entityModal.data.srDtmRemarks && (
+                              <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                Remarks: {entityModal.data.srDtmRemarks}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            {/* Safety Officer badge — shown only for MONTHLY, YEARLY, ANNUAL oil dock vehicles */}
+                            {["MONTHLY", "YEARLY", "ANNUAL"].includes(
+                              entityModal.data.passType,
+                            ) && (
+                              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                  Safety Officer (Twist Lock & Fitness)
+                                </span>
+                                <div className="flex items-center gap-2 mt-1">
+                                  {entityModal.data.twistLockCertified ? (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                      APPROVED
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                      PENDING APPROVAL
+                                    </span>
+                                  )}
                                 </div>
-
-                                {history.remarks && (
-                                  <p className="text-[10px] text-slate-600 mt-2 border-t pt-2">
-                                    Remarks: {history.remarks}
+                                {entityModal.data.twistLockRemarks && (
+                                  <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                    Remarks: {entityModal.data.twistLockRemarks}
                                   </p>
                                 )}
                               </div>
-                            ),
-                          )}
-                        </div>
+                            )}
+
+                            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                Fire Safety Officer (Spark Arrester)
+                              </span>
+                              <div className="flex items-center gap-2 mt-1">
+                                {entityModal.data.sparkArresterCertified ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                    CERTIFIED
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                    PENDING CERTIFICATION
+                                  </span>
+                                )}
+                              </div>
+                              {entityModal.data.sparkArresterRemarks && (
+                                <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                  Remarks:{" "}
+                                  {entityModal.data.sparkArresterRemarks}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                Sr. DTM Approval
+                              </span>
+                              <div className="flex items-center gap-2 mt-1">
+                                {entityModal.data.srDtmApproved ||
+                                (userRole === "Senior Deputy Traffic Manager" &&
+                                  entityStatuses.vehicles[
+                                    entityModal.data.id
+                                  ] === "APPROVED") ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                    AUTHORIZED
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                    PENDING AUTHORIZATION
+                                  </span>
+                                )}
+                              </div>
+                              {entityModal.data.srDtmRemarks && (
+                                <p className="text-xs text-slate-600 mt-2 font-mono bg-white p-2 rounded border">
+                                  Remarks: {entityModal.data.srDtmRemarks}
+                                </p>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
-                    )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3858,11 +2496,7 @@ export default function TrafficPassesPage() {
                   )}
                   <DetailItem
                     label="Calculated Amount"
-                    value={`₹${
-                      entityModal.data.amount ??
-                      selectedRequest?.amount ??
-                      "0.00"
-                    }`}
+                    value={`₹${entityModal.data.amount}`}
                   />
                 </div>
               </div>
