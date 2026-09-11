@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import PaginationBar from "@/components/ui/PaginationBar";
 import axios from "axios";
 import { toast } from "sonner";
+import PassPermitShareModal from "@/components/PassPermitShareModal";
 import {
   CheckCircle2,
   Search,
@@ -255,6 +256,8 @@ export default function TrafficPassesPage() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [companyProfile, setCompanyProfile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Outcome of sharing the Port Entry Permit, shown once a pass completes.
+  const [permitShare, setPermitShare] = useState(null);
 
   const extractEntityIndex = (entityId) => {
     if (!entityId) return 0;
@@ -801,6 +804,15 @@ export default function TrafficPassesPage() {
         });
         reviewStatus = completeResponse.data?.data?.reviewStatus;
         responseMessage = completeResponse.data?.data?.message;
+        // The pass reached COMPLETED and its permit was shared with iPortman;
+        // show the approver whether that worked.
+        if (completeResponse.data?.permitShare) {
+          setPermitShare({
+            passRequestId: selectedRequest.id,
+            referenceNo: selectedRequest.referenceNo,
+            result: completeResponse.data.permitShare,
+          });
+        }
       }
 
       // 6. HANDLE SUCCESS
@@ -2661,6 +2673,14 @@ export default function TrafficPassesPage() {
             </div>
           </div>
         </div>
+      )}
+      {permitShare && (
+        <PassPermitShareModal
+          passRequestId={permitShare.passRequestId}
+          referenceNo={permitShare.referenceNo}
+          initialResult={permitShare.result}
+          onClose={() => setPermitShare(null)}
+        />
       )}
     </div>
   );

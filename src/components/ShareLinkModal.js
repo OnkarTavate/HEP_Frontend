@@ -5,7 +5,10 @@ import { Copy, Check, Mail, X, Link2, Send, Loader2 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 
-const EMAIL_API = process.env.NEXT_PUBLIC_EMAIL_API || "http://localhost:5002/api";
+// The email is sent by face_verify, which checks that the link belongs to this
+// capture session before mailing it. The email service itself is internal and
+// is not reachable from the browser.
+const FACE_API = process.env.NEXT_PUBLIC_FACE_API || "http://localhost:5011/api";
 
 /**
  * ShareLinkModal
@@ -14,6 +17,7 @@ const EMAIL_API = process.env.NEXT_PUBLIC_EMAIL_API || "http://localhost:5002/ap
  *   open         – boolean
  *   onClose      – () => void
  *   link         – string  – the URL to share (defaults to window.location.href)
+ *   sessionId    – string  – the capture session the link belongs to
  *   personName   – string  – name of the person who needs to capture their photo
  *   agentName    – string  – logged-in agent's username (shown in email body)
  *   status       – string  – 'creating' | 'waiting' | 'opened' | 'received' | 'error'
@@ -23,6 +27,7 @@ export default function ShareLinkModal({
   open,
   onClose,
   link,
+  sessionId,
   personName,
   agentName,
   status,
@@ -47,6 +52,7 @@ export default function ShareLinkModal({
   console.log("ShareLinkModal: shareLink=", shareLink, "status=", status, "error=", error);
   const isBusy = status === "creating";
   const canShare = Boolean(shareLink) && !isBusy;
+  const canEmail = canShare && Boolean(sessionId);
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(shareLink);
@@ -76,6 +82,8 @@ export default function ShareLinkModal({
   };
 
   const handleSendEmail = async () => {
+    // Enter in the field reaches here even while the button is disabled.
+    if (!canEmail || sending) return;
     const err = validateEmail(email);
     if (err) {
       setEmailError(err);
@@ -84,12 +92,17 @@ export default function ShareLinkModal({
     setEmailError("");
     setSending(true);
     try {
-      await axios.post(`${EMAIL_API}/email/sendPhotoCaptureLink`, {
-        email: email.trim(),
-        personName: personName || "Applicant",
-        agentName: agentName || "Agent",
-        link: shareLink,
-      });
+      const token =
+        localStorage.getItem("accessToken") || localStorage.getItem("hep_token");
+      await axios.post(
+        `${FACE_API}/face/sessions/${sessionId}/email`,
+        {
+          email: email.trim(),
+          agentName: agentName || "Agent",
+          link: shareLink,
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
       toast.success(`Email sent to ${email.trim()}`);
       setEmail("");
     } catch (err) {
@@ -230,7 +243,7 @@ export default function ShareLinkModal({
               <button
                 type="button"
                 onClick={handleSendEmail}
-                disabled={sending || !canShare}
+                disabled={sending || !canEmail}
                 className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[#0a1e4d] text-white transition-colors hover:bg-[#0a1e4d]/85 disabled:opacity-60"
                 title="Send email"
               >

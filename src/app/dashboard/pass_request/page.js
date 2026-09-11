@@ -9549,6 +9549,7 @@ export default function PassRequestPage() {
         open={shareLinkOpen}
         onClose={() => setShareLinkOpen(false)}
         link={liveCapture.link}
+        sessionId={liveCapture.session?.sessionId}
         status={liveCapture.status}
         error={liveCapture.error}
         personName={personForm.name || ""}
