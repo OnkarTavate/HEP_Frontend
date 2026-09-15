@@ -10,6 +10,7 @@ import {
   X,
   Shield,
   User,
+  IdCard,
   Mail,
   Phone,
   Briefcase,
@@ -108,6 +109,7 @@ export default function AdminDashboard() {
   });
   const [newAdmin, setNewAdmin] = useState({
     userName: "",
+    employeeId: "",
     email: "",
     phoneNumber: "",
     roleId: "",
@@ -236,6 +238,13 @@ export default function AdminDashboard() {
       errors.email = "Please enter a valid email address";
     }
 
+    const employeeId = (newAdmin.employeeId || "").trim();
+    if (!employeeId) {
+      errors.employeeId = "Employee ID is required";
+    } else if (!/^[A-Za-z0-9][A-Za-z0-9._/-]{1,49}$/.test(employeeId)) {
+      errors.employeeId = "Enter a valid employee ID";
+    }
+
     const phone = (newAdmin.phoneNumber || "").replace(/\D/g, "");
     if (!phone) {
       errors.phoneNumber = "Phone number is required";
@@ -255,6 +264,7 @@ export default function AdminDashboard() {
   const resetCreateForm = () => {
     setNewAdmin({
       userName: "",
+      employeeId: "",
       email: "",
       phoneNumber: "",
       roleId: "",
@@ -304,6 +314,7 @@ export default function AdminDashboard() {
       // Reset form
       setNewAdmin({
         userName: "",
+        employeeId: "",
         email: "",
         phoneNumber: "",
         roleId: "",
@@ -937,6 +948,35 @@ export default function AdminDashboard() {
                   {fieldErrors.userName && (
                     <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
                       <AlertCircle className="h-3 w-3" /> {fieldErrors.userName}
+                    </p>
+                  )}
+                </div>
+
+                {/* Employee ID */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 sm:mb-1.5">
+                    Employee ID
+                  </label>
+                  <div className="relative">
+                    <IdCard className="absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
+                    <input
+                      type="text"
+                      maxLength={50}
+                      value={newAdmin.employeeId}
+                      onChange={(e) => {
+                        setNewAdmin({ ...newAdmin, employeeId: e.target.value });
+                        if (fieldErrors.employeeId)
+                          setFieldErrors({ ...fieldErrors, employeeId: "" });
+                      }}
+                      className={`w-full pl-9 sm:pl-10 pr-3 sm:pr-3.5 py-2.5 border bg-slate-50/50 dark:bg-slate-800/40 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-4 text-sm transition placeholder:text-slate-400 dark:placeholder:text-slate-500 ${fieldErrors.employeeId
+                        ? "border-red-400 focus:ring-red-500/10 focus:border-red-500 dark:border-red-500/60"
+                        : "border-slate-200 dark:border-slate-800/80 focus:ring-amber-500/10 focus:border-amber-400 dark:focus:ring-amber-500/20 dark:focus:border-amber-500"
+                        }`}
+                    />
+                  </div>
+                  {fieldErrors.employeeId && (
+                    <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" /> {fieldErrors.employeeId}
                     </p>
                   )}
                 </div>
