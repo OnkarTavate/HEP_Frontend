@@ -325,7 +325,7 @@ export default function PenaltyConfigPage() {
               <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                 Interactive Fine Simulator
                 <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold px-2 py-0.5 rounded-full uppercase">
-                  Real-time Preview
+                  Live Configuration Preview
                 </span>
               </h2>
               <p className="text-xs text-slate-500">Test how fine rates dynamically resolve for different entity types.</p>
@@ -667,7 +667,7 @@ export default function PenaltyConfigPage() {
           <div className="text-xs text-slate-600 leading-relaxed">
             <h4 className="font-bold text-slate-800 text-sm mb-0.5">Port Authority Policy Notes</h4>
             <p>
-              Rule changes saved on this dashboard update the baseline defaults in real-time for all newly created blacklisting records across both the <strong>ATM Dashboard</strong> and <strong>Traffic Department Approval</strong> views. 
+              Rule changes saved on this dashboard update the baseline defaults for all newly created blacklisting records across both the <strong>ATM Dashboard</strong> and <strong>Traffic Department Approval</strong> views. 
               Sub-rule: <strong>Code 005</strong> retains a mandatory minimum floor of ₹1,025. Vehicle releases are enforced at ₹1,025 minimum regardless of lower base rates.
             </p>
           </div>

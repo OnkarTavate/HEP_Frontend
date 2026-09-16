@@ -1398,7 +1398,7 @@ export default function TrafficManagerDashboard() {
               className="hidden md:inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 px-3.5 py-2 text-xs font-bold text-white transition-all ring-1 ring-inset ring-white/15 shadow-sm"
             >
               <FileText className="h-3.5 w-3.5 text-orange-300" />
-              Pass Pipeline
+              Pass Register
             </Link>
             <div className="flex items-center gap-2 rounded-xl bg-white/10 px-3.5 py-2 ring-1 ring-inset ring-white/15">
               <button
@@ -2114,7 +2114,7 @@ export default function TrafficManagerDashboard() {
           {/* Pass Health */}
           <Panel
             title="Pass Management Health"
-            subtitle={`Pipeline insights (${filterRange.label})`}
+            subtitle={`Performance & Health Summary (${filterRange.label})`}
             icon={FileText}
             tone="blue"
             action="View Passes"
@@ -2246,7 +2246,7 @@ export default function TrafficManagerDashboard() {
           {/* Company Health */}
           <Panel
             title="Company Registration Health"
-            subtitle="Operator pipeline & compliance status"
+            subtitle="Operator Registration & Compliance Status"
             icon={Building2}
             tone="violet"
             action="View All"
@@ -2615,7 +2615,7 @@ export default function TrafficManagerDashboard() {
       <div id="sec-operations">
         <SectionDivider label="Operations Summary" icon={Globe} />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Port Activity */}
+          {/* Port Transaction Activity */}
           <Panel
             title="Port Transaction Activity"
             subtitle="Pass submission volume by period"
@@ -2782,7 +2782,7 @@ export default function TrafficManagerDashboard() {
                 },
                 {
                   href: "/traffic_manager/passes",
-                  label: "Pass Pipeline",
+                  label: "Pass Register",
                   sub: `${displayData.pass.total} total · ${displayData.pass.pending} pending`,
                   icon: FileText,
                   color: "bg-blue-50 border-blue-200 text-blue-700",
@@ -2814,7 +2814,7 @@ export default function TrafficManagerDashboard() {
                 },
                 {
                   href: "/traffic_manager/bulk-pass",
-                  label: "Bulk Pass Queue",
+                  label: "Group Pass Applications",
                   sub: `${displayData.bulk.total} applications · ${displayData.bulk.pending} need review`,
                   icon: Layers,
                   color: "bg-indigo-50 border-indigo-200 text-indigo-700",

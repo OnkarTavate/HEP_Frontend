@@ -90,12 +90,14 @@ export default function UserAccountsPage() {
   const fetchUsers = async (pageNum = page, limitNum = pageSize, searchStr = debouncedSearch) => {
     try {
       setLoading(true);
+      const token = localStorage.getItem("accessToken");
       const res = await axios.get(`${BASE_URL}/user/dept-admin-users`, {
         params: {
           page: pageNum,
           limit: limitNum,
           search: searchStr,
         },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       setUsers(res.data?.data || []);

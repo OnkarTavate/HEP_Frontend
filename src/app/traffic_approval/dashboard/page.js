@@ -460,38 +460,95 @@ function IconStatRow({
   const t = TONE[tone] || TONE.blue;
   const Wrapper = href ? Link : "div";
   const wp = href ? { href } : {};
+
+  // Gradient background per tone — same vivid palette as the Overstay tiles
+  const overlayGrad = {
+    emerald: "bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-600",
+    rose:    "bg-gradient-to-r from-rose-400    via-rose-500    to-pink-600",
+    amber:   "bg-gradient-to-r from-amber-400   via-amber-500   to-orange-500",
+    sky:     "bg-gradient-to-r from-sky-400     via-sky-500     to-blue-600",
+    blue:    "bg-gradient-to-r from-blue-400    via-blue-500    to-indigo-600",
+    violet:  "bg-gradient-to-r from-violet-400  via-violet-500  to-purple-600",
+    teal:    "bg-gradient-to-r from-teal-400    via-teal-500    to-cyan-600",
+    indigo:  "bg-gradient-to-r from-indigo-400  via-indigo-500  to-violet-600",
+    orange:  "bg-gradient-to-r from-orange-400  via-orange-500  to-red-500",
+    cyan:    "bg-gradient-to-r from-cyan-400    via-cyan-500    to-sky-600",
+    red:     "bg-gradient-to-r from-red-400     via-red-500     to-rose-600",
+  };
+
+  // Colored glow shadow per tone
+  const glowMap = {
+    emerald: "group-hover/row:shadow-[0_8px_24px_-6px_rgba(16,185,129,0.55)]",
+    rose:    "group-hover/row:shadow-[0_8px_24px_-6px_rgba(244,63,94,0.5)]",
+    amber:   "group-hover/row:shadow-[0_8px_24px_-6px_rgba(251,191,36,0.55)]",
+    sky:     "group-hover/row:shadow-[0_8px_24px_-6px_rgba(14,165,233,0.5)]",
+    blue:    "group-hover/row:shadow-[0_8px_24px_-6px_rgba(59,130,246,0.5)]",
+    violet:  "group-hover/row:shadow-[0_8px_24px_-6px_rgba(139,92,246,0.5)]",
+    teal:    "group-hover/row:shadow-[0_8px_24px_-6px_rgba(20,184,166,0.5)]",
+    indigo:  "group-hover/row:shadow-[0_8px_24px_-6px_rgba(99,102,241,0.5)]",
+    orange:  "group-hover/row:shadow-[0_8px_24px_-6px_rgba(249,115,22,0.5)]",
+    cyan:    "group-hover/row:shadow-[0_8px_24px_-6px_rgba(6,182,212,0.5)]",
+    red:     "group-hover/row:shadow-[0_8px_24px_-6px_rgba(239,68,68,0.5)]",
+  };
+
+  const overlay  = overlayGrad[tone] || overlayGrad.blue;
+  const glowCls  = glowMap[tone]     || glowMap.blue;
+
   return (
     <Wrapper
       {...wp}
-      className={`group/row flex items-center justify-between gap-3 -mx-2 rounded-xl px-2 py-2.5 transition-all duration-150 ${href ? `hover:bg-gradient-to-r hover:${t.grad} cursor-pointer border border-transparent hover:${t.border}` : "hover:bg-slate-50"}`}
+      className={`group/row relative overflow-hidden flex items-center justify-between gap-3 -mx-2 rounded-xl px-3 py-2.5 transition-all duration-200 border border-transparent ring-1 ring-inset ring-transparent ${
+        href
+          ? `group-hover/row:border-white/20 group-hover/row:ring-white/20 hover:-translate-y-[1px] ${glowCls} cursor-pointer`
+          : ""
+      }`}
     >
-      <div className="flex items-center gap-2.5 min-w-0">
+      {/* ── Gradient background layer — fades in on hover ── */}
+      {href && (
+        <div
+          className={`absolute inset-0 ${overlay} opacity-0 group-hover/row:opacity-100 transition-opacity duration-200 rounded-xl`}
+        />
+      )}
+
+      {/* Top shimmer line — identical to the Overstay colored tiles */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent opacity-0 group-hover/row:opacity-100 transition-opacity duration-200" />
+
+      {/* Decorative orb — top-right, like the colored tiles */}
+      <div className="pointer-events-none absolute -right-3 -top-3 h-12 w-12 rounded-full bg-white/15 opacity-0 group-hover/row:opacity-100 transition-opacity duration-200" />
+
+      {/* ── Left: icon + label ── */}
+      <div className="flex items-center gap-2.5 min-w-0 relative z-10">
         <span
-          className={`flex h-8 w-8 items-center justify-center rounded-xl ${t.chip} shrink-0 shadow-sm`}
+          className={`flex h-8 w-8 items-center justify-center rounded-xl ${t.chip} group-hover/row:bg-white/25 group-hover/row:ring-1 group-hover/row:ring-inset group-hover/row:ring-white/40 shrink-0 shadow-sm transition-all duration-200 group-hover/row:scale-110`}
         >
           <Icon className="h-4 w-4" strokeWidth={2.2} />
         </span>
-        <span className="text-xs font-semibold text-slate-700 truncate">
+        <span className="text-xs font-semibold text-slate-700 group-hover/row:text-white/90 truncate transition-colors duration-150">
           {label}
         </span>
       </div>
-      <div className="flex items-center gap-1.5 shrink-0">
+
+      {/* ── Right: value + chevron ── */}
+      <div className="flex items-center gap-1.5 shrink-0 relative z-10">
         {loading ? (
-          <div className="h-5 w-12 rounded bg-slate-200 animate-pulse" />
+          <div className="h-5 w-12 rounded bg-slate-200 group-hover/row:bg-white/30 animate-pulse transition-colors" />
         ) : (
-          <span className={`text-lg font-black tabular-nums ${t.text}`}>
+          <span
+            className={`text-lg font-black tabular-nums ${t.text} group-hover/row:text-white drop-shadow-sm transition-all duration-150 group-hover/row:scale-[1.06]`}
+          >
             {money ? fmtMoney(value) : fmtNum(value)}
           </span>
         )}
         {href && (
-          <ChevronRight
-            className={`h-3.5 w-3.5 ${t.label} opacity-0 -translate-x-1 group-hover/row:opacity-80 group-hover/row:translate-x-0 transition-all`}
-          />
+          <ChevronRight className="h-3.5 w-3.5 text-white opacity-0 -translate-x-1 group-hover/row:opacity-80 group-hover/row:translate-x-0 transition-all duration-150" />
         )}
       </div>
     </Wrapper>
   );
 }
+
+
+
 
 function KpiCard({
   title,
@@ -1853,7 +1910,7 @@ export default function TrafficManagerDashboard() {
 
       {/* 1. OPERATIONAL EXECUTIVE SUMMARY */}
       <div>
-        <SectionDivider label="Operational Overview" icon={Sparkles} />
+        <SectionDivider label="Executive Operations Summary" icon={Sparkles} />
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-2">
           <KpiCard
             title="Pass Approvals"
@@ -1916,7 +1973,7 @@ export default function TrafficManagerDashboard() {
             ]}
           />
           <KpiCard
-            title="Port Activity"
+            title="Port Traffic"
             value={displayData.portActivity.today}
             icon={Truck}
             gradient="from-sky-500 to-cyan-600"
@@ -2003,13 +2060,13 @@ export default function TrafficManagerDashboard() {
         </div>
       </div>
 
-      {/* 2. LIVE APPROVAL QUEUE (OPERATIONAL PRIORITY #1) */}
+      {/* 2. PENDING PASS APPLICATIONS — PRIORITY CLEARANCE */}
       <SectionDivider
-        label="Live Approval Queue — Immediate Clearance"
+        label="Pass Applications — Pending Clearance (Priority)"
         icon={Clock}
       />
       <Panel
-        title="Pending Pass Queue"
+        title="Pass Applications Awaiting Clearance"
         subtitle={`Entries awaiting operational clearance & approval (${filterRange.label})`}
         icon={Clock}
         tone="amber"
@@ -2112,15 +2169,15 @@ export default function TrafficManagerDashboard() {
         )}
       </Panel>
 
-      {/* 3. PORT OPERATIONS & REAL-TIME TRAFFIC (GATE & VEHICLES) */}
+      {/* 3. PORT OPERATIONS & TRAFFIC MONITORING */}
       <SectionDivider
-        label="Port Operations & Real-Time Traffic"
+        label="Port Operations & Traffic Monitoring"
         icon={Globe}
       />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel
-          title="Port Activity & Transactions"
-          subtitle="Real-time traffic & movements inside port"
+          title="Port Traffic & Movement Register"
+          subtitle="Authorised movements and transactions within port limits"
           icon={Globe}
           tone="cyan"
           action="View Details"
@@ -2128,7 +2185,7 @@ export default function TrafficManagerDashboard() {
         >
           <div className="grid grid-cols-2 gap-3 mb-4">
             <MiniStat
-              label="Total Transactions"
+              label="Total Pass Applications"
               value={displayData.pass.total}
               tone="cyan"
               icon={Truck}
@@ -2294,15 +2351,15 @@ export default function TrafficManagerDashboard() {
         </Panel>
       </div>
 
-      {/* 4. PASS PIPELINE & DEPARTMENT CLEARANCE */}
+      {/* 4. PASS APPLICATION STATUS REGISTER & DEPARTMENTAL CLEARANCE */}
       <SectionDivider
         label="Pass Status & Department Distribution"
         icon={FileText}
       />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel
-          title="Pass Status Pipeline"
-          subtitle={`Pipeline breakdown (${filterRange.label})`}
+          title="Pass Application Status Register"
+          subtitle={`Status-wise distribution (${filterRange.label})`}
           icon={FileText}
           tone="blue"
           action="View All"
@@ -2421,11 +2478,11 @@ export default function TrafficManagerDashboard() {
       </div>
 
       {/* 5. PASS APPROVAL BREAKDOWN — PENDING & PROCESSED */}
-      <SectionDivider label="Approval Queue Breakdown" icon={ClipboardCheck} />
+      <SectionDivider label="Application Processing Status Summary" icon={ClipboardCheck} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel
-          title="Pass Approval — Pending Queue"
-          subtitle={`Pending entries (${filterRange.label})`}
+          title="Pass Applications — Pending Review"
+          subtitle={`Applications under review (${filterRange.label})`}
           icon={Clock}
           tone="amber"
           action="Review"
@@ -2768,9 +2825,11 @@ export default function TrafficManagerDashboard() {
             />
           </div>
 
-          {/* Company Revenue Ledger */}
+
+          {/* Company Revenue Ledger — fixed-height scrollable */}
           {!loading && displayData.hepRevenue.companyList.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-2">
+              {/* Header row */}
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
                   <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
@@ -2778,86 +2837,137 @@ export default function TrafficManagerDashboard() {
                     Company Revenue Ledger ({filterRange.label})
                   </p>
                   <span className="text-[10px] font-bold text-slate-400">
-                    · Click any company for full detailed ledger
+                    · {displayData.hepRevenue.companyList.length} companies
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                    Total: {fmtMoney(displayData.hepRevenue.total)}
-                  </span>
-                  {displayData.hepRevenue.companyList.length > 6 && (
+                <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  Total: {fmtMoney(displayData.hepRevenue.total)}
+                </span>
+              </div>
+
+              {/* Search box — shown only when > 6 companies */}
+              {displayData.hepRevenue.companyList.length > 6 && (
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search company…"
+                    value={allCompaniesSearch}
+                    onChange={(e) => setAllCompaniesSearch(e.target.value)}
+                    className="w-full pl-7 pr-3 py-1.5 text-[11px] bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 placeholder:text-slate-400 transition"
+                  />
+                  {allCompaniesSearch && (
                     <button
-                      onClick={() => setShowFullLedgerModal(true)}
-                      className="text-[10px] font-black text-blue-700 hover:text-blue-800 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-2.5 py-0.5 rounded-full transition-colors flex items-center gap-1"
+                      onClick={() => setAllCompaniesSearch("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                     >
-                      View All ({displayData.hepRevenue.companyList.length}) →
+                      <X className="h-3 w-3" />
                     </button>
                   )}
                 </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {displayData.hepRevenue.companyList.slice(0, 6).map((c, i) => {
-                  const rankColors = [
+              )}
+
+              {/* Fixed-height scrollable leaderboard table */}
+              <div
+                className="overflow-y-auto rounded-xl border border-slate-200 bg-white"
+                style={{ maxHeight: "260px" }}
+              >
+                {/* Table header */}
+                <div className="sticky top-0 z-10 grid grid-cols-[28px_1fr_auto] gap-2 px-3 py-1.5 bg-slate-50 border-b border-slate-200 text-[9px] font-black uppercase tracking-wider text-slate-500">
+                  <span className="text-center">#</span>
+                  <span>Company</span>
+                  <span className="text-right">Revenue</span>
+                </div>
+
+                {/* Rows */}
+                {(() => {
+                  const q = allCompaniesSearch.trim().toLowerCase();
+                  const filtered = q
+                    ? displayData.hepRevenue.companyList.filter((c) =>
+                        c.name.toLowerCase().includes(q)
+                      )
+                    : displayData.hepRevenue.companyList;
+
+                  if (filtered.length === 0)
+                    return (
+                      <p className="text-center text-[11px] text-slate-400 py-6">
+                        No companies match "{allCompaniesSearch}"
+                      </p>
+                    );
+
+                  const rankBadge = [
                     "bg-gradient-to-br from-yellow-400 to-amber-500 text-white",
                     "bg-gradient-to-br from-slate-300 to-slate-400 text-white",
                     "bg-gradient-to-br from-orange-400 to-orange-600 text-white",
-                    "bg-gradient-to-br from-emerald-500 to-teal-600 text-white",
-                    "bg-gradient-to-br from-blue-500 to-indigo-600 text-white",
-                    "bg-gradient-to-br from-violet-500 to-purple-600 text-white",
                   ];
-                  const leftBorders = [
-                    "border-l-yellow-400",
-                    "border-l-slate-400",
-                    "border-l-orange-400",
-                    "border-l-emerald-500",
-                    "border-l-blue-500",
-                    "border-l-violet-500",
-                  ];
-                  return (
-                    <div
-                      key={i}
-                      onClick={() => {
-                        setSelectedLedgerCompany(c);
-                        setLedgerSearchQuery("");
-                        setLedgerStatusFilter("ALL");
-                        setLedgerModeFilter("ALL");
-                        setLedgerActiveTab("transactions");
-                        setExpandedPassId(null);
-                      }}
-                      className={`group/co relative flex items-center justify-between p-3.5 rounded-2xl bg-white border border-slate-200 border-l-4 ${leftBorders[i] || "border-l-slate-300"} text-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_-10px_rgba(16,185,129,0.28)] hover:border-emerald-300 cursor-pointer active:scale-[0.99]`}
-                      title="Click to view detailed company revenue ledger"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
+
+                  return filtered.map((c, i) => {
+                    const originalRank = displayData.hepRevenue.companyList.indexOf(c);
+                    const badgeCls = rankBadge[originalRank] ?? "bg-slate-100 text-slate-600";
+                    const pct = displayData.hepRevenue.total > 0
+                      ? Math.round((c.total / displayData.hepRevenue.total) * 100)
+                      : 0;
+
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => {
+                          setSelectedLedgerCompany(c);
+                          setLedgerSearchQuery("");
+                          setLedgerStatusFilter("ALL");
+                          setLedgerModeFilter("ALL");
+                          setLedgerActiveTab("transactions");
+                          setExpandedPassId(null);
+                        }}
+                        className="group/row grid grid-cols-[28px_1fr_auto] gap-2 items-center px-3 py-2 border-b border-slate-100 last:border-0 hover:bg-emerald-50/60 cursor-pointer transition-colors"
+                        title="Click to view detailed company revenue ledger"
+                      >
+                        {/* Rank badge */}
                         <span
-                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-[11px] font-black shadow-sm ${rankColors[i] || "bg-slate-200 text-slate-600"}`}
+                          className={`flex h-5 w-5 shrink-0 mx-auto items-center justify-center rounded-md text-[9px] font-black shadow-sm ${badgeCls}`}
                         >
-                          {i + 1}
+                          {originalRank + 1}
                         </span>
+
+                        {/* Name + meta */}
                         <div className="min-w-0">
-                          <p className="font-extrabold text-slate-800 truncate text-[12px] group-hover/co:text-emerald-700 transition-colors">
+                          <p className="text-[11px] font-extrabold text-slate-800 truncate group-hover/row:text-emerald-700 transition-colors">
                             {c.name}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] text-slate-400 font-semibold">
-                              {c.passCount} passes · {c.persons}P · {c.vehicles}
-                              V
+                            <span className="text-[9px] text-slate-400 font-semibold">
+                              {c.passCount} passes · {c.persons}P · {c.vehicles}V
                             </span>
-                            <span className="text-[9px] font-extrabold text-emerald-600 flex items-center group-hover/co:translate-x-0.5 transition-transform">
-                              Ledger{" "}
-                              <ArrowUpRight className="h-2.5 w-2.5 ml-0.5" />
-                            </span>
+                            {pct > 0 && (
+                              <span className="text-[9px] font-bold text-emerald-600">
+                                {pct}%
+                              </span>
+                            )}
+                          </div>
+                          {/* Share bar */}
+                          <div className="mt-1 h-0.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 transition-all duration-500"
+                              style={{ width: `${pct}%` }}
+                            />
                           </div>
                         </div>
+
+                        {/* Amount + arrow */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="font-black text-emerald-600 tabular-nums text-[11px] bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg group-hover/row:bg-emerald-100/80 transition-colors">
+                            {fmtMoney(c.total)}
+                          </span>
+                          <ArrowUpRight className="h-3 w-3 text-emerald-500 opacity-0 group-hover/row:opacity-100 transition-opacity" />
+                        </div>
                       </div>
-                      <span className="font-black text-emerald-600 tabular-nums shrink-0 text-sm ml-2 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl group-hover/co:bg-emerald-100/80 transition-colors">
-                        {fmtMoney(c.total)}
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}
+
 
           {!loading && displayData.hepRevenue.companyList.length === 0 && (
             <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-6 text-[11px] text-slate-400 font-medium text-center">
@@ -2934,7 +3044,7 @@ export default function TrafficManagerDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel
           title="Company Management"
-          subtitle="Registration pipeline & status"
+          subtitle="Company Registration & Status Overview"
           icon={Building2}
           tone="violet"
           action="View All"

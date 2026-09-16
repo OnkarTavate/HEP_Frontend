@@ -282,7 +282,7 @@ export default function HepRatesPage() {
               <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                 Interactive Charge Simulator
                 <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold px-2 py-0.5 rounded-full uppercase">
-                  Real-time Preview
+                  Live Rate Preview
                 </span>
               </h2>
               <p className="text-xs text-slate-500">Preview the exact HEP charge an agent will see at checkout.</p>

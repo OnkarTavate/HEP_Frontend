@@ -368,7 +368,7 @@ export default function AdminDashboard() {
           />
         </div>
 
-        {/* Two side-by-side panels (Approval Rate + Pending Queue) */}
+        {/* Two side-by-side panels (Approval Rate + Applications Pending Review) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4 mb-4">
           <div
             className="h-44 rounded-[24px] bg-white dark:bg-[#1f232d] ring-1 ring-stone-200/60 dark:ring-white/5 animate-pulse"
@@ -737,7 +737,7 @@ export default function AdminDashboard() {
             <div>
               <h3 className="text-base sm:text-lg font-extrabold text-slate-800 dark:text-stone-100 flex items-center gap-1.5 tracking-tight">
                 <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500 dark:text-orange-300" />
-                Pending Queue
+                Applications Pending Review
               </h3>
               <p className="text-slate-500 dark:text-stone-400 text-xs sm:text-sm mt-1">
                 Awaiting review

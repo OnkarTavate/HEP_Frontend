@@ -249,7 +249,7 @@ export default function TrafficBulkPassPage() {
       const data = await getApprovalQueue();
       setBatches(Array.isArray(data) ? data : []);
     } catch {
-      toast.error("Failed to load approval queue.");
+      toast.error("Failed to load group pass applications.");
       setBatches([]);
     } finally { setLoading(false); }
   }, []);
@@ -355,7 +355,7 @@ export default function TrafficBulkPassPage() {
               : "text-stone-500 hover:text-stone-700"
           }`}
         >
-          Approval Queue
+          Group Pass Applications
           {batches.length > 0 && (
             <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#ff6b00] text-white text-[10px] font-bold">
               {batches.length}
@@ -429,7 +429,7 @@ export default function TrafficBulkPassPage() {
           )}
         </div>
       ) : (
-        /* ── Approval Queue (UNDER_REVIEW only) ── */
+        /* ── Group Pass Applications (Under Review) ── */
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <BatchTable
             rows={batches}

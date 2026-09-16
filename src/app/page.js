@@ -800,8 +800,8 @@ const LoginPage = () => {
                 },
                 {
                   icon: TrendingUp,
-                  title: "Real-Time Data",
-                  desc: "Live traffic monitoring & automated gates",
+                  title: "Live Operational Data",
+                  desc: "Live port traffic monitoring & automated gate control",
                 },
                 {
                   icon: Clock,

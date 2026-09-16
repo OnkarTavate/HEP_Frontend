@@ -265,7 +265,7 @@ export default function PassSectionDashboard() {
               TRAFFIC PASS SECTION DASHBOARD
             </h1>
             <p style={{ color:"#475569", fontSize:13, marginTop:8, fontWeight:500 }}>
-              Real-time approvals, registrations &amp; escalations
+              Approvals, Registrations &amp; Escalations — Live Status
               {user && <span style={{ color:"#64748b" }}> · {user.name || user.username}</span>}
             </p>
           </div>
@@ -292,7 +292,7 @@ export default function PassSectionDashboard() {
           {[
             { label:"Total Passes",   val:S.totalPasses,   sub:`${dn(S.pending)} pending`, icon:FileText,          c:"indigo" },
             { label:"Processed",      val:S.processed,     sub:"this session",             icon:CheckCircle,       c:"emerald" },
-            { label:"Pending Queue",  val:S.pending,       sub:"awaiting review",          icon:Clock,             c: safeNum(S.pending)>30?"red":"amber" },
+            { label:"Applications Pending Review",  val:S.pending,       sub:"awaiting authority clearance",          icon:Clock,             c: safeNum(S.pending)>30?"red":"amber" },
             { label:"My Approvals",   val:S.approvedByMe,  sub:"processed by me",          icon:UserCheck,         c:"violet" },
             { label:"Blacklisted",    val:S.blActiveTotal, sub:"active restrictions",      icon:ShieldOff,         c:"rose" },
             { label:"Overstay Dues",  val:null,            sub:dm(S.overstayAmount),       icon:CircleDollarSign,  c:"orange", money:true, rawVal:S.overstayAmount },
@@ -759,7 +759,7 @@ export default function PassSectionDashboard() {
       <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", justifyContent:"space-between", gap:12, paddingTop:16, borderTop:"1px solid rgba(255,255,255,0.06)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           <Zap size={12} color={ACCENT.amber} />
-          <span style={{ color:"#1e293b", fontSize:11, fontWeight:500 }}>Live data · Auto-refreshes every 5 min ·</span>
+          <span style={{ color:"#1e293b", fontSize:11, fontWeight:500 }}>Live data · Auto-refreshes every 5 minutes ·</span>
           <span style={{ color:"#475569", fontSize:11, fontWeight:700 }}>N/A</span>
           <span style={{ color:"#1e293b", fontSize:11 }}>= service offline</span>
         </div>
