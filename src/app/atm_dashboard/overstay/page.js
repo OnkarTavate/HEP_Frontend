@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
@@ -323,14 +324,30 @@ const PassBlockToggleStrip = ({ enabled, saving, onToggle, locked, lockedReason 
 
 export default function ATMOverstayPage() {
   const [activeTab, setActiveTab] = useState("detect");
-  const [loading, setLoading] = useState(false);
+  const [detectLoading, setDetectLoading] = useState(false);
+  const [chargesLoading, setChargesLoading] = useState(false);
+  const [appealsLoading, setAppealsLoading] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
+
   const [detectedList, setDetectedList] = useState([]);
   const [chargesList, setChargesList] = useState([]);
   const [appealsList, setAppealsList] = useState([]);
+
+  const [detectTotalCount, setDetectTotalCount] = useState(0);
+  const [chargesTotalCount, setChargesTotalCount] = useState(0);
+  const [appealsTotalCount, setAppealsTotalCount] = useState(0);
+
+  const [globalStats, setGlobalStats] = useState({
+    detect: { total: 0, persons: 0, vehicles: 0, maxDays: 0, totalFine: 0 },
+    charges: { total: 0, pending: 0, paid: 0, notified: 0, waived: 0, totalPending: 0, totalCollected: 0 },
+    appeals: { total: 0, persons: 0, vehicles: 0, oldestDays: 0, totalContested: 0 },
+  });
+
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [passTypeFilter, setPassTypeFilter] = useState("ALL");
   const [detectedActionFilter, setDetectedActionFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [dateRangeFilter, setDateRangeFilter] = useState("ALL");
   // Draft values edited in the custom range inputs.
   const [customDateFrom, setCustomDateFrom] = useState("");
@@ -381,41 +398,131 @@ export default function ATMOverstayPage() {
     });
   };
 
+  const getDateParams = useCallback(() => {
+    if (dateRangeFilter === "CUSTOM") {
+      return {
+        date_from: appliedCustomDateFrom || undefined,
+        date_to: appliedCustomDateTo || undefined,
+      };
+    }
+    const cutoff = dateRangeCutoff(dateRangeFilter);
+    if (cutoff) {
+      const iso = cutoff.toISOString().split("T")[0];
+      return { date_from: iso };
+    }
+    return {};
+  }, [dateRangeFilter, appliedCustomDateFrom, appliedCustomDateTo]);
+
   /* ─── FETCH DATA ─── */
-  const fetchDetected = async () => {
-    setLoading(true);
+  const fetchStats = useCallback(async () => {
     try {
-      const res = await axios.get(`${ADMIN_API}/overstay/detect`, { headers: getAuthHeaders() });
-      if (res.data?.success) setDetectedList(res.data.data || []);
+      setStatsLoading(true);
+      const res = await axios.get(`${ADMIN_API}/overstay/stats`, { headers: getAuthHeaders() });
+      if (res.data?.success && res.data?.data) {
+        setGlobalStats(res.data.data);
+      }
+    } catch (err) {
+      console.error("Fetch overstay stats error:", err);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  const fetchDetected = useCallback(async (customPage, customPageSize) => {
+    setDetectLoading(true);
+    try {
+      const p = customPage !== undefined ? customPage : page;
+      const ps = customPageSize !== undefined ? customPageSize : pageSize;
+      const dateParams = getDateParams();
+      const params = {
+        page: p,
+        limit: ps,
+        search: debouncedSearch.trim() || undefined,
+        pass_type: passTypeFilter === "ALL" ? undefined : passTypeFilter,
+        action_status: detectedActionFilter === "ALL" ? undefined : detectedActionFilter,
+        sortBy: sortConfig.key || undefined,
+        sortDir: sortConfig.direction ? sortConfig.direction.toUpperCase() : undefined,
+        ...dateParams,
+      };
+      const res = await axios.get(`${ADMIN_API}/overstay/detect`, {
+        headers: getAuthHeaders(),
+        params,
+      });
+      if (res.data?.success) {
+        setDetectedList(res.data.data || []);
+        setDetectTotalCount(res.data.totalCount ?? (res.data.data || []).length);
+      }
     } catch (err) {
       console.error("Fetch detected overstays error:", err);
       toast.error(err.response?.data?.message || err.message || "Failed to load overstay detections");
-    } finally { setLoading(false); }
-  };
+    } finally {
+      setDetectLoading(false);
+    }
+  }, [page, pageSize, debouncedSearch, passTypeFilter, detectedActionFilter, sortConfig, getDateParams]);
 
-  // Fetches the full charges log; status narrowing (Pending/Paid/Waived, with
-  // exception decisions folded in) happens client-side via effectiveStatus().
-  const fetchCharges = async () => {
-    setLoading(true);
+  const fetchCharges = useCallback(async (customPage, customPageSize) => {
+    setChargesLoading(true);
     try {
-      const res = await axios.get(`${ADMIN_API}/overstay/charges`, { headers: getAuthHeaders() });
-      if (res.data?.success) setChargesList(res.data.data || []);
+      const p = customPage !== undefined ? customPage : page;
+      const ps = customPageSize !== undefined ? customPageSize : pageSize;
+      const dateParams = getDateParams();
+      const params = {
+        page: p,
+        limit: ps,
+        status: statusFilter === "ALL" ? "EXCLUDE_APPEALS" : statusFilter,
+        pass_type: passTypeFilter === "ALL" ? undefined : passTypeFilter,
+        search: debouncedSearch.trim() || undefined,
+        sortBy: sortConfig.key || undefined,
+        sortDir: sortConfig.direction ? sortConfig.direction.toUpperCase() : undefined,
+        ...dateParams,
+      };
+      const res = await axios.get(`${ADMIN_API}/overstay/charges`, {
+        headers: getAuthHeaders(),
+        params,
+      });
+      if (res.data?.success) {
+        setChargesList(res.data.data || []);
+        setChargesTotalCount(res.data.totalCount ?? (res.data.data || []).length);
+      }
     } catch (err) {
       console.error("Fetch overstay charges error:", err);
       toast.error(err.response?.data?.message || err.message || "Failed to load levied charges");
-    } finally { setLoading(false); }
-  };
+    } finally {
+      setChargesLoading(false);
+    }
+  }, [page, pageSize, statusFilter, passTypeFilter, debouncedSearch, sortConfig, getDateParams]);
 
-  const fetchAppeals = async () => {
-    setLoading(true);
+  const fetchAppeals = useCallback(async (customPage, customPageSize) => {
+    setAppealsLoading(true);
     try {
-      const res = await axios.get(`${ADMIN_API}/overstay/charges?status=EXCEPTION_REQUESTED`, { headers: getAuthHeaders() });
-      if (res.data?.success) setAppealsList(res.data.data || []);
+      const p = customPage !== undefined ? customPage : page;
+      const ps = customPageSize !== undefined ? customPageSize : pageSize;
+      const dateParams = getDateParams();
+      const params = {
+        page: p,
+        limit: ps,
+        status: "EXCEPTION_REQUESTED",
+        pass_type: passTypeFilter === "ALL" ? undefined : passTypeFilter,
+        search: debouncedSearch.trim() || undefined,
+        sortBy: sortConfig.key || undefined,
+        sortDir: sortConfig.direction ? sortConfig.direction.toUpperCase() : undefined,
+        ...dateParams,
+      };
+      const res = await axios.get(`${ADMIN_API}/overstay/charges`, {
+        headers: getAuthHeaders(),
+        params,
+      });
+      if (res.data?.success) {
+        setAppealsList(res.data.data || []);
+        setAppealsTotalCount(res.data.totalCount ?? (res.data.data || []).length);
+      }
     } catch (err) {
       console.error("Fetch appeals error:", err);
       toast.error(err.response?.data?.message || err.message || "Failed to load appeals");
-    } finally { setLoading(false); }
-  };
+    } finally {
+      setAppealsLoading(false);
+    }
+  }, [page, pageSize, passTypeFilter, debouncedSearch, sortConfig, getDateParams]);
 
   const fetchAutoEmailSetting = async () => {
     try {
@@ -433,13 +540,20 @@ export default function ATMOverstayPage() {
       console.error("Failed to fetch pass-block setting:", err);
     }
   };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setPage(1);
+    setExpandedRowId(null);
+    setSortConfig({ key: null, direction: "asc" });
+    setSelectedKeys(new Set());
+  };
+
   useEffect(() => {
-    fetchDetected();
-    fetchCharges();
-    fetchAppeals();
+    fetchStats();
     fetchAutoEmailSetting();
     fetchPassBlockSetting();
-  }, []);
+  }, [fetchStats]);
 
   const handleToggleAutoEmail = async () => {
     const next = !autoEmailEnabled;
@@ -494,18 +608,21 @@ export default function ATMOverstayPage() {
   };
 
   useEffect(() => {
-    setPage(1);
-    setExpandedRowId(null);
-    setSortConfig({ key: null, direction: "asc" });
-    setSelectedKeys(new Set());
-    if (activeTab === "detect") fetchDetected();
-    else if (activeTab === "appeals") fetchAppeals();
-    else fetchCharges();
-  }, [activeTab]);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
-    setPage(1);
-  }, [searchQuery, dateRangeFilter, statusFilter, appliedCustomDateFrom, appliedCustomDateTo]);
+    if (activeTab === "detect") {
+      fetchDetected();
+    } else if (activeTab === "appeals") {
+      fetchAppeals();
+    } else {
+      fetchCharges();
+    }
+  }, [activeTab, page, pageSize, statusFilter, passTypeFilter, detectedActionFilter, dateRangeFilter, appliedCustomDateFrom, appliedCustomDateTo, sortConfig, debouncedSearch, fetchDetected, fetchCharges, fetchAppeals]);
 
   const isCustomRangeInvalid = useMemo(() => {
     if (!customDateFrom || !customDateTo) return false;
@@ -519,6 +636,7 @@ export default function ATMOverstayPage() {
     }
     setAppliedCustomDateFrom(customDateFrom);
     setAppliedCustomDateTo(customDateTo);
+    setPage(1);
   };
 
   const resetCustomDateRange = () => {
@@ -527,6 +645,7 @@ export default function ATMOverstayPage() {
     setAppliedCustomDateFrom("");
     setAppliedCustomDateTo("");
     setDateRangeFilter("ALL");
+    setPage(1);
   };
 
   /* ─── ACTIONS ─── */
@@ -820,7 +939,7 @@ export default function ATMOverstayPage() {
   };
 
   const handleBulkLevy = async () => {
-    const items = filteredDetected.filter((i) => selectedKeys.has(detectedKey(i)));
+    const items = detectedList.filter((i) => selectedKeys.has(detectedKey(i)));
     if (items.length === 0) return;
     if (!confirm(`Levy overstay fines for ${items.length} selected entit${items.length !== 1 ? "ies" : "y"} using their calculated daily rates?`)) return;
     setBulkProcessing(true);
@@ -856,6 +975,7 @@ export default function ATMOverstayPage() {
     }
     setBulkProcessing(false);
     setSelectedKeys(new Set());
+    fetchStats();
     fetchDetected();
     fetchCharges();
     if (success) toast.success(`Levied ${success} charge${success !== 1 ? "s" : ""}`);
@@ -863,7 +983,7 @@ export default function ATMOverstayPage() {
   };
 
   const handleBulkNotify = async () => {
-    const items = filteredDetected.filter((i) => selectedKeys.has(detectedKey(i)));
+    const items = detectedList.filter((i) => selectedKeys.has(detectedKey(i)));
     if (items.length === 0) return;
     if (!confirm(`Send overstay reminder notifications for ${items.length} selected entit${items.length !== 1 ? "ies" : "y"}?`)) return;
 
@@ -901,6 +1021,7 @@ export default function ATMOverstayPage() {
 
     setBulkProcessing(false);
     setSelectedKeys(new Set());
+    fetchStats();
     await fetchDetected();
     await fetchCharges();
     if (success) toast.success(`Notified ${success} entit${success !== 1 ? "ies" : "y"}`);
@@ -909,7 +1030,7 @@ export default function ATMOverstayPage() {
   };
 
   const handleBulkWaive = async () => {
-    const items = filteredDetected.filter((i) => selectedKeys.has(detectedKey(i)));
+    const items = detectedList.filter((i) => selectedKeys.has(detectedKey(i)));
     if (items.length === 0) return;
     if (!confirm(`Mark ${items.length} selected entit${items.length !== 1 ? "ies" : "y"} as resolved (waived)?`)) return;
     setBulkProcessing(true);
@@ -940,6 +1061,7 @@ export default function ATMOverstayPage() {
     }
     setBulkProcessing(false);
     setSelectedKeys(new Set());
+    fetchStats();
     fetchDetected();
     fetchCharges();
     if (success) toast.success(`Waived ${success} entit${success !== 1 ? "ies" : "y"}`);
@@ -977,11 +1099,47 @@ export default function ATMOverstayPage() {
     return companyHistoryMap.get(key) || { count: 0, totalAmount: 0 };
   };
 
+  const chargesStatusMap = useMemo(() => {
+    const map = new Map();
+    chargesList.forEach((c) => {
+      map.set(overstayIdentityKey(c), c.status);
+    });
+    return map;
+  }, [chargesList]);
+
+  const lastFineByCompanyMap = useMemo(() => {
+    const map = new Map();
+    const sorted = [...chargesList].sort(
+      (a, b) => new Date(b.created_at || b.createdAt || b.date_from || 0) - new Date(a.created_at || a.createdAt || a.date_from || 0)
+    );
+    sorted.forEach((c) => {
+      const keys = [
+        c.agent_id && `agent:${c.agent_id}`,
+        c.login_id && `login:${c.login_id.toLowerCase()}`,
+        c.company_name && `company:${c.company_name.toLowerCase()}`,
+      ].filter(Boolean);
+      keys.forEach((k) => {
+        if (!map.has(k)) {
+          map.set(k, c);
+        }
+      });
+    });
+    return map;
+  }, [chargesList]);
+
   const getItemStatus = useCallback((item) => {
     if (item.charge_status) return item.charge_status;
-    const match = chargesList.find((c) => overstayIdentityKey(c) === overstayIdentityKey(item));
-    return match ? match.status : null;
-  }, [chargesList]);
+    return chargesStatusMap.get(overstayIdentityKey(item)) || null;
+  }, [chargesStatusMap]);
+
+  const getLastFineForCompany = useCallback((entity) => {
+    if (!entity) return null;
+    const key =
+      (entity.agent_id && `agent:${entity.agent_id}`) ||
+      (entity.login_id && `login:${entity.login_id.toLowerCase()}`) ||
+      (entity.company_name && `company:${entity.company_name.toLowerCase()}`);
+    return lastFineByCompanyMap.get(key) || null;
+  }, [lastFineByCompanyMap]);
 
   const renderActionCircle = (status) => {
     const st = String(status || "").toUpperCase();
@@ -1040,170 +1198,42 @@ export default function ATMOverstayPage() {
     return null;
   };
 
-  const searchedDetected = useMemo(() => {
-    if (!searchQuery) return detectedList;
-    const q = searchQuery.toLowerCase();
-    return detectedList.filter((i) =>
-      i.identifier?.toLowerCase().includes(q) ||
-      i.entity_name?.toLowerCase().includes(q) ||
-      i.pass_no?.toLowerCase().includes(q) ||
-      i.company_name?.toLowerCase().includes(q) ||
-      i.login_id?.toLowerCase().includes(q)
-    );
-  }, [detectedList, searchQuery]);
-
-  // Charges log shows levied + reminder-only rows. Appeals in progress
-  // live exclusively in the Appeals tab, while NOTIFIED remains visible here.
-  const chargesTabBase = useMemo(() => {
-    return chargesList
-      .filter((c) => c.status !== "EXCEPTION_REQUESTED")
-      .filter((c) => statusFilter === "ALL" || effectiveStatus(c.status) === statusFilter);
-  }, [chargesList, statusFilter]);
-
-  const searchedCharges = useMemo(() => {
-    if (!searchQuery) return chargesTabBase;
-    const q = searchQuery.toLowerCase();
-    return chargesTabBase.filter((i) =>
-      i.identifier?.toLowerCase().includes(q) ||
-      i.entity_name?.toLowerCase().includes(q) ||
-      i.company_name?.toLowerCase().includes(q) ||
-      i.pass_no?.toLowerCase().includes(q) ||
-      i.login_id?.toLowerCase().includes(q)
-    );
-  }, [chargesTabBase, searchQuery]);
-
-  const searchedAppeals = useMemo(() => {
-    if (!searchQuery) return appealsList;
-    const q = searchQuery.toLowerCase();
-    return appealsList.filter((i) =>
-      i.identifier?.toLowerCase().includes(q) ||
-      i.entity_name?.toLowerCase().includes(q) ||
-      i.company_name?.toLowerCase().includes(q) ||
-      i.pass_no?.toLowerCase().includes(q) ||
-      i.login_id?.toLowerCase().includes(q)
-    );
-  }, [appealsList, searchQuery]);
-
-  const getLastFineForCompany = useCallback((entity) => {
-    if (!entity) return null;
-    const matches = chargesList.filter((c) => {
-      if (entity.agent_id && c.agent_id) return c.agent_id === entity.agent_id;
-      if (entity.company_name && c.company_name) return c.company_name.toLowerCase() === entity.company_name.toLowerCase();
-      if (entity.login_id && c.login_id) return c.login_id.toLowerCase() === entity.login_id.toLowerCase();
-      return false;
-    });
-
-    if (matches.length === 0) return null;
-
-    const sorted = [...matches].sort(
-      (a, b) => new Date(b.created_at || b.createdAt || b.date_from || 0) - new Date(a.created_at || a.createdAt || a.date_from || 0)
-    );
-    return sorted[0];
-  }, [chargesList]);
-
-  const applyDateRange = useCallback((list) => {
-    if (dateRangeFilter === "CUSTOM") {
-      if (!appliedCustomDateFrom && !appliedCustomDateTo) return list;
-
-      const from = appliedCustomDateFrom ? new Date(`${appliedCustomDateFrom}T00:00:00`) : null;
-      const to = appliedCustomDateTo ? new Date(`${appliedCustomDateTo}T23:59:59.999`) : null;
-
-      return list.filter((i) => {
-        if (!i.date_to) return false;
-        const d = new Date(i.date_to);
-        if (isNaN(d.getTime())) return false;
-        if (from && d < from) return false;
-        if (to && d > to) return false;
-        return true;
-      });
-    }
-
-    const cutoff = dateRangeCutoff(dateRangeFilter);
-    if (!cutoff) return list;
-    return list.filter((i) => i.date_to && new Date(i.date_to) >= cutoff);
-  }, [dateRangeFilter, appliedCustomDateFrom, appliedCustomDateTo]);
-
-  const applyPassTypeFilter = useCallback((list) => {
-    if (passTypeFilter === "ALL") return list;
-    return list.filter((i) => {
-      const formatted = formatPassType(i.pass_type || i.passType, i.date_from, i.date_to);
-      if (passTypeFilter === "DAILY") return formatted === "Daily";
-      if (passTypeFilter === "MONTHLY") return formatted === "Monthly";
-      if (passTypeFilter === "ANNUAL" || passTypeFilter === "YEARLY") return formatted === "Annual";
-      return true;
-    });
-  }, [passTypeFilter]);
-
-  const applyDetectedActionFilter = useCallback((list) => {
-    if (detectedActionFilter === "ALL") return list;
-    return list.filter((i) => {
-      const st = String(getItemStatus(i) || "").toUpperCase();
-      if (detectedActionFilter === "NEW") return !st || st === "NULL" || st === "";
-      if (detectedActionFilter === "NOTIFIED") return st === "NOTIFIED";
-      if (detectedActionFilter === "PENDING") return st === "PENDING" || st === "EXCEPTION_REJECTED";
-      if (detectedActionFilter === "PAID") return st === "PAID";
-      if (detectedActionFilter === "WAIVED") return st === "WAIVED" || st === "EXCEPTION_APPROVED";
-      if (detectedActionFilter === "EXCEPTION_REQUESTED") return st === "EXCEPTION_REQUESTED";
-      return true;
-    });
-  }, [detectedActionFilter, getItemStatus]);
-
-  const rangedDetected = useMemo(
-    () => applyPassTypeFilter(applyDateRange(applyDetectedActionFilter(searchedDetected))),
-    [searchedDetected, applyDateRange, applyPassTypeFilter, applyDetectedActionFilter]
-  );
-  const rangedCharges = useMemo(
-    () => applyPassTypeFilter(applyDateRange(searchedCharges)),
-    [searchedCharges, applyDateRange, applyPassTypeFilter]
-  );
-  const rangedAppeals = useMemo(
-    () => applyPassTypeFilter(applyDateRange(searchedAppeals)),
-    [searchedAppeals, applyDateRange, applyPassTypeFilter]
-  );
-
-  const filteredDetected = useMemo(() => sortData(rangedDetected, sortConfig.key, sortConfig.direction), [rangedDetected, sortConfig]);
-  const filteredCharges = useMemo(() => sortData(rangedCharges, sortConfig.key, sortConfig.direction), [rangedCharges, sortConfig]);
-  const filteredAppeals = useMemo(() => sortData(rangedAppeals, sortConfig.key, sortConfig.direction), [rangedAppeals, sortConfig]);
-
-  const currentList = activeTab === "detect" ? filteredDetected : activeTab === "appeals" ? filteredAppeals : filteredCharges;
-  const totalItems = currentList.length;
-  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+  const currentList = activeTab === "detect" ? detectedList : activeTab === "appeals" ? appealsList : chargesList;
+  const totalItems = activeTab === "detect" ? detectTotalCount : activeTab === "appeals" ? appealsTotalCount : chargesTotalCount;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const startIndex = (page - 1) * pageSize;
-  const paginatedData = useMemo(() => {
-    return currentList.slice(startIndex, startIndex + pageSize);
-  }, [currentList, startIndex, pageSize]);
+  const paginatedData = currentList;
+  const loading = activeTab === "detect" ? detectLoading : activeTab === "appeals" ? appealsLoading : chargesLoading;
 
   const detectStats = useMemo(() => {
-    const persons = rangedDetected.filter(
-      (d) => ["PERSON", "DRIVER"].includes(d.entity_type)
-    ).length;
-    const vehicles = rangedDetected.filter((d) => d.entity_type === "VEHICLE").length;
-    const totalFine = rangedDetected.reduce((s, d) => s + (d.total_amount || 0), 0);
-    const maxDays = rangedDetected.reduce((m, d) => Math.max(m, parseInt(d.overstay_days || 0, 10)), 0);
-    return { persons, vehicles, totalFine, maxDays, total: rangedDetected.length };
-  }, [rangedDetected]);
+    return {
+      total: globalStats.detect.total || detectTotalCount,
+      persons: globalStats.detect.persons,
+      vehicles: globalStats.detect.vehicles,
+      maxDays: globalStats.detect.maxDays,
+      totalFine: globalStats.detect.totalFine,
+    };
+  }, [globalStats.detect, detectTotalCount]);
 
   const chargeStats = useMemo(() => {
-    const pending = rangedCharges.filter((c) => effectiveStatus(c.status) === "PENDING");
-    const paid = rangedCharges.filter((c) => c.status === "PAID");
-
-    const liveAmount = (c) =>
-      ["PENDING", "EXCEPTION_REQUESTED", "EXCEPTION_REJECTED"].includes(c.status)
-        ? parseFloat(c.current_total_amount || 0)
-        : parseFloat(c.total_amount || 0);
-
-    const totalPending = pending.reduce((s, c) => s + liveAmount(c), 0);
-    const totalCollected = paid.reduce((s, c) => s + parseFloat(c.total_amount || 0), 0);
-    return { pending: pending.length, paid: paid.length, totalPending, totalCollected, total: rangedCharges.length };
-  }, [rangedCharges]);
+    return {
+      total: globalStats.charges.total || chargesTotalCount,
+      pending: globalStats.charges.pending,
+      paid: globalStats.charges.paid,
+      totalPending: globalStats.charges.totalPending,
+      totalCollected: globalStats.charges.totalCollected,
+    };
+  }, [globalStats.charges, chargesTotalCount]);
 
   const appealStats = useMemo(() => {
-    const totalContested = rangedAppeals.reduce((s, c) => s + parseFloat(c.current_total_amount || c.total_amount || 0), 0);
-    const oldestDays = rangedAppeals.reduce((m, c) => Math.max(m, parseInt(c.current_overstay_days || c.overstay_days || 0, 10)), 0);
-    const persons = rangedAppeals.filter((d) => d.entity_type === "PERSON").length;
-    const vehicles = rangedAppeals.filter((d) => d.entity_type === "VEHICLE").length;
-    return { total: rangedAppeals.length, totalContested, oldestDays, persons, vehicles };
-  }, [rangedAppeals]);
+    return {
+      total: globalStats.appeals.total || appealsTotalCount,
+      persons: globalStats.appeals.persons,
+      vehicles: globalStats.appeals.vehicles,
+      oldestDays: globalStats.appeals.oldestDays,
+      totalContested: globalStats.appeals.totalContested,
+    };
+  }, [globalStats.appeals, appealsTotalCount]);
 
   /* ─── Shared row-action cell for Charges / Appeals tables ─── */
   const renderChargeActions = (charge) => {
@@ -1315,7 +1345,7 @@ export default function ATMOverstayPage() {
 
     return (
       <tr
-        key={charge.id}
+        key={charge.id ? `charge-${charge.id}-${idx}` : `charge-idx-${idx}`}
         onClick={() => openDetailModal(charge)}
         className="hover:bg-blue-50/40 transition-colors cursor-pointer"
       >
@@ -1327,9 +1357,14 @@ export default function ATMOverstayPage() {
           <p className="font-bold text-slate-800 truncate" title={charge.company_name || "N/A"}>
             {charge.company_name || "N/A"}
           </p>
-          <p className="text-[10px] text-slate-400 font-mono truncate" title={charge.login_id || "Agent #" + charge.agent_id}>
-            {charge.login_id || "Agent #" + charge.agent_id}
-          </p>
+          {(charge.login_id || charge.agent_id) && (
+            <p
+              className="text-[10px] text-slate-400 font-mono truncate"
+              title={charge.login_id || (charge.agent_id ? `Agent #${charge.agent_id}` : "")}
+            >
+              {charge.login_id || `Agent #${charge.agent_id}`}
+            </p>
+          )}
           {(() => {
             const stats = getCompanyStats(charge);
             return stats.count > 0 ? (
@@ -1484,14 +1519,15 @@ export default function ATMOverstayPage() {
 
             <button
               onClick={() => {
-                fetchDetected();
-                fetchCharges();
-                fetchAppeals();
+                fetchStats();
+                if (activeTab === "detect") fetchDetected();
+                else if (activeTab === "appeals") fetchAppeals();
+                else fetchCharges();
               }}
               className="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg border border-white/20 transition-all active:scale-95 shrink-0 min-h-[40px]"
             >
               <RefreshCw
-                className={`h-4 w-4 text-white ${loading ? "animate-spin" : ""}`}
+                className={`h-4 w-4 text-white ${loading || statsLoading ? "animate-spin" : ""}`}
               />
               <div className="leading-tight text-left">
                 <p className="text-white text-[12px] font-bold">Refresh Data</p>
@@ -1509,38 +1545,38 @@ export default function ATMOverstayPage() {
 
         <div className="flex gap-1.5 p-1 bg-slate-100/80 rounded-lg overflow-x-auto">
           <button
-            onClick={() => setActiveTab("detect")}
+            onClick={() => handleTabChange("detect")}
             className={`px-3.5 py-1.5 text-[11px] font-black rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === "detect" ? "bg-[#0a1e4d] text-white shadow-md shadow-[#0a1e4d]/20" : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
               }`}
           >
             <AlertTriangle className="h-3 w-3 text-amber-400" />
             Detected Overstays
             <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${activeTab === "detect" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
-              {filteredDetected.length}
+              {activeTab === "detect" ? detectTotalCount : (globalStats.detect.total || detectTotalCount)}
             </span>
           </button>
 
           <button
-            onClick={() => setActiveTab("charges")}
+            onClick={() => handleTabChange("charges")}
             className={`px-3.5 py-1.5 text-[11px] font-black rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === "charges" ? "bg-[#0a1e4d] text-white shadow-md shadow-[#0a1e4d]/20" : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
               }`}
           >
             <FileText className="h-3 w-3 text-blue-400" />
             Levied/Notified Charges Log
             <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${activeTab === "charges" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
-              {filteredCharges.length}
+              {activeTab === "charges" ? chargesTotalCount : (globalStats.charges.total || chargesTotalCount)}
             </span>
           </button>
 
           <button
-            onClick={() => setActiveTab("appeals")}
+            onClick={() => handleTabChange("appeals")}
             className={`px-3.5 py-1.5 text-[11px] font-black rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === "appeals" ? "bg-[#0a1e4d] text-white shadow-md shadow-[#0a1e4d]/20" : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
               }`}
           >
             <Gavel className="h-3 w-3 text-amber-400" />
             Appeals
             <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${activeTab === "appeals" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
-              {filteredAppeals.length}
+              {activeTab === "appeals" ? appealsTotalCount : (globalStats.appeals.total || appealsTotalCount)}
             </span>
           </button>
         </div>
