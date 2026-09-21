@@ -5,6 +5,8 @@ import PaginationBar from "@/components/ui/PaginationBar";
 import FaceCaptureDialog from "@/components/face/FaceCaptureDialog";
 import ShareLinkModal from "@/components/ShareLinkModal";
 import { useLiveCaptureLink } from "@/hooks/useLiveCaptureLink";
+import ConversionRequestModal from "@/components/ConversionRequestModal";
+
 import axios from "axios";
 import { toast } from "sonner";
 import Select from "react-select";
@@ -50,6 +52,18 @@ import {
   getPassRequestCategory,
   getItemCategoryTag,
 } from "@/utils/passCategoryHelper";
+
+const isOilDockArea = (val) => {
+  if (!val) return false;
+  const str = String(val).toUpperCase();
+  return (
+    str === "1" ||
+    str.includes("OIL JETTY") ||
+    str.includes("OIL_JETTY") ||
+    str.includes("OIL DOCK") ||
+    str.includes("OIL_DOCK")
+  );
+};
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 const ADMIN_API =
@@ -470,11 +484,22 @@ const DetailItem = ({
 const getEnumValue = (arr, id, fallback) => {
   if (!id) return fallback;
 
-  const item = arr.find(
-    (x) => String(x.id) === String(id) || String(x.value) === String(id),
+  const searchStr = String(id).trim().toUpperCase();
+  const item = (arr || []).find(
+    (x) =>
+      String(x.id).toUpperCase() === searchStr ||
+      String(x.value || "").toUpperCase() === searchStr ||
+      String(x.name || "").toUpperCase() === searchStr ||
+      String(x.label || "").toUpperCase() === searchStr,
   );
 
-  let value = item ? item.value || item.label || item.name : fallback;
+  let value = item
+    ? item.value || item.name || item.label
+    : searchStr.includes("OIL JETTY") || searchStr === "1"
+      ? "OIL JETTY AND OTHER GATES"
+      : searchStr.includes("OTHER GATES") || searchStr === "2"
+        ? "OTHER GATES ONLY"
+        : id || fallback;
 
   // 🔧 FIX: convert YEARLY → ANNUAL to match DB enum
   if (value === "YEARLY") value = "ANNUAL";
@@ -505,7 +530,19 @@ export default function PassRequestPage() {
     type: null,
   });
 
+  const [conversionModalState, setConversionModalState] = useState({
+    isOpen: false,
+    entityData: null,
+    entityType: "person",
+    selectedItems: [],
+  });
+
+  const [selectedConversionPersons, setSelectedConversionPersons] = useState([]);
+  const [selectedConversionVehicles, setSelectedConversionVehicles] = useState([]);
+
+
   // State for editing reverted passes (Phase 2)
+
   const [editingRevertedPass, setEditingRevertedPass] = useState(null);
   const [revertedEditModal, setRevertedEditModal] = useState(false);
   const [revertedPersons, setRevertedPersons] = useState([]);
@@ -3599,11 +3636,22 @@ export default function PassRequestPage() {
       const getEnumValue = (arr, id, fallback) => {
         if (!id) return fallback;
 
-        const item = arr.find(
-          (x) => String(x.id) === String(id) || String(x.value) === String(id),
+        const searchStr = String(id).trim().toUpperCase();
+        const item = (arr || []).find(
+          (x) =>
+            String(x.id).toUpperCase() === searchStr ||
+            String(x.value || "").toUpperCase() === searchStr ||
+            String(x.name || "").toUpperCase() === searchStr ||
+            String(x.label || "").toUpperCase() === searchStr,
         );
 
-        let value = item ? item.value || item.label || item.name : fallback;
+        let value = item
+          ? item.value || item.name || item.label
+          : searchStr.includes("OIL JETTY") || searchStr === "1"
+            ? "OIL JETTY AND OTHER GATES"
+            : searchStr.includes("OTHER GATES") || searchStr === "2"
+              ? "OTHER GATES ONLY"
+              : id || fallback;
 
         // 🔧 FIX: convert YEARLY → ANNUAL to match DB enum
         if (value === "YEARLY") value = "ANNUAL";
@@ -6098,11 +6146,19 @@ export default function PassRequestPage() {
 
                       const catInfo = getPassRequestCategory(pass);
 
+                      const hasPendingConversion = (pass.persons || []).some(
+                        (p) => Boolean(p.conversionWorkflowState) || p.conversionStatus === "PENDING"
+                      ) || (pass.vehicles || []).some(
+                        (v) => Boolean(v.conversionWorkflowState) || v.conversionStatus === "PENDING"
+                      );
+
                       return (
                         <tr
                           key={pass.id || idx}
                           // onClick={() => setSelectedPassDetails(pass)}
-                          onClick={() =>
+                          onClick={() => {
+                            setSelectedConversionPersons([]);
+                            setSelectedConversionVehicles([]);
                             setSelectedPassDetails({
                               ...pass,
 
@@ -6125,8 +6181,9 @@ export default function PassRequestPage() {
                                     null,
                                 }),
                               ),
-                            })
-                          }
+                            });
+                          }}
+
                           className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${catInfo.borderAccent}`}
                         >
                           <td className="px-6 py-4 text-sm font-bold text-slate-400 text-center border-r border-slate-100 tabular-nums">
@@ -6135,11 +6192,18 @@ export default function PassRequestPage() {
                           <td className="px-6 py-4 text-sm font-bold text-[#0a1e4d] border-r border-slate-100">
                             <div className="flex flex-col gap-1">
                               <span>{passIdStr}</span>
-                              <span
-                                className={`self-start px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${catInfo.badgeClass}`}
-                              >
-                                {catInfo.label}
-                              </span>
+                              <div className="flex flex-wrap gap-1">
+                                <span
+                                  className={`self-start px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${catInfo.badgeClass}`}
+                                >
+                                  {catInfo.label}
+                                </span>
+                                {hasPendingConversion && (
+                                  <span className="self-start px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
+                                    ⚡ CONVERSION PENDING
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </td>
                           <td className="px-6 py-4 text-sm text-slate-600 font-medium border-r border-slate-100">
@@ -9180,7 +9244,11 @@ export default function PassRequestPage() {
                 Submitted Application Details
               </h2>
               <button
-                onClick={() => setSelectedPassDetails(null)}
+                onClick={() => {
+                  setSelectedPassDetails(null);
+                  setSelectedConversionPersons([]);
+                  setSelectedConversionVehicles([]);
+                }}
                 className="text-white/70 hover:text-white transition-colors"
               >
                 <X className="h-6 w-6" />
@@ -9312,14 +9380,72 @@ export default function PassRequestPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Persons Included Table */}
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                  <h3 className="font-black text-slate-800 mb-3 border-b border-slate-100 pb-2 text-sm uppercase tracking-wider">
-                    Persons Included
-                  </h3>
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
+                    <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">
+                      Persons Included
+                    </h3>
+                    {selectedConversionPersons.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConversionModalState({
+                            isOpen: true,
+                            entityData: null,
+                            entityType: "person",
+                            selectedItems: selectedConversionPersons,
+                          });
+                        }}
+                        className="bg-gradient-to-r from-indigo-600 to-indigo-800 hover:from-indigo-700 hover:to-indigo-900 text-white px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 animate-in fade-in"
+                      >
+                        ⚡ Convert Selected Persons ({selectedConversionPersons.length})
+                      </button>
+                    )}
+                  </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead className="bg-slate-50">
                         <tr>
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center w-8">
+                            {(() => {
+                              const eligiblePersons = (selectedPassDetails.persons || []).filter(
+                                (p) =>
+                                  (isPassApprovedAndActive(p) || String(p.status || "").toLowerCase() === "approved") &&
+                                  !(Boolean(p.conversionWorkflowState) || p.conversionStatus === 'PENDING') &&
+                                  !(Boolean(p.essentialWorkflowState) || (p.essentialDepartmentId !== null && p.essentialDepartmentId !== undefined) || isOilDockArea(p.accessAreaId || p.accessArea))
+                              );
+                              return (
+                                <input
+                                  type="checkbox"
+                                  disabled={eligiblePersons.length === 0}
+                                  checked={
+                                    eligiblePersons.length > 0 &&
+                                    eligiblePersons.every((p) =>
+                                      selectedConversionPersons.some((item) => item.id === p.id)
+                                    )
+                                  }
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedConversionPersons(
+                                        eligiblePersons.map((p) => ({
+                                          id: p.id,
+                                          type: "person",
+                                          name: p.name || p.person_name || `ID: ${p.id}`,
+                                          passNo: p.personPassNo || p.passNo || "N/A",
+                                          dateFrom: p.dateFrom || p.fromDate,
+                                          dateTo: p.dateTo || p.toDate,
+                                        }))
+                                      );
+                                    } else {
+                                      setSelectedConversionPersons([]);
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer disabled:opacity-30"
+                                />
+                              );
+                            })()}
+                          </th>
                           <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             Pass No
                           </th>
@@ -9340,87 +9466,133 @@ export default function PassRequestPage() {
                       <tbody className="divide-y divide-slate-100">
                         {selectedPassDetails.persons &&
                         selectedPassDetails.persons.length > 0 ? (
-                          selectedPassDetails.persons.map((p, i) => (
-                            <tr
-                              key={i}
-                              className="hover:bg-blue-50 cursor-pointer transition-colors"
-                              onClick={() =>
-                                setEntityModal({
-                                  isOpen: true,
-                                  data: p,
-                                  type: "person",
-                                })
-                              }
-                            >
-                              <td className="p-3 text-xs font-mono font-bold text-[#0a1e4d]">
-                                {p.personPassNo || "-"}
-                              </td>
-                              <td className="p-3 text-sm font-medium text-slate-800">
-                                {p.name || p.person_name}
-                              </td>
-                              <td className="p-3">
-                                {(() => {
-                                  const pCat = getItemCategoryTag(p, true);
-                                  return pCat ? (
-                                    <span
-                                      className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}
-                                    >
-                                      {pCat.label}
+                          selectedPassDetails.persons.map((p, i) => {
+                            const isPendingConversion = p.conversionStatus === 'PENDING';
+                            const isApprovedConversion = p.conversionStatus === 'APPROVED';
+                            const isAlreadyEssential = Boolean(p.essentialWorkflowState) || (p.essentialDepartmentId !== null && p.essentialDepartmentId !== undefined) || isOilDockArea(p.accessAreaId || p.accessArea) || isApprovedConversion;
+                            const isEligible = (isPassApprovedAndActive(p) || String(p.status || "").toLowerCase() === "approved") && !isPendingConversion && !isAlreadyEssential;
+                            const isChecked = selectedConversionPersons.some((item) => item.id === p.id);
+                            return (
+                              <tr
+                                key={i}
+                                className={`hover:bg-blue-50 cursor-pointer transition-colors ${isPendingConversion ? 'bg-amber-50/50' : isApprovedConversion ? 'bg-emerald-50/30' : ''}`}
+                                onClick={() =>
+                                  setEntityModal({
+                                    isOpen: true,
+                                    data: p,
+                                    type: "person",
+                                  })
+                                }
+                              >
+                                <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                  {isEligible ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedConversionPersons((prev) => [
+                                            ...prev,
+                                            {
+                                              id: p.id,
+                                              type: "person",
+                                              name: p.name || p.person_name || `ID: ${p.id}`,
+                                              passNo: p.personPassNo || p.passNo || "N/A",
+                                              dateFrom: p.dateFrom || p.fromDate,
+                                              dateTo: p.dateTo || p.toDate,
+                                            },
+                                          ]);
+                                        } else {
+                                          setSelectedConversionPersons((prev) =>
+                                            prev.filter((item) => item.id !== p.id)
+                                          );
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                                    />
+                                  ) : (
+                                    <span className="text-slate-300">-</span>
+                                  )}
+                                </td>
+                                <td className="p-3 text-xs font-mono font-bold text-[#0a1e4d]">
+                                  {p.personPassNo || "-"}
+                                </td>
+                                <td className="p-3 text-sm font-medium text-slate-800">
+                                  {p.name || p.person_name}
+                                </td>
+                                <td className="p-3">
+                                  {(() => {
+                                    const pCat = getItemCategoryTag(p, true);
+                                    return pCat ? (
+                                      <span
+                                        className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}
+                                      >
+                                        {pCat.label}
+                                      </span>
+                                    ) : (
+                                      "-"
+                                    );
+                                  })()}
+                                </td>
+                                <td className="p-3">
+                                  {isPendingConversion ? (
+                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                      ⚡ CONVERSION PENDING
+                                    </span>
+                                  ) : isApprovedConversion ? (
+                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                      ⚡ CONVERTED TO ESSENTIAL
+                                    </span>
+                                  ) : isPassDisabled(p) ? (
+                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                                      DISABLED
                                     </span>
                                   ) : (
-                                    "-"
-                                  );
-                                })()}
-                              </td>
-                              <td className="p-3">
-                                {isPassDisabled(p) ? (
-                                  <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
-                                    DISABLED
-                                  </span>
-                                ) : (
-                                  <span
-                                    className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                                      String(p.status || "").toUpperCase() ===
-                                      "APPROVED"
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : String(
-                                              p.status || "",
-                                            ).toUpperCase() === "REJECTED"
-                                          ? "bg-red-100 text-red-700"
+                                    <span
+                                      className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                                        String(p.status || "").toUpperCase() ===
+                                        "APPROVED"
+                                          ? "bg-emerald-100 text-emerald-700"
                                           : String(
                                                 p.status || "",
-                                              ).toUpperCase() === "REVERTED"
-                                            ? "bg-amber-100 text-amber-700"
-                                            : "bg-blue-100 text-blue-700"
-                                    }`}
-                                  >
-                                    {(p.status || "PENDING").toUpperCase()}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="p-3 text-center">
-                                {isPassApprovedAndActive(p) ? (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handlePrintQR(p, "person");
-                                    }}
-                                    className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
-                                  >
-                                    Print QR
-                                  </button>
-                                ) : (
-                                  <span className="text-xs text-slate-400">
-                                    -
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          ))
+                                              ).toUpperCase() === "REJECTED"
+                                            ? "bg-red-100 text-red-700"
+                                            : String(
+                                                  p.status || "",
+                                                ).toUpperCase() === "REVERTED"
+                                              ? "bg-amber-100 text-amber-700"
+                                              : "bg-blue-100 text-blue-700"
+                                      }`}
+                                    >
+                                      {(p.status || "PENDING").toUpperCase()}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3 text-center">
+                                  {(isPassApprovedAndActive(p) || String(p.status || "").toLowerCase() === "approved") ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handlePrintQR(p, "person");
+                                      }}
+                                      className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
+                                    >
+                                      Print QR
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">
+                                      -
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
                         ) : (
                           <tr>
                             <td
-                              colSpan="5"
+                              colSpan="6"
                               className="p-4 text-sm text-slate-400 text-center italic"
                             >
                               No persons found.
@@ -9432,14 +9604,72 @@ export default function PassRequestPage() {
                   </div>
                 </div>
 
+                {/* Vehicles Included Table */}
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                  <h3 className="font-black text-slate-800 mb-3 border-b border-slate-100 pb-2 text-sm uppercase tracking-wider">
-                    Vehicles Included
-                  </h3>
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
+                    <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">
+                      Vehicles Included
+                    </h3>
+                    {selectedConversionVehicles.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConversionModalState({
+                            isOpen: true,
+                            entityData: null,
+                            entityType: "vehicle",
+                            selectedItems: selectedConversionVehicles,
+                          });
+                        }}
+                        className="bg-gradient-to-r from-indigo-600 to-indigo-800 hover:from-indigo-700 hover:to-indigo-900 text-white px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 animate-in fade-in"
+                      >
+                        ⚡ Convert Selected Vehicles ({selectedConversionVehicles.length})
+                      </button>
+                    )}
+                  </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead className="bg-slate-50">
                         <tr>
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center w-8">
+                            {(() => {
+                              const eligibleVehicles = (selectedPassDetails.vehicles || []).filter(
+                                (v) =>
+                                  (isPassApprovedAndActive(v) || String(v.status || "").toLowerCase() === "approved") &&
+                                  !(Boolean(v.conversionWorkflowState) || v.conversionStatus === 'PENDING') &&
+                                  !(Boolean(v.essentialWorkflowState) || (v.essentialDepartmentId !== null && v.essentialDepartmentId !== undefined) || isOilDockArea(v.accessAreaId || v.accessArea))
+                              );
+                              return (
+                                <input
+                                  type="checkbox"
+                                  disabled={eligibleVehicles.length === 0}
+                                  checked={
+                                    eligibleVehicles.length > 0 &&
+                                    eligibleVehicles.every((v) =>
+                                      selectedConversionVehicles.some((item) => item.id === v.id)
+                                    )
+                                  }
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedConversionVehicles(
+                                        eligibleVehicles.map((v) => ({
+                                          id: v.id,
+                                          type: "vehicle",
+                                          name: v.registrationNo || v.registration_no || v.regNo || `ID: ${v.id}`,
+                                          passNo: v.vehiclePassNo || v.passNo || "N/A",
+                                          dateFrom: v.dateFrom || v.fromDate,
+                                          dateTo: v.dateTo || v.toDate,
+                                        }))
+                                      );
+                                    } else {
+                                      setSelectedConversionVehicles([]);
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer disabled:opacity-30"
+                                />
+                              );
+                            })()}
+                          </th>
                           <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             Pass No
                           </th>
@@ -9460,122 +9690,168 @@ export default function PassRequestPage() {
                       <tbody className="divide-y divide-slate-100">
                         {selectedPassDetails.vehicles &&
                         selectedPassDetails.vehicles.length > 0 ? (
-                          selectedPassDetails.vehicles.map((v, i) => (
-                            <tr
-                              key={i}
-                              className="hover:bg-blue-50 cursor-pointer transition-colors"
-                              onClick={() =>
-                                setEntityModal({
-                                  isOpen: true,
-                                  data: v,
-                                  type: "vehicle",
-                                })
-                              }
-                            >
-                              <td className="p-3 text-xs font-mono font-bold text-[#0a1e4d]">
-                                {v.vehiclePassNo || "-"}
-                              </td>
-                              <td className="p-3 text-sm font-bold text-[#0a1e4d] uppercase">
-                                {v.registrationNo ||
-                                  v.registration_no ||
-                                  v.regNo}
-                              </td>
-                              <td className="p-3">
-                                {(() => {
-                                  const vCat = getItemCategoryTag(v, false);
-                                  return vCat ? (
-                                    <span
-                                      className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}
-                                    >
-                                      {vCat.label}
+                          selectedPassDetails.vehicles.map((v, i) => {
+                            const isPendingConversion = v.conversionStatus === 'PENDING';
+                            const isApprovedConversion = v.conversionStatus === 'APPROVED';
+                            const isAlreadyEssential = Boolean(v.essentialWorkflowState) || (v.essentialDepartmentId !== null && v.essentialDepartmentId !== undefined) || isOilDockArea(v.accessAreaId || v.accessArea) || isApprovedConversion;
+                            const isEligible = (isPassApprovedAndActive(v) || String(v.status || "").toLowerCase() === "approved") && !isPendingConversion && !isAlreadyEssential;
+                            const isChecked = selectedConversionVehicles.some((item) => item.id === v.id);
+                            return (
+                              <tr
+                                key={i}
+                                className={`hover:bg-blue-50 cursor-pointer transition-colors ${isPendingConversion ? 'bg-amber-50/50' : isApprovedConversion ? 'bg-emerald-50/30' : ''}`}
+                                onClick={() =>
+                                  setEntityModal({
+                                    isOpen: true,
+                                    data: v,
+                                    type: "vehicle",
+                                  })
+                                }
+                              >
+                                <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                  {isEligible ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedConversionVehicles((prev) => [
+                                            ...prev,
+                                            {
+                                              id: v.id,
+                                              type: "vehicle",
+                                              name: v.registrationNo || v.registration_no || v.regNo || `ID: ${v.id}`,
+                                              passNo: v.vehiclePassNo || v.passNo || "N/A",
+                                              dateFrom: v.dateFrom || v.fromDate,
+                                              dateTo: v.dateTo || v.toDate,
+                                            },
+                                          ]);
+                                        } else {
+                                          setSelectedConversionVehicles((prev) =>
+                                            prev.filter((item) => item.id !== v.id)
+                                          );
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                                    />
+                                  ) : (
+                                    <span className="text-slate-300">-</span>
+                                  )}
+                                </td>
+                                <td className="p-3 text-xs font-mono font-bold text-[#0a1e4d]">
+                                  {v.vehiclePassNo || "-"}
+                                </td>
+                                <td className="p-3 text-sm font-bold text-[#0a1e4d] uppercase">
+                                  {v.registrationNo ||
+                                    v.registration_no ||
+                                    v.regNo}
+                                </td>
+                                <td className="p-3">
+                                  {(() => {
+                                    const vCat = getItemCategoryTag(v, false);
+                                    return vCat ? (
+                                      <span
+                                        className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}
+                                      >
+                                        {vCat.label}
+                                      </span>
+                                    ) : (
+                                      "-"
+                                    );
+                                  })()}
+                                </td>
+                                <td className="p-3">
+                                  {isPendingConversion ? (
+                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                      ⚡ CONVERSION PENDING
+                                    </span>
+                                  ) : isApprovedConversion ? (
+                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                      ⚡ CONVERTED TO ESSENTIAL
+                                    </span>
+                                  ) : isPassDisabled(v) ? (
+                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                                      DISABLED
                                     </span>
                                   ) : (
-                                    "-"
-                                  );
-                                })()}
-                              </td>
-                              <td className="p-3">
-                                {isPassDisabled(v) ? (
-                                  <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
-                                    DISABLED
-                                  </span>
-                                ) : (
-                                  (() => {
-                                    const passType = String(v.passType || "")
-                                      .trim()
-                                      .toUpperCase();
-                                    const vehicleTypeName = String(
-                                      v.vehicleTypeName || "",
-                                    )
-                                      .trim()
-                                      .toUpperCase();
-                                    const vehicleTypeId = Number(v.vehicleTypeId);
+                                    (() => {
+                                      const passType = String(v.passType || "")
+                                        .trim()
+                                        .toUpperCase();
+                                      const vehicleTypeName = String(
+                                        v.vehicleTypeName || "",
+                                      )
+                                        .trim()
+                                        .toUpperCase();
+                                      const vehicleTypeId = Number(v.vehicleTypeId);
 
-                                    const isAnnualTrailer =
-                                      (passType === "YEARLY" ||
-                                        passType === "ANNUAL") &&
-                                      (vehicleTypeId === 34 ||
-                                        vehicleTypeId === 35 ||
-                                        [
-                                          "TRAILORS",
-                                          "TRAILER LORRY",
-                                        ].includes(vehicleTypeName));
+                                      const isAnnualTrailer =
+                                        (passType === "YEARLY" ||
+                                          passType === "ANNUAL") &&
+                                        (vehicleTypeId === 34 ||
+                                          vehicleTypeId === 35 ||
+                                          [
+                                            "TRAILORS",
+                                            "TRAILER LORRY",
+                                          ].includes(vehicleTypeName));
 
-                                    let rawStatus = String(
-                                      v.status || "PENDING",
-                                    ).toUpperCase();
+                                      let rawStatus = String(
+                                        v.status || "PENDING",
+                                      ).toUpperCase();
 
-                                    if (
-                                      isAnnualTrailer &&
-                                      !v.twistLockCertified &&
-                                      !v.marineSafetyApproved
-                                    ) {
-                                      if (rawStatus === "APPROVED") {
-                                        rawStatus = "PENDING";
+                                      if (
+                                        isAnnualTrailer &&
+                                        !v.twistLockCertified &&
+                                        !v.marineSafetyApproved
+                                      ) {
+                                        if (rawStatus === "APPROVED") {
+                                          rawStatus = "PENDING";
+                                        }
                                       }
-                                    }
 
-                                    return (
-                                      <span
-                                        className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                                          rawStatus === "APPROVED"
-                                            ? "bg-emerald-100 text-emerald-700"
-                                            : rawStatus === "REJECTED"
-                                              ? "bg-red-100 text-red-700"
-                                              : rawStatus === "REVERTED"
-                                                ? "bg-amber-100 text-amber-700"
-                                                : "bg-blue-100 text-blue-700"
-                                        }`}
-                                      >
-                                        {rawStatus}
-                                      </span>
-                                    );
-                                  })()
-                                )}
-                              </td>
-                              <td className="p-3 text-center">
-                                {isPassApprovedAndActive(v) ? (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handlePrintQR(v, "vehicle");
-                                    }}
-                                    className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
-                                  >
-                                    Print QR
-                                  </button>
-                                ) : (
-                                  <span className="text-xs text-slate-400">
-                                    -
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          ))
+                                      return (
+                                        <span
+                                          className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                                            rawStatus === "APPROVED"
+                                              ? "bg-emerald-100 text-emerald-700"
+                                              : rawStatus === "REJECTED"
+                                                ? "bg-red-100 text-red-700"
+                                                : rawStatus === "REVERTED"
+                                                  ? "bg-amber-100 text-amber-700"
+                                                  : "bg-blue-100 text-blue-700"
+                                          }`}
+                                        >
+                                          {rawStatus}
+                                        </span>
+                                      );
+                                    })()
+                                  )}
+                                </td>
+                                <td className="p-3 text-center">
+                                  {(isPassApprovedAndActive(v) || String(v.status || "").toLowerCase() === "approved") ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handlePrintQR(v, "vehicle");
+                                      }}
+                                      className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
+                                    >
+                                      Print QR
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">
+                                      -
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
                         ) : (
                           <tr>
                             <td
-                              colSpan="4"
+                              colSpan="6"
                               className="p-4 text-sm text-slate-400 text-center italic"
                             >
                               No vehicles found.
@@ -9591,7 +9867,11 @@ export default function PassRequestPage() {
 
             <div className="flex justify-end p-5 border-t border-slate-200 bg-white rounded-b-2xl">
               <button
-                onClick={() => setSelectedPassDetails(null)}
+                onClick={() => {
+                  setSelectedPassDetails(null);
+                  setSelectedConversionPersons([]);
+                  setSelectedConversionVehicles([]);
+                }}
                 className="bg-[#0a1e4d] text-white px-8 py-2.5 rounded-xl shadow-lg font-bold hover:bg-opacity-90 transition-colors uppercase tracking-wider text-sm"
               >
                 Close Details
@@ -9902,7 +10182,14 @@ export default function PassRequestPage() {
                       <DetailItem
                         label="Access Area"
                         value={
-                          entityModal.data.accessArea || "OTHER GATES ONLY"
+                          entityModal.data.accessAreaName ||
+                          (masterData?.accessAreas && getLabelById(masterData.accessAreas, entityModal.data.accessAreaId || entityModal.data.accessArea, "name")) ||
+                          (masterData?.accessAreas && getLabelById(masterData.accessAreas, entityModal.data.accessAreaId || entityModal.data.accessArea, "label")) ||
+                          (entityModal.data.accessAreaId === "1" || entityModal.data.accessAreaId === 1 || entityModal.data.accessArea === "1" || String(entityModal.data.accessArea || entityModal.data.accessAreaId).toUpperCase().includes("OIL") ? "OIL JETTY AND OTHER GATES" : null) ||
+                          (entityModal.data.accessAreaId === "2" || entityModal.data.accessAreaId === 2 || entityModal.data.accessArea === "2" || String(entityModal.data.accessArea || entityModal.data.accessAreaId).toUpperCase().includes("OTHER") ? "OTHER GATES ONLY" : null) ||
+                          entityModal.data.accessArea ||
+                          entityModal.data.accessAreaId ||
+                          "-"
                         }
                       />
                       <DetailItem
@@ -10030,7 +10317,14 @@ export default function PassRequestPage() {
                       <DetailItem
                         label="Access Area"
                         value={
-                          entityModal.data.accessArea || "OTHER GATES ONLY"
+                          entityModal.data.accessAreaName ||
+                          (masterData?.accessAreas && getLabelById(masterData.accessAreas, entityModal.data.accessAreaId || entityModal.data.accessArea, "name")) ||
+                          (masterData?.accessAreas && getLabelById(masterData.accessAreas, entityModal.data.accessAreaId || entityModal.data.accessArea, "label")) ||
+                          (entityModal.data.accessAreaId === "1" || entityModal.data.accessAreaId === 1 || entityModal.data.accessArea === "1" || String(entityModal.data.accessArea || entityModal.data.accessAreaId).toUpperCase().includes("OIL") ? "OIL JETTY AND OTHER GATES" : null) ||
+                          (entityModal.data.accessAreaId === "2" || entityModal.data.accessAreaId === 2 || entityModal.data.accessArea === "2" || String(entityModal.data.accessArea || entityModal.data.accessAreaId).toUpperCase().includes("OTHER") ? "OTHER GATES ONLY" : null) ||
+                          entityModal.data.accessArea ||
+                          entityModal.data.accessAreaId ||
+                          "-"
                         }
                       />
                       <DetailItem
@@ -11034,6 +11328,20 @@ export default function PassRequestPage() {
           </div>
         </div>
       )}
+
+      {/* ESSENTIAL CONVERSION REQUEST MODAL */}
+      <ConversionRequestModal
+        isOpen={conversionModalState.isOpen}
+        onClose={() => setConversionModalState({ isOpen: false, entityData: null, entityType: "person", selectedItems: [] })}
+        entityData={conversionModalState.entityData}
+        entityType={conversionModalState.entityType}
+        selectedItems={conversionModalState.selectedItems}
+        onSuccess={() => {
+          toast.success("Essential conversion request submitted successfully!");
+          fetchSubmittedPasses();
+        }}
+      />
     </div>
   );
 }
+

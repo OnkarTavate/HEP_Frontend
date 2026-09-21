@@ -36,6 +36,8 @@ import {
   GripVertical,
   RotateCcw,
   Zap,
+  Sparkles,
+  Flame,
 } from "lucide-react";
 
 import { getPassRequestCategory, getItemCategoryTag } from "@/utils/passCategoryHelper";
@@ -507,7 +509,7 @@ export default function TrafficPassesPage() {
       (p) => !entityStatuses.persons[p.id] && (p.status === 'pending' || p.status === 'reverted'),
     );
     const unverifiedVehicles = vehicles.filter(
-      (v) => !entityStatuses.vehicles[v.id] && (v.status === 'pending' || v.status === 'reverted'),
+      (v) => !entityStatuses.vehicles[v.id] && (v.status === 'pending' || v.status === 'reverted' || Boolean(v.conversionWorkflowState)),
     );
 
     if (unverifiedPersons.length > 0 || unverifiedVehicles.length > 0) {
@@ -730,7 +732,14 @@ export default function TrafficPassesPage() {
       });
 
       (pass.vehicles || []).forEach((v) => {
-        if (v.status === 'approved') {
+        if (v.conversionWorkflowState) {
+          if (v.conversionStatus === 'APPROVED') {
+            initialVehicleStatuses[v.id] = 'APPROVED';
+          } else if (v.conversionStatus === 'REJECTED') {
+            initialVehicleStatuses[v.id] = 'REJECTED';
+            initialVehicleRemarks[v.id] = v.rejectedReason || '';
+          }
+        } else if (v.status === 'approved') {
           // Pre-fill as APPROVED (read-only, approver cannot change)
           initialVehicleStatuses[v.id] = 'APPROVED';
         } else if (v.status === 'rejected') {
@@ -1148,13 +1157,13 @@ export default function TrafficPassesPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {selectedRequest.requisitionLetterFilePath && (
+                    {(selectedRequest.requisitionLetterFilePath || selectedRequest.requisitionLetterFileName) && (
                       <button
                         onClick={() =>
                           handleViewDoc(
                             selectedRequest.id,
                             "passRequisitionLetter",
-                            selectedRequest.requisitionLetterFilePath,
+                            selectedRequest.requisitionLetterFilePath || selectedRequest.requisitionLetterFileName,
                           )
                         }
                         className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
@@ -1393,7 +1402,12 @@ export default function TrafficPassesPage() {
                               {v.vehiclePassNo || "-"}
                             </td>
                             <td className="p-3 font-bold text-[#0a1e4d] uppercase">
-                              {v.registrationNo}
+                              <div>{v.registrationNo}</div>
+                              {v.conversionWorkflowState && (
+                                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold border bg-amber-50 text-amber-800 border-amber-300">
+                                  ⚡ Essential Pass
+                                </span>
+                              )}
                             </td>
                             <td className="p-3 text-slate-600 text-xs font-medium">
                               {v.vehicleTypeName || v.vehicleTypeId} • {formatPassType(v.passType)}
@@ -1453,7 +1467,7 @@ export default function TrafficPassesPage() {
                                     }}
                                     className="bg-[#0a1e4d] text-white hover:bg-blue-900 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
                                   >
-                                    {entityStatuses.vehicles[v.id] || v.status === 'approved' || v.status === 'rejected'
+                                    {entityStatuses.vehicles[v.id] || (!v.conversionWorkflowState && (v.status === 'approved' || v.status === 'rejected'))
                                       ? "Re-verify"
                                       : "Verify"}
                                   </button>
@@ -1523,6 +1537,111 @@ export default function TrafficPassesPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 bg-slate-50 space-y-6">
+              {(() => {
+                const data = entityModal.data || {};
+                const isConversion =
+                  Boolean(data.conversionWorkflowState) ||
+                  Boolean(data.conversionStatus) ||
+                  Boolean(data.conversionStartDate) ||
+                  Boolean(data.conversion_start_date) ||
+                  Boolean(data.conversionPurpose) ||
+                  Boolean(data.conversion_purpose) ||
+                  Boolean(data.isConversionRequest);
+
+                const isFreshEssential =
+                  !isConversion &&
+                  (Boolean(data.essentialWorkflowState) ||
+                    Boolean(data.isEssentialPass) ||
+                    data.passType === "ESSENTIAL" ||
+                    data.pass_type === "ESSENTIAL" ||
+                    Boolean(selectedRequest?.isEssentialPass));
+
+                if (!isConversion && !isFreshEssential) return null;
+
+                const reqLetterPath =
+                  data.conversionRequisitionFilePath ||
+                  data.requisitionLetterPath ||
+                  data.conversionDocumentPath ||
+                  data.conversion_document_path ||
+                  data.document_path ||
+                  selectedRequest?.requisitionLetterFilePath ||
+                  selectedRequest?.conversionRequisitionFilePath ||
+                  (selectedRequest?.vehicles || []).find((v) => v.conversionRequisitionFilePath || v.requisitionLetterPath)?.conversionRequisitionFilePath ||
+                  (selectedRequest?.vehicles || []).find((v) => v.conversionRequisitionFilePath || v.requisitionLetterPath)?.requisitionLetterPath ||
+                  (selectedRequest?.persons || []).find((p) => p.conversionRequisitionFilePath || p.requisitionLetterPath)?.conversionRequisitionFilePath ||
+                  (selectedRequest?.persons || []).find((p) => p.conversionRequisitionFilePath || p.requisitionLetterPath)?.requisitionLetterPath;
+
+                if (isConversion) {
+                  return (
+                    <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-5 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-5 w-5 text-amber-600 animate-pulse" />
+                          <h4 className="text-sm font-black text-amber-900 uppercase tracking-wider">
+                            ⚡ Essential Access Conversion Request Details
+                          </h4>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-200 text-amber-800">
+                          {data.conversionWorkflowState || data.conversionStatus || "PENDING_CONVERSION"}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                            Conversion Start Date
+                          </span>
+                          <span className="text-xs font-bold text-slate-800">
+                            {data.conversionStartDate || data.conversion_start_date
+                              ? String(data.conversionStartDate || data.conversion_start_date).split("T")[0]
+                              : "-"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                            Conversion End Date
+                          </span>
+                          <span className="text-xs font-bold text-slate-800">
+                            {data.conversionEndDate || data.conversion_end_date
+                              ? String(data.conversionEndDate || data.conversion_end_date).split("T")[0]
+                              : "-"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                            Purpose
+                          </span>
+                          <span className="text-xs font-bold text-slate-800">
+                            {data.conversionPurpose || data.conversion_purpose || "-"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {reqLetterPath && (
+                        <div className="pt-3 border-t border-amber-200 flex items-center justify-between">
+                          <span className="text-xs font-bold text-amber-900">
+                            Applicant Requisition Letter PDF:
+                          </span>
+                          <div className="w-64">
+                            <DocumentCard
+                              label="View Requisition Letter (PDF)"
+                              filePath={reqLetterPath}
+                              documentType="conversionRequisition"
+                              passRequestId={data.passRequestId || selectedRequest?.id}
+                              onView={handleViewDoc}
+                              entityIndex={extractEntityIndex(data.id)}
+                              isVendorPass={selectedRequest?.originType === "VENDOR"}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                return null;
+              })()}
+
               {/* SECTION 1: Identity & Profile Details */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-5 py-3 bg-slate-100 border-b border-slate-200">

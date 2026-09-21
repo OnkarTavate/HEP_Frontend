@@ -585,6 +585,9 @@ const LoginPage = () => {
         } else if (role === CISF_APPROVAL_ROLE && deptId === CISF_DEPT_ID) {
           // CISF Assistant Commandant → same Pass Approvals page
           router.push("/admin/pass-approvals");
+        } else if (role === "fire safety officer" && deptId === MARINE_DEPT_ID) {
+          // Marine Fire Safety Officer → directly to passes pending tab
+          router.push("/traffic_approval/passes?tab=pending");
         } else if (
           TRAFFIC_APPROVAL_ROLES.includes(role) &&
           TRAFFIC_DEPT_IDS.includes(deptId)
