@@ -4,12 +4,40 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import axios from "axios";
 import { QRCodeSVG } from "qrcode.react";
-import { CheckCircle, User, Car, Download, AlertCircle, Loader2, ChevronLeft, QrCode, Calendar, Building2, FileBadge, Edit, Edit3, X as CloseIcon, Upload, Eye, CheckCircle2, UserPlus, Phone, Users, Truck, RefreshCw, BookOpen, FileCheck2, Maximize, Minimize, XCircle, FileText } from "lucide-react";
+import {
+  CheckCircle,
+  User,
+  Car,
+  Download,
+  AlertCircle,
+  Loader2,
+  ChevronLeft,
+  QrCode,
+  Calendar,
+  Building2,
+  FileBadge,
+  Edit,
+  Edit3,
+  X as CloseIcon,
+  Upload,
+  Eye,
+  CheckCircle2,
+  UserPlus,
+  Phone,
+  Users,
+  Truck,
+  RefreshCw,
+  BookOpen,
+  FileCheck2,
+  Maximize,
+  Minimize,
+  XCircle,
+  FileText,
+} from "lucide-react";
 import { toast } from "sonner";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 const QR_API = process.env.NEXT_PUBLIC_QR_API || "http://localhost:5007/api";
-
 
 const getCurrentDateTime = () => {
   const now = new Date();
@@ -135,24 +163,74 @@ const getValidationError = (field, value, extra = {}) => {
   }
 };
 
-
 export default function VendorPassApprovedPage() {
   const params = useParams();
   const [vendorPassId, setVendorPassId] = useState(null);
+  const [qrType, setQrType] = useState(null);
+  const [qrEntityId, setQrEntityId] = useState(null);
+
+  // useEffect(() => {
+  //   if (typeof window !== "undefined") {
+  //     let id = params?.id;
+  //     if (id) {
+  //       sessionStorage.setItem("vendor_pass_approved_id", id);
+  //       setVendorPassId(id);
+  //       window.history.replaceState(null, "", "/vendor_pass_approved");
+  //     } else {
+  //       const stored = sessionStorage.getItem("vendor_pass_approved_id");
+  //       if (stored) {
+  //         setVendorPassId(stored);
+  //       }
+  //     }
+  //   }
+  // }, [params?.id]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      let id = params?.id;
-      if (id) {
-        sessionStorage.setItem("vendor_pass_approved_id", id);
-        setVendorPassId(id);
-        window.history.replaceState(null, "", "/vendor_pass_approved");
-      } else {
-        const stored = sessionStorage.getItem("vendor_pass_approved_id");
-        if (stored) {
-          setVendorPassId(stored);
-        }
+    if (typeof window === "undefined") return;
+
+    const id = params?.id || null;
+
+    const searchParams = new URLSearchParams(window.location.search);
+
+    const urlType = searchParams.get("type");
+    const urlEntityId = searchParams.get("entityId");
+
+    const storedType = sessionStorage.getItem("vendor_pass_qr_type") || null;
+
+    const storedEntityId =
+      sessionStorage.getItem("vendor_pass_qr_entity_id") || null;
+
+    const resolvedType = urlType || storedType;
+    const resolvedEntityId = urlEntityId || storedEntityId;
+
+    // Save the QR entity context immediately.
+    if (resolvedType) {
+      sessionStorage.setItem("vendor_pass_qr_type", resolvedType);
+    }
+
+    if (resolvedEntityId) {
+      sessionStorage.setItem("vendor_pass_qr_entity_id", resolvedEntityId);
+    }
+
+    if (id) {
+      sessionStorage.setItem("vendor_pass_approved_id", id);
+
+      setVendorPassId(id);
+    } else {
+      const storedPassId = sessionStorage.getItem("vendor_pass_approved_id");
+
+      if (storedPassId) {
+        setVendorPassId(storedPassId);
       }
+    }
+
+    setQrType(resolvedType);
+    setQrEntityId(resolvedEntityId);
+
+    // Hide the token/query from the visible URL only
+    // after we have captured the values above.
+    if (id && (urlType || urlEntityId)) {
+      window.history.replaceState(null, "", "/vendor_pass_approved");
     }
   }, [params?.id]);
 
@@ -162,7 +240,13 @@ export default function VendorPassApprovedPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [iframeLoading, setIframeLoading] = useState(false);
 
-  const handleViewDoc = async (passRequestId, documentType, staticPath, entityIndex = 0, isVendorPass = false) => {
+  const handleViewDoc = async (
+    passRequestId,
+    documentType,
+    staticPath,
+    entityIndex = 0,
+    isVendorPass = false,
+  ) => {
     let docUrl = "";
     if (documentType === "workOrder") {
       docUrl = `${AGENT_API}/vendor-pass/public/work-order/${passRequestId}`;
@@ -174,14 +258,16 @@ export default function VendorPassApprovedPage() {
 
     let detectedIsImage = false;
     try {
-      const response = await fetch(docUrl, { method: 'HEAD' });
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.startsWith('image/')) {
+      const response = await fetch(docUrl, { method: "HEAD" });
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.startsWith("image/")) {
         detectedIsImage = true;
       }
     } catch (err) {
       console.error("Error fetching head:", err);
-      detectedIsImage = !!(staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath));
+      detectedIsImage = !!(
+        staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath)
+      );
     }
 
     setIsImage(detectedIsImage);
@@ -215,17 +301,25 @@ export default function VendorPassApprovedPage() {
       { id: 4, name: "Site Visit" },
       { id: 5, name: "New Project" },
       { id: 6, name: "Others" },
-    ]
+    ],
   });
 
   const isOilDockArea = (areaId) => {
     if (!areaId) return false;
-    const area = masterData?.accessAreas?.find(a => String(a.id) === String(areaId));
-    if (area) return String(area.label || area.value || area.name).toUpperCase().includes("OIL JETTY") || String(area.id) === "1";
-    return String(areaId).toUpperCase().includes("OIL JETTY") || String(areaId) === "1";
+    const area = masterData?.accessAreas?.find(
+      (a) => String(a.id) === String(areaId),
+    );
+    if (area)
+      return (
+        String(area.label || area.value || area.name)
+          .toUpperCase()
+          .includes("OIL JETTY") || String(area.id) === "1"
+      );
+    return (
+      String(areaId).toUpperCase().includes("OIL JETTY") ||
+      String(areaId) === "1"
+    );
   };
-
-
 
   const [revertedPersons, setRevertedPersons] = useState([]);
   const [revertedVehicles, setRevertedVehicles] = useState([]);
@@ -309,8 +403,17 @@ export default function VendorPassApprovedPage() {
   const [vehicleForm, setVehicleForm] = useState(initialVehicleForm);
 
   const isPersonForeigner = (natValue) => {
-    const label = getLabelById(masterData.nationalities, natValue, "label")?.toUpperCase() || "";
-    return label === "FOREIGNER" || String(natValue) === "2" || String(natValue).toUpperCase() === "FOREIGNER";
+    const label =
+      getLabelById(
+        masterData.nationalities,
+        natValue,
+        "label",
+      )?.toUpperCase() || "";
+    return (
+      label === "FOREIGNER" ||
+      String(natValue) === "2" ||
+      String(natValue).toUpperCase() === "FOREIGNER"
+    );
   };
 
   const validatePersonField = (field, value, extra = {}) => {
@@ -339,7 +442,8 @@ export default function VendorPassApprovedPage() {
     }
   };
 
-  const inputClass = "w-full h-10 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm bg-white outline-none transition-all";
+  const inputClass =
+    "w-full h-10 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm bg-white outline-none transition-all";
 
   const FileUploadBox = ({
     label,
@@ -418,10 +522,11 @@ export default function VendorPassApprovedPage() {
           }}
         />
         <div
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${file
-            ? "border-orange-300 bg-orange-50"
-            : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
-            } transition-colors`}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
+            file
+              ? "border-orange-300 bg-orange-50"
+              : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
+          } transition-colors`}
         >
           <Upload
             className={`w-4 h-4 flex-shrink-0 ${file ? "text-orange-600" : "text-slate-400"}`}
@@ -440,8 +545,12 @@ export default function VendorPassApprovedPage() {
     </div>
   );
 
-  const handleAddPerson = () => { handleSaveRevertedEntity(); };
-  const handleAddVehicle = () => { handleSaveRevertedEntity(); };
+  const handleAddPerson = () => {
+    handleSaveRevertedEntity();
+  };
+  const handleAddVehicle = () => {
+    handleSaveRevertedEntity();
+  };
   const handleClearPerson = () => {
     setPersonForm(initialPersonForm);
     setPersonErrors({});
@@ -470,26 +579,47 @@ export default function VendorPassApprovedPage() {
     return masterData.designations || [];
   };
 
-
   useEffect(() => {
+    if (!vendorPassId) return;
+
     fetchVendorPassData();
     fetchMasterData();
   }, [vendorPassId]);
 
   const fetchMasterData = async () => {
     try {
-      const [natRes, passRes, idRes, accessRes, vehRes, desigRes, countryRes] = await Promise.all([
-        axios.get(`${AGENT_API}/pass-request/get-nationality`).catch(() => ({ data: [] })),
-        axios.get(`${AGENT_API}/pass-request/get-pass-types`).catch(() => ({ data: [] })),
-        axios.get(`${AGENT_API}/pass-request/get-id-proof-types`).catch(() => ({ data: [] })),
-        axios.get(`${AGENT_API}/pass-request/get-access-areas`).catch(() => ({ data: [] })),
-        axios.get(`${AGENT_API}/pass-request/getVehicleTypes`).catch(() => ({ data: [] })),
-        axios.get(`${AGENT_API}/pass-request/getDesignations`).catch(() => ({ data: [] })),
-        axios.get(`${AGENT_API}/pass-request/get-countries`).catch(() => ({ data: [] })),
-      ]);
-      const extractArray = (res) => Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res?.data) ? res.data : [];
+      const [natRes, passRes, idRes, accessRes, vehRes, desigRes, countryRes] =
+        await Promise.all([
+          axios
+            .get(`${AGENT_API}/pass-request/get-nationality`)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/get-pass-types`)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/get-id-proof-types`)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/get-access-areas`)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/getVehicleTypes`)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/getDesignations`)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/get-countries`)
+            .catch(() => ({ data: [] })),
+        ]);
+      const extractArray = (res) =>
+        Array.isArray(res?.data?.data)
+          ? res.data.data
+          : Array.isArray(res?.data)
+            ? res.data
+            : [];
       const fetchedCountries = extractArray(countryRes);
-      setMasterData(prev => ({
+      setMasterData((prev) => ({
         ...prev,
         nationalities: extractArray(natRes),
         passTypes: extractArray(passRes),
@@ -497,31 +627,68 @@ export default function VendorPassApprovedPage() {
         accessAreas: extractArray(accessRes),
         vehicleTypes: extractArray(vehRes),
         designations: extractArray(desigRes),
-        countries: fetchedCountries.length > 0 ? fetchedCountries : prev.countries,
+        countries:
+          fetchedCountries.length > 0 ? fetchedCountries : prev.countries,
       }));
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const fetchVendorPassData = async () => {
     if (!vendorPassId) return;
+
     try {
       setLoading(true);
       setError(null);
 
+      const effectiveType =
+        qrType || sessionStorage.getItem("vendor_pass_qr_type");
+
+      const effectiveEntityId =
+        qrEntityId || sessionStorage.getItem("vendor_pass_qr_entity_id");
+
+      const params = {};
+
+      if (effectiveType) {
+        params.type = effectiveType;
+      }
+
+      if (effectiveEntityId) {
+        params.entityId = effectiveEntityId;
+      }
+
       const response = await axios.get(
-        `${AGENT_API}/pass-request/vendor-qr-data/${vendorPassId}`
+        `${AGENT_API}/pass-request/vendor-qr-data/${vendorPassId}`,
+        {
+          params,
+        },
       );
 
-      setPassData(response.data);
+      const apiData = response.data?.data || response.data;
+
+      setPassData(apiData);
+
       if (response.data) {
-        setRevertedPersons(response.data.persons?.filter(p => p.status === 'reverted' || p.status === 'updated') || []);
-        setRevertedVehicles(response.data.vehicles?.filter(v => v.status === 'reverted' || v.status === 'updated') || []);
+        setRevertedPersons(
+          response.data.persons?.filter(
+            (p) => p.status === "reverted" || p.status === "updated",
+          ) || [],
+        );
+
+        setRevertedVehicles(
+          response.data.vehicles?.filter(
+            (v) => v.status === "reverted" || v.status === "updated",
+          ) || [],
+        );
       }
     } catch (err) {
       console.error("Error fetching vendor pass data:", err);
+
       setError(
         err.response?.data?.message ||
-        "Failed to load pass data. Please check your link or contact support."
+          err.message ||
+          "Failed to load pass data. Please check your link or contact support.",
       );
     } finally {
       setLoading(false);
@@ -535,75 +702,116 @@ export default function VendorPassApprovedPage() {
     setEditingRevertedEntity(null);
   };
 
-
   const handleEditEntity = (type, index, entity) => {
     // Close the reverted edit modal first
     setRevertedEditModal(false);
 
     // Find original index in full list
     let originalIdx = index;
-    if (type === 'person' && passData?.persons) {
-      originalIdx = passData.persons.findIndex(p => p.id === entity.id);
-    } else if (type === 'vehicle' && passData?.vehicles) {
-      originalIdx = passData.vehicles.findIndex(v => v.id === entity.id);
+    if (type === "person" && passData?.persons) {
+      originalIdx = passData.persons.findIndex((p) => p.id === entity.id);
+    } else if (type === "vehicle" && passData?.vehicles) {
+      originalIdx = passData.vehicles.findIndex((v) => v.id === entity.id);
     }
     if (originalIdx === -1) originalIdx = index;
 
     // Store editing context
-    setEditingRevertedEntity({ type, index: originalIdx, id: entity.id, passId: vendorPassId, revertedIndex: index });
+    setEditingRevertedEntity({
+      type,
+      index: originalIdx,
+      id: entity.id,
+      passId: vendorPassId,
+      revertedIndex: index,
+    });
 
-    if (type === 'person') {
-      setEditingPersonIndex('reverted');
+    if (type === "person") {
+      setEditingPersonIndex("reverted");
 
       // Helper: resolve a value to a numeric ID string.
       // If the raw value is already a numeric string ("1","2"…) use it directly.
       // Otherwise try to match by name/label in the provided array.
-      const resolveId = (arr, raw, fallback = '') => {
+      const resolveId = (arr, raw, fallback = "") => {
         if (!raw) return fallback;
         if (/^\d+$/.test(String(raw))) return String(raw); // already numeric
-        const found = arr.find(x => (x.value || x.label || x.name || '').toUpperCase() === String(raw).toUpperCase());
+        const found = arr.find(
+          (x) =>
+            (x.value || x.label || x.name || "").toUpperCase() ===
+            String(raw).toUpperCase(),
+        );
         return found ? String(found.id || found.value) : fallback;
       };
 
-      const nationalityId = resolveId(masterData.nationalities, entity.nationality, entity.nationality === 'FOREIGNER' ? '2' : '1');
-      const accessAreaId = resolveId(masterData.accessAreas, entity.accessAreaId, '');
-      const idProofTypeId = resolveId(masterData.idProofTypes, entity.idProofType, entity.idProofType || '');
-      const passTypeId = resolveId(masterData.passTypes, entity.passType, entity.passType || '1');
+      const nationalityId = resolveId(
+        masterData.nationalities,
+        entity.nationality,
+        entity.nationality === "FOREIGNER" ? "2" : "1",
+      );
+      const accessAreaId = resolveId(
+        masterData.accessAreas,
+        entity.accessAreaId,
+        "",
+      );
+      const idProofTypeId = resolveId(
+        masterData.idProofTypes,
+        entity.idProofType,
+        entity.idProofType || "",
+      );
+      const passTypeId = resolveId(
+        masterData.passTypes,
+        entity.passType,
+        entity.passType || "1",
+      );
 
       setPersonForm({
         ...initialPersonForm,
         id: entity.id,
-        masterId: entity.masterId || '',
-        name: entity.name || '',
-        mobile: entity.mobile || '',
-        email: entity.email || '',
-        aadharNo: entity.aadharNo || '',
-        designation: String(entity.designationId || entity.designation || ''),
-        designationOther: '',
+        masterId: entity.masterId || "",
+        name: entity.name || "",
+        mobile: entity.mobile || "",
+        email: entity.email || "",
+        aadharNo: entity.aadharNo || "",
+        designation: String(entity.designationId || entity.designation || ""),
+        designationOther: "",
         idProofType: idProofTypeId,
-        idProofNumber: entity.idProofNumber || entity.aadharNo || '',
-        hepType: String(entity.hepTypeId || '2'),
+        idProofNumber: entity.idProofNumber || entity.aadharNo || "",
+        hepType: String(entity.hepTypeId || "2"),
         passType: passTypeId,
-        passPeriod: String(entity.passPeriod || '1'),
-        dateFrom: entity.dateFrom ? (String(entity.dateFrom).includes('T') ? String(entity.dateFrom).split('T')[0] : String(entity.dateFrom)) + 'T00:00' : '',
-        dateTo: entity.dateTo ? (String(entity.dateTo).includes('T') ? String(entity.dateTo).split('T')[0] : String(entity.dateTo)) + 'T05:59' : '',
-        amount: entity.amount || '',
+        passPeriod: String(entity.passPeriod || "1"),
+        dateFrom: entity.dateFrom
+          ? (String(entity.dateFrom).includes("T")
+              ? String(entity.dateFrom).split("T")[0]
+              : String(entity.dateFrom)) + "T00:00"
+          : "",
+        dateTo: entity.dateTo
+          ? (String(entity.dateTo).includes("T")
+              ? String(entity.dateTo).split("T")[0]
+              : String(entity.dateTo)) + "T05:59"
+          : "",
+        amount: entity.amount || "",
         nationality: nationalityId,
-        country: entity.countryId ? String(entity.countryId) : (entity.country ? String(entity.country) : (() => {
-          const indiaObj = (masterData.countries || []).find(
-            (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
-          );
-          return indiaObj ? String(indiaObj.id || indiaObj.value) : "";
-        })()),
-        visaNo: entity.visaNo || '',
-        cardNumber: entity.cardNumber || '',
-        withTwoWheeler: entity.withTwoWheeler === true || entity.withTwoWheeler === 'true',
-        vehicleNo: entity.vehicleNo || '',
+        country: entity.countryId
+          ? String(entity.countryId)
+          : entity.country
+            ? String(entity.country)
+            : (() => {
+                const indiaObj = (masterData.countries || []).find(
+                  (c) =>
+                    String(c.name || "")
+                      .trim()
+                      .toUpperCase() === "INDIA",
+                );
+                return indiaObj ? String(indiaObj.id || indiaObj.value) : "";
+              })(),
+        visaNo: entity.visaNo || "",
+        cardNumber: entity.cardNumber || "",
+        withTwoWheeler:
+          entity.withTwoWheeler === true || entity.withTwoWheeler === "true",
+        vehicleNo: entity.vehicleNo || "",
         accessArea: accessAreaId,
-        passportNo: entity.passportNo || '',
-        cdcNumber: entity.cdcNumber || '',
-        seafarerPassFor: entity.seafarerPassFor || 'Sign-On',
-        seafarerIdType: entity.seafarerIdType || '',
+        passportNo: entity.passportNo || "",
+        cdcNumber: entity.cdcNumber || "",
+        seafarerPassFor: entity.seafarerPassFor || "Sign-On",
+        seafarerIdType: entity.seafarerIdType || "",
         photo: null,
         aadharFile: null,
         driverLicence: null,
@@ -629,45 +837,60 @@ export default function VendorPassApprovedPage() {
         existingDeclarationName: entity.declarationFormName,
         existingEntryAuthName: entity.entryAuthorizationFileName,
         isEditing: true,
-        editIndex: index
+        editIndex: index,
       });
 
       toggleModal("person", true);
-      toast.success('Person details loaded for editing');
+      toast.success("Person details loaded for editing");
+    } else if (type === "vehicle") {
+      setEditingVehicleIndex("reverted");
 
-    } else if (type === 'vehicle') {
-      setEditingVehicleIndex('reverted');
-
-      const resolveId = (arr, raw, fallback = '') => {
+      const resolveId = (arr, raw, fallback = "") => {
         if (!raw) return fallback;
         if (/^\d+$/.test(String(raw))) return String(raw);
-        const found = arr.find(x => (x.value || x.label || x.name || '').toUpperCase() === String(raw).toUpperCase());
+        const found = arr.find(
+          (x) =>
+            (x.value || x.label || x.name || "").toUpperCase() ===
+            String(raw).toUpperCase(),
+        );
         return found ? String(found.id || found.value) : fallback;
       };
 
-      const accessAreaId = resolveId(masterData.accessAreas, entity.accessAreaId, '');
-      const vehicleTypeId = resolveId(masterData.vehicleTypes, entity.vehicleTypeId, entity.vehicleTypeId || '');
-      const passTypeId = resolveId(masterData.passTypes, entity.passType, entity.passType || '1');
+      const accessAreaId = resolveId(
+        masterData.accessAreas,
+        entity.accessAreaId,
+        "",
+      );
+      const vehicleTypeId = resolveId(
+        masterData.vehicleTypes,
+        entity.vehicleTypeId,
+        entity.vehicleTypeId || "",
+      );
+      const passTypeId = resolveId(
+        masterData.passTypes,
+        entity.passType,
+        entity.passType || "1",
+      );
 
       const toDateOnly = (val) => {
-        if (!val) return '';
-        return String(val).split('T')[0];
+        if (!val) return "";
+        return String(val).split("T")[0];
       };
 
       setVehicleForm({
         ...initialVehicleForm,
         id: entity.id,
-        regNo: entity.registrationNo || entity.regNo || '',
+        regNo: entity.registrationNo || entity.regNo || "",
         type: vehicleTypeId,
-        fuelType: entity.fuelType || '',
+        fuelType: entity.fuelType || "",
         accessArea: accessAreaId,
         insuranceExpiry: toDateOnly(entity.insuranceExpiry),
         rcValidity: toDateOnly(entity.rcValidity),
         passType: passTypeId,
-        passPeriod: String(entity.passPeriod || '1'),
-        dateFrom: entity.dateFrom ? toDateOnly(entity.dateFrom) + 'T00:00' : '',
-        dateTo: entity.dateTo ? toDateOnly(entity.dateTo) + 'T05:59' : '',
-        amount: entity.amount || '',
+        passPeriod: String(entity.passPeriod || "1"),
+        dateFrom: entity.dateFrom ? toDateOnly(entity.dateFrom) + "T00:00" : "",
+        dateTo: entity.dateTo ? toDateOnly(entity.dateTo) + "T05:59" : "",
+        amount: entity.amount || "",
         rcDocument: null,
         insuranceDocument: null,
         permit: null,
@@ -688,11 +911,11 @@ export default function VendorPassApprovedPage() {
         existingSparkArresterName: entity.sparkArresterFileName,
         existingTwistLockName: entity.twistLockFileName,
         isEditing: true,
-        editIndex: index
+        editIndex: index,
       });
 
       toggleModal("vehicle", true);
-      toast.success('Vehicle details loaded for editing');
+      toast.success("Vehicle details loaded for editing");
     }
   };
 
@@ -709,17 +932,21 @@ export default function VendorPassApprovedPage() {
     setSubmitLoading(true);
     try {
       const data = new FormData();
-      Object.keys(formData).forEach(key => {
+      Object.keys(formData).forEach((key) => {
         if (formData[key] !== null && formData[key] !== undefined) {
           data.append(key, formData[key]);
         }
       });
 
-      const endpoint = editingEntity.type === 'person'
-        ? `/api/vendor-pass/public/${vendorPassId}/update-person/${editingEntity.index}`
-        : `/api/vendor-pass/public/${vendorPassId}/update-vehicle/${editingEntity.index}`;
+      const endpoint =
+        editingEntity.type === "person"
+          ? `/api/vendor-pass/public/${vendorPassId}/update-person/${editingEntity.index}`
+          : `/api/vendor-pass/public/${vendorPassId}/update-vehicle/${editingEntity.index}`;
 
-      await axios.put(`${process.env.NEXT_PUBLIC_AGENT_API || 'http://localhost:5001/api'}${endpoint.replace('/api', '')}`, data);
+      await axios.put(
+        `${process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api"}${endpoint.replace("/api", "")}`,
+        data,
+      );
 
       // Refresh
       await fetchVendorPassData();
@@ -731,35 +958,37 @@ export default function VendorPassApprovedPage() {
     setSubmitLoading(false);
   };
 
-
   const handleSaveRevertedEntity = async () => {
     if (!editingRevertedEntity) return;
 
     const { type, index, id, revertedIndex } = editingRevertedEntity;
 
-    const getEnumValue = (arr, valId, fallback = '') => {
+    const getEnumValue = (arr, valId, fallback = "") => {
       if (!valId) return fallback;
-      const found = arr.find(x => String(x.id || x.value) === String(valId));
-      return found ? (found.label || found.name || found.value || '') : fallback;
+      const found = arr.find((x) => String(x.id || x.value) === String(valId));
+      return found ? found.label || found.name || found.value || "" : fallback;
     };
 
-    const passTypeEnumMap = { '1': 'DAILY', '2': 'MONTHLY', '3': 'YEARLY' };
-    const toPassTypeEnum = (val) => passTypeEnumMap[String(val)] || val || 'DAILY';
+    const passTypeEnumMap = { 1: "DAILY", 2: "MONTHLY", 3: "YEARLY" };
+    const toPassTypeEnum = (val) =>
+      passTypeEnumMap[String(val)] || val || "DAILY";
 
-    const nationalityEnumMap = { '1': 'INDIAN', '2': 'FOREIGNER' };
-    const toNationalityEnum = (val) => nationalityEnumMap[String(val)] || val || 'INDIAN';
+    const nationalityEnumMap = { 1: "INDIAN", 2: "FOREIGNER" };
+    const toNationalityEnum = (val) =>
+      nationalityEnumMap[String(val)] || val || "INDIAN";
 
     const idProofTypeEnumMap = {
-      '1': 'DRIVING LICENSE',
-      '2': 'PAN CARD',
-      '3': 'PASSPORT',
-      '4': 'ELECTION CARD',
-      '5': 'COMPANY ID CARD'
+      1: "DRIVING LICENSE",
+      2: "PAN CARD",
+      3: "PASSPORT",
+      4: "ELECTION CARD",
+      5: "COMPANY ID CARD",
     };
-    const toIdProofTypeEnum = (val) => idProofTypeEnumMap[String(val)] || val || '';
+    const toIdProofTypeEnum = (val) =>
+      idProofTypeEnumMap[String(val)] || val || "";
 
     try {
-      if (type === 'person') {
+      if (type === "person") {
         const updateData = {
           id: id,
           name: personForm.name,
@@ -779,7 +1008,11 @@ export default function VendorPassApprovedPage() {
           amount: personForm.amount,
           nationality: toNationalityEnum(personForm.nationality),
           countryId: personForm.country,
-          accessAreaId: getEnumValue(masterData.accessAreas, personForm.accessArea, "OTHER GATES ONLY"),
+          accessAreaId: getEnumValue(
+            masterData.accessAreas,
+            personForm.accessArea,
+            "OTHER GATES ONLY",
+          ),
           visaNo: personForm.visaNo,
           passportNo: personForm.passportNo,
           cdcNumber: personForm.cdcNumber,
@@ -815,24 +1048,31 @@ export default function VendorPassApprovedPage() {
         };
 
         const updatedPersons = [...revertedPersons];
-        updatedPersons[revertedIndex] = { ...updateData, status: 'updated' };
+        updatedPersons[revertedIndex] = { ...updateData, status: "updated" };
         setRevertedPersons(updatedPersons);
 
         toggleModal("person", false);
         setPersonForm(initialPersonForm);
         // Reopen the reverted edit modal
         setRevertedEditModal(true);
-
-      } else if (type === 'vehicle') {
+      } else if (type === "vehicle") {
         const updateData = {
           id: id,
           registrationNo: vehicleForm.regNo,
           regNo: vehicleForm.regNo,
           vehicleRegistrationNo: vehicleForm.regNo,
           vehicleTypeId: vehicleForm.type,
-          vehicleType: getEnumValue(masterData.vehicleTypes, vehicleForm.type, ""),
+          vehicleType: getEnumValue(
+            masterData.vehicleTypes,
+            vehicleForm.type,
+            "",
+          ),
           fuelType: vehicleForm.fuelType,
-          accessAreaId: getEnumValue(masterData.accessAreas, vehicleForm.accessArea, "OTHER GATES ONLY"),
+          accessAreaId: getEnumValue(
+            masterData.accessAreas,
+            vehicleForm.accessArea,
+            "OTHER GATES ONLY",
+          ),
           insuranceExpiry: vehicleForm.insuranceExpiry,
           rcValidity: vehicleForm.rcValidity,
           passType: toPassTypeEnum(vehicleForm.passType),
@@ -862,7 +1102,7 @@ export default function VendorPassApprovedPage() {
         };
 
         const updatedVehicles = [...revertedVehicles];
-        updatedVehicles[revertedIndex] = { ...updateData, status: 'updated' };
+        updatedVehicles[revertedIndex] = { ...updateData, status: "updated" };
         setRevertedVehicles(updatedVehicles);
 
         toggleModal("vehicle", false);
@@ -871,144 +1111,205 @@ export default function VendorPassApprovedPage() {
         setRevertedEditModal(true);
       }
 
-      toast.success(`${type === 'person' ? 'Person' : 'Vehicle'} updated successfully`);
+      toast.success(
+        `${type === "person" ? "Person" : "Vehicle"} updated successfully`,
+      );
       setEditingRevertedEntity(null);
-
     } catch (error) {
-      console.error('Error updating reverted entity:', error);
-      toast.error('Failed to update entity locally');
+      console.error("Error updating reverted entity:", error);
+      toast.error("Failed to update entity locally");
     }
   };
 
   const handleResubmitPass = async () => {
     setSubmitLoading(true);
     try {
-      const apiBase = process.env.NEXT_PUBLIC_AGENT_API || 'http://localhost:5001/api';
+      const apiBase =
+        process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
 
       // 1. Update reverted persons
       for (let i = 0; i < revertedPersons.length; i++) {
         const person = revertedPersons[i];
-        if (person.status === 'updated') {
+        if (person.status === "updated") {
           const formData = new FormData();
 
           // Append text fields
-          formData.append('name', person.name || '');
-          formData.append('mobile', person.mobile || '');
-          formData.append('email', person.email || '');
-          formData.append('aadharNo', person.aadharNo || '');
-          formData.append('designation', person.designation || '');
-          formData.append('designationOther', person.designationOther || '');
-          formData.append('idProofType', person.idProofType || '');
-          formData.append('idProofNumber', person.idProofNumber || '');
-          formData.append('hepTypeId', person.hepTypeId || '');
-          formData.append('hepType', person.hepType || '');
-          formData.append('passType', person.passType || '');
-          formData.append('passPeriod', person.passPeriod || '');
-          formData.append('dateFrom', person.dateFrom || '');
-          formData.append('dateTo', person.dateTo || '');
-          formData.append('amount', person.amount || '');
-          formData.append('nationality', person.nationality || '');
-          formData.append('countryId', person.countryId || '');
-          formData.append('accessAreaId', person.accessAreaId || '');
-          formData.append('visaNo', person.visaNo || '');
-          formData.append('passportNo', person.passportNo || '');
-          formData.append('cdcNumber', person.cdcNumber || '');
-          formData.append('seafarerPassFor', person.seafarerPassFor || '');
-          formData.append('seafarerIdType', person.seafarerIdType || '');
-          formData.append('withTwoWheeler', person.withTwoWheeler ? 'true' : 'false');
-          formData.append('vehicleNo', person.vehicleNo || '');
+          formData.append("name", person.name || "");
+          formData.append("mobile", person.mobile || "");
+          formData.append("email", person.email || "");
+          formData.append("aadharNo", person.aadharNo || "");
+          formData.append("designation", person.designation || "");
+          formData.append("designationOther", person.designationOther || "");
+          formData.append("idProofType", person.idProofType || "");
+          formData.append("idProofNumber", person.idProofNumber || "");
+          formData.append("hepTypeId", person.hepTypeId || "");
+          formData.append("hepType", person.hepType || "");
+          formData.append("passType", person.passType || "");
+          formData.append("passPeriod", person.passPeriod || "");
+          formData.append("dateFrom", person.dateFrom || "");
+          formData.append("dateTo", person.dateTo || "");
+          formData.append("amount", person.amount || "");
+          formData.append("nationality", person.nationality || "");
+          formData.append("countryId", person.countryId || "");
+          formData.append("accessAreaId", person.accessAreaId || "");
+          formData.append("visaNo", person.visaNo || "");
+          formData.append("passportNo", person.passportNo || "");
+          formData.append("cdcNumber", person.cdcNumber || "");
+          formData.append("seafarerPassFor", person.seafarerPassFor || "");
+          formData.append("seafarerIdType", person.seafarerIdType || "");
+          formData.append(
+            "withTwoWheeler",
+            person.withTwoWheeler ? "true" : "false",
+          );
+          formData.append("vehicleNo", person.vehicleNo || "");
 
-          formData.append('photoFileName', person.photoFileName || '');
-          formData.append('aadharPDFFileName', person.aadharPDFFileName || '');
-          formData.append('driverLicenseName', person.driverLicenseName || '');
-          formData.append('requisitionLetterName', person.requisitionLetterName || '');
-          formData.append('passportName', person.passportName || '');
-          formData.append('policeVerificationName', person.policeVerificationName || '');
-          formData.append('employmentProofName', person.employmentProofName || '');
-          formData.append('chaLicenseName', person.chaLicenseName || '');
-          formData.append('idProofFileName', person.idProofFileName || '');
-          formData.append('cdcDocumentName', person.cdcDocumentName || '');
-          formData.append('declarationFormName', person.declarationFormName || '');
-          formData.append('entryAuthorizationFileName', person.entryAuthorizationFileName || '');
+          formData.append("photoFileName", person.photoFileName || "");
+          formData.append("aadharPDFFileName", person.aadharPDFFileName || "");
+          formData.append("driverLicenseName", person.driverLicenseName || "");
+          formData.append(
+            "requisitionLetterName",
+            person.requisitionLetterName || "",
+          );
+          formData.append("passportName", person.passportName || "");
+          formData.append(
+            "policeVerificationName",
+            person.policeVerificationName || "",
+          );
+          formData.append(
+            "employmentProofName",
+            person.employmentProofName || "",
+          );
+          formData.append("chaLicenseName", person.chaLicenseName || "");
+          formData.append("idProofFileName", person.idProofFileName || "");
+          formData.append("cdcDocumentName", person.cdcDocumentName || "");
+          formData.append(
+            "declarationFormName",
+            person.declarationFormName || "",
+          );
+          formData.append(
+            "entryAuthorizationFileName",
+            person.entryAuthorizationFileName || "",
+          );
 
           // Append file fields
-          if (person.newPhoto) formData.append('personPhoto', person.newPhoto);
-          if (person.newAadhar) formData.append('personAadhar', person.newAadhar);
-          if (person.newIdProof) formData.append('personIdProof', person.newIdProof);
-          if (person.newDriverLicence) formData.append('driverLicense', person.newDriverLicence);
-          if (person.newPoliceVerification) formData.append('policeVerification', person.newPoliceVerification);
-          if (person.newEmploymentProof) formData.append('employmentProof', person.newEmploymentProof);
-          if (person.newChaLicence) formData.append('chaLicenseCopy', person.newChaLicence);
-          if (person.newPassport) formData.append('passportDoc', person.newPassport);
-          if (person.newRequisitionLetter) formData.append('requisitionLetter', person.newRequisitionLetter);
-          if (person.newCdc) formData.append('cdcDocument', person.newCdc);
-          if (person.newDeclaration) formData.append('declarationForm', person.newDeclaration);
-          if (person.newEntryAuthorization) formData.append('entryAuthorization', person.newEntryAuthorization);
+          if (person.newPhoto) formData.append("personPhoto", person.newPhoto);
+          if (person.newAadhar)
+            formData.append("personAadhar", person.newAadhar);
+          if (person.newIdProof)
+            formData.append("personIdProof", person.newIdProof);
+          if (person.newDriverLicence)
+            formData.append("driverLicense", person.newDriverLicence);
+          if (person.newPoliceVerification)
+            formData.append("policeVerification", person.newPoliceVerification);
+          if (person.newEmploymentProof)
+            formData.append("employmentProof", person.newEmploymentProof);
+          if (person.newChaLicence)
+            formData.append("chaLicenseCopy", person.newChaLicence);
+          if (person.newPassport)
+            formData.append("passportDoc", person.newPassport);
+          if (person.newRequisitionLetter)
+            formData.append("requisitionLetter", person.newRequisitionLetter);
+          if (person.newCdc) formData.append("cdcDocument", person.newCdc);
+          if (person.newDeclaration)
+            formData.append("declarationForm", person.newDeclaration);
+          if (person.newEntryAuthorization)
+            formData.append("entryAuthorization", person.newEntryAuthorization);
 
-          const originalIndex = passData.persons.findIndex(p => p.id === person.id);
+          const originalIndex = passData.persons.findIndex(
+            (p) => p.id === person.id,
+          );
           if (originalIndex === -1) {
             console.error("Person not found in original list:", person);
             continue;
           }
 
-          await axios.put(`${apiBase}/vendor-pass/public/${vendorPassId}/update-person/${originalIndex}`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          });
+          await axios.put(
+            `${apiBase}/vendor-pass/public/${vendorPassId}/update-person/${originalIndex}`,
+            formData,
+            {
+              headers: { "Content-Type": "multipart/form-data" },
+            },
+          );
         }
       }
 
       // 2. Update reverted vehicles
       for (let i = 0; i < revertedVehicles.length; i++) {
         const vehicle = revertedVehicles[i];
-        if (vehicle.status === 'updated') {
+        if (vehicle.status === "updated") {
           const formData = new FormData();
 
           // Append text fields
-          formData.append('registrationNo', vehicle.registrationNo || '');
-          formData.append('regNo', vehicle.regNo || '');
-          formData.append('vehicleRegistrationNo', vehicle.vehicleRegistrationNo || vehicle.regNo || '');
-          formData.append('vehicleTypeId', vehicle.vehicleTypeId || '');
-          formData.append('vehicleType', vehicle.vehicleType || vehicle.vehicleTypeId || '');
-          formData.append('fuelType', vehicle.fuelType || '');
-          formData.append('accessAreaId', vehicle.accessAreaId || '');
-          formData.append('insuranceExpiry', vehicle.insuranceExpiry || '');
-          formData.append('rcValidity', vehicle.rcValidity || '');
-          formData.append('passType', vehicle.passType || '');
-          formData.append('passPeriod', vehicle.passPeriod || '');
-          formData.append('dateFrom', vehicle.dateFrom || '');
-          formData.append('dateTo', vehicle.dateTo || '');
-          formData.append('amount', vehicle.amount || '');
+          formData.append("registrationNo", vehicle.registrationNo || "");
+          formData.append("regNo", vehicle.regNo || "");
+          formData.append(
+            "vehicleRegistrationNo",
+            vehicle.vehicleRegistrationNo || vehicle.regNo || "",
+          );
+          formData.append("vehicleTypeId", vehicle.vehicleTypeId || "");
+          formData.append(
+            "vehicleType",
+            vehicle.vehicleType || vehicle.vehicleTypeId || "",
+          );
+          formData.append("fuelType", vehicle.fuelType || "");
+          formData.append("accessAreaId", vehicle.accessAreaId || "");
+          formData.append("insuranceExpiry", vehicle.insuranceExpiry || "");
+          formData.append("rcValidity", vehicle.rcValidity || "");
+          formData.append("passType", vehicle.passType || "");
+          formData.append("passPeriod", vehicle.passPeriod || "");
+          formData.append("dateFrom", vehicle.dateFrom || "");
+          formData.append("dateTo", vehicle.dateTo || "");
+          formData.append("amount", vehicle.amount || "");
 
-          formData.append('scannedCopyFileName', vehicle.scannedCopyFileName || '');
-          formData.append('insuranceFileName', vehicle.insuranceFileName || '');
-          formData.append('permitFileName', vehicle.permitFileName || '');
-          formData.append('fitnessFileName', vehicle.fitnessFileName || '');
-          formData.append('requestLetterName', vehicle.requestLetterName || '');
-          formData.append('taxDocName', vehicle.taxDocName || '');
-          formData.append('emissionCertName', vehicle.emissionCertName || '');
-          formData.append('sparkArresterFileName', vehicle.sparkArresterFileName || '');
-          formData.append('twistLockFileName', vehicle.twistLockFileName || '');
+          formData.append(
+            "scannedCopyFileName",
+            vehicle.scannedCopyFileName || "",
+          );
+          formData.append("insuranceFileName", vehicle.insuranceFileName || "");
+          formData.append("permitFileName", vehicle.permitFileName || "");
+          formData.append("fitnessFileName", vehicle.fitnessFileName || "");
+          formData.append("requestLetterName", vehicle.requestLetterName || "");
+          formData.append("taxDocName", vehicle.taxDocName || "");
+          formData.append("emissionCertName", vehicle.emissionCertName || "");
+          formData.append(
+            "sparkArresterFileName",
+            vehicle.sparkArresterFileName || "",
+          );
+          formData.append("twistLockFileName", vehicle.twistLockFileName || "");
 
           // Append file fields
-          if (vehicle.newRc) formData.append('vehicleRC', vehicle.newRc);
-          if (vehicle.newInsurance) formData.append('vehicleInsurance', vehicle.newInsurance);
-          if (vehicle.newPermit) formData.append('vehiclePermit', vehicle.newPermit);
-          if (vehicle.newFitness) formData.append('vehicleFitness', vehicle.newFitness);
-          if (vehicle.newRequestLetter) formData.append('vehicleRequestLetter', vehicle.newRequestLetter);
-          if (vehicle.newTax) formData.append('vehicleTax', vehicle.newTax);
-          if (vehicle.newEmission) formData.append('vehicleEmission', vehicle.newEmission);
-          if (vehicle.newSparkArrester) formData.append('sparkArrester', vehicle.newSparkArrester);
-          if (vehicle.newTwistLock) formData.append('twistLock', vehicle.newTwistLock);
+          if (vehicle.newRc) formData.append("vehicleRC", vehicle.newRc);
+          if (vehicle.newInsurance)
+            formData.append("vehicleInsurance", vehicle.newInsurance);
+          if (vehicle.newPermit)
+            formData.append("vehiclePermit", vehicle.newPermit);
+          if (vehicle.newFitness)
+            formData.append("vehicleFitness", vehicle.newFitness);
+          if (vehicle.newRequestLetter)
+            formData.append("vehicleRequestLetter", vehicle.newRequestLetter);
+          if (vehicle.newTax) formData.append("vehicleTax", vehicle.newTax);
+          if (vehicle.newEmission)
+            formData.append("vehicleEmission", vehicle.newEmission);
+          if (vehicle.newSparkArrester)
+            formData.append("sparkArrester", vehicle.newSparkArrester);
+          if (vehicle.newTwistLock)
+            formData.append("twistLock", vehicle.newTwistLock);
 
-          const originalIndex = passData.vehicles.findIndex(v => v.id === vehicle.id);
+          const originalIndex = passData.vehicles.findIndex(
+            (v) => v.id === vehicle.id,
+          );
           if (originalIndex === -1) {
             console.error("Vehicle not found in original list:", vehicle);
             continue;
           }
 
-          await axios.put(`${apiBase}/vendor-pass/public/${vendorPassId}/update-vehicle/${originalIndex}`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          });
+          await axios.put(
+            `${apiBase}/vendor-pass/public/${vendorPassId}/update-vehicle/${originalIndex}`,
+            formData,
+            {
+              headers: { "Content-Type": "multipart/form-data" },
+            },
+          );
         }
       }
 
@@ -1042,13 +1343,14 @@ export default function VendorPassApprovedPage() {
     try {
       const response = await axios.get(
         `${QR_API}/qr/vendor-generate-single-qr/${vendorPassId}/${entityType}/${selectedIndex}`,
-        { responseType: "blob" }
+        { responseType: "blob" },
       );
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      const passNo = selectedEntity.personPassNo || selectedEntity.vehiclePassNo || "pass";
+      const passNo =
+        selectedEntity.personPassNo || selectedEntity.vehiclePassNo || "pass";
       link.download = `Pass_${passNo}.pdf`;
       document.body.appendChild(link);
       link.click();
@@ -1064,7 +1366,7 @@ export default function VendorPassApprovedPage() {
     try {
       const response = await axios.get(
         `${QR_API}/qr/vendor-generate-single-qr/${vendorPassId}/${type}/${index}`,
-        { responseType: "blob" }
+        { responseType: "blob" },
       );
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
@@ -1086,7 +1388,7 @@ export default function VendorPassApprovedPage() {
     try {
       const response = await axios.get(
         `${QR_API}/qr/vendor-generate-qr/${vendorPassId}`,
-        { responseType: "blob" }
+        { responseType: "blob" },
       );
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
@@ -1119,7 +1421,9 @@ export default function VendorPassApprovedPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-slate-800 mb-2">Error Loading Pass</h2>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">
+            Error Loading Pass
+          </h2>
           <p className="text-slate-600 mb-6">{error}</p>
           <button
             onClick={fetchVendorPassData}
@@ -1137,7 +1441,9 @@ export default function VendorPassApprovedPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
           <AlertCircle className="h-16 w-16 text-amber-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-slate-800 mb-2">No Data Found</h2>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">
+            No Data Found
+          </h2>
           <p className="text-slate-600">Unable to retrieve pass information.</p>
         </div>
       </div>
@@ -1157,15 +1463,18 @@ export default function VendorPassApprovedPage() {
     ? `Enter ${currentIdProofName} No`
     : "Enter Identification Proof number";
 
-  const approvedPersons = persons.filter(p => p.status === 'approved');
-  const rejectedPersons = persons.filter(p => p.status === 'rejected');
-  const initialRevertedPersons = persons.filter(p => p.status === 'reverted');
+  const approvedPersons = persons.filter((p) => p.status === "approved");
+  const rejectedPersons = persons.filter((p) => p.status === "rejected");
+  const initialRevertedPersons = persons.filter((p) => p.status === "reverted");
 
-  const approvedVehicles = vehicles.filter(v => v.status === 'approved');
-  const rejectedVehicles = vehicles.filter(v => v.status === 'rejected');
-  const initialRevertedVehicles = vehicles.filter(v => v.status === 'reverted');
+  const approvedVehicles = vehicles.filter((v) => v.status === "approved");
+  const rejectedVehicles = vehicles.filter((v) => v.status === "rejected");
+  const initialRevertedVehicles = vehicles.filter(
+    (v) => v.status === "reverted",
+  );
 
-  const isReverted = initialRevertedPersons.length > 0 || initialRevertedVehicles.length > 0;
+  const isReverted =
+    initialRevertedPersons.length > 0 || initialRevertedVehicles.length > 0;
 
   // QR Detail View
   if (selectedEntity) {
@@ -1217,41 +1526,57 @@ export default function VendorPassApprovedPage() {
                     <Car className="h-5 w-5 text-slate-400" />
                   )}
                   <span className="font-semibold text-slate-800">
-                    {isPerson ? selectedEntity.name : selectedEntity.registrationNo}
+                    {isPerson
+                      ? selectedEntity.name
+                      : selectedEntity.registrationNo}
                   </span>
                 </div>
 
                 <div className="bg-slate-50 rounded-lg p-4 text-left space-y-2">
                   <div className="flex justify-between">
                     <span className="text-slate-500 text-sm">Pass Number:</span>
-                    <span className="font-mono font-semibold text-slate-800">{passNo}</span>
+                    <span className="font-mono font-semibold text-slate-800">
+                      {passNo}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500 text-sm">Company:</span>
-                    <span className="text-slate-800">{selectedEntity.company}</span>
+                    <span className="text-slate-800">
+                      {selectedEntity.company}
+                    </span>
                   </div>
                   {isPerson && (
                     <>
                       <div className="flex justify-between">
                         <span className="text-slate-500 text-sm">Mobile:</span>
-                        <span className="text-slate-800">{selectedEntity.mobile || "N/A"}</span>
+                        <span className="text-slate-800">
+                          {selectedEntity.mobile || "N/A"}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500 text-sm">Aadhar:</span>
-                        <span className="text-slate-800">{selectedEntity.aadharNo || "N/A"}</span>
+                        <span className="text-slate-800">
+                          {selectedEntity.aadharNo || "N/A"}
+                        </span>
                       </div>
                     </>
                   )}
                   {selectedEntity.validFrom && (
                     <div className="flex justify-between">
-                      <span className="text-slate-500 text-sm">Valid From:</span>
-                      <span className="text-slate-800">{selectedEntity.validFrom}</span>
+                      <span className="text-slate-500 text-sm">
+                        Valid From:
+                      </span>
+                      <span className="text-slate-800">
+                        {selectedEntity.validFrom}
+                      </span>
                     </div>
                   )}
                   {selectedEntity.validTo && (
                     <div className="flex justify-between">
                       <span className="text-slate-500 text-sm">Valid To:</span>
-                      <span className="text-slate-800">{selectedEntity.validTo}</span>
+                      <span className="text-slate-800">
+                        {selectedEntity.validTo}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -1283,7 +1608,13 @@ export default function VendorPassApprovedPage() {
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-4">
-              <div className={isReverted ? "bg-orange-100 p-3 rounded-full" : "bg-green-100 p-3 rounded-full"}>
+              <div
+                className={
+                  isReverted
+                    ? "bg-orange-100 p-3 rounded-full"
+                    : "bg-green-100 p-3 rounded-full"
+                }
+              >
                 {isReverted ? (
                   <AlertCircle className="h-8 w-8 text-orange-600" />
                 ) : (
@@ -1292,10 +1623,13 @@ export default function VendorPassApprovedPage() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-800">
-                  {isReverted ? "Action Required: Reverted Passes" : "Pass Review Completed"}
+                  {isReverted
+                    ? "Action Required: Reverted Passes"
+                    : "Pass Review Completed"}
                 </h1>
                 <p className="text-slate-600">
-                  Reference: <span className="font-mono font-semibold">{referenceNo}</span>
+                  Reference:{" "}
+                  <span className="font-mono font-semibold">{referenceNo}</span>
                 </p>
               </div>
             </div>
@@ -1304,8 +1638,19 @@ export default function VendorPassApprovedPage() {
                 onClick={downloadPDF}
                 className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 3H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 3H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
                 </svg>
                 Download All Passes PDF
               </button>
@@ -1323,18 +1668,32 @@ export default function VendorPassApprovedPage() {
             <div className="flex flex-wrap gap-6 text-sm">
               {passData.companyName && (
                 <div>
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Company</span>
-                  <span className="font-semibold text-slate-700">{passData.companyName}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                    Company
+                  </span>
+                  <span className="font-semibold text-slate-700">
+                    {passData.companyName}
+                  </span>
                 </div>
               )}
               {passData.workOrderFileName && (
                 <div>
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Work Order Copy</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                    Work Order Copy
+                  </span>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-700">{passData.workOrderFileName}</span>
+                    <span className="font-semibold text-slate-700">
+                      {passData.workOrderFileName}
+                    </span>
                     <button
                       type="button"
-                      onClick={() => handleViewDoc(vendorPassId, "workOrder", passData.workOrderFileName)}
+                      onClick={() =>
+                        handleViewDoc(
+                          vendorPassId,
+                          "workOrder",
+                          passData.workOrderFileName,
+                        )
+                      }
                       className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-white px-2 py-1 rounded shadow-sm border border-slate-200"
                     >
                       <Eye className="h-3 w-3" /> View
@@ -1451,33 +1810,48 @@ export default function VendorPassApprovedPage() {
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-rose-200">
             <h2 className="text-lg font-bold text-rose-700 mb-4 flex items-center gap-2">
               <AlertCircle className="h-5 w-5" />
-              Rejected Passes ({rejectedPersons.length + rejectedVehicles.length})
+              Rejected Passes (
+              {rejectedPersons.length + rejectedVehicles.length})
             </h2>
 
             <div className="space-y-4">
               {rejectedPersons.map((person, index) => (
-                <div key={`rp-${index}`} className="bg-rose-50 rounded-lg p-4 flex flex-col md:flex-row gap-4 justify-between items-start">
+                <div
+                  key={`rp-${index}`}
+                  className="bg-rose-50 rounded-lg p-4 flex flex-col md:flex-row gap-4 justify-between items-start"
+                >
                   <div className="flex items-start gap-4">
                     <div className="bg-white p-2 rounded-lg text-rose-500">
                       <User className="h-6 w-6" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-rose-800">{person.name}</h3>
-                      <p className="text-sm text-rose-600 font-medium mt-1">Reason: {person.rejectedReason || "Not specified"}</p>
+                      <h3 className="font-semibold text-rose-800">
+                        {person.name}
+                      </h3>
+                      <p className="text-sm text-rose-600 font-medium mt-1">
+                        Reason: {person.rejectedReason || "Not specified"}
+                      </p>
                     </div>
                   </div>
                 </div>
               ))}
 
               {rejectedVehicles.map((vehicle, index) => (
-                <div key={`rv-${index}`} className="bg-rose-50 rounded-lg p-4 flex flex-col md:flex-row gap-4 justify-between items-start">
+                <div
+                  key={`rv-${index}`}
+                  className="bg-rose-50 rounded-lg p-4 flex flex-col md:flex-row gap-4 justify-between items-start"
+                >
                   <div className="flex items-start gap-4">
                     <div className="bg-white p-2 rounded-lg text-rose-500">
                       <Car className="h-6 w-6" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-rose-800">{vehicle.registrationNo}</h3>
-                      <p className="text-sm text-rose-600 font-medium mt-1">Reason: {vehicle.rejectedReason || "Not specified"}</p>
+                      <h3 className="font-semibold text-rose-800">
+                        {vehicle.registrationNo}
+                      </h3>
+                      <p className="text-sm text-rose-600 font-medium mt-1">
+                        Reason: {vehicle.rejectedReason || "Not specified"}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1487,70 +1861,98 @@ export default function VendorPassApprovedPage() {
         )}
 
         {/* Resubmitted — pending re-review banner */}
-        {passData?.status === 'VENDOR_SUBMITTED' && (
+        {passData?.status === "VENDOR_SUBMITTED" && (
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-blue-200">
             <div className="flex items-start gap-3">
               <div className="bg-blue-100 p-2 rounded-lg">
                 <RefreshCw className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-blue-700 mb-1">Resubmitted — Awaiting Re-Review</h2>
-                <p className="text-sm text-blue-600">Your updated passes have been submitted for re-approval. No further action is required at this time.</p>
+                <h2 className="text-base font-bold text-blue-700 mb-1">
+                  Resubmitted — Awaiting Re-Review
+                </h2>
+                <p className="text-sm text-blue-600">
+                  Your updated passes have been submitted for re-approval. No
+                  further action is required at this time.
+                </p>
               </div>
             </div>
           </div>
         )}
 
         {/* Reverted Section — only show when status is REVERTED (not after resubmission) */}
-        {(passData?.status === 'REVERTED' || (!passData?.status && (revertedPersons.length > 0 || revertedVehicles.length > 0))) && (revertedPersons.length > 0 || revertedVehicles.length > 0) && (
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-orange-200">
-            <h2 className="text-lg font-bold text-orange-700 mb-4 flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" />
-              Returned for Correction ({revertedPersons.length + revertedVehicles.length})
-            </h2>
+        {(passData?.status === "REVERTED" ||
+          (!passData?.status &&
+            (revertedPersons.length > 0 || revertedVehicles.length > 0))) &&
+          (revertedPersons.length > 0 || revertedVehicles.length > 0) && (
+            <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-orange-200">
+              <h2 className="text-lg font-bold text-orange-700 mb-4 flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                Returned for Correction (
+                {revertedPersons.length + revertedVehicles.length})
+              </h2>
 
-            <div className="space-y-4">
-              {revertedPersons.map((person, index) => (
-                <div key={`revp-${index}`} className="bg-orange-50 rounded-lg p-4 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
-                  <div className="flex items-start gap-4">
-                    <div className="bg-white p-2 rounded-lg text-orange-500">
-                      <User className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-orange-800">{person.name}</h3>
-                      <p className="text-sm text-orange-600 font-medium mt-1">Please correct: {person.revertReason || "Check details"}</p>
+              <div className="space-y-4">
+                {revertedPersons.map((person, index) => (
+                  <div
+                    key={`revp-${index}`}
+                    className="bg-orange-50 rounded-lg p-4 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="bg-white p-2 rounded-lg text-orange-500">
+                        <User className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-orange-800">
+                          {person.name}
+                        </h3>
+                        <p className="text-sm text-orange-600 font-medium mt-1">
+                          Please correct:{" "}
+                          {person.revertReason || "Check details"}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
 
-              {revertedVehicles.map((vehicle, index) => (
-                <div key={`revv-${index}`} className="bg-orange-50 rounded-lg p-4 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
-                  <div className="flex items-start gap-4">
-                    <div className="bg-white p-2 rounded-lg text-orange-500">
-                      <Car className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-orange-800">{vehicle.registrationNo}</h3>
-                      <p className="text-sm text-orange-600 font-medium mt-1">Please correct: {vehicle.revertReason || "Check details"}</p>
+                {revertedVehicles.map((vehicle, index) => (
+                  <div
+                    key={`revv-${index}`}
+                    className="bg-orange-50 rounded-lg p-4 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="bg-white p-2 rounded-lg text-orange-500">
+                        <Car className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-orange-800">
+                          {vehicle.registrationNo}
+                        </h3>
+                        <p className="text-sm text-orange-600 font-medium mt-1">
+                          Please correct:{" "}
+                          {vehicle.revertReason || "Check details"}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
 
-              <div className="mt-4 pt-4 border-t border-orange-200">
-                <p className="text-sm text-orange-700 mb-3 font-medium">To correct these passes, you need to click the button below and submit the requested changes.</p>
-                <button
-                  onClick={openEditModal}
-                  className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm"
-                >
-                  <Edit3 className="h-4 w-4" />
-                  Edit & Resubmit Passes
-                </button>
+                <div className="mt-4 pt-4 border-t border-orange-200">
+                  <p className="text-sm text-orange-700 mb-3 font-medium">
+                    To correct these passes, you need to click the button below
+                    and submit the requested changes.
+                  </p>
+                  <button
+                    onClick={openEditModal}
+                    className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                    Edit & Resubmit Passes
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Instructions */}
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
@@ -1581,7 +1983,6 @@ export default function VendorPassApprovedPage() {
       {revertedEditModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
-
             {/* Header */}
             <div className="flex justify-between items-center px-6 py-4 bg-amber-600 text-white shrink-0">
               <div>
@@ -1603,13 +2004,15 @@ export default function VendorPassApprovedPage() {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-
               {/* Warning Banner */}
               <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl mb-6 flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
                 <div className="text-sm text-amber-800">
                   <p className="font-semibold">Action Required</p>
-                  <p>Please review and update all reverted entries below. Once all are updated, you can resubmit for approval.</p>
+                  <p>
+                    Please review and update all reverted entries below. Once
+                    all are updated, you can resubmit for approval.
+                  </p>
                 </div>
               </div>
 
@@ -1624,52 +2027,80 @@ export default function VendorPassApprovedPage() {
                     {revertedPersons.map((person, idx) => (
                       <div
                         key={person.id || idx}
-                        className={`p-4 rounded-xl border-2 transition-all ${person.status === 'updated'
-                          ? 'bg-green-50 border-green-300'
-                          : 'bg-white border-amber-300'
-                          }`}
+                        className={`p-4 rounded-xl border-2 transition-all ${
+                          person.status === "updated"
+                            ? "bg-green-50 border-green-300"
+                            : "bg-white border-amber-300"
+                        }`}
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${person.status === 'updated' ? 'bg-green-100' : 'bg-amber-100'
-                              }`}>
-                              <User className={`h-5 w-5 ${person.status === 'updated' ? 'text-green-600' : 'text-amber-600'
-                                }`} />
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                person.status === "updated"
+                                  ? "bg-green-100"
+                                  : "bg-amber-100"
+                              }`}
+                            >
+                              <User
+                                className={`h-5 w-5 ${
+                                  person.status === "updated"
+                                    ? "text-green-600"
+                                    : "text-amber-600"
+                                }`}
+                              />
                             </div>
                             <div>
-                              <p className="font-semibold text-slate-800">{person.name || 'Person'}</p>
-                              <p className="text-xs text-slate-500 font-mono">{person.aadharNo || ''}</p>
+                              <p className="font-semibold text-slate-800">
+                                {person.name || "Person"}
+                              </p>
+                              <p className="text-xs text-slate-500 font-mono">
+                                {person.aadharNo || ""}
+                              </p>
                             </div>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${person.status === 'updated'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-amber-100 text-amber-700'
-                            }`}>
-                            {person.status === 'updated' ? 'Updated ✓' : 'Needs Update'}
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                              person.status === "updated"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {person.status === "updated"
+                              ? "Updated ✓"
+                              : "Needs Update"}
                           </span>
                         </div>
 
                         {/* Revert Reason */}
                         {(person.revertReason || person.rejectedReason) && (
                           <div className="bg-red-50 border border-red-200 p-3 rounded-lg mb-3">
-                            <p className="text-xs text-red-600 font-semibold mb-1">Revert Reason:</p>
-                            <p className="text-sm text-red-700">{person.revertReason || person.rejectedReason}</p>
+                            <p className="text-xs text-red-600 font-semibold mb-1">
+                              Revert Reason:
+                            </p>
+                            <p className="text-sm text-red-700">
+                              {person.revertReason || person.rejectedReason}
+                            </p>
                           </div>
                         )}
 
                         {/* Edit Button */}
-                        {person.status !== 'updated' && (
+                        {person.status !== "updated" && (
                           <button
-                            onClick={() => handleEditEntity('person', idx, person)}
+                            onClick={() =>
+                              handleEditEntity("person", idx, person)
+                            }
                             className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
                           >
                             <Edit3 className="h-4 w-4" />
                             Update Person
                           </button>
                         )}
-                        {person.status === 'updated' && (
+                        {person.status === "updated" && (
                           <button
-                            onClick={() => handleEditEntity('person', idx, person)}
+                            onClick={() =>
+                              handleEditEntity("person", idx, person)
+                            }
                             className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
                           >
                             <Edit3 className="h-4 w-4" />
@@ -1693,52 +2124,82 @@ export default function VendorPassApprovedPage() {
                     {revertedVehicles.map((vehicle, idx) => (
                       <div
                         key={vehicle.id || idx}
-                        className={`p-4 rounded-xl border-2 transition-all ${vehicle.status === 'updated'
-                          ? 'bg-green-50 border-green-300'
-                          : 'bg-white border-amber-300'
-                          }`}
+                        className={`p-4 rounded-xl border-2 transition-all ${
+                          vehicle.status === "updated"
+                            ? "bg-green-50 border-green-300"
+                            : "bg-white border-amber-300"
+                        }`}
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${vehicle.status === 'updated' ? 'bg-green-100' : 'bg-amber-100'
-                              }`}>
-                              <Car className={`h-5 w-5 ${vehicle.status === 'updated' ? 'text-green-600' : 'text-amber-600'
-                                }`} />
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                vehicle.status === "updated"
+                                  ? "bg-green-100"
+                                  : "bg-amber-100"
+                              }`}
+                            >
+                              <Car
+                                className={`h-5 w-5 ${
+                                  vehicle.status === "updated"
+                                    ? "text-green-600"
+                                    : "text-amber-600"
+                                }`}
+                              />
                             </div>
                             <div>
-                              <p className="font-semibold text-slate-800">{vehicle.registrationNo || vehicle.regNo || 'Vehicle'}</p>
-                              <p className="text-xs text-slate-500">{vehicle.vehicleType || ''}</p>
+                              <p className="font-semibold text-slate-800">
+                                {vehicle.registrationNo ||
+                                  vehicle.regNo ||
+                                  "Vehicle"}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {vehicle.vehicleType || ""}
+                              </p>
                             </div>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${vehicle.status === 'updated'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-amber-100 text-amber-700'
-                            }`}>
-                            {vehicle.status === 'updated' ? 'Updated ✓' : 'Needs Update'}
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                              vehicle.status === "updated"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {vehicle.status === "updated"
+                              ? "Updated ✓"
+                              : "Needs Update"}
                           </span>
                         </div>
 
                         {/* Revert Reason */}
                         {(vehicle.revertReason || vehicle.rejectedReason) && (
                           <div className="bg-red-50 border border-red-200 p-3 rounded-lg mb-3">
-                            <p className="text-xs text-red-600 font-semibold mb-1">Revert Reason:</p>
-                            <p className="text-sm text-red-700">{vehicle.revertReason || vehicle.rejectedReason}</p>
+                            <p className="text-xs text-red-600 font-semibold mb-1">
+                              Revert Reason:
+                            </p>
+                            <p className="text-sm text-red-700">
+                              {vehicle.revertReason || vehicle.rejectedReason}
+                            </p>
                           </div>
                         )}
 
                         {/* Edit Button */}
-                        {vehicle.status !== 'updated' && (
+                        {vehicle.status !== "updated" && (
                           <button
-                            onClick={() => handleEditEntity('vehicle', idx, vehicle)}
+                            onClick={() =>
+                              handleEditEntity("vehicle", idx, vehicle)
+                            }
                             className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
                           >
                             <Edit3 className="h-4 w-4" />
                             Update Vehicle
                           </button>
                         )}
-                        {vehicle.status === 'updated' && (
+                        {vehicle.status === "updated" && (
                           <button
-                            onClick={() => handleEditEntity('vehicle', idx, vehicle)}
+                            onClick={() =>
+                              handleEditEntity("vehicle", idx, vehicle)
+                            }
                             className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
                           >
                             <Edit3 className="h-4 w-4" />
@@ -1753,13 +2214,17 @@ export default function VendorPassApprovedPage() {
 
               {/* All Updated Message */}
               {revertedPersons.length + revertedVehicles.length > 0 &&
-                revertedPersons.every(p => p.status === 'updated') &&
-                revertedVehicles.every(v => v.status === 'updated') && (
+                revertedPersons.every((p) => p.status === "updated") &&
+                revertedVehicles.every((v) => v.status === "updated") && (
                   <div className="bg-green-50 border border-green-200 p-4 rounded-xl flex items-center gap-3 mb-2">
                     <CheckCircle2 className="h-6 w-6 text-green-600" />
                     <div>
-                      <p className="font-semibold text-green-800">All entities updated!</p>
-                      <p className="text-sm text-green-700">You can now resubmit your pass for approval.</p>
+                      <p className="font-semibold text-green-800">
+                        All entities updated!
+                      </p>
+                      <p className="text-sm text-green-700">
+                        You can now resubmit your pass for approval.
+                      </p>
                     </div>
                   </div>
                 )}
@@ -1777,20 +2242,25 @@ export default function VendorPassApprovedPage() {
                 onClick={handleResubmitPass}
                 disabled={
                   submitLoading ||
-                  revertedPersons.some(p => p.status !== 'updated') ||
-                  revertedVehicles.some(v => v.status !== 'updated')
+                  revertedPersons.some((p) => p.status !== "updated") ||
+                  revertedVehicles.some((v) => v.status !== "updated")
                 }
-                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${submitLoading ||
-                  revertedPersons.some(p => p.status !== 'updated') ||
-                  revertedVehicles.some(v => v.status !== 'updated')
-                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                  : 'bg-amber-500 hover:bg-amber-600 text-white'
-                  }`}
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${
+                  submitLoading ||
+                  revertedPersons.some((p) => p.status !== "updated") ||
+                  revertedVehicles.some((v) => v.status !== "updated")
+                    ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                    : "bg-amber-500 hover:bg-amber-600 text-white"
+                }`}
               >
                 {submitLoading ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Resubmitting...</>
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Resubmitting...
+                  </>
                 ) : (
-                  <><RefreshCw className="h-4 w-4" /> Resubmit</>
+                  <>
+                    <RefreshCw className="h-4 w-4" /> Resubmit
+                  </>
                 )}
               </button>
             </div>
@@ -1823,7 +2293,6 @@ export default function VendorPassApprovedPage() {
             </div>
 
             <div className="p-8 overflow-y-auto flex-1 bg-slate-50 space-y-8">
-
               <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3">
                   1. Role & Identity
@@ -1884,19 +2353,28 @@ export default function VendorPassApprovedPage() {
                             ...personForm,
                             seafarerIdType: value,
                             // Clear opposite field when switching
-                            aadharNo: value === "passport" ? "" : personForm.aadharNo,
-                            passportNo: value === "aadhaar" ? "" : personForm.passportNo,
-                            aadharFile: value === "passport" ? null : personForm.aadharFile,
+                            aadharNo:
+                              value === "passport" ? "" : personForm.aadharNo,
+                            passportNo:
+                              value === "aadhaar" ? "" : personForm.passportNo,
+                            aadharFile:
+                              value === "passport"
+                                ? null
+                                : personForm.aadharFile,
                           });
                           // Clear error when selection is made
                           if (personErrors.seafarerIdType) {
-                            setPersonErrors((prev) => ({ ...prev, seafarerIdType: null }));
+                            setPersonErrors((prev) => ({
+                              ...prev,
+                              seafarerIdType: null,
+                            }));
                           }
                         }}
-                        className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${personErrors.seafarerIdType
-                          ? "border-red-400 bg-red-50"
-                          : "border-slate-300 bg-white"
-                          }`}
+                        className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${
+                          personErrors.seafarerIdType
+                            ? "border-red-400 bg-red-50"
+                            : "border-slate-300 bg-white"
+                        }`}
                       >
                         <option value="">-- Select ID Type --</option>
                         <option value="aadhaar">Aadhaar</option>
@@ -1911,123 +2389,138 @@ export default function VendorPassApprovedPage() {
                   )}
 
                   {/* Aadhaar Fields - Show for non-foreigners (non-seafarers OR seafarers who selected aadhaar) */}
-                  {!isPersonForeigner(personForm.nationality) && (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar") && (
-                    <>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase">
-                          Aadhaar No. <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={personForm.aadharNo}
-                          onChange={(e) => {
-                            const val = e.target.value
-                              .replace(/\D/g, "")
-                              .slice(0, 12);
-                            setPersonForm({ ...personForm, aadharNo: val });
-                            // Clear error on change
-                            if (personErrors.aadharNo) {
-                              setPersonErrors((prev) => ({ ...prev, aadharNo: null }));
-                            }
-                          }}
-                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none transition-all ${personErrors.aadharNo
-                            ? "border-red-400 bg-red-50"
-                            : "border-slate-300 bg-white"
+                  {!isPersonForeigner(personForm.nationality) &&
+                    (personForm.hepType !== "3" ||
+                      personForm.seafarerIdType === "aadhaar") && (
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700 uppercase">
+                            Aadhaar No. <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={personForm.aadharNo}
+                            onChange={(e) => {
+                              const val = e.target.value
+                                .replace(/\D/g, "")
+                                .slice(0, 12);
+                              setPersonForm({ ...personForm, aadharNo: val });
+                              // Clear error on change
+                              if (personErrors.aadharNo) {
+                                setPersonErrors((prev) => ({
+                                  ...prev,
+                                  aadharNo: null,
+                                }));
+                              }
+                            }}
+                            className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none transition-all ${
+                              personErrors.aadharNo
+                                ? "border-red-400 bg-red-50"
+                                : "border-slate-300 bg-white"
                             }`}
-                          placeholder="XXXX XXXX XXXX"
-                          maxLength={12}
-                          inputMode="numeric"
-                        />
-                        {personErrors.aadharNo && (
-                          <p className="text-xs text-red-500 mt-0.5 font-medium">
-                            {personErrors.aadharNo}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700 uppercase">
-                          Upload Aadhar <span className="text-red-500">*</span>
-                        </label>
-                        <FileUploadBox
-                          file={personForm.aadharFile}
-                          existingFileName={personForm.existingAadharName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "personAadhar",
-                              personForm.existingAadharName,
-                              editingRevertedEntity?.index ?? 0,
-                              true
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              aadharFile: e.target.files[0],
-                            })
-                          }
-                        />
-                      </div>
-                    </>
-                  )}
+                            placeholder="XXXX XXXX XXXX"
+                            maxLength={12}
+                            inputMode="numeric"
+                          />
+                          {personErrors.aadharNo && (
+                            <p className="text-xs text-red-500 mt-0.5 font-medium">
+                              {personErrors.aadharNo}
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700 uppercase">
+                            Upload Aadhar{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <FileUploadBox
+                            file={personForm.aadharFile}
+                            existingFileName={personForm.existingAadharName}
+                            onView={() =>
+                              handleViewDoc(
+                                personForm.existingPassRequestId,
+                                "personAadhar",
+                                personForm.existingAadharName,
+                                editingRevertedEntity?.index ?? 0,
+                                true,
+                              )
+                            }
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                aadharFile: e.target.files[0],
+                              })
+                            }
+                          />
+                        </div>
+                      </>
+                    )}
 
                   {/* Passport Fields - Show only for seafarers who selected passport */}
-                  {personForm.hepType === "3" && personForm.seafarerIdType === "passport" && (
-                    <>
-                      <div className="space-y-1.5 animate-in zoom-in">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          Passport No. <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={personForm.passportNo}
-                          onChange={(e) => {
-                            const val = e.target.value.toUpperCase().slice(0, 8);
-                            setPersonForm({ ...personForm, passportNo: val });
-                            // Clear error on change
-                            if (personErrors.passportNo) {
-                              setPersonErrors((prev) => ({ ...prev, passportNo: null }));
-                            }
-                          }}
-                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${personErrors.passportNo
-                            ? "border-red-400 bg-red-50"
-                            : "border-slate-300 bg-white"
+                  {personForm.hepType === "3" &&
+                    personForm.seafarerIdType === "passport" && (
+                      <>
+                        <div className="space-y-1.5 animate-in zoom-in">
+                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Passport No. <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={personForm.passportNo}
+                            onChange={(e) => {
+                              const val = e.target.value
+                                .toUpperCase()
+                                .slice(0, 8);
+                              setPersonForm({ ...personForm, passportNo: val });
+                              // Clear error on change
+                              if (personErrors.passportNo) {
+                                setPersonErrors((prev) => ({
+                                  ...prev,
+                                  passportNo: null,
+                                }));
+                              }
+                            }}
+                            className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${
+                              personErrors.passportNo
+                                ? "border-red-400 bg-red-50"
+                                : "border-slate-300 bg-white"
                             }`}
-                          placeholder="A1234567"
-                          maxLength={8}
-                        />
-                        {personErrors.passportNo && (
-                          <p className="text-xs text-red-500 mt-0.5 font-medium">
-                            {personErrors.passportNo}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-1.5 animate-in zoom-in">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          Upload Passport <span className="text-red-500">*</span>
-                        </label>
-                        <FileUploadBox
-                          file={personForm.passportDoc}
-                          existingFileName={personForm.existingPassportName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "passportDoc",
-                              personForm.existingPassportName,
-                              editingRevertedEntity?.index ?? 0,
-                              true
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              passportDoc: e.target.files[0],
-                            })
-                          }
-                        />
-                      </div>
-                    </>
-                  )}
+                            placeholder="A1234567"
+                            maxLength={8}
+                          />
+                          {personErrors.passportNo && (
+                            <p className="text-xs text-red-500 mt-0.5 font-medium">
+                              {personErrors.passportNo}
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-1.5 animate-in zoom-in">
+                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Upload Passport{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <FileUploadBox
+                            file={personForm.passportDoc}
+                            existingFileName={personForm.existingPassportName}
+                            onView={() =>
+                              handleViewDoc(
+                                personForm.existingPassRequestId,
+                                "passportDoc",
+                                personForm.existingPassportName,
+                                editingRevertedEntity?.index ?? 0,
+                                true,
+                              )
+                            }
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                passportDoc: e.target.files[0],
+                              })
+                            }
+                          />
+                        </div>
+                      </>
+                    )}
                   {/* <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Card Number
@@ -2059,10 +2552,11 @@ export default function VendorPassApprovedPage() {
                       <input
                         type="tel"
                         value={personForm.mobile} // Fixed: Removed URL wrapper
-                        className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${personErrors.mobile
-                          ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
-                          : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
-                          }`}
+                        className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${
+                          personErrors.mobile
+                            ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
+                            : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
+                        }`}
                         placeholder="00000 00000"
                         maxLength={10}
                         inputMode="numeric"
@@ -2180,15 +2674,25 @@ export default function VendorPassApprovedPage() {
                         )?.toUpperCase();
 
                         const indiaObj = (masterData.countries || []).find(
-                          (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
+                          (c) =>
+                            String(c.name || "")
+                              .trim()
+                              .toUpperCase() === "INDIA",
                         );
-                        const indiaId = indiaObj ? String(indiaObj.id || indiaObj.value) : "";
-                        const isInd = nationalityName === "INDIAN" || value === "1";
+                        const indiaId = indiaObj
+                          ? String(indiaObj.id || indiaObj.value)
+                          : "";
+                        const isInd =
+                          nationalityName === "INDIAN" || value === "1";
 
                         setPersonForm((prev) => ({
                           ...prev,
                           nationality: value,
-                          country: isInd ? (indiaId || prev.country) : (prev.country === indiaId ? "" : prev.country),
+                          country: isInd
+                            ? indiaId || prev.country
+                            : prev.country === indiaId
+                              ? ""
+                              : prev.country,
                           aadharNo: prev.aadharNo,
                         }));
                       }}
@@ -2220,7 +2724,8 @@ export default function VendorPassApprovedPage() {
                           masterData.nationalities,
                           personForm.nationality,
                           "label",
-                        )?.toUpperCase() === "INDIAN" || personForm.nationality === "1"
+                        )?.toUpperCase() === "INDIAN" ||
+                        personForm.nationality === "1"
                       }
                     >
                       <option value="">Select Country</option>
@@ -2232,8 +2737,13 @@ export default function VendorPassApprovedPage() {
                             personForm.nationality,
                             "label",
                           )?.toUpperCase();
-                          const isInd = nationality === "INDIAN" || personForm.nationality === "1";
-                          const isIndiaCountry = String(c.name || "").trim().toUpperCase() === "INDIA";
+                          const isInd =
+                            nationality === "INDIAN" ||
+                            personForm.nationality === "1";
+                          const isIndiaCountry =
+                            String(c.name || "")
+                              .trim()
+                              .toUpperCase() === "INDIA";
 
                           if (isInd) {
                             return isIndiaCountry;
@@ -2270,7 +2780,8 @@ export default function VendorPassApprovedPage() {
                           masterData.nationalities,
                           personForm.nationality,
                           "label",
-                        )?.toUpperCase() === "INDIAN" || personForm.nationality === "1"
+                        )?.toUpperCase() === "INDIAN" ||
+                        personForm.nationality === "1"
                       }
                       placeholder="Visa number (5-20 alphanumeric)"
                       maxLength={20}
@@ -2360,7 +2871,8 @@ export default function VendorPassApprovedPage() {
                     <div className="col-span-1 md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-5 items-start">
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700 uppercase">
-                          CDC Document No. <span className="text-red-500">*</span>
+                          CDC Document No.{" "}
+                          <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -2388,7 +2900,7 @@ export default function VendorPassApprovedPage() {
                               "cdcDocument",
                               personForm.existingCdcName,
                               editingRevertedEntity?.index ?? 0,
-                              true
+                              true,
                             )
                           }
                           onChange={(e) =>
@@ -2401,7 +2913,8 @@ export default function VendorPassApprovedPage() {
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700 uppercase">
-                          Declaration Form Document <span className="text-red-500">*</span>
+                          Declaration Form Document{" "}
+                          <span className="text-red-500">*</span>
                         </label>
                         <FileUploadBox
                           file={personForm.declarationForm}
@@ -2412,7 +2925,7 @@ export default function VendorPassApprovedPage() {
                               "declarationForm",
                               personForm.existingDeclarationName,
                               editingRevertedEntity?.index ?? 0,
-                              true
+                              true,
                             )
                           }
                           onChange={(e) =>
@@ -2542,7 +3055,7 @@ export default function VendorPassApprovedPage() {
                           "personIdProof",
                           personForm.existingIdProofName,
                           editingRevertedEntity?.index ?? 0,
-                          true
+                          true,
                         )
                       }
                       onChange={(e) =>
@@ -2663,7 +3176,9 @@ export default function VendorPassApprovedPage() {
                           value={personForm.dateTo}
                           className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
                         />
-                        {["2", "MONTHLY"].includes(String(personForm.passType)) && (
+                        {["2", "MONTHLY"].includes(
+                          String(personForm.passType),
+                        ) && (
                           <input
                             type="time"
                             title="Valid Upto Time"
@@ -2682,63 +3197,67 @@ export default function VendorPassApprovedPage() {
                 </table>
               </div>
 
-              {(["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(personForm.passType)) ||
+              {(["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                String(personForm.passType),
+              ) ||
                 isOilDockArea(personForm.accessArea)) && (
-                  <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
-                      <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
-                      Mandatory Documents
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                      {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(personForm.passType)) && (
-                        <FileUploadBox
-                          label="Police Verification Certificate"
-                          isRequired
-                          file={personForm.policeVerification}
-                          existingFileName={personForm.existingPoliceName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "policeVerification",
-                              personForm.existingPoliceName,
-                              editingRevertedEntity?.index ?? 0,
-                              true
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              policeVerification: e.target.files[0],
-                            })
-                          }
-                        />
-                      )}
-                      {isOilDockArea(personForm.accessArea) && (
-                        <FileUploadBox
-                          label="Entry Authorization Document"
-                          isRequired
-                          file={personForm.entryAuthorization}
-                          existingFileName={personForm.existingEntryAuthName}
-                          onView={() =>
-                            handleViewDoc(
-                              personForm.existingPassRequestId,
-                              "entryAuthorization",
-                              personForm.existingEntryAuthName,
-                              editingRevertedEntity?.index ?? 0,
-                              true
-                            )
-                          }
-                          onChange={(e) =>
-                            setPersonForm({
-                              ...personForm,
-                              entryAuthorization: e.target.files[0],
-                            })
-                          }
-                        />
-                      )}
-                    </div>
+                <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
+                    <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
+                    Mandatory Documents
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                      String(personForm.passType),
+                    ) && (
+                      <FileUploadBox
+                        label="Police Verification Certificate"
+                        isRequired
+                        file={personForm.policeVerification}
+                        existingFileName={personForm.existingPoliceName}
+                        onView={() =>
+                          handleViewDoc(
+                            personForm.existingPassRequestId,
+                            "policeVerification",
+                            personForm.existingPoliceName,
+                            editingRevertedEntity?.index ?? 0,
+                            true,
+                          )
+                        }
+                        onChange={(e) =>
+                          setPersonForm({
+                            ...personForm,
+                            policeVerification: e.target.files[0],
+                          })
+                        }
+                      />
+                    )}
+                    {isOilDockArea(personForm.accessArea) && (
+                      <FileUploadBox
+                        label="Entry Authorization Document"
+                        isRequired
+                        file={personForm.entryAuthorization}
+                        existingFileName={personForm.existingEntryAuthName}
+                        onView={() =>
+                          handleViewDoc(
+                            personForm.existingPassRequestId,
+                            "entryAuthorization",
+                            personForm.existingEntryAuthName,
+                            editingRevertedEntity?.index ?? 0,
+                            true,
+                          )
+                        }
+                        onChange={(e) =>
+                          setPersonForm({
+                            ...personForm,
+                            entryAuthorization: e.target.files[0],
+                          })
+                        }
+                      />
+                    )}
                   </div>
-                )}
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -2785,7 +3304,6 @@ export default function VendorPassApprovedPage() {
             </div>
 
             <div className="p-8 overflow-y-auto flex-1 bg-slate-50/50 space-y-8">
-
               <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3">
                   1. Vehicle Details
@@ -3014,7 +3532,6 @@ export default function VendorPassApprovedPage() {
                 </table>
               </div>
 
-
               <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-orange-500" /> 2. Mandatory
@@ -3032,7 +3549,7 @@ export default function VendorPassApprovedPage() {
                         "vehicleRC",
                         vehicleForm.existingRcName,
                         editingRevertedEntity?.index ?? 0,
-                        true
+                        true,
                       )
                     }
                     onChange={(e) =>
@@ -3053,7 +3570,7 @@ export default function VendorPassApprovedPage() {
                         "vehicleInsurance",
                         vehicleForm.existingInsName,
                         editingRevertedEntity?.index ?? 0,
-                        true
+                        true,
                       )
                     }
                     onChange={(e) =>
@@ -3075,7 +3592,7 @@ export default function VendorPassApprovedPage() {
                           "vehiclePermit",
                           vehicleForm.existingPermitName,
                           editingRevertedEntity?.index ?? 0,
-                          true
+                          true,
                         )
                       }
                       onChange={(e) =>
@@ -3097,7 +3614,7 @@ export default function VendorPassApprovedPage() {
                         "vehicleFitness",
                         vehicleForm.existingFitnessName,
                         editingRevertedEntity?.index ?? 0,
-                        true
+                        true,
                       )
                     }
                     onChange={(e) =>
@@ -3107,7 +3624,10 @@ export default function VendorPassApprovedPage() {
                       })
                     }
                   />
-                  {(String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") || String(vehicleForm.accessArea) === "1") && (
+                  {(String(vehicleForm.accessArea)
+                    .toUpperCase()
+                    .includes("OIL JETTY") ||
+                    String(vehicleForm.accessArea) === "1") && (
                     <FileUploadBox
                       label="Spark Arrester Certificate"
                       isRequired
@@ -3119,7 +3639,7 @@ export default function VendorPassApprovedPage() {
                           "sparkArrester",
                           vehicleForm.existingSparkArresterName,
                           editingRevertedEntity?.index ?? 0,
-                          true
+                          true,
                         )
                       }
                       onChange={(e) =>
@@ -3130,7 +3650,9 @@ export default function VendorPassApprovedPage() {
                       }
                     />
                   )}
-                  {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) && (
+                  {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                    String(vehicleForm.passType),
+                  ) && (
                     <FileUploadBox
                       label="Twist Lock Certificate"
                       isRequired
@@ -3142,7 +3664,7 @@ export default function VendorPassApprovedPage() {
                           "twistLock",
                           vehicleForm.existingTwistLockName,
                           editingRevertedEntity?.index ?? 0,
-                          true
+                          true,
                         )
                       }
                       onChange={(e) =>
@@ -3153,9 +3675,15 @@ export default function VendorPassApprovedPage() {
                       }
                     />
                   )}
-                  {(!["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) &&
-                    ((String(vehicleForm.passType) === "1" || String(vehicleForm.passType).toUpperCase() === "DAILY") &&
-                      (String(vehicleForm.accessArea).toUpperCase().includes("OIL JETTY") || String(vehicleForm.accessArea) === "1"))) && (
+                  {!["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                    String(vehicleForm.passType),
+                  ) &&
+                    (String(vehicleForm.passType) === "1" ||
+                      String(vehicleForm.passType).toUpperCase() === "DAILY") &&
+                    (String(vehicleForm.accessArea)
+                      .toUpperCase()
+                      .includes("OIL JETTY") ||
+                      String(vehicleForm.accessArea) === "1") && (
                       <FileUploadBox
                         label="Request Letter"
                         isRequired
@@ -3167,7 +3695,7 @@ export default function VendorPassApprovedPage() {
                             "vehicleRequestLetter",
                             vehicleForm.existingReqName,
                             editingRevertedEntity?.index ?? 0,
-                            true
+                            true,
                           )
                         }
                         onChange={(e) =>
@@ -3178,7 +3706,9 @@ export default function VendorPassApprovedPage() {
                         }
                       />
                     )}
-                  {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) && (
+                  {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                    String(vehicleForm.passType),
+                  ) && (
                     <>
                       <FileUploadBox
                         label="Request Letter"
@@ -3191,7 +3721,7 @@ export default function VendorPassApprovedPage() {
                             "vehicleRequestLetter",
                             vehicleForm.existingReqName,
                             editingRevertedEntity?.index ?? 0,
-                            true
+                            true,
                           )
                         }
                         onChange={(e) =>
@@ -3212,7 +3742,7 @@ export default function VendorPassApprovedPage() {
                             "vehicleTax",
                             vehicleForm.existingTaxName,
                             editingRevertedEntity?.index ?? 0,
-                            true
+                            true,
                           )
                         }
                         onChange={(e) =>
@@ -3233,7 +3763,7 @@ export default function VendorPassApprovedPage() {
                             "vehicleEmission",
                             vehicleForm.existingEmissionName,
                             editingRevertedEntity?.index ?? 0,
-                            true
+                            true,
                           )
                         }
                         onChange={(e) =>

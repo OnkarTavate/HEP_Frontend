@@ -332,18 +332,184 @@ export default function TrafficLayout({ children }) {
         setTimeout(() => router.push("/admin"), 0);
         return;
       }
-      const isTrafficApprover =
-        (role === "approval" && dept.includes("traffic")) ||
-        role.includes("traffic") ||
-        ["ss", "sm", "asm"].includes(role) ||
+      // const isTrafficApprover =
+      //   (role === "approval" &&
+      //     (dept.includes("traffic") ||
+      //       dept.includes("civil") ||
+      //       dept.includes("mechanical"))) ||
+      //   role.includes("traffic") ||
+      //   [
+      //     "safety officer",
+      //     "fire safety officer",
+      //     "dy. conservator",
+      //     "senior deputy traffic manager",
+      //   ].includes(role);
+
+      // if (!isTrafficApprover) {
+      //   alert("Unauthorized Access: Approval Department Only.");
+      //   setTimeout(() => router.push("/"), 0);
+      //   return;
+      // }
+
+      const roleId = Number(
+        parsedUser.roleId ?? parsedUser.roleID ?? parsedUser.role_id,
+      );
+
+      const departmentId = Number(
+        parsedUser.departmentId ??
+          parsedUser.departmentID ??
+          parsedUser.department_id,
+      );
+
+      const normalizedRole = String(
+        parsedUser.role ?? parsedUser.roleName ?? parsedUser.role_name ?? "",
+      )
+        .toLowerCase()
+        .trim()
+        .replace(/_/g, " ")
+        .replace(/\s+/g, " ");
+
+      const normalizedDepartment = String(
+        parsedUser.departmentName ??
+          parsedUser.department ??
+          parsedUser.department_name ??
+          "",
+      )
+        .toLowerCase()
+        .trim()
+        .replace(/_/g, " ")
+        .replace(/\s+/g, " ");
+
+      /*
+       * ============================================================
+       * TRAFFIC APPROVAL AUTHORIZATION
+       *
+       * Approval role:
+       *   Civil       = department 3
+       *   Mechanical  = department 4
+       *   Traffic     = department 9
+       *
+       * Safety Officer / Fire Safety Officer:
+       *   Traffic department = 9
+       *
+       * Marine workflow:
+       *   Marine department = 7
+       *   Safety Officer / Fire Safety Officer /
+       *   Dy. Conservator / SDTM
+       *
+       * CISF:
+       *   CISF department = 1
+       *   CISF Assistant Commandant
+       * ============================================================
+       */
+
+      /* ---------- APPROVAL ROLE ---------- */
+      const isApprovalRole = roleId === 4 && [3, 4, 9].includes(departmentId);
+
+      /* ---------- SAFETY OFFICER ---------- */
+      const isSafetyOfficerTraffic = roleId === 26 && departmentId === 9;
+
+      /* ---------- MARINE WORKFLOW ---------- */
+      const isMarineWorkflowRole =
+        departmentId === 7 && [26, 27, 28, 29].includes(roleId);
+
+      /* ---------- CISF WORKFLOW ---------- */
+      const isCisfWorkflowRole = departmentId === 1 && roleId === 30;
+
+      /*
+       * ============================================================
+       * NAME FALLBACK
+       *
+       * Used when login response does not contain usable numeric IDs.
+       * ============================================================
+       */
+
+      const isApprovalRoleByName =
+        normalizedRole === "approval" &&
+        ["engineering civil", "engineering mechanical", "traffic"].includes(
+          normalizedDepartment,
+        );
+
+      const isSafetyOfficerTrafficByName =
+        normalizedDepartment === "traffic" &&
+        normalizedRole === "safety officer";
+
+      const isMarineWorkflowRoleByName =
+        normalizedDepartment === "marine" &&
         [
           "safety officer",
           "fire safety officer",
+          "dy. conservator",
+          "dy conservator",
           "senior deputy traffic manager",
-        ].includes(role);
+          "senior deputy traffic manager",
+        ].includes(normalizedRole);
+
+      const isCisfWorkflowRoleByName =
+        normalizedDepartment === "cisf" &&
+        ["cisf assistant commandant", "cisf.assistant commandant"].includes(
+          normalizedRole,
+        );
+
+      /*
+       * ============================================================
+       * FINAL ACCESS DECISION
+       * ============================================================
+       */
+
+      const isTrafficApprover =
+        isApprovalRole ||
+        isSafetyOfficerTraffic ||
+        isMarineWorkflowRole ||
+        isCisfWorkflowRole ||
+        isApprovalRoleByName ||
+        isSafetyOfficerTrafficByName ||
+        isMarineWorkflowRoleByName ||
+        isCisfWorkflowRoleByName;
+
+      console.log("TRAFFIC APPROVAL ACCESS CHECK:", {
+        username: parsedUser.username,
+        role: parsedUser.role,
+        roleId,
+        department: parsedUser.departmentName,
+        departmentId,
+        normalizedRole,
+        normalizedDepartment,
+        isApprovalRole,
+        isSafetyOfficerTraffic,
+        isMarineWorkflowRole,
+        isCisfWorkflowRole,
+        isApprovalRoleByName,
+        isSafetyOfficerTrafficByName,
+        isMarineWorkflowRoleByName,
+        isCisfWorkflowRoleByName,
+        isTrafficApprover,
+      });
+
       if (!isTrafficApprover) {
-        alert("Unauthorized Access: Traffic Department Only.");
-        setTimeout(() => router.push("/"), 0);
+        alert("Unauthorized Access: Approval Department Only.");
+        setUser(null);
+
+        setTimeout(() => {
+          router.replace("/");
+        }, 0);
+
+        return;
+      }
+
+      const isSafetyOfficerUser =
+        normalizedRole === "safety officer" ||
+        normalizedRole === "fire safety officer";
+
+      if (
+        isSafetyOfficerUser &&
+        (pathname === "/traffic_approval" ||
+          pathname === "/traffic_approval/dashboard")
+      ) {
+        setTimeout(
+          () => router.replace("/traffic_approval/passes?tab=pending"),
+          0,
+        );
         return;
       }
       setUser(parsedUser);
@@ -423,31 +589,73 @@ export default function TrafficLayout({ children }) {
     user?.role?.toLowerCase() === "fire safety officer";
 
   const navigationItems = [
-    { name: "Dashboard", href: "/traffic_approval/dashboard", icon: BarChart3 },
+    ...(!isSafetyOfficer
+      ? [
+          {
+            name: "Dashboard",
+            href: "/traffic_approval/dashboard",
+            icon: BarChart3,
+          },
+        ]
+      : []),
     {
       name: "Pass Approvals",
       href: "/traffic_approval/passes",
       icon: FileText,
     },
-    { name: "VVIP Pass", href: "/traffic_approval/vvip-pass", icon: VvipIcon },
-    {
-      name: "Company Approvals",
-      href: "/traffic_approval/companies",
-      icon: Building2,
-    },
-    {
-      name: "Blacklist Management",
-      href: "/traffic_approval/blacklist",
-      icon: ShieldBan,
-    },
-    {
-      name: "Overstay Exceptions",
-      href: "/traffic_approval/overstay",
-      icon: ShieldCheck,
-    },
-    { name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users },
+    ...(!isSafetyOfficer
+      ? [
+          {
+            name: "VVIP Pass",
+            href: "/traffic_approval/vvip-pass",
+            icon: VvipIcon,
+          },
+        ]
+      : []),
+    ...(!isSafetyOfficer
+      ? [
+          {
+            name: "Company Approvals",
+            href: "/traffic_approval/companies",
+            icon: Building2,
+          },
+        ]
+      : []),
+    ...(!isSafetyOfficer
+      ? [
+          {
+            name: "Blacklist Management",
+            href: "/traffic_approval/blacklist",
+            icon: ShieldBan,
+          },
+        ]
+      : []),
+    ...(!isSafetyOfficer
+      ? [
+          {
+            name: "Overstay Exceptions",
+            href: "/traffic_approval/overstay",
+            icon: ShieldCheck,
+          },
+        ]
+      : []),
+    ...(!isSafetyOfficer
+      ? [
+          {
+            name: "Bulk Pass",
+            href: "/traffic_approval/bulk-pass",
+            icon: Users,
+          },
+        ]
+      : []),
   ];
 
+  const SidebarContent = ({
+    onNavigate,
+    expanded = sidebarExpanded,
+    showCollapseToggle = true,
+  }) => (
+    <div className="h-full flex flex-col justify-between py-6 bg-slate-900 text-white overflow-hidden">
   const SidebarContent = ({
     onNavigate,
     expanded = sidebarExpanded,
@@ -457,6 +665,25 @@ export default function TrafficLayout({ children }) {
       <div className="flex flex-col gap-6">
         {/* Brand row */}
         <div className="flex flex-col gap-2 px-4">
+          <div
+            className={cn(
+              "flex items-center",
+              expanded ? "justify-between" : "justify-center",
+            )}
+          >
+            <Link
+              href="/traffic_approval/dashboard"
+              className="flex items-center gap-3 group min-w-0"
+              onClick={onNavigate}
+            >
+              <span className="flex items-center justify-center w-11 h-11 rounded-xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
+                <Image
+                  src="/logo1.png"
+                  alt="Chennai Port Logo"
+                  width={44}
+                  height={44}
+                  className="w-full h-full object-contain"
+                />
           <div
             className={cn(
               "flex items-center",
@@ -529,6 +756,12 @@ export default function TrafficLayout({ children }) {
         </div>
 
         {/* Nav items */}
+        <div
+          className={cn(
+            "flex flex-col gap-1 px-3",
+            expanded ? "items-stretch" : "items-center",
+          )}
+        >
         <div
           className={cn(
             "flex flex-col gap-1 px-3",

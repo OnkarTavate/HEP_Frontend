@@ -10,7 +10,19 @@ export default function VendorPassApprovedRootPage() {
     if (typeof window !== "undefined") {
       const id = sessionStorage.getItem("vendor_pass_approved_id");
       if (id) {
-        setTimeout(() => router.replace(`/vendor_pass_approved/${id}`), 0);
+        // setTimeout(() => router.replace(`/vendor_pass_approved/${id}`), 0);
+        const type = sessionStorage.getItem("vendor_pass_qr_type");
+        const entityId = sessionStorage.getItem("vendor_pass_qr_entity_id");
+
+        const query =
+          type && entityId
+            ? `?type=${encodeURIComponent(type)}&entityId=${encodeURIComponent(entityId)}`
+            : "";
+
+        setTimeout(
+          () => router.replace(`/vendor_pass_approved/${id}${query}`),
+          0,
+        );
       } else {
         setTimeout(() => router.replace("/"), 0);
       }
@@ -18,23 +30,32 @@ export default function VendorPassApprovedRootPage() {
   }, [router]);
 
   return (
-    <div style={{
-      display: "flex",
-      height: "100vh",
-      width: "100vw",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "#f9fafb",
-      fontFamily: "sans-serif",
-      color: "#6b7280"
-    }}>
-      <div style={{ animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite" }}>
+    <div
+      style={{
+        display: "flex",
+        height: "100vh",
+        width: "100vw",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#f9fafb",
+        fontFamily: "sans-serif",
+        color: "#6b7280",
+      }}
+    >
+      <div
+        style={{ animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite" }}
+      >
         Loading session...
       </div>
       <style jsx>{`
         @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: .5; }
+          0%,
+          100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
         }
       `}</style>
     </div>

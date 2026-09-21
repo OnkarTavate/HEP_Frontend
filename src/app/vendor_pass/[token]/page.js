@@ -33,14 +33,12 @@ import {
   XCircle,
   Calendar,
 } from "lucide-react";
-import {
-  getPublicIntake,
-  submitPublicVendorForm,
-} from "@/lib/vendorPassApi";
+import { getPublicIntake, submitPublicVendorForm } from "@/lib/vendorPassApi";
 
 const AGENT_API =
   process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
-const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
+const ADMIN_API =
+  process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 
 const getCurrentDateTime = () => {
   const now = new Date();
@@ -112,7 +110,12 @@ const calculateDateTo = (fromDate, period, type) => {
     d.setDate(d.getDate() + p); // +1 day for 1-day pass ✅
   } else if (type === "MONTHLY" || type === "2" || type === 2) {
     d.setMonth(d.getMonth() + p); // +1 month, same day ✅
-  } else if (type === "YEARLY" || type === "ANNUAL" || type === "3" || type === 3) {
+  } else if (
+    type === "YEARLY" ||
+    type === "ANNUAL" ||
+    type === "3" ||
+    type === 3
+  ) {
     d.setFullYear(d.getFullYear() + p); // +1 year, same day ✅
   }
 
@@ -134,7 +137,7 @@ const getFilteredPassTypes = (intakeData, passTypesData) => {
   if (intakeData.allowAuctionPassOnly) {
     // Only show Auction pass type - add it if not present
     const auctionPass = passTypesData.find(
-      (t) => (t.label || t.name || "").toUpperCase() === "AUCTION"
+      (t) => (t.label || t.name || "").toUpperCase() === "AUCTION",
     );
     if (auctionPass) {
       return [auctionPass];
@@ -145,7 +148,7 @@ const getFilteredPassTypes = (intakeData, passTypesData) => {
   } else {
     // Filter out Auction pass type
     return passTypesData.filter(
-      (t) => (t.label || t.name || "").toUpperCase() !== "AUCTION"
+      (t) => (t.label || t.name || "").toUpperCase() !== "AUCTION",
     );
   }
 };
@@ -263,8 +266,20 @@ const getValidationError = (field, value, extra = {}) => {
 
 // ============================================================
 
-const DetailItem = ({ label, value, highlight = false, showIfEmpty = false }) => {
-  if (!showIfEmpty && (!value || value === "N/A" || value === "null" || value === "undefined" || String(value).trim() === "")) {
+const DetailItem = ({
+  label,
+  value,
+  highlight = false,
+  showIfEmpty = false,
+}) => {
+  if (
+    !showIfEmpty &&
+    (!value ||
+      value === "N/A" ||
+      value === "null" ||
+      value === "undefined" ||
+      String(value).trim() === "")
+  ) {
     return null;
   }
   return (
@@ -310,7 +325,13 @@ export default function VendorPassPublicPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [docLoading, setDocLoading] = useState(false);
 
-  const handleViewDoc = async (passRequestId, documentType, staticPath, entityIndex = 0, isVendorPass = false) => {
+  const handleViewDoc = async (
+    passRequestId,
+    documentType,
+    staticPath,
+    entityIndex = 0,
+    isVendorPass = false,
+  ) => {
     let docUrl = "";
     if (documentType === "workOrder") {
       docUrl = `${AGENT_API}/vendor-pass/public/work-order/${passRequestId}`;
@@ -322,14 +343,16 @@ export default function VendorPassPublicPage() {
 
     let detectedIsImage = false;
     try {
-      const response = await fetch(docUrl, { method: 'HEAD' });
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.startsWith('image/')) {
+      const response = await fetch(docUrl, { method: "HEAD" });
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.startsWith("image/")) {
         detectedIsImage = true;
       }
     } catch (err) {
       console.error("Error fetching head:", err);
-      detectedIsImage = !!(staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath));
+      detectedIsImage = !!(
+        staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath)
+      );
     }
 
     setIsImage(detectedIsImage);
@@ -408,6 +431,7 @@ export default function VendorPassPublicPage() {
     country: "", // Dynamically populated from masterData.countries
     visaNo: "",
     accessArea: "",
+    concernDepartmentId: "",
     designation: "",
     designationOther: "",
     idProofType: "",
@@ -459,6 +483,7 @@ export default function VendorPassPublicPage() {
     insuranceExpiry: "",
     rcValidity: "",
     accessArea: "",
+    concernDepartmentId: "",
     rcDocument: null,
     insuranceDocument: null,
     permit: null,
@@ -501,14 +526,26 @@ export default function VendorPassPublicPage() {
     ],
     countries: [],
   });
+  const [vendorOilJettyDepartments, setVendorOilJettyDepartments] = useState(
+    [],
+  );
 
   const isOilDockArea = (areaId) => {
     if (!areaId) return false;
-    const area = masterData?.accessAreas?.find(a => String(a.id) === String(areaId));
-    if (area) return String(area.label || area.value || area.name).toUpperCase().includes("OIL JETTY") || String(area.id) === "1";
-    return String(areaId).toUpperCase().includes("OIL JETTY") || String(areaId) === "1";
+    const area = masterData?.accessAreas?.find(
+      (a) => String(a.id) === String(areaId),
+    );
+    if (area)
+      return (
+        String(area.label || area.value || area.name)
+          .toUpperCase()
+          .includes("OIL JETTY") || String(area.id) === "1"
+      );
+    return (
+      String(areaId).toUpperCase().includes("OIL JETTY") ||
+      String(areaId) === "1"
+    );
   };
-
 
   // Fetch vendor intake by token; pre-fill general form from intake
   useEffect(() => {
@@ -548,18 +585,36 @@ export default function VendorPassPublicPage() {
         if (Array.isArray(data.persons) && data.persons.length > 0) {
           const mappedPersons = data.persons.map((p) => {
             let natVal = "1";
-            if (String(p.nationality || "").toUpperCase() === "FOREIGNER" || String(p.nationality) === "2") {
+            if (
+              String(p.nationality || "").toUpperCase() === "FOREIGNER" ||
+              String(p.nationality) === "2"
+            ) {
               natVal = "2";
             }
-            let countryVal = p.countryId ? String(p.countryId) : p.country ? String(p.country) : "";
+            let countryVal = p.countryId
+              ? String(p.countryId)
+              : p.country
+                ? String(p.country)
+                : "";
             const pTypeStr = String(p.passType || "").toUpperCase();
-            const passTypeVal = pTypeStr === "MONTHLY" || pTypeStr === "2" ? "2" : pTypeStr === "YEARLY" || pTypeStr === "ANNUAL" || pTypeStr === "3" ? "3" : "1";
+            const passTypeVal =
+              pTypeStr === "MONTHLY" || pTypeStr === "2"
+                ? "2"
+                : pTypeStr === "YEARLY" ||
+                    pTypeStr === "ANNUAL" ||
+                    pTypeStr === "3"
+                  ? "3"
+                  : "1";
 
             return {
               id: p.id,
               existingPassRequestId: p.vendorPassRequestId || data.id,
               personPassNo: p.personPassNo || "",
-              hepType: p.hepTypeId ? String(p.hepTypeId) : (p.designation === "Driver" ? "1" : "2"),
+              hepType: p.hepTypeId
+                ? String(p.hepTypeId)
+                : p.designation === "Driver"
+                  ? "1"
+                  : "2",
               name: p.name || "",
               aadharNo: p.aadharNo || p.aadharNumber || "",
               mobile: p.mobile || "",
@@ -567,18 +622,31 @@ export default function VendorPassPublicPage() {
               nationality: natVal,
               country: countryVal,
               visaNo: p.visaNo || "",
-              accessArea: p.accessAreaId ? String(p.accessAreaId) : (p.accessArea || ""),
-              designation: p.designationId ? String(p.designationId) : (p.designation || ""),
+              accessArea: p.accessAreaId
+                ? String(p.accessAreaId)
+                : p.accessArea || "",
+              designation: p.designationId
+                ? String(p.designationId)
+                : p.designation || "",
+              concernDepartmentId: p.concernDepartmentId
+                ? String(p.concernDepartmentId)
+                : "",
               designationOther: p.designationOther || "",
               cardNumber: p.cardNumber || "",
-              withTwoWheeler: p.withTwoWheeler === true || String(p.withTwoWheeler) === "true",
+              withTwoWheeler:
+                p.withTwoWheeler === true ||
+                String(p.withTwoWheeler) === "true",
               vehicleNo: p.vehicleNo || "",
               idProofType: p.idProofType ? String(p.idProofType) : "",
               idProofNumber: p.idProofNumber || "",
               passType: passTypeVal,
               passPeriod: p.passPeriod ? String(p.passPeriod) : "1",
-              dateFrom: p.dateFrom ? new Date(p.dateFrom).toISOString().slice(0, 16) : getCurrentDateTime(),
-              dateTo: p.dateTo ? new Date(p.dateTo).toISOString().slice(0, 16) : "",
+              dateFrom: p.dateFrom
+                ? new Date(p.dateFrom).toISOString().slice(0, 16)
+                : getCurrentDateTime(),
+              dateTo: p.dateTo
+                ? new Date(p.dateTo).toISOString().slice(0, 16)
+                : "",
               amount: parseFloat(p.amount) || 10.3,
               status: p.status || "pending",
               revertReason: p.revertReason || "",
@@ -599,8 +667,8 @@ export default function VendorPassPublicPage() {
         console.error("Vendor intake fetch failed:", err);
         setIntakeError(
           err?.response?.data?.message ||
-          err?.message ||
-          "This link is invalid or has expired."
+            err?.message ||
+            "This link is invalid or has expired.",
         );
       } finally {
         if (alive) setIntakeLoading(false);
@@ -616,7 +684,10 @@ export default function VendorPassPublicPage() {
   useEffect(() => {
     const fetchFeeMaster = async () => {
       try {
-        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+        const token =
+          typeof window !== "undefined"
+            ? localStorage.getItem("accessToken")
+            : null;
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
         const res = await axios.get(`${ADMIN_API}/hep-rate`, { headers });
@@ -652,30 +723,41 @@ export default function VendorPassPublicPage() {
       try {
         const config = {};
 
-        const [natRes, passRes, idRes, accessRes, desigRes, vehRes, countryRes] =
-          await Promise.all([
-            axios
-              .get(`${AGENT_API}/pass-request/get-nationality`, config)
-              .catch(() => ({ data: [] })),
-            axios
-              .get(`${AGENT_API}/pass-request/get-pass-types`, config)
-              .catch(() => ({ data: [] })),
-            axios
-              .get(`${AGENT_API}/pass-request/get-id-proof-types`, config)
-              .catch(() => ({ data: [] })),
-            axios
-              .get(`${AGENT_API}/pass-request/get-access-areas`, config)
-              .catch(() => ({ data: [] })),
-            axios
-              .get(`${AGENT_API}/pass-request/getDesignations`, config)
-              .catch(() => ({ data: [] })),
-            axios
-              .get(`${AGENT_API}/pass-request/getVehicleTypes`, config)
-              .catch(() => ({ data: [] })),
-            axios
-              .get(`${AGENT_API}/pass-request/get-countries`, config)
-              .catch(() => ({ data: [] })),
-          ]);
+        const [
+          natRes,
+          passRes,
+          idRes,
+          accessRes,
+          desigRes,
+          vehRes,
+          countryRes,
+          deptRes,
+        ] = await Promise.all([
+          axios
+            .get(`${AGENT_API}/pass-request/get-nationality`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/get-pass-types`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/get-id-proof-types`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/get-access-areas`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/getDesignations`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/getVehicleTypes`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${AGENT_API}/pass-request/get-countries`, config)
+            .catch(() => ({ data: [] })),
+          axios
+            .get(`${ADMIN_API}/user/departments`, config)
+            .catch(() => ({ data: [] })),
+        ]);
 
         const extractArray = (res) =>
           Array.isArray(res?.data?.data)
@@ -685,6 +767,14 @@ export default function VendorPassPublicPage() {
               : [];
 
         const fetchedCountries = extractArray(countryRes);
+        const fetchedDepartments = extractArray(deptRes);
+
+        const requiredVendorOilJettyDepartments = fetchedDepartments
+          .map((dept) => ({
+            id: Number(dept.id ?? dept.departmentId),
+            name: dept.departmentName ?? dept.name ?? dept.label ?? "",
+          }))
+          .filter((dept) => [3, 4, 9].includes(dept.id));
 
         setMasterData((prev) => ({
           ...prev,
@@ -694,13 +784,18 @@ export default function VendorPassPublicPage() {
           accessAreas: extractArray(accessRes),
           designations: extractArray(desigRes),
           vehicleTypes: extractArray(vehRes),
-          countries: fetchedCountries.length > 0 ? fetchedCountries : prev.countries,
+          countries:
+            fetchedCountries.length > 0 ? fetchedCountries : prev.countries,
         }));
+        setVendorOilJettyDepartments(requiredVendorOilJettyDepartments);
 
         // Auto-set country to India's real DB ID when nationality is Indian
         if (fetchedCountries.length > 0) {
           const indiaEntry = fetchedCountries.find(
-            (c) => String(c.name || "").trim().toLowerCase() === "india"
+            (c) =>
+              String(c.name || "")
+                .trim()
+                .toLowerCase() === "india",
           );
           if (indiaEntry) {
             setPersonForm((prev) => {
@@ -777,7 +872,14 @@ export default function VendorPassPublicPage() {
       amount: amt,
       dateTo: newDateTo,
     }));
-  }, [personForm.passType, personForm.passPeriod, personForm.dateFrom, generalForm.remainingDays, generalForm.isLicenseExpired, feeMaster]);
+  }, [
+    personForm.passType,
+    personForm.passPeriod,
+    personForm.dateFrom,
+    generalForm.remainingDays,
+    generalForm.isLicenseExpired,
+    feeMaster,
+  ]);
 
   // Live running time: update dateFrom every 30s while person modal is open
   useEffect(() => {
@@ -822,9 +924,23 @@ export default function VendorPassPublicPage() {
       updatedPeriod = "1";
     }
 
-    const selectedTypeObj = masterData.vehicleTypes.find(t => String(t.id) === String(vehicleForm.type));
-    const typeName = selectedTypeObj ? String(selectedTypeObj.name).toUpperCase().trim() : "";
-    const isCargoEquipment = ["CRANE", "DOZERS", "DUMPERS", "EXCAVATORS", "FORKLIFT", "JCB EARTHMOVER", "MOBILE CRANE", "PAY LOADER", "POCLAIN"].includes(typeName);
+    const selectedTypeObj = masterData.vehicleTypes.find(
+      (t) => String(t.id) === String(vehicleForm.type),
+    );
+    const typeName = selectedTypeObj
+      ? String(selectedTypeObj.name).toUpperCase().trim()
+      : "";
+    const isCargoEquipment = [
+      "CRANE",
+      "DOZERS",
+      "DUMPERS",
+      "EXCAVATORS",
+      "FORKLIFT",
+      "JCB EARTHMOVER",
+      "MOBILE CRANE",
+      "PAY LOADER",
+      "POCLAIN",
+    ].includes(typeName);
 
     const feeConfig = isCargoEquipment
       ? feeMaster["CARGO_HANDLING_EQUIPMENT"]
@@ -856,27 +972,52 @@ export default function VendorPassPublicPage() {
       amount: amt,
       dateTo: newDateTo,
     }));
-  }, [vehicleForm.passType, vehicleForm.passPeriod, vehicleForm.dateFrom, vehicleForm.type, masterData.vehicleTypes, generalForm.remainingDays, generalForm.isLicenseExpired, feeMaster]);
+  }, [
+    vehicleForm.passType,
+    vehicleForm.passPeriod,
+    vehicleForm.dateFrom,
+    vehicleForm.type,
+    masterData.vehicleTypes,
+    generalForm.remainingDays,
+    generalForm.isLicenseExpired,
+    feeMaster,
+  ]);
 
   useEffect(() => {
     const natObj = (masterData.nationalities || []).find(
-      (n) => String(n.id || n.value) === String(personForm.nationality)
+      (n) => String(n.id || n.value) === String(personForm.nationality),
     );
-    const selectedNationality = (natObj?.label || natObj?.name || "").toUpperCase();
+    const selectedNationality = (
+      natObj?.label ||
+      natObj?.name ||
+      ""
+    ).toUpperCase();
 
     const indiaObj = (masterData.countries || []).find(
-      (c) => String(c.name || "").trim().toLowerCase() === "india"
+      (c) =>
+        String(c.name || "")
+          .trim()
+          .toLowerCase() === "india",
     );
     const indiaId = indiaObj ? String(indiaObj.id) : "";
 
-    if ((selectedNationality === "INDIAN" || !personForm.nationality || String(personForm.nationality) === "1") && indiaId) {
+    if (
+      (selectedNationality === "INDIAN" ||
+        !personForm.nationality ||
+        String(personForm.nationality) === "1") &&
+      indiaId
+    ) {
       setPersonForm((prev) => {
         if (String(prev.country) !== indiaId) {
           return { ...prev, country: indiaId };
         }
         return prev;
       });
-    } else if (selectedNationality && selectedNationality !== "INDIAN" && String(personForm.nationality) !== "1") {
+    } else if (
+      selectedNationality &&
+      selectedNationality !== "INDIAN" &&
+      String(personForm.nationality) !== "1"
+    ) {
       // If switching from Indian → foreign, clear country if it was India
       if (String(personForm.country) === indiaId) {
         setPersonForm((prev) => ({
@@ -890,12 +1031,19 @@ export default function VendorPassPublicPage() {
   const isPersonForeigner = React.useCallback(
     (natValue) => {
       const natObj = (masterData.nationalities || []).find(
-        (n) => String(n.id || n.value) === String(natValue) || (n.label || n.name || "").toUpperCase() === String(natValue).toUpperCase()
+        (n) =>
+          String(n.id || n.value) === String(natValue) ||
+          (n.label || n.name || "").toUpperCase() ===
+            String(natValue).toUpperCase(),
       );
       const label = (natObj?.label || natObj?.name || "").toUpperCase();
-      return label === "FOREIGNER" || String(natValue) === "2" || String(natValue).toUpperCase() === "FOREIGNER";
+      return (
+        label === "FOREIGNER" ||
+        String(natValue) === "2" ||
+        String(natValue).toUpperCase() === "FOREIGNER"
+      );
     },
-    [masterData.nationalities]
+    [masterData.nationalities],
   );
 
   const calculateTotals = () => {
@@ -1036,7 +1184,17 @@ export default function VendorPassPublicPage() {
         mobile: data.mobile || "",
         email: data.email || "",
         nationality: natVal,
-        country: resolvedCountry,
+        country: data.countryId
+          ? String(data.countryId)
+          : (() => {
+              const indiaObj = (masterData.countries || []).find(
+                (c) =>
+                  String(c.name || "")
+                    .trim()
+                    .toUpperCase() === "INDIA",
+              );
+              return indiaObj ? String(indiaObj.id || indiaObj.value) : "";
+            })(),
         visaNo: data.visaNo || "",
         accessArea: areaVal,
         designation: data.designationId ? String(data.designationId) : "",
@@ -1108,7 +1266,8 @@ export default function VendorPassPublicPage() {
         existingPassRequestId: data.passRequestId,
         regNo: data.registrationNo || data.regNo || "",
         type: data.vehicleTypeId || data.type || "",
-        cardNumber: data.qrCode || data.qrPassReference || data.rfidCardNumber || "",
+        cardNumber:
+          data.qrCode || data.qrPassReference || data.rfidCardNumber || "",
         accessArea: areaVal,
         insuranceExpiry: data.insuranceExpiry
           ? new Date(data.insuranceExpiry).toISOString().split("T")[0]
@@ -1146,7 +1305,8 @@ export default function VendorPassPublicPage() {
     // ---- Full field validation before add ----
     const errors = {};
     if (!personForm.hepType || !personForm.hepType.trim()) {
-      errors.hepType = "Please select Type of HEP (Drivers, Personnel, or Seafarers)";
+      errors.hepType =
+        "Please select Type of HEP (Drivers, Personnel, or Seafarers)";
     }
 
     if (!personForm.name.trim()) errors.name = "Full name is required";
@@ -1156,7 +1316,10 @@ export default function VendorPassPublicPage() {
     const isForeigner = isPersonForeigner(personForm.nationality);
 
     // Aadhaar validation - required for non-foreigners (non-seafarers OR seafarers who chose aadhaar)
-    if (!isForeigner && (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar")) {
+    if (
+      !isForeigner &&
+      (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar")
+    ) {
       if (!personForm.aadharNo) errors.aadharNo = "Aadhaar number is required";
       else if (!/^\d{12}$/.test(personForm.aadharNo.replace(/\s/g, "")))
         errors.aadharNo = "Aadhaar must be exactly 12 digits";
@@ -1167,14 +1330,23 @@ export default function VendorPassPublicPage() {
       if (!personForm.idProofNumber && !personForm.passportNo) {
         errors.idProofNumber = "Passport number is required for Foreigners";
       }
-    } else if (personForm.hepType === "3" && personForm.seafarerIdType === "passport") {
-      if (!personForm.passportNo) errors.passportNo = "Passport number is required";
+    } else if (
+      personForm.hepType === "3" &&
+      personForm.seafarerIdType === "passport"
+    ) {
+      if (!personForm.passportNo)
+        errors.passportNo = "Passport number is required";
       else if (!/^[A-Z0-9]{5,20}$/i.test(personForm.passportNo))
-        errors.passportNo = "Passport number must be 5-20 alphanumeric characters";
+        errors.passportNo =
+          "Passport number must be 5-20 alphanumeric characters";
     }
 
     // Seafarer must select ID type
-    if (personForm.hepType === "3" && !personForm.seafarerIdType && !isForeigner) {
+    if (
+      personForm.hepType === "3" &&
+      !personForm.seafarerIdType &&
+      !isForeigner
+    ) {
       errors.seafarerIdType = "Please select Aadhaar or Passport";
     }
 
@@ -1214,6 +1386,19 @@ export default function VendorPassPublicPage() {
       );
       if (err) errors.idProofNumber = err;
     }
+    const normalizedAccessArea = String(personForm.accessArea || "")
+      .trim()
+      .toUpperCase();
+
+    const isOilJetty =
+      normalizedAccessArea === "1" ||
+      normalizedAccessArea.includes("OIL JETTY") ||
+      normalizedAccessArea.includes("OIL_JETTY");
+
+    if (isOilJetty && !personForm.concernDepartmentId) {
+      errors.concernDepartmentId =
+        "Department is required for Oil Jetty and Other Gates.";
+    }
 
     if (Object.keys(errors).length > 0) {
       setPersonErrors(errors);
@@ -1231,42 +1416,90 @@ export default function VendorPassPublicPage() {
       return toast.error("Please fill all mandatory fields including Photo.");
     }
 
-    if (personForm.hepType === "1" && !(personForm.driverLicence || personForm.idProofFile || personForm.existingDlName || personForm.existingIdProofName)) {
+    if (
+      personForm.hepType === "1" &&
+      !(
+        personForm.driverLicence ||
+        personForm.idProofFile ||
+        personForm.existingDlName ||
+        personForm.existingIdProofName
+      )
+    ) {
       return toast.error("Driver Licence is mandatory for Drivers.");
     }
 
-    if (!isForeigner && (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar")) {
+    if (
+      !isForeigner &&
+      (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar")
+    ) {
       if (!(personForm.aadharFile || personForm.existingAadharName)) {
         return toast.error("Aadhar Card upload is mandatory.");
       }
     }
 
-    if (isForeigner && !(personForm.idProofFile || personForm.existingIdProofName || personForm.passportDoc || personForm.existingPassportName)) {
+    if (
+      isForeigner &&
+      !(
+        personForm.idProofFile ||
+        personForm.existingIdProofName ||
+        personForm.passportDoc ||
+        personForm.existingPassportName
+      )
+    ) {
       return toast.error("Copy of Passport is mandatory for Foreigners.");
     }
 
-    if (isForeigner && !(personForm.visaDoc || personForm.existingVisaDocName)) {
+    if (
+      isForeigner &&
+      !(personForm.visaDoc || personForm.existingVisaDocName)
+    ) {
       return toast.error("Visa document is mandatory for Foreigners.");
     }
 
-    if (isForeigner && !(personForm.immigrationDoc || personForm.existingImmigrationDocName)) {
-      return toast.error("Immigration Clearance document is mandatory for Foreigners.");
+    if (
+      isForeigner &&
+      !(personForm.immigrationDoc || personForm.existingImmigrationDocName)
+    ) {
+      return toast.error(
+        "Immigration Clearance document is mandatory for Foreigners.",
+      );
     }
 
-    if (personForm.hepType === "3" && personForm.seafarerIdType === "passport") {
+    if (
+      personForm.hepType === "3" &&
+      personForm.seafarerIdType === "passport"
+    ) {
       if (!(personForm.passportDoc || personForm.existingPassportName)) {
-        return toast.error("Passport upload is mandatory for Seafarers with Passport.");
+        return toast.error(
+          "Passport upload is mandatory for Seafarers with Passport.",
+        );
       }
     }
 
-    const isMonthlyOrYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(personForm.passType).toUpperCase());
-    if (isMonthlyOrYearly && !(personForm.policeVerification || personForm.existingPoliceName)) {
-      return toast.error("Police Verification Certificate is mandatory for Monthly/Yearly passes.");
+    const isMonthlyOrYearly = [
+      "2",
+      "3",
+      "MONTHLY",
+      "ANNUAL",
+      "YEARLY",
+    ].includes(String(personForm.passType).toUpperCase());
+    if (
+      isMonthlyOrYearly &&
+      !(personForm.policeVerification || personForm.existingPoliceName)
+    ) {
+      return toast.error(
+        "Police Verification Certificate is mandatory for Monthly/Yearly passes.",
+      );
     }
 
     const isPersonOilDock = isOilDockArea(personForm.accessArea);
-    if (isPersonOilDock && !(personForm.entryAuthorization || personForm.existingEntryAuthName)) {
-      return toast.error("Entry Authorization is mandatory for Oil Dock passes.");
+    if (
+      isPersonOilDock &&
+      !(personForm.entryAuthorization || personForm.existingEntryAuthName)
+    ) {
+      return toast.error(
+        "Entry Authorization is mandatory for Oil Dock passes.",
+      );
     }
 
     if (editingPersonIndex !== null) {
@@ -1293,7 +1526,10 @@ export default function VendorPassPublicPage() {
   const openAddPersonModal = () => {
     const now = getCurrentDateTime();
     const indiaObj = (masterData.countries || []).find(
-      (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
+      (c) =>
+        String(c.name || "")
+          .trim()
+          .toUpperCase() === "INDIA",
     );
     const indiaId = indiaObj ? String(indiaObj.id || indiaObj.value) : "";
 
@@ -1301,7 +1537,11 @@ export default function VendorPassPublicPage() {
       ...initialPersonForm,
       country: indiaId,
       dateFrom: now,
-      dateTo: calculateDateTo(now, initialPersonForm.passPeriod, initialPersonForm.passType),
+      dateTo: calculateDateTo(
+        now,
+        initialPersonForm.passPeriod,
+        initialPersonForm.passType,
+      ),
     });
     setEditingPersonIndex(null);
     toggleModal("person", true);
@@ -1317,7 +1557,10 @@ export default function VendorPassPublicPage() {
   const handleClearPerson = () => {
     const now = getCurrentDateTime();
     const indiaObj = (masterData.countries || []).find(
-      (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
+      (c) =>
+        String(c.name || "")
+          .trim()
+          .toUpperCase() === "INDIA",
     );
     const indiaId = indiaObj ? String(indiaObj.id || indiaObj.value) : "";
 
@@ -1325,7 +1568,11 @@ export default function VendorPassPublicPage() {
       ...initialPersonForm,
       country: indiaId,
       dateFrom: now,
-      dateTo: calculateDateTo(now, initialPersonForm.passPeriod, initialPersonForm.passType),
+      dateTo: calculateDateTo(
+        now,
+        initialPersonForm.passPeriod,
+        initialPersonForm.passType,
+      ),
     });
     setPersonErrors({});
     setEditingPersonIndex(null);
@@ -1342,6 +1589,19 @@ export default function VendorPassPublicPage() {
       )
     )
       vErrors.regNo = "Enter a valid registration number (e.g. TN-01-AB-1234)";
+    const selectedArea = String(vehicleForm.accessArea || "")
+      .trim()
+      .toUpperCase();
+
+    const isOilJetty =
+      selectedArea === "1" ||
+      selectedArea.includes("OIL JETTY") ||
+      selectedArea.includes("OIL_JETTY");
+
+    if (isOilJetty && !vehicleForm.concernDepartmentId) {
+      vErrors.concernDepartmentId =
+        "Department is required for Oil Jetty and Other Gates.";
+    }
 
     if (vehicleForm.insuranceExpiry) {
       const today = new Date();
@@ -1376,29 +1636,46 @@ export default function VendorPassPublicPage() {
       );
     }
     if (
-      ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType))
+      ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+        String(vehicleForm.passType),
+      )
     ) {
       if (!(vehicleForm.permit || vehicleForm.existingPermitName)) {
-        return toast.error("Permit Document is mandatory for Monthly/Yearly passes.");
+        return toast.error(
+          "Permit Document is mandatory for Monthly/Yearly passes.",
+        );
       }
       if (
         !(vehicleForm.requestLetter || vehicleForm.existingReqName) ||
         !(vehicleForm.taxDoc || vehicleForm.existingTaxName) ||
         !(vehicleForm.emissionCert || vehicleForm.existingEmissionName)
       ) {
-        return toast.error("Request Letter, Tax Document, Emission Cert, and Permit are mandatory for Monthly/Yearly passes.");
+        return toast.error(
+          "Request Letter, Tax Document, Emission Cert, and Permit are mandatory for Monthly/Yearly passes.",
+        );
       }
     }
 
     const isVehicleOilDock = isOilDockArea(vehicleForm.accessArea);
     if (isVehicleOilDock) {
-      if (!(vehicleForm.sparkArrester || vehicleForm.existingSparkArresterName)) {
-        return toast.error("Spark Arrester Certificate is mandatory for Oil Dock passes.");
+      if (
+        !(vehicleForm.sparkArrester || vehicleForm.existingSparkArresterName)
+      ) {
+        return toast.error(
+          "Spark Arrester Certificate is mandatory for Oil Dock passes.",
+        );
       }
     }
-    const isMonthlyYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType).toUpperCase());
-    if (isMonthlyYearly && !(vehicleForm.twistLock || vehicleForm.existingTwistLockName)) {
-      return toast.error("Twist Lock Certificate is mandatory for Monthly/Yearly passes.");
+    const isMonthlyYearly = ["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+      String(vehicleForm.passType).toUpperCase(),
+    );
+    if (
+      isMonthlyYearly &&
+      !(vehicleForm.twistLock || vehicleForm.existingTwistLockName)
+    ) {
+      return toast.error(
+        "Twist Lock Certificate is mandatory for Monthly/Yearly passes.",
+      );
     }
 
     if (editingVehicleIndex !== null) {
@@ -1427,7 +1704,11 @@ export default function VendorPassPublicPage() {
     setVehicleForm({
       ...initialVehicleForm,
       dateFrom: now,
-      dateTo: calculateDateTo(now, initialVehicleForm.passPeriod, initialVehicleForm.passType),
+      dateTo: calculateDateTo(
+        now,
+        initialVehicleForm.passPeriod,
+        initialVehicleForm.passType,
+      ),
     });
     setEditingVehicleIndex(null);
     toggleModal("vehicle", true);
@@ -1450,12 +1731,12 @@ export default function VendorPassPublicPage() {
     // Enforce intake quotas
     if (persons.length > Number(intake.noOfPersonsAllowed || 0)) {
       return toast.error(
-        `You can submit at most ${intake.noOfPersonsAllowed} persons.`
+        `You can submit at most ${intake.noOfPersonsAllowed} persons.`,
       );
     }
     if (vehicles.length > Number(intake.noOfVehiclesAllowed || 0)) {
       return toast.error(
-        `You can submit at most ${intake.noOfVehiclesAllowed} vehicles.`
+        `You can submit at most ${intake.noOfVehiclesAllowed} vehicles.`,
       );
     }
 
@@ -1496,7 +1777,7 @@ export default function VendorPassPublicPage() {
           aadharNo: p.aadharNo,
           mobile: p.mobile,
           email: p.email,
-          visaNo: p.visaNo || '',
+          visaNo: p.visaNo || "",
           dob: p.dob || null,
           nationality: getEnumValue(
             masterData.nationalities,
@@ -1507,9 +1788,14 @@ export default function VendorPassPublicPage() {
             const parsed = parseInt(p.country, 10);
             if (!isNaN(parsed) && parsed > 0) return parsed;
             const indiaObj = (masterData.countries || []).find(
-              (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
+              (c) =>
+                String(c.name || "")
+                  .trim()
+                  .toUpperCase() === "INDIA",
             );
-            return indiaObj ? (parseInt(indiaObj.id || indiaObj.value, 10) || 75) : 75;
+            return indiaObj
+              ? parseInt(indiaObj.id || indiaObj.value, 10) || 75
+              : 75;
           })(),
           designationId:
             p.designation === "Others"
@@ -1521,6 +1807,20 @@ export default function VendorPassPublicPage() {
             p.accessArea,
             "OTHER GATES ONLY",
           ),
+          concernDepartmentId: (() => {
+            const area = String(p.accessArea || "")
+              .trim()
+              .toUpperCase();
+
+            const isOilJetty =
+              area === "1" ||
+              area.includes("OIL JETTY") ||
+              area.includes("OIL_JETTY");
+
+            return isOilJetty && p.concernDepartmentId
+              ? Number(p.concernDepartmentId)
+              : null;
+          })(),
           withTwoWheeler: p.withTwoWheeler,
           vehicleNo: p.vehicleNo,
           idProofType: getEnumValue(masterData.idProofTypes, p.idProofType, ""),
@@ -1555,6 +1855,20 @@ export default function VendorPassPublicPage() {
             v.accessArea,
             "OTHER GATES ONLY",
           ),
+          concernDepartmentId: (() => {
+            const area = String(v.accessArea || "")
+              .trim()
+              .toUpperCase();
+
+            const isOilJetty =
+              area === "1" ||
+              area.includes("OIL JETTY") ||
+              area.includes("OIL_JETTY");
+
+            return isOilJetty && v.concernDepartmentId
+              ? Number(v.concernDepartmentId)
+              : null;
+          })(),
           passType: getEnumValue(masterData.passTypes, v.passType, "DAILY"),
           passPeriod: parseInt(v.passPeriod, 10) || 1,
           dateFrom: v.dateFrom,
@@ -1580,7 +1894,8 @@ export default function VendorPassPublicPage() {
         if (p.idProofFile) formData.append("personIdProof", p.idProofFile);
         if (p.requisitionLetter)
           formData.append("requisitionLetter", p.requisitionLetter);
-        const dlFile = p.driverLicence || (p.hepType === "1" ? p.idProofFile : null);
+        const dlFile =
+          p.driverLicence || (p.hepType === "1" ? p.idProofFile : null);
         if (dlFile) formData.append("driverLicense", dlFile);
         if (p.policeVerification)
           formData.append("policeVerification", p.policeVerification);
@@ -1589,8 +1904,10 @@ export default function VendorPassPublicPage() {
         if (p.copyOfLicence) formData.append("chaLicenseCopy", p.copyOfLicence);
         if (p.passportDoc) formData.append("passportDoc", p.passportDoc);
         if (p.visaDoc) formData.append("visaDoc", p.visaDoc);
-        if (p.immigrationDoc) formData.append("immigrationDoc", p.immigrationDoc);
-        if (p.entryAuthorization) formData.append("entryAuthorization", p.entryAuthorization);
+        if (p.immigrationDoc)
+          formData.append("immigrationDoc", p.immigrationDoc);
+        if (p.entryAuthorization)
+          formData.append("entryAuthorization", p.entryAuthorization);
       });
 
       vehicles.forEach((v) => {
@@ -1610,7 +1927,7 @@ export default function VendorPassPublicPage() {
       const response = await axios.post(
         `${AGENT_API}/vendor-pass/public/${activeToken}/submit`,
         formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
+        { headers: { "Content-Type": "multipart/form-data" } },
       );
 
       if (response.data?.success) {
@@ -1715,10 +2032,11 @@ export default function VendorPassPublicPage() {
           }}
         />
         <div
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${file
-            ? "border-orange-300 bg-orange-50"
-            : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
-            } transition-colors`}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
+            file
+              ? "border-orange-300 bg-orange-50"
+              : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
+          } transition-colors`}
         >
           <Upload
             className={`w-4 h-4 flex-shrink-0 ${file ? "text-orange-600" : "text-slate-400"}`}
@@ -1824,8 +2142,8 @@ export default function VendorPassPublicPage() {
                 {intake.companyName || "Vendor"}
               </h2>
               <p className="text-xs text-slate-300 mt-1">
-                Ref: <span className="font-mono">{intake.referenceNo}</span>{" "}
-                · Dept: {intake.departmentName}
+                Ref: <span className="font-mono">{intake.referenceNo}</span> ·
+                Dept: {intake.departmentName}
               </p>
             </div>
           </div>
@@ -1846,35 +2164,83 @@ export default function VendorPassPublicPage() {
             <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
               <div className="px-6 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
                 <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wide flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-orange-500" /> General Information:
+                  <FileText className="h-5 w-5 text-orange-500" /> General
+                  Information:
                 </h3>
               </div>
               <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <DetailItem label="Department Name" value={intake.departmentName} highlight />
+                <DetailItem
+                  label="Department Name"
+                  value={intake.departmentName}
+                  highlight
+                />
                 <DetailItem label="Pass Type" value={intake.passApplyMode} />
-                <DetailItem label="Type of Visitors" value={generalForm.visitorType ? getLabelById(masterData.purposes, generalForm.visitorType) : "-"} />
+                <DetailItem
+                  label="Type of Visitors"
+                  value={
+                    generalForm.visitorType
+                      ? getLabelById(
+                          masterData.purposes,
+                          generalForm.visitorType,
+                        )
+                      : "-"
+                  }
+                />
                 {generalForm.visitorType === "6" && (
-                  <DetailItem label="Visitor Type (Other)" value={generalForm.visitorTypeOther} />
+                  <DetailItem
+                    label="Visitor Type (Other)"
+                    value={generalForm.visitorTypeOther}
+                  />
                 )}
-                <DetailItem label="Purpose of Visit" value={generalForm.purpose ? getLabelById(masterData.purposes, generalForm.purpose) : "-"} />
+                <DetailItem
+                  label="Purpose of Visit"
+                  value={
+                    generalForm.purpose
+                      ? getLabelById(masterData.purposes, generalForm.purpose)
+                      : "-"
+                  }
+                />
                 {generalForm.purpose === "6" && (
-                  <DetailItem label="Purpose (Other)" value={generalForm.purposeOther} />
+                  <DetailItem
+                    label="Purpose (Other)"
+                    value={generalForm.purposeOther}
+                  />
                 )}
-                <DetailItem label="Company Name" value={generalForm.companyName} highlight />
+                <DetailItem
+                  label="Company Name"
+                  value={generalForm.companyName}
+                  highlight
+                />
                 <DetailItem label="Vendor Mobile" value={generalForm.mobile} />
                 <DetailItem label="Vendor Email" value={generalForm.email} />
-                <DetailItem label="Work Order" value={generalForm.hasWorkOrder ? "Yes" : "No"} />
+                <DetailItem
+                  label="Work Order"
+                  value={generalForm.hasWorkOrder ? "Yes" : "No"}
+                />
                 {generalForm.hasWorkOrder && (
                   <>
-                    <DetailItem label="Ref Doc No / PO No / Work Order No" value={generalForm.refDocNo} />
+                    <DetailItem
+                      label="Ref Doc No / PO No / Work Order No"
+                      value={generalForm.refDocNo}
+                    />
                     {generalForm.workOrderFile && (
                       <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Work Order Copy</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Work Order Copy
+                        </span>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-slate-700">{generalForm.workOrderFile.name}</span>
+                          <span className="text-sm font-semibold text-slate-700">
+                            {generalForm.workOrderFile.name}
+                          </span>
                           <button
                             type="button"
-                            onClick={() => handleViewDoc(intake?.id || activeToken || token, "workOrder", generalForm.workOrderFile.name)}
+                            onClick={() =>
+                              handleViewDoc(
+                                intake?.id || activeToken || token,
+                                "workOrder",
+                                generalForm.workOrderFile.name,
+                              )
+                            }
                             className="flex items-center gap-1 text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-white px-2 py-1 rounded shadow-sm border border-slate-200"
                           >
                             <Eye className="h-3 w-3" /> View
@@ -1884,11 +2250,26 @@ export default function VendorPassPublicPage() {
                     )}
                   </>
                 )}
-                <DetailItem label="Equipment/Material Details" value={generalForm.equipmentMaterialDetails} />
+                <DetailItem
+                  label="Equipment/Material Details"
+                  value={generalForm.equipmentMaterialDetails}
+                />
                 <DetailItem label="Remarks" value={generalForm.remarks} />
-                <DetailItem label="No. of Vehicles Allowed" value={intake.noOfVehiclesAllowed} highlight />
-                <DetailItem label="No. of Persons Allowed" value={intake.noOfPersonsAllowed} highlight />
-                <DetailItem label="Validity Upto" value={intake.validUpto} highlight />
+                <DetailItem
+                  label="No. of Vehicles Allowed"
+                  value={intake.noOfVehiclesAllowed}
+                  highlight
+                />
+                <DetailItem
+                  label="No. of Persons Allowed"
+                  value={intake.noOfPersonsAllowed}
+                  highlight
+                />
+                <DetailItem
+                  label="Validity Upto"
+                  value={intake.validUpto}
+                  highlight
+                />
                 <DetailItem label="Payment Mode" value={intake.paymentMode} />
                 {intake.allowAuctionPassOnly && (
                   <DetailItem label="Auction Pass Only" value="Yes" highlight />
@@ -1900,7 +2281,8 @@ export default function VendorPassPublicPage() {
               <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
                 <div className="px-6 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
                   <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wide flex items-center gap-2">
-                    <Users className="h-5 w-5 text-orange-500" /> Detail of Persons:
+                    <Users className="h-5 w-5 text-orange-500" /> Detail of
+                    Persons:
                   </h3>
                   <span className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-[#0a1e4d] font-black shadow-sm">
                     Total: {persons.length}
@@ -1980,9 +2362,9 @@ export default function VendorPassPublicPage() {
                                   {p.designation === "Others"
                                     ? p.designationOther
                                     : getLabelById(
-                                      masterData.designations,
-                                      p.designation,
-                                    )}
+                                        masterData.designations,
+                                        p.designation,
+                                      )}
                                 </p>
                               </div>
                             </div>
@@ -1992,7 +2374,8 @@ export default function VendorPassPublicPage() {
                               {getLabelById(masterData.hepTypes, p.hepType)}
                             </p>
                             <p className="text-xs text-orange-600 font-bold capitalize">
-                              {getLabelById(masterData.passTypes, p.passType)} Pass
+                              {getLabelById(masterData.passTypes, p.passType)}{" "}
+                              Pass
                             </p>
                           </td>
                           <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
@@ -2042,11 +2425,14 @@ export default function VendorPassPublicPage() {
                 <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
                   <button
                     onClick={openAddPersonModal}
-                    disabled={persons.length >= (intake?.noOfPersonsAllowed || 0)}
-                    className={`text-xs font-bold px-6 py-3 rounded-xl shadow-lg transition-all uppercase tracking-wider ${persons.length >= (intake?.noOfPersonsAllowed || 0)
-                      ? "bg-slate-300 text-slate-500 cursor-not-allowed"
-                      : "bg-orange-600 text-white hover:bg-orange-700"
-                      }`}
+                    disabled={
+                      persons.length >= (intake?.noOfPersonsAllowed || 0)
+                    }
+                    className={`text-xs font-bold px-6 py-3 rounded-xl shadow-lg transition-all uppercase tracking-wider ${
+                      persons.length >= (intake?.noOfPersonsAllowed || 0)
+                        ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                        : "bg-orange-600 text-white hover:bg-orange-700"
+                    }`}
                   >
                     Add Person
                   </button>
@@ -2124,7 +2510,8 @@ export default function VendorPassPublicPage() {
                           </td>
                           <td className="px-4 py-4 border-r border-slate-100">
                             <p className="text-sm font-semibold text-slate-800 capitalize">
-                              {getLabelById(masterData.passTypes, v.passType)} Pass
+                              {getLabelById(masterData.passTypes, v.passType)}{" "}
+                              Pass
                             </p>
                           </td>
                           <td className="px-4 py-4 text-sm text-slate-600 border-r border-slate-100 font-medium">
@@ -2151,34 +2538,38 @@ export default function VendorPassPublicPage() {
                           </td>
                         </tr>
                       ))}
-                      {vehicles.length > 0 && intake?.paymentMode !== "FREE" && (
-                        <tr className="bg-slate-50 border-t-2 border-slate-200">
-                          <td
-                            colSpan="5"
-                            className="px-4 py-3 text-right text-xs font-black text-slate-700 uppercase tracking-widest border-r border-slate-200"
-                          >
-                            Total Amount
-                          </td>
-                          <td className="px-4 py-3 text-base font-black text-orange-600 text-right border-r border-slate-200">
-                            ₹{" "}
-                            {vehicles
-                              .reduce((sum, v) => sum + v.amount, 0)
-                              .toFixed(2)}
-                          </td>
-                          <td></td>
-                        </tr>
-                      )}
+                      {vehicles.length > 0 &&
+                        intake?.paymentMode !== "FREE" && (
+                          <tr className="bg-slate-50 border-t-2 border-slate-200">
+                            <td
+                              colSpan="5"
+                              className="px-4 py-3 text-right text-xs font-black text-slate-700 uppercase tracking-widest border-r border-slate-200"
+                            >
+                              Total Amount
+                            </td>
+                            <td className="px-4 py-3 text-base font-black text-orange-600 text-right border-r border-slate-200">
+                              ₹{" "}
+                              {vehicles
+                                .reduce((sum, v) => sum + v.amount, 0)
+                                .toFixed(2)}
+                            </td>
+                            <td></td>
+                          </tr>
+                        )}
                     </tbody>
                   </table>
                 </div>
                 <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
                   <button
                     onClick={openAddVehicleModal}
-                    disabled={vehicles.length >= (intake?.noOfVehiclesAllowed || 0)}
-                    className={`text-xs font-bold px-6 py-3 rounded-xl shadow-lg transition-all uppercase tracking-wider ${vehicles.length >= (intake?.noOfVehiclesAllowed || 0)
-                      ? "bg-slate-300 text-slate-500 cursor-not-allowed"
-                      : "bg-orange-600 text-white hover:bg-orange-700"
-                      }`}
+                    disabled={
+                      vehicles.length >= (intake?.noOfVehiclesAllowed || 0)
+                    }
+                    className={`text-xs font-bold px-6 py-3 rounded-xl shadow-lg transition-all uppercase tracking-wider ${
+                      vehicles.length >= (intake?.noOfVehiclesAllowed || 0)
+                        ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                        : "bg-orange-600 text-white hover:bg-orange-700"
+                    }`}
                   >
                     Add Vehicle
                   </button>
@@ -2305,7 +2696,10 @@ export default function VendorPassPublicPage() {
                         onChange={(e) => {
                           handleHepTypeChange(e);
                           if (personErrors.hepType) {
-                            setPersonErrors((prev) => ({ ...prev, hepType: null }));
+                            setPersonErrors((prev) => ({
+                              ...prev,
+                              hepType: null,
+                            }));
                           }
                         }}
                         className={`${inputClass} ${personErrors.hepType ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
@@ -2331,7 +2725,10 @@ export default function VendorPassPublicPage() {
                         type="text"
                         value={personForm.name}
                         onChange={(e) => {
-                          setPersonForm({ ...personForm, name: e.target.value });
+                          setPersonForm({
+                            ...personForm,
+                            name: e.target.value,
+                          });
                           validatePersonField("name", e.target.value);
                         }}
                         onBlur={(e) =>
@@ -2361,10 +2758,11 @@ export default function VendorPassPublicPage() {
                         <input
                           type="tel"
                           value={personForm.mobile}
-                          className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${personErrors.mobile
-                            ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
-                            : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
-                            }`}
+                          className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${
+                            personErrors.mobile
+                              ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
+                              : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
+                          }`}
                           placeholder="00000 00000"
                           maxLength={10}
                           inputMode="numeric"
@@ -2397,7 +2795,10 @@ export default function VendorPassPublicPage() {
                         type="email"
                         value={personForm.email}
                         onChange={(e) => {
-                          setPersonForm({ ...personForm, email: e.target.value });
+                          setPersonForm({
+                            ...personForm,
+                            email: e.target.value,
+                          });
                           if (e.target.value)
                             validatePersonField("email", e.target.value);
                         }}
@@ -2429,29 +2830,59 @@ export default function VendorPassPublicPage() {
                             "label",
                           )?.toUpperCase();
 
-                          const isForeignerVal = nationalityName === "FOREIGNER" || value === "2";
-                          const passportIdObj = (masterData.idProofTypes || []).find(
-                            (t) => (t.label || t.name || "").toLowerCase().includes("passport")
+                          const isForeignerVal =
+                            nationalityName === "FOREIGNER" || value === "2";
+                          const passportIdObj = (
+                            masterData.idProofTypes || []
+                          ).find((t) =>
+                            (t.label || t.name || "")
+                              .toLowerCase()
+                              .includes("passport"),
                           );
-                          const passportTypeId = passportIdObj ? String(passportIdObj.id || passportIdObj.value) : "4";
+                          const passportTypeId = passportIdObj
+                            ? String(passportIdObj.id || passportIdObj.value)
+                            : "4";
 
                           const dlIdObj = (masterData.idProofTypes || []).find(
-                            (t) => (t.label || t.name || "").toLowerCase().includes("driver") || (t.label || t.name || "").toLowerCase().includes("licence")
+                            (t) =>
+                              (t.label || t.name || "")
+                                .toLowerCase()
+                                .includes("driver") ||
+                              (t.label || t.name || "")
+                                .toLowerCase()
+                                .includes("licence"),
                           );
-                          const dlTypeId = dlIdObj ? String(dlIdObj.id || dlIdObj.value) : "1";
+                          const dlTypeId = dlIdObj
+                            ? String(dlIdObj.id || dlIdObj.value)
+                            : "1";
 
                           const indiaObj = (masterData.countries || []).find(
-                            (c) => String(c.name || "").trim().toUpperCase() === "INDIA"
+                            (c) =>
+                              String(c.name || "")
+                                .trim()
+                                .toUpperCase() === "INDIA",
                           );
-                          const indiaId = indiaObj ? String(indiaObj.id || indiaObj.value) : "";
+                          const indiaId = indiaObj
+                            ? String(indiaObj.id || indiaObj.value)
+                            : "";
 
-                          const isInd = nationalityName === "INDIAN" || value === "1";
+                          const isInd =
+                            nationalityName === "INDIAN" || value === "1";
 
                           setPersonForm((prev) => ({
                             ...prev,
                             nationality: value,
-                            country: isInd ? (indiaId || prev.country) : (prev.country === indiaId ? "" : prev.country),
-                            idProofType: prev.hepType === "1" ? dlTypeId : (isForeignerVal ? passportTypeId : prev.idProofType),
+                            country: isInd
+                              ? indiaId || prev.country
+                              : prev.country === indiaId
+                                ? ""
+                                : prev.country,
+                            idProofType:
+                              prev.hepType === "1"
+                                ? dlTypeId
+                                : isForeignerVal
+                                  ? passportTypeId
+                                  : prev.idProofType,
                             aadharNo: prev.aadharNo,
                             aadharFile: prev.aadharFile,
                           }));
@@ -2479,19 +2910,25 @@ export default function VendorPassPublicPage() {
                           })
                         }
                         className={inputClass}
-                        disabled={
-                          !isPersonForeigner(personForm.nationality)
-                        }
+                        disabled={!isPersonForeigner(personForm.nationality)}
                       >
                         <option value="">Select Country</option>
 
                         {masterData.countries
                           .filter((c) => {
-                            const isForeigner = isPersonForeigner(personForm.nationality);
+                            const isForeigner = isPersonForeigner(
+                              personForm.nationality,
+                            );
                             if (!isForeigner) {
-                              return c.name && c.name.trim().toUpperCase() === "INDIA";
+                              return (
+                                c.name &&
+                                c.name.trim().toUpperCase() === "INDIA"
+                              );
                             } else {
-                              return c.name && c.name.trim().toUpperCase() !== "INDIA";
+                              return (
+                                c.name &&
+                                c.name.trim().toUpperCase() !== "INDIA"
+                              );
                             }
                           })
                           .map((c) => (
@@ -2503,7 +2940,10 @@ export default function VendorPassPublicPage() {
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 uppercase">
-                        Visa No. {isPersonForeigner(personForm.nationality) && <span className="text-red-500">*</span>}
+                        Visa No.{" "}
+                        {isPersonForeigner(personForm.nationality) && (
+                          <span className="text-red-500">*</span>
+                        )}
                       </label>
                       <input
                         type="text"
@@ -2537,7 +2977,8 @@ export default function VendorPassPublicPage() {
                         const isTwoWheeler = personForm.withTwoWheeler;
                         const hasError = !!personErrors.vehicleNo;
 
-                        let containerClass = "border-slate-300 focus-within:ring-2 focus-within:ring-orange-500/30 focus-within:border-orange-500";
+                        let containerClass =
+                          "border-slate-300 focus-within:ring-2 focus-within:ring-orange-500/30 focus-within:border-orange-500";
                         if (isTwoWheeler && hasVal) {
                           containerClass = hasError
                             ? "border-red-400 focus-within:ring-2 focus-within:ring-red-500/20 focus-within:border-red-400"
@@ -2545,7 +2986,9 @@ export default function VendorPassPublicPage() {
                         }
 
                         return (
-                          <div className={`flex h-10 shadow-sm rounded-lg overflow-hidden border transition-all ${containerClass}`}>
+                          <div
+                            className={`flex h-10 shadow-sm rounded-lg overflow-hidden border transition-all ${containerClass}`}
+                          >
                             <div className="border-r border-slate-300 flex items-center justify-center px-4 bg-slate-50">
                               <input
                                 type="checkbox"
@@ -2567,15 +3010,23 @@ export default function VendorPassPublicPage() {
                               className="w-full text-sm disabled:bg-slate-100 disabled:cursor-not-allowed px-3 outline-none uppercase font-bold text-[#0a1e4d]"
                               onBlur={(e) => {
                                 if (personForm.withTwoWheeler)
-                                  validatePersonField("vehicleNo", e.target.value);
+                                  validatePersonField(
+                                    "vehicleNo",
+                                    e.target.value,
+                                  );
                               }}
                               onChange={(e) => {
-                                const val = e.target.value.toUpperCase().slice(0, 13);
+                                const val = e.target.value
+                                  .toUpperCase()
+                                  .slice(0, 13);
                                 setPersonForm({
                                   ...personForm,
                                   vehicleNo: val,
                                 });
-                                if (personForm.withTwoWheeler && val.length >= 8) {
+                                if (
+                                  personForm.withTwoWheeler &&
+                                  val.length >= 8
+                                ) {
                                   validatePersonField("vehicleNo", val);
                                 }
                               }}
@@ -2583,21 +3034,26 @@ export default function VendorPassPublicPage() {
                           </div>
                         );
                       })()}
-                      {personForm.withTwoWheeler && personForm.vehicleNo.trim() && (
-                        <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all">
-                          {personErrors.vehicleNo ? (
-                            <>
-                              <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                              <span className="text-red-500">{personErrors.vehicleNo}</span>
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                              <span className="text-emerald-600">Valid vehicle registration format</span>
-                            </>
-                          )}
-                        </div>
-                      )}
+                      {personForm.withTwoWheeler &&
+                        personForm.vehicleNo.trim() && (
+                          <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all">
+                            {personErrors.vehicleNo ? (
+                              <>
+                                <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                <span className="text-red-500">
+                                  {personErrors.vehicleNo}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span className="text-emerald-600">
+                                  Valid vehicle registration format
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        )}
                     </div>
                     {personForm.hepType === "3" && (
                       <div className="space-y-1.5 animate-in zoom-in">
@@ -2611,18 +3067,29 @@ export default function VendorPassPublicPage() {
                             setPersonForm({
                               ...personForm,
                               seafarerIdType: value,
-                              aadharNo: value === "passport" ? "" : personForm.aadharNo,
-                              passportNo: value === "aadhaar" ? "" : personForm.passportNo,
-                              aadharFile: value === "passport" ? null : personForm.aadharFile,
+                              aadharNo:
+                                value === "passport" ? "" : personForm.aadharNo,
+                              passportNo:
+                                value === "aadhaar"
+                                  ? ""
+                                  : personForm.passportNo,
+                              aadharFile:
+                                value === "passport"
+                                  ? null
+                                  : personForm.aadharFile,
                             });
                             if (personErrors.seafarerIdType) {
-                              setPersonErrors((prev) => ({ ...prev, seafarerIdType: null }));
+                              setPersonErrors((prev) => ({
+                                ...prev,
+                                seafarerIdType: null,
+                              }));
                             }
                           }}
-                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${personErrors.seafarerIdType
-                            ? "border-red-400 bg-red-50"
-                            : "border-slate-300 bg-white"
-                            }`}
+                          className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${
+                            personErrors.seafarerIdType
+                              ? "border-red-400 bg-red-50"
+                              : "border-slate-300 bg-white"
+                          }`}
                         >
                           <option value="">-- Select ID Type --</option>
                           <option value="aadhaar">Aadhaar</option>
@@ -2635,144 +3102,192 @@ export default function VendorPassPublicPage() {
                         )}
                       </div>
                     )}
-                    {!isPersonForeigner(personForm.nationality) && (personForm.hepType !== "3" || personForm.seafarerIdType === "aadhaar") && (
-                      <>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-700 uppercase">
-                            Upload Aadhar <span className="text-red-500">*</span>
-                          </label>
-                          <FileUploadBox
-                            file={personForm.aadharFile}
-                            existingFileName={personForm.existingAadharName}
-                            onView={() =>
-                              handleViewDoc(
-                                personForm.existingPassRequestId,
-                                "personAadhar",
-                                personForm.existingAadharName,
-                                personForm.editIndex || 0,
-                                true
-                              )
-                            }
-                            onChange={async (e) => {
-                              const file =
-                                e?.target?.files?.[0] ||
-                                e?.files?.[0] ||
-                                e?.file ||
-                                e;
+                    {!isPersonForeigner(personForm.nationality) &&
+                      (personForm.hepType !== "3" ||
+                        personForm.seafarerIdType === "aadhaar") && (
+                        <>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-700 uppercase">
+                              Upload Aadhar{" "}
+                              <span className="text-red-500">*</span>
+                            </label>
+                            <FileUploadBox
+                              file={personForm.aadharFile}
+                              existingFileName={personForm.existingAadharName}
+                              onView={() =>
+                                handleViewDoc(
+                                  personForm.existingPassRequestId,
+                                  "personAadhar",
+                                  personForm.existingAadharName,
+                                  personForm.editIndex || 0,
+                                  true,
+                                )
+                              }
+                              onChange={async (e) => {
+                                const file =
+                                  e?.target?.files?.[0] ||
+                                  e?.files?.[0] ||
+                                  e?.file ||
+                                  e;
 
-                              if (!file) return;
+                                if (!file) return;
 
-                              setPersonForm((prev) => ({
-                                ...prev,
-                                aadharFile: file,
-                              }));
+                                setPersonForm((prev) => ({
+                                  ...prev,
+                                  aadharFile: file,
+                                }));
 
-                              try {
-                                toast.loading("Reading Aadhaar PDF...", { id: "aadhar-ocr" });
-                                const extractedAadhar = await extractAadharFromPdf(file);
-                                toast.dismiss("aadhar-ocr");
+                                try {
+                                  toast.loading("Reading Aadhaar PDF...", {
+                                    id: "aadhar-ocr",
+                                  });
+                                  const extractedAadhar =
+                                    await extractAadharFromPdf(file);
+                                  toast.dismiss("aadhar-ocr");
 
-                                if (!extractedAadhar) {
+                                  if (!extractedAadhar) {
+                                    setPersonForm((prev) => ({
+                                      ...prev,
+                                      aadharFile: file,
+                                      aadharNo: "",
+                                    }));
+                                    toast.warning(
+                                      "Could not detect Aadhaar automatically. Please enter manually.",
+                                    );
+                                    return;
+                                  }
+
+                                  setPersonForm((prev) => ({
+                                    ...prev,
+                                    aadharFile: file,
+                                    aadharNo: extractedAadhar,
+                                  }));
+                                  toast.success(
+                                    `Aadhaar detected: ${extractedAadhar}`,
+                                  );
+                                } catch (error) {
+                                  toast.dismiss("aadhar-ocr");
+                                  console.error(error);
                                   setPersonForm((prev) => ({
                                     ...prev,
                                     aadharFile: file,
                                     aadharNo: "",
                                   }));
-                                  toast.warning("Could not detect Aadhaar automatically. Please enter manually.");
-                                  return;
+                                  toast.error("Failed to read Aadhaar PDF");
                                 }
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-700 uppercase">
+                              Aadhaar No.{" "}
+                              <span className="text-red-500">*</span>
+                            </label>
+                            {(() => {
+                              const hasVal = !!personForm.aadharNo.trim();
+                              const isValid = /^\d{12}$/.test(
+                                personForm.aadharNo,
+                              );
+                              const hasError = !!personErrors.aadharNo;
 
-                                setPersonForm((prev) => ({
-                                  ...prev,
-                                  aadharFile: file,
-                                  aadharNo: extractedAadhar,
-                                }));
-                                toast.success(`Aadhaar detected: ${extractedAadhar}`);
-                              } catch (error) {
-                                toast.dismiss("aadhar-ocr");
-                                console.error(error);
-                                setPersonForm((prev) => ({
-                                  ...prev,
-                                  aadharFile: file,
-                                  aadharNo: "",
-                                }));
-                                toast.error("Failed to read Aadhaar PDF");
+                              let customBorderClass =
+                                "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
+                              if (hasVal) {
+                                customBorderClass =
+                                  hasError || !isValid
+                                    ? "border-red-400 focus:ring-red-500/20 focus:border-red-400"
+                                    : "border-emerald-500 focus:ring-emerald-500/20 focus:border-emerald-500";
                               }
-                            }}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-700 uppercase">
-                            Aadhaar No. <span className="text-red-500">*</span>
-                          </label>
-                          {(() => {
-                            const hasVal = !!personForm.aadharNo.trim();
-                            const isValid = /^\d{12}$/.test(personForm.aadharNo);
-                            const hasError = !!personErrors.aadharNo;
 
-                            let customBorderClass = "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
-                            if (hasVal) {
-                              customBorderClass = (hasError || !isValid)
-                                ? "border-red-400 focus:ring-red-500/20 focus:border-red-400"
-                                : "border-emerald-500 focus:ring-emerald-500/20 focus:border-emerald-500";
-                            }
-
-                            return (
-                              <>
-                                <input
-                                  type="text"
-                                  value={personForm.aadharNo}
-                                  onChange={(e) => {
-                                    const val = e.target.value
-                                      .replace(/\D/g, "")
-                                      .slice(0, 12);
-                                    setPersonForm({ ...personForm, aadharNo: val });
-                                    if (val.length === 12) {
-                                      validatePersonField("aadharNo", val);
+                              return (
+                                <>
+                                  <input
+                                    type="text"
+                                    value={personForm.aadharNo}
+                                    onChange={(e) => {
+                                      const val = e.target.value
+                                        .replace(/\D/g, "")
+                                        .slice(0, 12);
+                                      setPersonForm({
+                                        ...personForm,
+                                        aadharNo: val,
+                                      });
+                                      if (val.length === 12) {
+                                        validatePersonField("aadharNo", val);
+                                      }
+                                    }}
+                                    onBlur={(e) =>
+                                      validatePersonField(
+                                        "aadharNo",
+                                        e.target.value,
+                                      )
                                     }
-                                  }}
-                                  onBlur={(e) => validatePersonField("aadharNo", e.target.value)}
-                                  className={`w-full h-10 border rounded-lg text-sm px-3 shadow-sm outline-none transition-all focus:ring-2 ${customBorderClass}`}
-                                  placeholder="XXXX XXXX XXXX"
-                                  maxLength={12}
-                                  inputMode="numeric"
-                                />
-                                {hasVal && (
-                                  <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all animate-in fade-in duration-200">
-                                    {(hasError || !isValid) ? (
-                                      <>
-                                        <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                        <span className="text-red-500">Aadhaar must be exactly 12 digits</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                                        <span className="text-emerald-600">Valid Aadhaar format</span>
-                                      </>
-                                    )}
-                                  </div>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </div>
-                      </>
-                    )}
+                                    className={`w-full h-10 border rounded-lg text-sm px-3 shadow-sm outline-none transition-all focus:ring-2 ${customBorderClass}`}
+                                    placeholder="XXXX XXXX XXXX"
+                                    maxLength={12}
+                                    inputMode="numeric"
+                                  />
+                                  {hasVal && (
+                                    <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold transition-all animate-in fade-in duration-200">
+                                      {hasError || !isValid ? (
+                                        <>
+                                          <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                          <span className="text-red-500">
+                                            Aadhaar must be exactly 12 digits
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                          <span className="text-emerald-600">
+                                            Valid Aadhaar format
+                                          </span>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </>
+                      )}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 uppercase">
                         Access Area <span className="text-red-500">*</span>
                       </label>
+
                       <select
                         value={personForm.accessArea}
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            accessArea: e.target.value,
-                          })
-                        }
+                        onChange={(e) => {
+                          const value = e.target.value;
+
+                          const normalized = String(value || "")
+                            .trim()
+                            .toUpperCase();
+
+                          const isOilJetty =
+                            normalized === "1" ||
+                            normalized.includes("OIL JETTY") ||
+                            normalized.includes("OIL_JETTY");
+
+                          setPersonForm((prev) => ({
+                            ...prev,
+                            accessArea: value,
+                            concernDepartmentId: isOilJetty
+                              ? prev.concernDepartmentId
+                              : "",
+                          }));
+
+                          setPersonErrors((prev) => ({
+                            ...prev,
+                            concernDepartmentId: null,
+                          }));
+                        }}
                         className={inputClass}
                       >
                         <option value="">Select Access Area</option>
+
                         {masterData.accessAreas.map((a) => (
                           <option key={a.id} value={a.id}>
                             {a.label}
@@ -2780,6 +3295,52 @@ export default function VendorPassPublicPage() {
                         ))}
                       </select>
                     </div>
+                    {(() => {
+                      const selectedArea = String(personForm.accessArea || "")
+                        .trim()
+                        .toUpperCase();
+
+                      const isOilJetty =
+                        selectedArea === "1" ||
+                        selectedArea.includes("OIL JETTY") ||
+                        selectedArea.includes("OIL_JETTY");
+
+                      if (!isOilJetty) return null;
+
+                      return (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700 uppercase">
+                            Select Department{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+
+                          <select
+                            value={personForm.concernDepartmentId}
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                concernDepartmentId: e.target.value,
+                              })
+                            }
+                            className={inputClass}
+                          >
+                            <option value="">Select Department</option>
+
+                            {vendorOilJettyDepartments.map((dept) => (
+                              <option key={dept.id} value={dept.id}>
+                                {dept.name}
+                              </option>
+                            ))}
+                          </select>
+
+                          {personErrors.concernDepartmentId && (
+                            <p className="text-xs text-red-500 mt-0.5 font-medium">
+                              {personErrors.concernDepartmentId}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 uppercase">
                         Designation <span className="text-red-500">*</span>
@@ -2866,9 +3427,13 @@ export default function VendorPassPublicPage() {
                         }}
                         onBlur={(e) => {
                           if (e.target.value)
-                            validatePersonField("idProofNumber", e.target.value, {
-                              idProofType: personForm.idProofType,
-                            });
+                            validatePersonField(
+                              "idProofNumber",
+                              e.target.value,
+                              {
+                                idProofType: personForm.idProofType,
+                              },
+                            );
                         }}
                         className={`${inputClass} ${personErrors.idProofNumber ? "border-red-400 focus:border-red-500 focus:ring-red-500/20" : ""}`}
                         placeholder={idProofPlaceholder}
@@ -2943,7 +3508,7 @@ export default function VendorPassPublicPage() {
                             "personIdProof",
                             personForm.existingIdProofName,
                             personForm.editIndex || 0,
-                            true
+                            true,
                           )
                         }
                         onChange={(e) => {
@@ -2951,7 +3516,8 @@ export default function VendorPassPublicPage() {
                           setPersonForm((prev) => ({
                             ...prev,
                             idProofFile: file,
-                            driverLicence: prev.hepType === "1" ? file : prev.driverLicence,
+                            driverLicence:
+                              prev.hepType === "1" ? file : prev.driverLicence,
                           }));
                         }}
                       />
@@ -2971,7 +3537,7 @@ export default function VendorPassPublicPage() {
                                 "visaDoc",
                                 personForm.existingVisaDocName,
                                 personForm.editIndex || 0,
-                                true
+                                true,
                               )
                             }
                             onChange={(e) =>
@@ -2984,18 +3550,21 @@ export default function VendorPassPublicPage() {
                         </div>
                         <div className="space-y-1.5 md:col-span-2 max-w-sm">
                           <label className="text-xs font-bold text-slate-700 uppercase">
-                            Immigration Clearance <span className="text-red-500">*</span>
+                            Immigration Clearance{" "}
+                            <span className="text-red-500">*</span>
                           </label>
                           <FileUploadBox
                             file={personForm.immigrationDoc}
-                            existingFileName={personForm.existingImmigrationDocName}
+                            existingFileName={
+                              personForm.existingImmigrationDocName
+                            }
                             onView={() =>
                               handleViewDoc(
                                 personForm.existingPassRequestId,
                                 "immigrationDoc",
                                 personForm.existingImmigrationDocName,
                                 personForm.editIndex || 0,
-                                true
+                                true,
                               )
                             }
                             onChange={(e) =>
@@ -3038,7 +3607,8 @@ export default function VendorPassPublicPage() {
                     <thead className="bg-[#0a1e4d] text-white">
                       <tr>
                         <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                          Type of Pass <span className="text-orange-400">*</span>
+                          Type of Pass{" "}
+                          <span className="text-orange-400">*</span>
                         </th>
                         <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
                           Pass Period <span className="text-orange-400">*</span>
@@ -3064,7 +3634,10 @@ export default function VendorPassPublicPage() {
                             }
                             className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                           >
-                            {getFilteredPassTypes(intake, masterData.passTypes).map((t) => (
+                            {getFilteredPassTypes(
+                              intake,
+                              masterData.passTypes,
+                            ).map((t) => (
                               <option
                                 key={t.id || t.value}
                                 value={t.id || t.value}
@@ -3102,9 +3675,13 @@ export default function VendorPassPublicPage() {
                             <input
                               type="text"
                               placeholder="DD/MM/YYYY, hh:mm AM/PM"
-                              value={formatDateTimeISOToDisplay(personForm.dateFrom)}
+                              value={formatDateTimeISOToDisplay(
+                                personForm.dateFrom,
+                              )}
                               onChange={(e) => {
-                                const iso = formatDateTimeDisplayToISO(e.target.value);
+                                const iso = formatDateTimeDisplayToISO(
+                                  e.target.value,
+                                );
                                 if (iso) {
                                   setPersonForm((prev) => ({
                                     ...prev,
@@ -3134,8 +3711,13 @@ export default function VendorPassPublicPage() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const picker = document.getElementById("vendor-person-datefrom-picker");
-                                  if (picker && typeof picker.showPicker === "function") {
+                                  const picker = document.getElementById(
+                                    "vendor-person-datefrom-picker",
+                                  );
+                                  if (
+                                    picker &&
+                                    typeof picker.showPicker === "function"
+                                  ) {
                                     picker.showPicker();
                                   } else if (picker) {
                                     picker.focus();
@@ -3154,7 +3736,9 @@ export default function VendorPassPublicPage() {
                           <input
                             readOnly
                             type="text"
-                            value={formatDateTimeISOToDisplay(personForm.dateTo)}
+                            value={formatDateTimeISOToDisplay(
+                              personForm.dateTo,
+                            )}
                             className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
                           />
                           {String(personForm.passType) === "2" && (
@@ -3176,141 +3760,158 @@ export default function VendorPassPublicPage() {
                   </table>
                 </div>
 
-                {((personForm.hepType === "1" && personForm.idProofType !== "1") ||
+                {((personForm.hepType === "1" &&
+                  personForm.idProofType !== "1") ||
                   String(personForm.passType) === "2" ||
                   String(personForm.passType) === "3" ||
                   personForm.hepType === "3" ||
-                  String(personForm.accessArea).toUpperCase().includes("OIL JETTY") ||
+                  String(personForm.accessArea)
+                    .toUpperCase()
+                    .includes("OIL JETTY") ||
                   String(personForm.accessArea) === "1") && (
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                      <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
-                        <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
-                        Mandatory Documents
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                        {personForm.hepType === "1" && ( // 1 = Driver ID
-                          <FileUploadBox
-                            label="Driver Licence"
-                            isRequired
-                            file={personForm.driverLicence}
-                            existingFileName={personForm.existingDlName}
-                            onView={() =>
-                              handleViewDoc(
-                                personForm.existingPassRequestId,
-                                "driverLicense",
-                                personForm.existingDlName,
-                                personForm.editIndex || 0,
-                                true
-                              )
-                            }
-                            onChange={(e) =>
-                              setPersonForm({
-                                ...personForm,
-                                driverLicence: e.target.files[0],
-                              })
-                            }
-                          />
-                        )}
-                        {(String(personForm.passType) === "2" ||
-                          String(personForm.passType) === "3") && (
-                            <FileUploadBox
-                              label="Police Verification Certificate"
-                              isRequired
-                              file={personForm.policeVerification}
-                              existingFileName={personForm.existingPoliceName}
-                              onView={() =>
-                                handleViewDoc(
-                                  personForm.existingPassRequestId,
-                                  "policeVerification",
-                                  personForm.existingPoliceName,
-                                  personForm.editIndex || 0,
-                                  true
-                                )
-                              }
-                              onChange={(e) =>
-                                setPersonForm({
-                                  ...personForm,
-                                  policeVerification: e.target.files[0],
-                                })
-                              }
-                            />
+                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
+                      <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
+                      Mandatory Documents
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                      {personForm.hepType === "1" && ( // 1 = Driver ID
+                        <FileUploadBox
+                          label="Driver Licence"
+                          isRequired
+                          file={personForm.driverLicence}
+                          existingFileName={personForm.existingDlName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "driverLicense",
+                              personForm.existingDlName,
+                              personForm.editIndex || 0,
+                              true,
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              driverLicence: e.target.files[0],
+                            })
+                          }
+                        />
+                      )}
+                      {(String(personForm.passType) === "2" ||
+                        String(personForm.passType) === "3") && (
+                        <FileUploadBox
+                          label="Police Verification Certificate"
+                          isRequired
+                          file={personForm.policeVerification}
+                          existingFileName={personForm.existingPoliceName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "policeVerification",
+                              personForm.existingPoliceName,
+                              personForm.editIndex || 0,
+                              true,
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              policeVerification: e.target.files[0],
+                            })
+                          }
+                        />
+                      )}
+                      {personForm.hepType === "3" && (
+                        <>
+                          {personForm.seafarerIdType === "passport" && (
+                            <div className="space-y-1.5 animate-in zoom-in">
+                              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                Passport No.{" "}
+                                <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={personForm.passportNo}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                    .toUpperCase()
+                                    .slice(0, 8);
+                                  setPersonForm({
+                                    ...personForm,
+                                    passportNo: val,
+                                  });
+                                  if (personErrors.passportNo) {
+                                    setPersonErrors((prev) => ({
+                                      ...prev,
+                                      passportNo: null,
+                                    }));
+                                  }
+                                }}
+                                className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${
+                                  personErrors.passportNo
+                                    ? "border-red-400 bg-red-50"
+                                    : "border-slate-300 bg-white"
+                                }`}
+                                placeholder="A1234567"
+                                maxLength={8}
+                              />
+                              {personErrors.passportNo && (
+                                <p className="text-xs text-red-500 mt-0.5 font-medium">
+                                  {personErrors.passportNo}
+                                </p>
+                              )}
+                            </div>
                           )}
-                        {personForm.hepType === "3" && (
-                          <>
-                            {personForm.seafarerIdType === "passport" && (
-                              <div className="space-y-1.5 animate-in zoom-in">
-                                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                  Passport No. <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="text"
-                                  value={personForm.passportNo}
-                                  onChange={(e) => {
-                                    const val = e.target.value.toUpperCase().slice(0, 8);
-                                    setPersonForm({ ...personForm, passportNo: val });
-                                    if (personErrors.passportNo) {
-                                      setPersonErrors((prev) => ({ ...prev, passportNo: null }));
-                                    }
-                                  }}
-                                  className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${personErrors.passportNo ? "border-red-400 bg-red-50" : "border-slate-300 bg-white"
-                                    }`}
-                                  placeholder="A1234567"
-                                  maxLength={8}
-                                />
-                                {personErrors.passportNo && (
-                                  <p className="text-xs text-red-500 mt-0.5 font-medium">{personErrors.passportNo}</p>
-                                )}
-                              </div>
-                            )}
-                            <FileUploadBox
-                              label="Passport"
-                              isRequired
-                              file={personForm.passportDoc}
-                              existingFileName={personForm.existingPassportName}
-                              onView={() =>
-                                handleViewDoc(
-                                  personForm.existingPassRequestId,
-                                  "passportDoc",
-                                  personForm.existingPassportName,
-                                  personForm.editIndex || 0,
-                                  true
-                                )
-                              }
-                              onChange={(e) =>
-                                setPersonForm({
-                                  ...personForm,
-                                  passportDoc: e.target.files[0],
-                                })
-                              }
-                            />
-                          </>
-                        )}
-                        {(isOilDockArea(personForm.accessArea)) && (
                           <FileUploadBox
-                            label="Entry Authorization Document"
+                            label="Passport"
                             isRequired
-                            file={personForm.entryAuthorization}
-                            existingFileName={personForm.existingEntryAuthName}
+                            file={personForm.passportDoc}
+                            existingFileName={personForm.existingPassportName}
                             onView={() =>
                               handleViewDoc(
                                 personForm.existingPassRequestId,
-                                "entryAuthorization",
-                                personForm.existingEntryAuthName,
+                                "passportDoc",
+                                personForm.existingPassportName,
                                 personForm.editIndex || 0,
-                                true
+                                true,
                               )
                             }
                             onChange={(e) =>
                               setPersonForm({
                                 ...personForm,
-                                entryAuthorization: e.target.files[0],
+                                passportDoc: e.target.files[0],
                               })
                             }
                           />
-                        )}
-                      </div>
+                        </>
+                      )}
+                      {isOilDockArea(personForm.accessArea) && (
+                        <FileUploadBox
+                          label="Entry Authorization Document"
+                          isRequired
+                          file={personForm.entryAuthorization}
+                          existingFileName={personForm.existingEntryAuthName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "entryAuthorization",
+                              personForm.existingEntryAuthName,
+                              personForm.editIndex || 0,
+                              true,
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              entryAuthorization: e.target.files[0],
+                            })
+                          }
+                        />
+                      )}
                     </div>
-                  )}
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -3371,14 +3972,16 @@ export default function VendorPassPublicPage() {
                         const hasVal = !!vehicleForm.regNo.trim();
                         const hasError = !!vehicleErrors.regNo;
 
-                        let customBorderClass = "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
+                        let customBorderClass =
+                          "border-slate-300 focus:ring-orange-500/20 focus:border-orange-500";
                         if (hasVal) {
                           customBorderClass = hasError
                             ? "border-red-400 focus:border-red-500 focus:ring-red-500/20"
                             : "border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/20";
                         }
 
-                        const baseInputClass = "w-full h-10 rounded-lg text-sm px-3 shadow-sm bg-white outline-none transition-all border focus:ring-2";
+                        const baseInputClass =
+                          "w-full h-10 rounded-lg text-sm px-3 shadow-sm bg-white outline-none transition-all border focus:ring-2";
 
                         return (
                           <>
@@ -3386,9 +3989,12 @@ export default function VendorPassPublicPage() {
                               type="text"
                               value={vehicleForm.regNo}
                               onChange={(e) => {
-                                const val = e.target.value.toUpperCase().slice(0, 13);
+                                const val = e.target.value
+                                  .toUpperCase()
+                                  .slice(0, 13);
                                 setVehicleForm({ ...vehicleForm, regNo: val });
-                                if (val.length >= 8) validateVehicleField("regNo", val);
+                                if (val.length >= 8)
+                                  validateVehicleField("regNo", val);
                               }}
                               onBlur={(e) =>
                                 validateVehicleField("regNo", e.target.value)
@@ -3402,12 +4008,16 @@ export default function VendorPassPublicPage() {
                                 {hasError ? (
                                   <>
                                     <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                    <span className="text-red-500">{vehicleErrors.regNo}</span>
+                                    <span className="text-red-500">
+                                      {vehicleErrors.regNo}
+                                    </span>
                                   </>
                                 ) : (
                                   <>
                                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                                    <span className="text-emerald-600">Valid vehicle registration format</span>
+                                    <span className="text-emerald-600">
+                                      Valid vehicle registration format
+                                    </span>
                                   </>
                                 )}
                               </div>
@@ -3423,7 +4033,10 @@ export default function VendorPassPublicPage() {
                       <select
                         value={vehicleForm.type}
                         onChange={(e) =>
-                          setVehicleForm({ ...vehicleForm, type: e.target.value })
+                          setVehicleForm({
+                            ...vehicleForm,
+                            type: e.target.value,
+                          })
                         }
                         className={inputClass}
                       >
@@ -3439,17 +4052,38 @@ export default function VendorPassPublicPage() {
                       <label className="text-xs font-bold text-slate-700 uppercase">
                         Access Area <span className="text-red-500">*</span>
                       </label>
+
                       <select
                         value={vehicleForm.accessArea}
-                        onChange={(e) =>
-                          setVehicleForm({
-                            ...vehicleForm,
-                            accessArea: e.target.value,
-                          })
-                        }
+                        onChange={(e) => {
+                          const value = e.target.value;
+
+                          const normalized = String(value || "")
+                            .trim()
+                            .toUpperCase();
+
+                          const isOilJetty =
+                            normalized === "1" ||
+                            normalized.includes("OIL JETTY") ||
+                            normalized.includes("OIL_JETTY");
+
+                          setVehicleForm((prev) => ({
+                            ...prev,
+                            accessArea: value,
+                            concernDepartmentId: isOilJetty
+                              ? prev.concernDepartmentId
+                              : "",
+                          }));
+
+                          setVehicleErrors((prev) => ({
+                            ...prev,
+                            concernDepartmentId: null,
+                          }));
+                        }}
                         className={inputClass}
                       >
                         <option value="">Select Access Area</option>
+
                         {masterData.accessAreas.map((a) => (
                           <option key={a.id} value={a.id}>
                             {a.label}
@@ -3457,6 +4091,53 @@ export default function VendorPassPublicPage() {
                         ))}
                       </select>
                     </div>
+
+                    {(() => {
+                      const selectedArea = String(vehicleForm.accessArea || "")
+                        .trim()
+                        .toUpperCase();
+
+                      const isOilJetty =
+                        selectedArea === "1" ||
+                        selectedArea.includes("OIL JETTY") ||
+                        selectedArea.includes("OIL_JETTY");
+
+                      if (!isOilJetty) return null;
+
+                      return (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700 uppercase">
+                            Select Department{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+
+                          <select
+                            value={vehicleForm.concernDepartmentId}
+                            onChange={(e) =>
+                              setVehicleForm((prev) => ({
+                                ...prev,
+                                concernDepartmentId: e.target.value,
+                              }))
+                            }
+                            className={inputClass}
+                          >
+                            <option value="">Select Department</option>
+
+                            {vendorOilJettyDepartments.map((dept) => (
+                              <option key={dept.id} value={dept.id}>
+                                {dept.name}
+                              </option>
+                            ))}
+                          </select>
+
+                          {vehicleErrors.concernDepartmentId && (
+                            <p className="text-xs text-red-500 mt-0.5 font-medium">
+                              {vehicleErrors.concernDepartmentId}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 uppercase">
                         Insurance Expiry Date
@@ -3466,7 +4147,9 @@ export default function VendorPassPublicPage() {
                           type="text"
                           placeholder="DD/MM/YYYY"
                           maxLength={10}
-                          value={formatISOToDDMMYYYY(vehicleForm.insuranceExpiry)}
+                          value={formatISOToDDMMYYYY(
+                            vehicleForm.insuranceExpiry,
+                          )}
                           onChange={(e) => {
                             let input = e.target.value.replace(/\D/g, "");
                             if (input.length > 8) input = input.substring(0, 8);
@@ -3498,9 +4181,12 @@ export default function VendorPassPublicPage() {
                             id="vendor-ins-hidden-picker"
                             tabIndex={-1}
                             value={
-                              vehicleForm.insuranceExpiry && vehicleForm.insuranceExpiry.includes("-")
+                              vehicleForm.insuranceExpiry &&
+                              vehicleForm.insuranceExpiry.includes("-")
                                 ? vehicleForm.insuranceExpiry
-                                : formatDDMMYYYYToISO(vehicleForm.insuranceExpiry)
+                                : formatDDMMYYYYToISO(
+                                    vehicleForm.insuranceExpiry,
+                                  )
                             }
                             onChange={(e) => {
                               if (e.target.value) {
@@ -3508,7 +4194,10 @@ export default function VendorPassPublicPage() {
                                   ...prev,
                                   insuranceExpiry: e.target.value,
                                 }));
-                                validateVehicleField("insuranceExpiry", e.target.value);
+                                validateVehicleField(
+                                  "insuranceExpiry",
+                                  e.target.value,
+                                );
                               }
                             }}
                             className="sr-only"
@@ -3516,8 +4205,13 @@ export default function VendorPassPublicPage() {
                           <button
                             type="button"
                             onClick={() => {
-                              const picker = document.getElementById("vendor-ins-hidden-picker");
-                              if (picker && typeof picker.showPicker === "function") {
+                              const picker = document.getElementById(
+                                "vendor-ins-hidden-picker",
+                              );
+                              if (
+                                picker &&
+                                typeof picker.showPicker === "function"
+                              ) {
                                 picker.showPicker();
                               } else if (picker) {
                                 picker.focus();
@@ -3578,7 +4272,8 @@ export default function VendorPassPublicPage() {
                             id="vendor-rc-hidden-picker"
                             tabIndex={-1}
                             value={
-                              vehicleForm.rcValidity && vehicleForm.rcValidity.includes("-")
+                              vehicleForm.rcValidity &&
+                              vehicleForm.rcValidity.includes("-")
                                 ? vehicleForm.rcValidity
                                 : formatDDMMYYYYToISO(vehicleForm.rcValidity)
                             }
@@ -3588,7 +4283,10 @@ export default function VendorPassPublicPage() {
                                   ...prev,
                                   rcValidity: e.target.value,
                                 }));
-                                validateVehicleField("rcValidity", e.target.value);
+                                validateVehicleField(
+                                  "rcValidity",
+                                  e.target.value,
+                                );
                               }
                             }}
                             className="sr-only"
@@ -3596,8 +4294,13 @@ export default function VendorPassPublicPage() {
                           <button
                             type="button"
                             onClick={() => {
-                              const picker = document.getElementById("vendor-rc-hidden-picker");
-                              if (picker && typeof picker.showPicker === "function") {
+                              const picker = document.getElementById(
+                                "vendor-rc-hidden-picker",
+                              );
+                              if (
+                                picker &&
+                                typeof picker.showPicker === "function"
+                              ) {
                                 picker.showPicker();
                               } else if (picker) {
                                 picker.focus();
@@ -3624,7 +4327,8 @@ export default function VendorPassPublicPage() {
                     <thead className="bg-[#0a1e4d] text-white">
                       <tr>
                         <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-                          Type of Pass <span className="text-orange-400">*</span>
+                          Type of Pass{" "}
+                          <span className="text-orange-400">*</span>
                         </th>
                         <th className="p-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
                           Pass Period <span className="text-orange-400">*</span>
@@ -3650,7 +4354,10 @@ export default function VendorPassPublicPage() {
                             }
                             className="w-full h-10 border border-slate-300 rounded-lg text-sm px-3 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                           >
-                            {getFilteredPassTypes(intake, masterData.passTypes).map((t) => (
+                            {getFilteredPassTypes(
+                              intake,
+                              masterData.passTypes,
+                            ).map((t) => (
                               <option
                                 key={t.id || t.value}
                                 value={t.id || t.value}
@@ -3688,9 +4395,13 @@ export default function VendorPassPublicPage() {
                             <input
                               type="text"
                               placeholder="DD/MM/YYYY, hh:mm AM/PM"
-                              value={formatDateTimeISOToDisplay(vehicleForm.dateFrom)}
+                              value={formatDateTimeISOToDisplay(
+                                vehicleForm.dateFrom,
+                              )}
                               onChange={(e) => {
-                                const iso = formatDateTimeDisplayToISO(e.target.value);
+                                const iso = formatDateTimeDisplayToISO(
+                                  e.target.value,
+                                );
                                 if (iso) {
                                   setVehicleForm((prev) => ({
                                     ...prev,
@@ -3720,8 +4431,13 @@ export default function VendorPassPublicPage() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const picker = document.getElementById("vendor-vehicle-datefrom-picker");
-                                  if (picker && typeof picker.showPicker === "function") {
+                                  const picker = document.getElementById(
+                                    "vendor-vehicle-datefrom-picker",
+                                  );
+                                  if (
+                                    picker &&
+                                    typeof picker.showPicker === "function"
+                                  ) {
                                     picker.showPicker();
                                   } else if (picker) {
                                     picker.focus();
@@ -3740,7 +4456,9 @@ export default function VendorPassPublicPage() {
                           <input
                             readOnly
                             type="text"
-                            value={formatDateTimeISOToDisplay(vehicleForm.dateTo)}
+                            value={formatDateTimeISOToDisplay(
+                              vehicleForm.dateTo,
+                            )}
                             className="w-full h-10 bg-slate-100 border border-slate-200 rounded-lg text-sm px-3 text-slate-700 font-bold cursor-not-allowed outline-none"
                           />
                         </td>
@@ -3751,8 +4469,8 @@ export default function VendorPassPublicPage() {
 
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
                   <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
-                    <BookOpen className="h-5 w-5 text-orange-500" /> 2. Mandatory
-                    Documents
+                    <BookOpen className="h-5 w-5 text-orange-500" /> 2.
+                    Mandatory Documents
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                     <FileUploadBox
@@ -3766,7 +4484,7 @@ export default function VendorPassPublicPage() {
                           "vehicleRC",
                           vehicleForm.existingRcName,
                           vehicleForm.editIndex || 0,
-                          true
+                          true,
                         )
                       }
                       onChange={(e) =>
@@ -3787,7 +4505,7 @@ export default function VendorPassPublicPage() {
                           "vehicleInsurance",
                           vehicleForm.existingInsName,
                           vehicleForm.editIndex || 0,
-                          true
+                          true,
                         )
                       }
                       onChange={(e) =>
@@ -3809,7 +4527,7 @@ export default function VendorPassPublicPage() {
                             "vehiclePermit",
                             vehicleForm.existingPermitName,
                             vehicleForm.editIndex || 0,
-                            true
+                            true,
                           )
                         }
                         onChange={(e) =>
@@ -3831,7 +4549,7 @@ export default function VendorPassPublicPage() {
                           "vehicleFitness",
                           vehicleForm.existingFitnessName,
                           vehicleForm.editIndex || 0,
-                          true
+                          true,
                         )
                       }
                       onChange={(e) =>
@@ -3841,7 +4559,7 @@ export default function VendorPassPublicPage() {
                         })
                       }
                     />
-                    {(isOilDockArea(vehicleForm.accessArea)) && (
+                    {isOilDockArea(vehicleForm.accessArea) && (
                       <FileUploadBox
                         label="Spark Arrester Certificate"
                         isRequired
@@ -3853,7 +4571,7 @@ export default function VendorPassPublicPage() {
                             "sparkArrester",
                             vehicleForm.existingSparkArresterName,
                             vehicleForm.editIndex || 0,
-                            true
+                            true,
                           )
                         }
                         onChange={(e) =>
@@ -3864,7 +4582,9 @@ export default function VendorPassPublicPage() {
                         }
                       />
                     )}
-                    {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType).toUpperCase()) && (
+                    {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                      String(vehicleForm.passType).toUpperCase(),
+                    ) && (
                       <FileUploadBox
                         label="Twist Lock Certificate"
                         isRequired
@@ -3876,7 +4596,7 @@ export default function VendorPassPublicPage() {
                             "twistLock",
                             vehicleForm.existingTwistLockName,
                             vehicleForm.editIndex || 0,
-                            true
+                            true,
                           )
                         }
                         onChange={(e) =>
@@ -3887,9 +4607,13 @@ export default function VendorPassPublicPage() {
                         }
                       />
                     )}
-                    {(!["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) &&
-                      ((String(vehicleForm.passType) === "1" || String(vehicleForm.passType).toUpperCase() === "DAILY") &&
-                        (isOilDockArea(vehicleForm.accessArea)))) && (
+                    {!["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                      String(vehicleForm.passType),
+                    ) &&
+                      (String(vehicleForm.passType) === "1" ||
+                        String(vehicleForm.passType).toUpperCase() ===
+                          "DAILY") &&
+                      isOilDockArea(vehicleForm.accessArea) && (
                         <FileUploadBox
                           label="Request Letter"
                           isRequired
@@ -3901,7 +4625,7 @@ export default function VendorPassPublicPage() {
                               "vehicleRequestLetter",
                               vehicleForm.existingReqName,
                               vehicleForm.editIndex || 0,
-                              true
+                              true,
                             )
                           }
                           onChange={(e) =>
@@ -3912,7 +4636,9 @@ export default function VendorPassPublicPage() {
                           }
                         />
                       )}
-                    {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(String(vehicleForm.passType)) && (
+                    {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
+                      String(vehicleForm.passType),
+                    ) && (
                       <>
                         <FileUploadBox
                           label="Request Letter"
@@ -3925,7 +4651,7 @@ export default function VendorPassPublicPage() {
                               "vehicleRequestLetter",
                               vehicleForm.existingReqName,
                               vehicleForm.editIndex || 0,
-                              true
+                              true,
                             )
                           }
                           onChange={(e) =>
@@ -3946,7 +4672,7 @@ export default function VendorPassPublicPage() {
                               "vehicleTax",
                               vehicleForm.existingTaxName,
                               vehicleForm.editIndex || 0,
-                              true
+                              true,
                             )
                           }
                           onChange={(e) =>
@@ -3967,7 +4693,7 @@ export default function VendorPassPublicPage() {
                               "vehicleEmission",
                               vehicleForm.existingEmissionName,
                               vehicleForm.editIndex || 0,
-                              true
+                              true,
                             )
                           }
                           onChange={(e) =>
@@ -3990,7 +4716,11 @@ export default function VendorPassPublicPage() {
                     setVehicleForm({
                       ...initialVehicleForm,
                       dateFrom: now,
-                      dateTo: calculateDateTo(now, initialVehicleForm.passPeriod, initialVehicleForm.passType),
+                      dateTo: calculateDateTo(
+                        now,
+                        initialVehicleForm.passPeriod,
+                        initialVehicleForm.passType,
+                      ),
                     });
                     setEditingVehicleIndex(null);
                   }}
@@ -4029,20 +4759,32 @@ export default function VendorPassPublicPage() {
 
               <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
                 <p className="text-sm font-semibold text-slate-700 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                  The following are rates (excluding GST) for QR-based Harbour Entry
-                  Permits.
+                  The following are rates (excluding GST) for QR-based Harbour
+                  Entry Permits.
                 </p>
 
                 <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
                   <table className="w-full text-left border-collapse bg-white">
                     <thead className="bg-slate-100 border-b border-slate-200">
                       <tr>
-                        <th className="p-3 text-xs font-bold text-center border-r">S.No</th>
-                        <th className="p-3 text-xs font-bold border-r">Category</th>
-                        <th className="p-3 text-xs font-bold border-r">Description ₹</th>
-                        <th className="p-3 text-xs font-bold text-right border-r">Daily ₹</th>
-                        <th className="p-3 text-xs font-bold text-right border-r">Monthly ₹</th>
-                        <th className="p-3 text-xs font-bold text-right">Yearly ₹</th>
+                        <th className="p-3 text-xs font-bold text-center border-r">
+                          S.No
+                        </th>
+                        <th className="p-3 text-xs font-bold border-r">
+                          Category
+                        </th>
+                        <th className="p-3 text-xs font-bold border-r">
+                          Description ₹
+                        </th>
+                        <th className="p-3 text-xs font-bold text-right border-r">
+                          Daily ₹
+                        </th>
+                        <th className="p-3 text-xs font-bold text-right border-r">
+                          Monthly ₹
+                        </th>
+                        <th className="p-3 text-xs font-bold text-right">
+                          Yearly ₹
+                        </th>
                       </tr>
                     </thead>
 
@@ -4119,7 +4861,8 @@ export default function VendorPassPublicPage() {
                   <h3 className="text-lg font-bold">
                     {entityModal.type === "person"
                       ? entityModal.data.name
-                      : entityModal.data.registrationNo || entityModal.data.regNo}
+                      : entityModal.data.registrationNo ||
+                        entityModal.data.regNo}
                   </h3>
                 </div>
                 <button
@@ -4190,8 +4933,8 @@ export default function VendorPassPublicPage() {
                           value={
                             entityModal.data.dateFrom
                               ? new Date(
-                                entityModal.data.dateFrom,
-                              ).toLocaleDateString()
+                                  entityModal.data.dateFrom,
+                                ).toLocaleDateString()
                               : ""
                           }
                         />
@@ -4200,8 +4943,8 @@ export default function VendorPassPublicPage() {
                           value={
                             entityModal.data.dateTo
                               ? new Date(
-                                entityModal.data.dateTo,
-                              ).toLocaleDateString()
+                                  entityModal.data.dateTo,
+                                ).toLocaleDateString()
                               : ""
                           }
                         />
@@ -4235,8 +4978,8 @@ export default function VendorPassPublicPage() {
                           value={
                             entityModal.data.dateFrom
                               ? new Date(
-                                entityModal.data.dateFrom,
-                              ).toLocaleDateString()
+                                  entityModal.data.dateFrom,
+                                ).toLocaleDateString()
                               : ""
                           }
                         />
@@ -4245,8 +4988,8 @@ export default function VendorPassPublicPage() {
                           value={
                             entityModal.data.dateTo
                               ? new Date(
-                                entityModal.data.dateTo,
-                              ).toLocaleDateString()
+                                  entityModal.data.dateTo,
+                                ).toLocaleDateString()
                               : ""
                           }
                         />
@@ -4255,8 +4998,8 @@ export default function VendorPassPublicPage() {
                           value={
                             entityModal.data.insuranceExpiry
                               ? new Date(
-                                entityModal.data.insuranceExpiry,
-                              ).toLocaleDateString()
+                                  entityModal.data.insuranceExpiry,
+                                ).toLocaleDateString()
                               : ""
                           }
                         />
@@ -4265,8 +5008,8 @@ export default function VendorPassPublicPage() {
                           value={
                             entityModal.data.rcValidity
                               ? new Date(
-                                entityModal.data.rcValidity,
-                              ).toLocaleDateString()
+                                  entityModal.data.rcValidity,
+                                ).toLocaleDateString()
                               : ""
                           }
                         />
