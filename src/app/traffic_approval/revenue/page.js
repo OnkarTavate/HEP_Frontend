@@ -11,7 +11,7 @@ import {
   Wallet, TrendingUp, CircleDollarSign, ShieldBan, AlertTriangle, CheckCircle2,
   Clock, Activity, CalendarDays, ArrowUpRight, BadgeDollarSign, ReceiptText,
   Users, Car, ChevronRight, RefreshCw, FileText, Ban, Timer, Building2,
-  Download, ArrowLeft
+  Download, ArrowLeft, CreditCard
 } from "lucide-react";
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
@@ -54,6 +54,141 @@ const BarTip = ({ active, payload, label }) => {
     </div>
   );
 };
+
+/* ─────────── Premium Payment Mode Donut Chart ─────────── */
+const SLICE_ICONS = {
+  "HEP Account (Direct)": Wallet,
+  "E-Cash / Gateway":     CreditCard,
+  "Overstay Port Dues":   ReceiptText,
+};
+const GRAD_IDS = [
+  { id: "paySlice0", from: "#312e81", to: "#0a1e4d" },
+  { id: "paySlice1", from: "#fb923c", to: "#ea580c" },
+  { id: "paySlice2", from: "#34d399", to: "#059669" },
+];
+
+function PaymentModeDonut({ pieChartData, loading }) {
+  const total = pieChartData?.reduce((s, d) => s + d.value, 0) || 0;
+  const top = total
+    ? pieChartData.reduce((a, b) => (a.value >= b.value ? a : b))
+    : { name: "None", value: 0, color: "#cccccc" };
+  const topPct = total ? Math.round((top.value / total) * 100) : 0;
+  const [activeIndex, setActiveIndex] = useState(null);
+  const activeSlice = activeIndex !== null && pieChartData ? pieChartData[activeIndex] : null;
+
+  return (
+    <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_6px_24px_-10px_rgba(10,30,77,0.14)] flex flex-col p-5">
+      {/* accent top stripe */}
+      <div className="absolute inset-x-0 top-0 h-1 rounded-t-3xl bg-gradient-to-r from-[#0a1e4d] via-orange-500 to-emerald-500" />
+      <div className="flex items-center gap-2 mb-4">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#0a1e4d] to-indigo-700 text-white shadow-md shrink-0">
+          <CircleDollarSign className="h-4 w-4" strokeWidth={2.2} />
+        </span>
+        <div>
+          <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-700">Payment Mode Distribution</h3>
+          <p className="text-[10px] text-slate-400 font-medium">Collection breakdown by mode</p>
+        </div>
+        <span className="ml-auto text-[11px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+          {fmtMoney(total)}
+        </span>
+      </div>
+
+      {total === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+          <CircleDollarSign className="h-10 w-10 mb-2 opacity-30" />
+          <p className="text-xs font-semibold">No payment data yet</p>
+        </div>
+      ) : (
+        <>
+          <div className="relative">
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <defs>
+                  {GRAD_IDS.map((g) => (
+                    <linearGradient key={g.id} id={g.id} x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor={g.from} />
+                      <stop offset="100%" stopColor={g.to} />
+                    </linearGradient>
+                  ))}
+                </defs>
+                <Pie
+                  data={pieChartData}
+                  cx="50%" cy="50%"
+                  startAngle={90} endAngle={-270}
+                  innerRadius={72} outerRadius={104}
+                  paddingAngle={4} cornerRadius={10}
+                  dataKey="value" stroke="none"
+                  onMouseEnter={(_, idx) => setActiveIndex(idx)}
+                  onMouseLeave={() => setActiveIndex(null)}
+                >
+                  {pieChartData.map((entry, idx) => (
+                    <Cell
+                      key={entry.name}
+                      fill={`url(#${GRAD_IDS[idx % GRAD_IDS.length].id})`}
+                      opacity={activeIndex === null || activeIndex === idx ? 1 : 0.4}
+                      style={{ transition: "opacity 200ms ease", filter: activeIndex === idx ? "drop-shadow(0 4px 8px rgba(0,0,0,0.25))" : undefined }}
+                    />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+
+            {/* Center overlay */}
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+                {activeSlice ? activeSlice.name.split(" ")[0] : "Top mode"}
+              </p>
+              <p className="text-4xl font-extrabold tabular-nums text-slate-900 leading-none mt-0.5">
+                {activeSlice
+                  ? `${Math.round((activeSlice.value / total) * 100)}%`
+                  : `${topPct}%`}
+              </p>
+              <p className="mt-1 text-[10px] font-bold" style={{ color: activeSlice ? activeSlice.color : top.color }}>
+                <span className="inline-block h-1.5 w-1.5 rounded-full mr-1" style={{ backgroundColor: activeSlice ? activeSlice.color : top.color }} />
+                {activeSlice ? fmtMoney(activeSlice.value) : top.name.split(" ")[0]}
+              </p>
+            </div>
+          </div>
+
+          {/* Legend rows */}
+          <div className="mt-4 space-y-2.5">
+            {pieChartData.map((item, idx) => {
+              const pct = total ? Math.round((item.value / total) * 100) : 0;
+              const grad = GRAD_IDS[idx % GRAD_IDS.length];
+              const Icon = SLICE_ICONS[item.name] || CircleDollarSign;
+              return (
+                <div key={item.name}
+                  className="flex items-center gap-3 rounded-2xl bg-slate-50 ring-1 ring-slate-200/70 px-3 py-2.5"
+                >
+                  <span className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+                    style={{ background: `linear-gradient(135deg, ${grad.from}, ${grad.to})` }}
+                  >
+                    <Icon className="h-4 w-4 text-white" strokeWidth={2.5} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="font-bold text-slate-800 text-xs truncate">{item.name}</p>
+                      <p className="text-sm font-extrabold tabular-nums text-slate-900">
+                        {fmtMoney(item.value)}
+                        <span className="ml-1.5 text-xs font-semibold text-slate-500">{pct}%</span>
+                      </p>
+                    </div>
+                    <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-200/70 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${grad.from}, ${grad.to})` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function TrafficRevenuePage() {
   const [loading, setLoading] = useState(true);
@@ -274,37 +409,8 @@ export default function TrafficRevenuePage() {
           )}
         </div>
 
-        {/* Payment Mode Donut Chart */}
-        <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between">
-          <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wider mb-2">
-            Payment Mode Distribution
-          </h3>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={4}>
-                  {pieChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip content={<PieTip />} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="space-y-1.5 pt-2">
-            {pieChartData.map((d) => (
-              <div key={d.name} className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-slate-600 font-medium">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: d.color }} />
-                  {d.name}
-                </span>
-                <span className="font-bold text-slate-800 tabular-nums">
-                  {fmtMoney(d.value)} ({d.pct}%)
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Payment Mode Donut Chart — Premium Design */}
+        <PaymentModeDonut pieChartData={pieChartData} loading={loading} />
       </div>
 
       {/* Top Company Breakdown Table */}

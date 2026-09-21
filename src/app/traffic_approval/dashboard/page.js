@@ -56,6 +56,7 @@ import {
   BadgeCheck,
   ShieldCheck,
 } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
 const ADMIN_API =
   process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
@@ -464,35 +465,35 @@ function IconStatRow({
   // Gradient background per tone — same vivid palette as the Overstay tiles
   const overlayGrad = {
     emerald: "bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-600",
-    rose:    "bg-gradient-to-r from-rose-400    via-rose-500    to-pink-600",
-    amber:   "bg-gradient-to-r from-amber-400   via-amber-500   to-orange-500",
-    sky:     "bg-gradient-to-r from-sky-400     via-sky-500     to-blue-600",
-    blue:    "bg-gradient-to-r from-blue-400    via-blue-500    to-indigo-600",
-    violet:  "bg-gradient-to-r from-violet-400  via-violet-500  to-purple-600",
-    teal:    "bg-gradient-to-r from-teal-400    via-teal-500    to-cyan-600",
-    indigo:  "bg-gradient-to-r from-indigo-400  via-indigo-500  to-violet-600",
-    orange:  "bg-gradient-to-r from-orange-400  via-orange-500  to-red-500",
-    cyan:    "bg-gradient-to-r from-cyan-400    via-cyan-500    to-sky-600",
-    red:     "bg-gradient-to-r from-red-400     via-red-500     to-rose-600",
+    rose: "bg-gradient-to-r from-rose-400    via-rose-500    to-pink-600",
+    amber: "bg-gradient-to-r from-amber-400   via-amber-500   to-orange-500",
+    sky: "bg-gradient-to-r from-sky-400     via-sky-500     to-blue-600",
+    blue: "bg-gradient-to-r from-blue-400    via-blue-500    to-indigo-600",
+    violet: "bg-gradient-to-r from-violet-400  via-violet-500  to-purple-600",
+    teal: "bg-gradient-to-r from-teal-400    via-teal-500    to-cyan-600",
+    indigo: "bg-gradient-to-r from-indigo-400  via-indigo-500  to-violet-600",
+    orange: "bg-gradient-to-r from-orange-400  via-orange-500  to-red-500",
+    cyan: "bg-gradient-to-r from-cyan-400    via-cyan-500    to-sky-600",
+    red: "bg-gradient-to-r from-red-400     via-red-500     to-rose-600",
   };
 
   // Colored glow shadow per tone
   const glowMap = {
     emerald: "group-hover/row:shadow-[0_8px_24px_-6px_rgba(16,185,129,0.55)]",
-    rose:    "group-hover/row:shadow-[0_8px_24px_-6px_rgba(244,63,94,0.5)]",
-    amber:   "group-hover/row:shadow-[0_8px_24px_-6px_rgba(251,191,36,0.55)]",
-    sky:     "group-hover/row:shadow-[0_8px_24px_-6px_rgba(14,165,233,0.5)]",
-    blue:    "group-hover/row:shadow-[0_8px_24px_-6px_rgba(59,130,246,0.5)]",
-    violet:  "group-hover/row:shadow-[0_8px_24px_-6px_rgba(139,92,246,0.5)]",
-    teal:    "group-hover/row:shadow-[0_8px_24px_-6px_rgba(20,184,166,0.5)]",
-    indigo:  "group-hover/row:shadow-[0_8px_24px_-6px_rgba(99,102,241,0.5)]",
-    orange:  "group-hover/row:shadow-[0_8px_24px_-6px_rgba(249,115,22,0.5)]",
-    cyan:    "group-hover/row:shadow-[0_8px_24px_-6px_rgba(6,182,212,0.5)]",
-    red:     "group-hover/row:shadow-[0_8px_24px_-6px_rgba(239,68,68,0.5)]",
+    rose: "group-hover/row:shadow-[0_8px_24px_-6px_rgba(244,63,94,0.5)]",
+    amber: "group-hover/row:shadow-[0_8px_24px_-6px_rgba(251,191,36,0.55)]",
+    sky: "group-hover/row:shadow-[0_8px_24px_-6px_rgba(14,165,233,0.5)]",
+    blue: "group-hover/row:shadow-[0_8px_24px_-6px_rgba(59,130,246,0.5)]",
+    violet: "group-hover/row:shadow-[0_8px_24px_-6px_rgba(139,92,246,0.5)]",
+    teal: "group-hover/row:shadow-[0_8px_24px_-6px_rgba(20,184,166,0.5)]",
+    indigo: "group-hover/row:shadow-[0_8px_24px_-6px_rgba(99,102,241,0.5)]",
+    orange: "group-hover/row:shadow-[0_8px_24px_-6px_rgba(249,115,22,0.5)]",
+    cyan: "group-hover/row:shadow-[0_8px_24px_-6px_rgba(6,182,212,0.5)]",
+    red: "group-hover/row:shadow-[0_8px_24px_-6px_rgba(239,68,68,0.5)]",
   };
 
-  const overlay  = overlayGrad[tone] || overlayGrad.blue;
-  const glowCls  = glowMap[tone]     || glowMap.blue;
+  const overlay = overlayGrad[tone] || overlayGrad.blue;
+  const glowCls = glowMap[tone] || glowMap.blue;
 
   return (
     <Wrapper
@@ -546,9 +547,6 @@ function IconStatRow({
     </Wrapper>
   );
 }
-
-
-
 
 function KpiCard({
   title,
@@ -658,6 +656,171 @@ const EMPTY = {
   avgApprovalMins: null,
 };
 
+// ── Pass Type Distribution Pie Chart ──────────────────────────────────────────
+// Mirrors the PassTypeChart from app/dashboard/page.js for design uniformity.
+function PassTypeDistributionChart({ persons, vehicles, loading }) {
+  const passTypeData = [
+    { name: "Personnel", value: persons, color: "#14b8a6" },
+    { name: "Vehicles", value: vehicles, color: "#f59e0b" },
+  ];
+  const total = persons + vehicles;
+  const [activeIndex, setActiveIndex] = useState(null);
+  const activeSlice = activeIndex !== null ? passTypeData[activeIndex] : null;
+  const top = total
+    ? passTypeData.reduce((a, b) => (a.value >= b.value ? a : b))
+    : { name: "None", value: 0, color: "#cccccc" };
+  const topPct = total ? Math.round((top.value / total) * 100) : 0;
+
+  return (
+    <Panel
+      title="Pass Type Distribution"
+      subtitle="Breakdown of authorised entities by category"
+      icon={BarChart3}
+      tone="teal"
+      action="View Passes"
+      actionHref="/traffic_approval/passes"
+    >
+      {loading || total === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 gap-2 text-center">
+          {loading ? (
+            <div className="h-40 w-40 mx-auto rounded-full bg-slate-100 animate-pulse" />
+          ) : (
+            <>
+              <BarChart3 className="h-10 w-10 text-slate-300" />
+              <p className="text-xs font-semibold text-slate-400">
+                No pass data to chart yet
+              </p>
+            </>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Donut chart */}
+          <div className="relative">
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <defs>
+                  <linearGradient id="ptcPersonnel" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#2dd4bf" />
+                    <stop offset="100%" stopColor="#0d9488" />
+                  </linearGradient>
+                  <linearGradient id="ptcVehicle" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#fbbf24" />
+                    <stop offset="100%" stopColor="#f59e0b" />
+                  </linearGradient>
+                </defs>
+                <Pie
+                  data={passTypeData}
+                  cx="50%"
+                  cy="50%"
+                  startAngle={90}
+                  endAngle={-270}
+                  innerRadius={62}
+                  outerRadius={90}
+                  paddingAngle={4}
+                  cornerRadius={10}
+                  dataKey="value"
+                  stroke="none"
+                  onMouseEnter={(_, idx) => setActiveIndex(idx)}
+                  onMouseLeave={() => setActiveIndex(null)}
+                >
+                  {passTypeData.map((entry, idx) => (
+                    <Cell
+                      key={entry.name}
+                      fill={
+                        entry.name === "Personnel"
+                          ? "url(#ptcPersonnel)"
+                          : "url(#ptcVehicle)"
+                      }
+                      opacity={
+                        activeIndex === null || activeIndex === idx ? 1 : 0.45
+                      }
+                      style={{ transition: "opacity 200ms ease" }}
+                    />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+
+            {/* Centre label */}
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                {activeSlice ? activeSlice.name : "Top type"}
+              </p>
+              <p className="text-3xl font-extrabold tabular-nums text-slate-900 leading-none mt-1">
+                {activeSlice
+                  ? `${Math.round((activeSlice.value / total) * 100)}%`
+                  : `${topPct}%`}
+              </p>
+              <p
+                className="mt-1 inline-flex items-center gap-1.5 text-xs font-bold"
+                style={{ color: activeSlice ? activeSlice.color : top.color }}
+              >
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{
+                    backgroundColor: activeSlice
+                      ? activeSlice.color
+                      : top.color,
+                  }}
+                />
+                {activeSlice
+                  ? `${fmtNum(activeSlice.value)} entries`
+                  : top.name}
+              </p>
+            </div>
+          </div>
+
+          {/* Legend rows */}
+          <div className="mt-4 space-y-2.5">
+            {passTypeData.map((item) => {
+              const pct = total ? Math.round((item.value / total) * 100) : 0;
+              const Icon = item.name === "Vehicles" ? Car : Users;
+              return (
+                <div
+                  key={item.name}
+                  className="flex items-center gap-3 rounded-2xl bg-slate-50 ring-1 ring-slate-200/70 px-3 py-2.5"
+                >
+                  <span
+                    className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+                    style={{
+                      background: `linear-gradient(135deg, ${item.color}, ${item.color}cc)`,
+                    }}
+                  >
+                    <Icon className="h-4 w-4 text-white" strokeWidth={2.5} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="font-bold text-slate-800 truncate">
+                        {item.name}
+                      </p>
+                      <p className="text-sm font-extrabold tabular-nums text-slate-900">
+                        {fmtNum(item.value)}
+                        <span className="ml-1.5 text-xs font-semibold text-slate-500">
+                          {pct}%
+                        </span>
+                      </p>
+                    </div>
+                    <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-200/70 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${pct}%`,
+                          background: `linear-gradient(90deg, ${item.color}, ${item.color}cc)`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </Panel>
+  );
+}
+
 export default function TrafficManagerDashboard() {
   const router = useRouter();
   const [data, setData] = useState(EMPTY);
@@ -667,6 +830,7 @@ export default function TrafficManagerDashboard() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [showCustom, setShowCustom] = useState(false);
+  const [shiftFilter, setShiftFilter] = useState("all");
   const [selectedLedgerCompany, setSelectedLedgerCompany] = useState(null);
   const [showFullLedgerModal, setShowFullLedgerModal] = useState(false);
   const [ledgerSearchQuery, setLedgerSearchQuery] = useState("");
@@ -1220,6 +1384,19 @@ export default function TrafficManagerDashboard() {
       return d >= filterRange.from && d <= filterRange.to;
     };
 
+    // Shift-wise time filter
+    const inShift = (dStr) => {
+      if (shiftFilter === "all") return true;
+      if (!dStr) return false;
+      const d = new Date(dStr);
+      if (isNaN(d.getTime())) return false;
+      const h = d.getHours();
+      if (shiftFilter === "shift1") return h >= 7 && h < 14; // Morning  07:00–14:00
+      if (shiftFilter === "shift2") return h >= 14 && h < 21; // Afternoon 14:00–21:00
+      if (shiftFilter === "shift3") return h >= 21 || h < 7; // Night    21:00–07:00
+      return true;
+    };
+
     const getPassAmt = (p) => {
       const direct = parseFloat(
         p.netAmount ??
@@ -1246,11 +1423,95 @@ export default function TrafficManagerDashboard() {
       data.rawAllPasses?.length > 0
         ? data.rawAllPasses
         : data.allPassesQueue?.list || [];
-    const filteredPasses = isAll
+
+    // Apply date-range filter first, then shift-time filter
+    const dateFiltered = isAll
       ? passSourceList
       : passSourceList.filter((p) =>
           inRange(p.createdAt || p.submittedAt || p.updatedAt),
         );
+    const filteredPasses = dateFiltered.filter((p) =>
+      inShift(p.createdAt || p.submittedAt || p.updatedAt),
+    );
+
+    // ── Shift Filter Debug Log ─────────────────────────────────────────────
+    const shiftName =
+      shiftFilter === "shift1"
+        ? "1st Shift — Morning  (07:00–14:00)"
+        : shiftFilter === "shift2"
+          ? "2nd Shift — Afternoon (14:00–21:00)"
+          : shiftFilter === "shift3"
+            ? "3rd Shift — Night    (21:00–07:00)"
+            : "All Shifts (no time filter)";
+
+    const toRow = (p) => {
+      const raw = p.createdAt || p.submittedAt || p.updatedAt;
+      const d = raw ? new Date(raw) : null;
+      return {
+        ref: p.referenceNo || p.id || "—",
+        status: p.status || "—",
+        company: p.companyName || p.company?.name || "—",
+        persons: p.persons?.length ?? 0,
+        vehicles: p.vehicles?.length ?? 0,
+        date: d ? d.toLocaleDateString("en-IN") : "—",
+        time: d
+          ? d.toLocaleTimeString("en-IN", {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            })
+          : "—",
+        hour: d ? d.getHours() + "h" : "—",
+        rawTimestamp: raw || "—",
+      };
+    };
+
+    console.group(
+      "%c🔀 SHIFT FILTER PIPELINE",
+      "background:#0a1e4d;color:#fbbf24;font-weight:bold;font-size:12px;padding:3px 8px;border-radius:4px;",
+    );
+    console.log("Date period   :", filterRange.label);
+    console.log("Shift active  :", shiftName);
+    console.log("─────────────────────────────────────────────────");
+    console.log("Total source  :", passSourceList.length, "passes");
+    console.log("After date ↓  :", dateFiltered.length, "passes");
+    console.log("After shift ↓ :", filteredPasses.length, "passes");
+
+    // Hour-bucket breakdown
+    const buckets = { "00–07": 0, "07–14": 0, "14–21": 0, "21–24": 0 };
+    dateFiltered.forEach((p) => {
+      const d = new Date(p.createdAt || p.submittedAt || p.updatedAt);
+      if (!isNaN(d.getTime())) {
+        const h = d.getHours();
+        if (h < 7) buckets["00–07"]++;
+        else if (h < 14) buckets["07–14"]++;
+        else if (h < 21) buckets["14–21"]++;
+        else buckets["21–24"]++;
+      }
+    });
+    console.log("Hour buckets  :", buckets);
+
+    // Full source list with timestamps
+    console.groupCollapsed(`📋 All Source Passes (${passSourceList.length})`);
+    console.table(passSourceList.map(toRow));
+    console.groupEnd();
+
+    // Full date-filtered list
+    console.groupCollapsed(
+      `📅 After Date Filter — ${filterRange.label} (${dateFiltered.length})`,
+    );
+    console.table(dateFiltered.map(toRow));
+    console.groupEnd();
+
+    // Full shift-matched list
+    console.groupCollapsed(
+      `⏰ After Shift Filter — ${shiftName} (${filteredPasses.length})`,
+    );
+    console.table(filteredPasses.map(toRow));
+    console.groupEnd();
+
+    console.groupEnd();
+    // ──────────────────────────────────────────────────────────────────────
 
     const pendingList = filteredPasses.filter((p) =>
       ["SUBMITTED", "PENDING", "IN_REVIEW", "UNDER_REVIEW"].includes(
@@ -1525,7 +1786,7 @@ export default function TrafficManagerDashboard() {
       bl: data.bl,
       avgApprovalMins: data.avgApprovalMins,
     };
-  }, [data, filterPeriod, filterRange]);
+  }, [data, filterPeriod, filterRange, shiftFilter]);
 
   const hepRevBreakup = useMemo(
     () => [
@@ -1551,6 +1812,49 @@ export default function TrafficManagerDashboard() {
     { key: "week", label: "Last 7 Days", icon: "📅" },
     { key: "month", label: "This Month", icon: "🗓" },
   ];
+
+  const SHIFT_TABS = [
+    {
+      key: "all",
+      label: "All Shifts",
+      icon: "🕐",
+      color: "bg-white text-[#0a1e4d]",
+      activeGlow: "shadow-[0_4px_16px_rgba(255,255,255,0.25)]",
+    },
+    {
+      key: "shift1",
+      label: "1st · Morning",
+      icon: "🌅",
+      color: "bg-amber-400 text-white",
+      activeGlow: "shadow-[0_4px_16px_rgba(251,191,36,0.55)]",
+    },
+    {
+      key: "shift2",
+      label: "2nd · Afternoon",
+      icon: "☀️",
+      color: "bg-orange-500 text-white",
+      activeGlow: "shadow-[0_4px_16px_rgba(249,115,22,0.55)]",
+    },
+    {
+      key: "shift3",
+      label: "3rd · Night",
+      icon: "🌙",
+      color: "bg-indigo-500 text-white",
+      activeGlow: "shadow-[0_4px_16px_rgba(99,102,241,0.55)]",
+    },
+  ];
+
+  const shiftLabel =
+    shiftFilter === "shift1"
+      ? " · Morning (07:00–14:00)"
+      : shiftFilter === "shift2"
+        ? " · Afternoon (14:00–21:00)"
+        : shiftFilter === "shift3"
+          ? " · Night (21:00–07:00)"
+          : "";
+
+  const activeShiftTab =
+    SHIFT_TABS.find((s) => s.key === shiftFilter) || SHIFT_TABS[0];
 
   const avgColor =
     data.avgApprovalMins == null
@@ -1762,7 +2066,7 @@ export default function TrafficManagerDashboard() {
                 Traffic & Pass Section · Chennai Port Authority
               </p>
               <h2 className="text-lg font-black tracking-tight text-white leading-tight">
-                TRAFFIC – PASS OS SECTION DASHBOARD
+                TRAFFIC – PASS OPERATIONAL SECTION DASHBOARD
               </h2>
             </div>
           </div>
@@ -1847,12 +2151,28 @@ export default function TrafficManagerDashboard() {
               Custom Range
             </button>
           </div>
-          <div className="ml-auto shrink-0">
+          <div className="ml-auto shrink-0 text-right">
             <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-blue-200/60 block">
               Active Filter
             </span>
-            <span className="text-base font-black text-orange-300">
+            <span className="text-base font-black text-orange-300 block leading-tight">
               {filterRange.label}
+            </span>
+            {/* Shift subtitle — fixed height, opacity-only transition, no layout shift */}
+            <span
+              className={`text-[11px] font-bold block leading-tight mt-0.5 transition-opacity duration-200 ${
+                shiftFilter === "all"
+                  ? "opacity-0 text-blue-200/60"
+                  : "opacity-100 text-blue-200/80"
+              }`}
+            >
+              {shiftFilter === "shift1"
+                ? "🌅 Morning · 07:00–14:00"
+                : shiftFilter === "shift2"
+                  ? "☀️ Afternoon · 14:00–21:00"
+                  : shiftFilter === "shift3"
+                    ? "🌙 Night · 21:00–07:00"
+                    : "\u00a0"}
             </span>
           </div>
         </div>
@@ -1906,12 +2226,49 @@ export default function TrafficManagerDashboard() {
             )}
           </div>
         )}
+
+        {/* SHIFT FILTER ROW — iOS segmented control style, zero layout change on click */}
+        <div className="relative border-t border-white/10 px-5 py-3 flex items-center gap-3 bg-white/[0.03]">
+          {/* Label */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/25 ring-1 ring-indigo-400/30">
+              <Timer className="h-3.5 w-3.5 text-indigo-300" />
+            </span>
+            <div className="leading-tight">
+              <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-blue-200/60">
+                Duty Shift
+              </p>
+              <p className="text-[12px] font-extrabold text-white">
+                Shift Filter
+              </p>
+            </div>
+          </div>
+          <div className="h-6 w-px bg-white/15 shrink-0" />
+
+          {/* Segmented control — single container, no individual button color changes */}
+          <div className="flex items-center rounded-xl bg-white/8 ring-1 ring-inset ring-white/10 p-0.5 gap-0.5">
+            {SHIFT_TABS.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => setShiftFilter(s.key)}
+                className={`relative px-4 py-1.5 rounded-[10px] text-[12px] font-extrabold tracking-wide transition-colors duration-150 flex items-center gap-1.5 ${
+                  shiftFilter === s.key
+                    ? "bg-white/15 text-white shadow-sm"
+                    : "text-white/55 hover:text-white/80"
+                }`}
+              >
+                <span>{s.icon}</span>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* 1. OPERATIONAL EXECUTIVE SUMMARY */}
       <div>
         <SectionDivider label="Executive Operations Summary" icon={Sparkles} />
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 mt-2">
           <KpiCard
             title="Pass Approvals"
             value={displayData.pass.total}
@@ -1926,11 +2283,6 @@ export default function TrafficManagerDashboard() {
                 value: displayData.pass.pending,
                 label: "Pending",
               },
-              {
-                icon: CheckCircle2,
-                value: displayData.pass.processed,
-                label: "Approved",
-              },
               ...(displayData.pass.reverted > 0
                 ? [
                     {
@@ -1940,15 +2292,45 @@ export default function TrafficManagerDashboard() {
                     },
                   ]
                 : []),
-              ...(displayData.pass.rejected > 0
-                ? [
-                    {
-                      icon: XCircle,
-                      value: displayData.pass.rejected,
-                      label: "Rejected",
-                    },
-                  ]
-                : []),
+            ]}
+          />
+          {/* ── NEW: Passes Approved ── */}
+          <KpiCard
+            title="Passes Approved"
+            value={displayData.pass.processed}
+            icon={CheckCircle2}
+            gradient="from-emerald-500 via-emerald-600 to-teal-600"
+            glow="shadow-emerald-500/35"
+            href="/traffic_approval/passes?tab=processed"
+            loading={loading}
+            chips={[
+              {
+                icon: Users,
+                value: displayData.processedQueue.persons,
+                label: "Persons",
+              },
+              {
+                icon: Car,
+                value: displayData.processedQueue.vehicles,
+                label: "Vehicles",
+              },
+            ]}
+          />
+          {/* ── NEW: Passes Rejected ── */}
+          <KpiCard
+            title="Passes Rejected"
+            value={displayData.pass.rejected}
+            icon={XCircle}
+            gradient="from-rose-500 via-rose-600 to-pink-700"
+            glow="shadow-rose-500/35"
+            href="/traffic_approval/passes?tab=processed"
+            loading={loading}
+            chips={[
+              {
+                icon: RotateCcw,
+                value: displayData.pass.reverted,
+                label: "Reverted",
+              },
             ]}
           />
           <KpiCard
@@ -2074,36 +2456,58 @@ export default function TrafficManagerDashboard() {
         actionHref="/traffic_approval/passes?tab=pending"
       >
         {/* Summary chips row */}
-        <div className="flex items-center gap-2 flex-wrap mb-3">
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-1 text-[10px] font-extrabold">
-            <FileText className="h-3 w-3" />
-            {loading ? "—" : fmtNum(displayData.pass.pending)} Pending
+        <div className="flex items-center gap-2.5 flex-wrap mb-4">
+          <span className="inline-flex items-center gap-2 rounded-xl bg-amber-500 text-white border border-amber-600 px-3.5 py-1.5 shadow-md shadow-amber-300/40">
+            <FileText className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-[13px] font-black tabular-nums">
+              {loading ? "—" : fmtNum(displayData.pass.pending)}
+            </span>
+            <span className="text-[11px] font-bold text-amber-100">
+              Pending
+            </span>
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 text-[10px] font-extrabold">
-            <Users className="h-3 w-3" />
-            {loading ? "—" : fmtNum(displayData.pendingQueue.persons)} Persons
+          <span className="inline-flex items-center gap-2 rounded-xl bg-blue-600 text-white border border-blue-700 px-3.5 py-1.5 shadow-md shadow-blue-300/40">
+            <Users className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-[13px] font-black tabular-nums">
+              {loading ? "—" : fmtNum(displayData.pendingQueue.persons)}
+            </span>
+            <span className="text-[11px] font-bold text-blue-100">Persons</span>
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 px-2.5 py-1 text-[10px] font-extrabold">
-            <Car className="h-3 w-3" />
-            {loading ? "—" : fmtNum(displayData.pendingQueue.vehicles)} Vehicles
+          <span className="inline-flex items-center gap-2 rounded-xl bg-violet-600 text-white border border-violet-700 px-3.5 py-1.5 shadow-md shadow-violet-300/40">
+            <Car className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-[13px] font-black tabular-nums">
+              {loading ? "—" : fmtNum(displayData.pendingQueue.vehicles)}
+            </span>
+            <span className="text-[11px] font-bold text-violet-100">
+              Vehicles
+            </span>
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 text-[10px] font-extrabold">
-            <Building2 className="h-3 w-3" />
-            {loading ? "—" : fmtNum(displayData.pendingQueue.companies)}{" "}
-            Companies
+          <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 text-white border border-emerald-700 px-3.5 py-1.5 shadow-md shadow-emerald-300/40">
+            <Building2 className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-[13px] font-black tabular-nums">
+              {loading ? "—" : fmtNum(displayData.pendingQueue.companies)}
+            </span>
+            <span className="text-[11px] font-bold text-emerald-100">
+              Companies
+            </span>
           </span>
           <Link
             href="/traffic_approval/companies?tab=processed"
-            className="inline-flex items-center gap-1 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-2.5 py-1 text-[10px] font-extrabold transition-colors"
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-700 px-3.5 py-1.5 shadow-md shadow-indigo-300/40 transition-all hover:-translate-y-0.5"
           >
-            <Building2 className="h-3 w-3" />
-            {loading ? "—" : fmtNum(displayData.company.approved)} Companies
-            Approved
+            <Building2 className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-[13px] font-black tabular-nums">
+              {loading ? "—" : fmtNum(displayData.company.approved)}
+            </span>
+            <span className="text-[11px] font-bold text-indigo-100">
+              Approved
+            </span>
+            <ArrowUpRight className="h-3 w-3 text-indigo-200" />
           </Link>
         </div>
 
         {/* Scrollable list */}
-        <div className="overflow-y-auto max-h-56 divide-y divide-slate-50 -mx-1 pr-1 scrollbar-thin scrollbar-thumb-amber-200 scrollbar-track-transparent">
+        <div className="overflow-y-auto max-h-72 space-y-2 pr-0.5 scrollbar-thin scrollbar-thumb-amber-300 scrollbar-track-amber-50">
           {loading ? (
             <div className="py-2">
               <SkeletonRows />
@@ -2120,41 +2524,60 @@ export default function TrafficManagerDashboard() {
                     "/traffic_approval/passes?tab=pending",
                     `Review ${p.referenceNo || "pass request"}`,
                   )}
-                  className="flex items-center gap-3 py-2 px-2 cursor-pointer transition-all duration-150 hover:bg-amber-50/70 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  className="group/row relative flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 cursor-pointer shadow-sm transition-all duration-200 hover:border-amber-300 hover:shadow-md hover:-translate-y-[1px] hover:bg-amber-50/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 overflow-hidden"
                 >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-600 shrink-0">
-                    <FileText className="h-3.5 w-3.5" strokeWidth={2.2} />
-                  </div>
+                  {/* Left accent stripe */}
+                  <div className="absolute left-0 inset-y-0 w-1 rounded-l-2xl bg-gradient-to-b from-amber-400 to-orange-500" />
+
+                  {/* Serial number */}
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 text-[12px] font-black group-hover/row:bg-amber-100 group-hover/row:text-amber-700 transition-colors">
+                    {i + 1}
+                  </span>
+
+                  {/* Main content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-mono font-extrabold text-slate-700">
+                    {/* Row 1: Reference number + Status */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[14px] font-mono font-black text-slate-900 tracking-tight leading-none">
                         {p.referenceNo || (p.id ? `REQ-${p.id}` : "—")}
                       </span>
                       <span
-                        className={`inline-block px-1.5 py-px rounded-full font-bold text-[8px] border ${PASS_STATUS_TONE[status] || "bg-slate-100 text-slate-600 border-slate-200"}`}
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-lg font-extrabold text-[10px] border ${PASS_STATUS_TONE[status] || "bg-slate-100 text-slate-600 border-slate-200"}`}
                       >
                         {status.replace(/_/g, " ")}
                       </span>
                     </div>
-                    <p className="text-[9px] text-slate-400 font-medium truncate">
+                    {/* Row 2: Entity name · email */}
+                    <p className="text-[12px] text-slate-600 font-semibold truncate mt-0.5 leading-snug">
                       {p.entityName || "—"}
-                      {p.email ? ` · ${p.email}` : ""}
+                      {p.email ? (
+                        <span className="text-slate-400 font-normal">
+                          {" "}
+                          · {p.email}
+                        </span>
+                      ) : null}
                     </p>
                   </div>
+
+                  {/* Person / Vehicle count badges */}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-500/10 text-blue-700 px-1.5 py-px text-[9px] font-bold">
-                      <Users className="h-2.5 w-2.5" />
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-blue-600 text-white px-2.5 py-1 text-[11px] font-bold shadow-sm">
+                      <Users className="h-3.5 w-3.5" />
                       {p.persons?.length || 0}
                     </span>
-                    <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/10 text-violet-700 px-1.5 py-px text-[9px] font-bold">
-                      <Car className="h-2.5 w-2.5" />
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-violet-600 text-white px-2.5 py-1 text-[11px] font-bold shadow-sm">
+                      <Car className="h-3.5 w-3.5" />
                       {p.vehicles?.length || 0}
                     </span>
                   </div>
-                  <span className="text-[9px] font-semibold text-slate-400 shrink-0 hidden sm:block">
+
+                  {/* Date */}
+                  <span className="text-[11px] font-bold text-slate-500 shrink-0 hidden sm:block bg-slate-100 rounded-lg px-2.5 py-1 min-w-[80px] text-center group-hover/row:bg-amber-100 group-hover/row:text-amber-700 transition-colors">
                     {fmtDate(p.createdAt)}
                   </span>
-                  <ChevronRight className="h-3.5 w-3.5 text-slate-300 shrink-0" />
+
+                  {/* Arrow */}
+                  <ChevronRight className="h-4 w-4 text-amber-500 shrink-0 -translate-x-1 opacity-0 group-hover/row:opacity-100 group-hover/row:translate-x-0 transition-all duration-150" />
                 </div>
               );
             })
@@ -2162,8 +2585,8 @@ export default function TrafficManagerDashboard() {
         </div>
 
         {!loading && displayData.pendingQueue.list.length > 0 && (
-          <p className="mt-2 text-[9px] font-medium text-amber-600 text-right">
-            {fmtNum(displayData.pendingQueue.list.length)} of{" "}
+          <p className="mt-3 text-[11px] font-bold text-amber-600 text-right">
+            Showing {fmtNum(displayData.pendingQueue.list.length)} of{" "}
             {fmtNum(displayData.pass.pending)} pending passes
           </p>
         )}
@@ -2416,69 +2839,18 @@ export default function TrafficManagerDashboard() {
             />
           </div>
         </Panel>
-        <Panel
-          title="Department / Authority-wise Passes"
-          subtitle={`Distribution (${filterRange.label})`}
-          icon={Target}
-          tone="sky"
-          action="View Passes"
-          actionHref="/traffic_approval/passes"
-        >
-          <div className="mb-3 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-[10px] text-amber-700 font-medium flex items-center gap-2">
-            <AlertTriangle className="h-3 w-3 shrink-0" />
-            Dept-wise API confirmation active — operational distribution shown
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <MiniStat
-              label="Traffic"
-              value={displayData.pass.total}
-              tone="blue"
-              icon={Truck}
-              loading={loading}
-              href="/traffic_approval/passes"
-            />
-            <MiniStat
-              label="Civil"
-              value={Math.round(displayData.pass.total * 0.15)}
-              tone="violet"
-              icon={Building2}
-              loading={loading}
-            />
-            <MiniStat
-              label="CME"
-              value={Math.round(displayData.pass.total * 0.1)}
-              tone="orange"
-              icon={Target}
-              loading={loading}
-            />
-            <MiniStat
-              label="MEO"
-              value={Math.round(displayData.pass.total * 0.08)}
-              tone="emerald"
-              icon={Globe}
-              loading={loading}
-            />
-            <MiniStat
-              label="CVO"
-              value={Math.round(displayData.pass.total * 0.05)}
-              tone="rose"
-              icon={ShieldBan}
-              loading={loading}
-            />
-            <MiniStat
-              label="Total Passes"
-              value={displayData.pass.total}
-              tone="sky"
-              icon={FileText}
-              loading={loading}
-              href="/traffic_approval/passes"
-            />
-          </div>
-        </Panel>
+        <PassTypeDistributionChart
+          persons={displayData.hepRevenue.totalPersons}
+          vehicles={displayData.hepRevenue.totalVehicles}
+          loading={loading}
+        />
       </div>
 
       {/* 5. PASS APPROVAL BREAKDOWN — PENDING & PROCESSED */}
-      <SectionDivider label="Application Processing Status Summary" icon={ClipboardCheck} />
+      <SectionDivider
+        label="Application Processing Status Summary"
+        icon={ClipboardCheck}
+      />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel
           title="Pass Applications — Pending Review"
@@ -2514,7 +2886,7 @@ export default function TrafficManagerDashboard() {
               href="/traffic_approval/passes?tab=pending"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3 mt-3">
+          <div className="grid grid-cols-1 gap-3 mt-3">
             <MiniStat
               label="Companies"
               value={displayData.pendingQueue.companies}
@@ -2522,19 +2894,6 @@ export default function TrafficManagerDashboard() {
               icon={Building2}
               loading={loading}
               href="/traffic_approval/companies"
-            />
-            <MiniStat
-              label="Other"
-              value={Math.max(
-                0,
-                displayData.pass.pending -
-                  displayData.pendingQueue.persons -
-                  displayData.pendingQueue.vehicles,
-              )}
-              tone="orange"
-              icon={Layers}
-              loading={loading}
-              href="/traffic_approval/passes?tab=pending"
             />
           </div>
         </Panel>
@@ -2546,7 +2905,7 @@ export default function TrafficManagerDashboard() {
           action="View"
           actionHref="/traffic_approval/passes?tab=processed"
         >
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <MiniStat
               label="Total Processed"
               value={displayData.pass.processed}
@@ -2554,14 +2913,6 @@ export default function TrafficManagerDashboard() {
               icon={CheckCircle2}
               loading={loading}
               href="/traffic_approval/passes?tab=processed"
-            />
-            <MiniStat
-              label="Pending Clearance"
-              value={displayData.pass.pending}
-              tone="amber"
-              icon={Clock}
-              loading={loading}
-              href="/traffic_approval/passes?tab=pending"
             />
             <MiniStat
               label="Total Passes"
@@ -2825,7 +3176,6 @@ export default function TrafficManagerDashboard() {
             />
           </div>
 
-
           {/* Company Revenue Ledger — fixed-height scrollable */}
           {!loading && displayData.hepRevenue.companyList.length > 0 && (
             <div className="space-y-2">
@@ -2884,7 +3234,7 @@ export default function TrafficManagerDashboard() {
                   const q = allCompaniesSearch.trim().toLowerCase();
                   const filtered = q
                     ? displayData.hepRevenue.companyList.filter((c) =>
-                        c.name.toLowerCase().includes(q)
+                        c.name.toLowerCase().includes(q),
                       )
                     : displayData.hepRevenue.companyList;
 
@@ -2902,11 +3252,16 @@ export default function TrafficManagerDashboard() {
                   ];
 
                   return filtered.map((c, i) => {
-                    const originalRank = displayData.hepRevenue.companyList.indexOf(c);
-                    const badgeCls = rankBadge[originalRank] ?? "bg-slate-100 text-slate-600";
-                    const pct = displayData.hepRevenue.total > 0
-                      ? Math.round((c.total / displayData.hepRevenue.total) * 100)
-                      : 0;
+                    const originalRank =
+                      displayData.hepRevenue.companyList.indexOf(c);
+                    const badgeCls =
+                      rankBadge[originalRank] ?? "bg-slate-100 text-slate-600";
+                    const pct =
+                      displayData.hepRevenue.total > 0
+                        ? Math.round(
+                            (c.total / displayData.hepRevenue.total) * 100,
+                          )
+                        : 0;
 
                     return (
                       <div
@@ -2936,7 +3291,8 @@ export default function TrafficManagerDashboard() {
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[9px] text-slate-400 font-semibold">
-                              {c.passCount} passes · {c.persons}P · {c.vehicles}V
+                              {c.passCount} passes · {c.persons}P · {c.vehicles}
+                              V
                             </span>
                             {pct > 0 && (
                               <span className="text-[9px] font-bold text-emerald-600">
@@ -2967,7 +3323,6 @@ export default function TrafficManagerDashboard() {
               </div>
             </div>
           )}
-
 
           {!loading && displayData.hepRevenue.companyList.length === 0 && (
             <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-6 text-[11px] text-slate-400 font-medium text-center">

@@ -1376,7 +1376,7 @@ export default function TrafficManagerDashboard() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold text-blue-200/70 hidden sm:inline">
-                  Traffic Authority · Chennai Port Authority
+                  Chennai Port Trust · Traffic Authority Division
                 </span>
               </div>
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white leading-tight mt-0.5">
@@ -1557,10 +1557,10 @@ export default function TrafficManagerDashboard() {
             </span>
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.15em] text-rose-700">
-                Decision Required · Pending Actions
+                Pending Authorisation — Immediate Review Required
               </p>
               <p className="text-[11px] font-semibold text-slate-600">
-                Items requiring Traffic Manager attention right now
+                The following require Traffic Manager action and sign-off
               </p>
             </div>
           </div>
@@ -1568,21 +1568,21 @@ export default function TrafficManagerDashboard() {
             {[
               {
                 href: "/traffic_manager/passes?tab=pending",
-                label: `${displayData.pass.pending} Pass Reviews`,
+                label: `${displayData.pass.pending} Pass Applications`,
                 icon: FileText,
                 cls: "bg-amber-500 hover:bg-amber-600",
                 urgent: displayData.pass.pending > 5,
               },
               {
                 href: "/traffic_manager/companies?tab=pending",
-                label: `${displayData.company.pending} Company Approvals`,
+                label: `${displayData.company.pending} Operator Approvals`,
                 icon: Building2,
                 cls: "bg-blue-600 hover:bg-blue-700",
                 urgent: false,
               },
               {
                 href: "/traffic_manager/blacklist",
-                label: `${displayData.bl.pending_blacklist} Blacklist Reviews`,
+                label: `${displayData.bl.pending_blacklist} Restriction Reviews`,
                 icon: ShieldBan,
                 cls: "bg-rose-600 hover:bg-rose-700",
                 urgent: displayData.bl.pending_blacklist > 0,
@@ -1625,11 +1625,11 @@ export default function TrafficManagerDashboard() {
           Jump To:
         </span>
         {[
-          { id: "sec-overview", label: "Command Centre", icon: Sparkles },
-          { id: "sec-revenue", label: "Revenue & Dues", icon: TrendingUp },
+          { id: "sec-overview", label: "Command Overview", icon: Sparkles },
+          { id: "sec-revenue", label: "Revenue & Collections", icon: TrendingUp },
           {
             id: "sec-health",
-            label: "Pass & Company Health",
+            label: "Pass & Operator Status",
             icon: ClipboardCheck,
           },
           {
@@ -1637,7 +1637,7 @@ export default function TrafficManagerDashboard() {
             label: "Security & Compliance",
             icon: ShieldBan,
           },
-          { id: "sec-operations", label: "Operations", icon: Globe },
+          { id: "sec-operations", label: "Port Operations", icon: Globe },
         ].map((sec) => {
           const Icon = sec.icon;
           return (
@@ -1657,9 +1657,9 @@ export default function TrafficManagerDashboard() {
         })}
       </div>
 
-      {/* — 1. COMMAND CENTRE — Strategic KPIs — */}
+      {/* — EXECUTIVE OVERVIEW — Strategic KPIs — */}
       <div id="sec-overview">
-        <SectionDivider label="Command Centre" icon={Sparkles} />
+        <SectionDivider label="Executive Overview" icon={Sparkles} />
 
         {/* Avg approval time banner */}
         <div className="mb-3 flex items-center justify-between rounded-2xl bg-gradient-to-r from-[#0a1e4d] to-[#1b3a8a] px-5 py-3 ring-1 ring-inset ring-white/10 shadow-sm">
@@ -1669,7 +1669,7 @@ export default function TrafficManagerDashboard() {
             </span>
             <div>
               <p className="text-[9px] font-extrabold uppercase tracking-widest text-blue-200/70">
-                Avg. Pass Approval Time
+                Avg. Pass Processing Time
               </p>
               <p className={`text-lg font-black tabular-nums ${avgColor}`}>
                 {fmtDuration(data.avgApprovalMins)}
@@ -1682,7 +1682,7 @@ export default function TrafficManagerDashboard() {
           <div className="hidden sm:flex items-center gap-6">
             {[
               {
-                label: "Pass Clearance Rate",
+                label: "Application Clearance Rate",
                 value: `${Math.round(((displayData.pass.processed || 0) / (displayData.pass.total || 1)) * 100)}%`,
                 color: "text-emerald-300",
               },
@@ -1712,9 +1712,9 @@ export default function TrafficManagerDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
           <KpiCard
-            title="Revenue Collected"
+            title="Total Revenue Collected"
             value={displayData.hepRevenue.total}
             icon={Wallet}
             gradient="from-emerald-500 to-teal-600"
@@ -1730,29 +1730,47 @@ export default function TrafficManagerDashboard() {
               },
             ]}
           />
+          {/* ── NEW: Passes Approved ── */}
           <KpiCard
             title="Passes Approved"
             value={displayData.pass.processed}
-            icon={PackageCheck}
-            gradient="from-blue-500 to-indigo-600"
-            glow="shadow-blue-500/30"
+            icon={CheckCircle2}
+            gradient="from-emerald-500 via-emerald-600 to-teal-600"
+            glow="shadow-emerald-500/35"
             href="/traffic_manager/passes?tab=processed"
             loading={loading}
             chips={[
               {
                 icon: Users,
-                value: displayData.processedQueue.persons,
-                label: "P",
+                value: displayData.processedQueue?.persons ?? 0,
+                label: "Persons",
               },
               {
                 icon: Car,
-                value: displayData.processedQueue.vehicles,
-                label: "V",
+                value: displayData.processedQueue?.vehicles ?? 0,
+                label: "Vehicles",
+              },
+            ]}
+          />
+          {/* ── NEW: Passes Rejected ── */}
+          <KpiCard
+            title="Passes Rejected"
+            value={displayData.pass.rejected}
+            icon={XCircle}
+            gradient="from-rose-500 via-rose-600 to-pink-700"
+            glow="shadow-rose-500/35"
+            href="/traffic_manager/passes"
+            loading={loading}
+            chips={[
+              {
+                icon: RotateCcw,
+                value: displayData.pass.reverted,
+                label: "Reverted",
               },
             ]}
           />
           <KpiCard
-            title="Pending Clearance"
+            title="Awaiting Clearance"
             value={displayData.pass.pending}
             icon={Clock}
             gradient="from-amber-500 to-orange-600"
@@ -1768,7 +1786,7 @@ export default function TrafficManagerDashboard() {
             ]}
           />
           <KpiCard
-            title="Companies Registered"
+            title="Registered Operators"
             value={displayData.company.total}
             icon={Building2}
             gradient="from-violet-500 to-purple-600"
@@ -1784,7 +1802,7 @@ export default function TrafficManagerDashboard() {
             ]}
           />
           <KpiCard
-            title="Active Restrictions"
+            title="Active Blacklist Entries"
             value={displayData.bl.active_blacklisted}
             icon={ShieldBan}
             gradient="from-rose-500 to-red-600"
@@ -1816,12 +1834,33 @@ export default function TrafficManagerDashboard() {
               },
             ]}
           />
+          <KpiCard
+            title="Passes Cleared"
+            value={displayData.pass.processed}
+            icon={PackageCheck}
+            gradient="from-blue-500 to-indigo-600"
+            glow="shadow-blue-500/30"
+            href="/traffic_manager/passes?tab=processed"
+            loading={loading}
+            chips={[
+              {
+                icon: Users,
+                value: displayData.processedQueue?.persons ?? 0,
+                label: "P",
+              },
+              {
+                icon: Car,
+                value: displayData.processedQueue?.vehicles ?? 0,
+                label: "V",
+              },
+            ]}
+          />
         </div>
       </div>
 
       {/* — 2. REVENUE INTELLIGENCE — */}
       <div id="sec-revenue">
-        <SectionDivider label="Revenue & Collections" icon={TrendingUp} />
+        <SectionDivider label="Revenue & Financial Collections" icon={TrendingUp} />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Panel
             title="HEP Pass Revenue & Collections"
@@ -1868,7 +1907,7 @@ export default function TrafficManagerDashboard() {
               <div className="flex items-center justify-between text-xs font-bold mb-1.5">
                 <span className="text-slate-200 flex items-center gap-1.5">
                   <TrendingUp className="h-3 w-3 text-emerald-400" />
-                  Revenue Mode Distribution
+                  Payment Mode Distribution
                 </span>
                 <span className="text-emerald-300 font-black">
                   {fmtMoney(displayData.hepRevenue.total)} total
@@ -1917,7 +1956,7 @@ export default function TrafficManagerDashboard() {
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                    Top Contributors by Revenue
+                    Revenue Contribution by Operator
                   </p>
                   <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                     {fmtMoney(displayData.hepRevenue.total)} total
@@ -2005,7 +2044,7 @@ export default function TrafficManagerDashboard() {
             <div className="mb-3 rounded-xl bg-gradient-to-r from-[#0a1e4d] to-[#12275f] p-3 text-white ring-1 ring-white/10">
               <div className="flex items-center justify-between text-xs font-bold mb-1.5">
                 <span className="text-slate-200 text-[10px]">
-                  Collection Efficiency
+                  Dues Recovery Rate
                 </span>
                 <span className="text-teal-300 font-black text-sm">
                   {displayData.overstay.total > 0
@@ -2029,7 +2068,7 @@ export default function TrafficManagerDashboard() {
 
             <div className="space-y-1 mb-3">
               <IconStatRow
-                label="Collected (All Time)"
+                label="Total Dues Collected"
                 value={displayData.overstay.paidAmount}
                 icon={CircleDollarSign}
                 tone="emerald"
@@ -2047,7 +2086,7 @@ export default function TrafficManagerDashboard() {
                 href="/traffic_manager/overstay"
               />
               <IconStatRow
-                label="Exception Requests"
+                label="Waiver Requests"
                 value={displayData.overstay.exceptions}
                 icon={HelpCircle}
                 tone="amber"
@@ -2055,7 +2094,7 @@ export default function TrafficManagerDashboard() {
                 href="/traffic_manager/overstay"
               />
               <IconStatRow
-                label="Settled Cases"
+                label="Cases Settled"
                 value={displayData.overstay.paid}
                 icon={CheckCircle2}
                 tone="sky"
@@ -2107,14 +2146,14 @@ export default function TrafficManagerDashboard() {
         </div>
       </div>
 
-      {/* — 3. PASS & COMPANY HEALTH — */}
+      {/* — 3. PASS & OPERATOR STATUS — */}
       <div id="sec-health">
-        <SectionDivider label="Pass & Company Health" icon={ClipboardCheck} />
+        <SectionDivider label="Pass Application & Operator Status" icon={ClipboardCheck} />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Pass Health */}
           <Panel
-            title="Pass Management Health"
-            subtitle={`Performance & Health Summary (${filterRange.label})`}
+            title="Pass Application Status"
+            subtitle={`Application status report — ${filterRange.label}`}
             icon={FileText}
             tone="blue"
             action="View Passes"
@@ -2124,7 +2163,7 @@ export default function TrafficManagerDashboard() {
               <div className="flex items-center justify-between text-xs font-bold mb-1.5">
                 <span className="text-slate-200 flex items-center gap-1.5">
                   <CheckCircle className="h-3.5 w-3.5 text-blue-400" />
-                  Pass Clearance Rate
+                  Application Clearance Rate
                 </span>
                 <span className="text-blue-300 font-black text-lg">
                   {Math.round(
@@ -2174,7 +2213,7 @@ export default function TrafficManagerDashboard() {
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <MiniStat
-                label="Total Passes"
+                label="Total Applications"
                 value={displayData.pass.total}
                 tone="blue"
                 icon={FileText}
@@ -2245,8 +2284,8 @@ export default function TrafficManagerDashboard() {
 
           {/* Company Health */}
           <Panel
-            title="Company Registration Health"
-            subtitle="Operator Registration & Compliance Status"
+            title="Operator Registration Status"
+            subtitle="Registered operator compliance and approval status"
             icon={Building2}
             tone="violet"
             action="View All"
@@ -2256,7 +2295,7 @@ export default function TrafficManagerDashboard() {
               <div className="flex items-center justify-between text-xs font-bold mb-1.5">
                 <span className="text-slate-200 flex items-center gap-1.5">
                   <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" />
-                  Operator Clearance Rate
+                  Operator Approval Rate
                 </span>
                 <span className="text-emerald-300 font-black text-lg">
                   {Math.round(
@@ -2358,7 +2397,7 @@ export default function TrafficManagerDashboard() {
               <div className="mt-3 flex items-center gap-2 rounded-xl bg-blue-50 border border-blue-200 px-3 py-2">
                 <Building2 className="h-3.5 w-3.5 text-blue-600 shrink-0" />
                 <p className="text-[10px] font-bold text-blue-700">
-                  {displayData.company.pending} operator registrations pending
+                  {displayData.company.pending} operator registration(s) pending
                   approval.
                   {displayData.profileUpdates > 0
                     ? ` ${displayData.profileUpdates} profile updates need review.`
@@ -2378,11 +2417,11 @@ export default function TrafficManagerDashboard() {
 
       {/* — 4. SECURITY & COMPLIANCE — */}
       <div id="sec-security">
-        <SectionDivider label="Security & Compliance" icon={ShieldBan} />
+        <SectionDivider label="Security & Regulatory Compliance" icon={ShieldBan} />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Blacklist Intelligence */}
+          {/* Blacklist Register */}
           <Panel
-            title="Blacklist & Restrictions"
+            title="Blacklist Register & Restrictions"
             subtitle="Active restrictions across all entity types"
             icon={ShieldBan}
             tone="red"
@@ -2393,7 +2432,7 @@ export default function TrafficManagerDashboard() {
             <div className="mb-4 rounded-2xl bg-gradient-to-r from-[#0a1e4d] to-[#12275f] p-3.5 text-white ring-1 ring-white/10">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-200/70">
-                  Active Restriction Index
+                  Restriction Summary
                 </span>
                 <span className="text-rose-300 font-black text-lg">
                   {fmtNum(displayData.bl.active_blacklisted)} Active
@@ -2510,8 +2549,8 @@ export default function TrafficManagerDashboard() {
 
           {/* Overstay & Penalties */}
           <Panel
-            title="Overstay & Penalty Summary"
-            subtitle="Port fee compliance & outstanding dues"
+            title="Overstay & Penalty Register"
+            subtitle="Port fee compliance and outstanding dues recovery"
             icon={Timer}
             tone="orange"
             action="Manage"
@@ -2520,7 +2559,7 @@ export default function TrafficManagerDashboard() {
             <div className="mb-4 rounded-2xl bg-gradient-to-r from-[#0a1e4d] to-[#12275f] p-3.5 text-white ring-1 ring-white/10">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-200/70">
-                  Penalty Collection Status
+                  Dues Recovery Status
                 </span>
                 <span className="text-teal-300 font-black">
                   {displayData.overstay.total > 0
@@ -2574,7 +2613,7 @@ export default function TrafficManagerDashboard() {
                 href="/traffic_manager/overstay"
               />
               <MiniStat
-                label="Exception Requests"
+                label="Waiver Requests"
                 value={displayData.overstay.exceptions}
                 tone="amber"
                 icon={HelpCircle}
@@ -2615,10 +2654,10 @@ export default function TrafficManagerDashboard() {
       <div id="sec-operations">
         <SectionDivider label="Operations Summary" icon={Globe} />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Port Transaction Activity */}
+          {/* Port Pass Transaction Volume */}
           <Panel
-            title="Port Transaction Activity"
-            subtitle="Pass submission volume by period"
+            title="Port Pass Transaction Volume"
+            subtitle="Volume of pass submissions by period"
             icon={Activity}
             tone="cyan"
             action="View Passes"
@@ -2689,8 +2728,8 @@ export default function TrafficManagerDashboard() {
 
           {/* Bulk Pass */}
           <Panel
-            title="Bulk Pass Operations"
-            subtitle="Group pass application summary"
+            title="Group Pass Application Status"
+            subtitle="Status of group pass applications submitted"
             icon={Users}
             tone="indigo"
             action="View All"
@@ -2699,7 +2738,7 @@ export default function TrafficManagerDashboard() {
             <div className="mb-3 rounded-xl bg-gradient-to-r from-[#0a1e4d] to-[#12275f] p-3 text-white ring-1 ring-white/10">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-200/70">
-                  Bulk Pass Approval Rate
+                  Group Pass Approval Rate
                 </span>
                 <span className="text-indigo-300 font-black">
                   {displayData.bulk.total > 0
@@ -2765,8 +2804,8 @@ export default function TrafficManagerDashboard() {
 
           {/* Quick Links / Reports */}
           <Panel
-            title="Quick Access"
-            subtitle="Navigate to key management areas"
+            title="Management Module Directory"
+            subtitle="Direct access to operational management modules"
             icon={BarChart3}
             tone="navy"
           >
@@ -2790,7 +2829,7 @@ export default function TrafficManagerDashboard() {
                 },
                 {
                   href: "/traffic_manager/companies",
-                  label: "Operator Registry",
+                  label: "Operator Registration Registry",
                   sub: `${displayData.company.total} registered · ${displayData.company.approved} verified`,
                   icon: Building2,
                   color: "bg-violet-50 border-violet-200 text-violet-700",
@@ -2798,7 +2837,7 @@ export default function TrafficManagerDashboard() {
                 },
                 {
                   href: "/traffic_manager/blacklist",
-                  label: "Blacklist Ledger",
+                  label: "Blacklist & Restrictions Register",
                   sub: `${displayData.bl.active_blacklisted} active · ${displayData.bl.pending_blacklist} pending`,
                   icon: ShieldBan,
                   color: "bg-rose-50 border-rose-200 text-rose-700",
@@ -2814,7 +2853,7 @@ export default function TrafficManagerDashboard() {
                 },
                 {
                   href: "/traffic_manager/bulk-pass",
-                  label: "Group Pass Applications",
+                  label: "Group Pass Application Register",
                   sub: `${displayData.bulk.total} applications · ${displayData.bulk.pending} need review`,
                   icon: Layers,
                   color: "bg-indigo-50 border-indigo-200 text-indigo-700",

@@ -1468,7 +1468,7 @@ export default function DashboardPage() {
         if (Array.isArray(parsed) && parsed.length === 8) {
           setCardOrder(parsed);
         }
-      } catch (e) { }
+      } catch (e) {}
     }
   }, []);
 
@@ -1543,31 +1543,27 @@ export default function DashboardPage() {
 
       const role = String(parsedUser?.role || "").trim();
 
-    const departmentId =
-      Number(parsedUser?.departmentId);
+      const departmentId = Number(parsedUser?.departmentId);
 
-    const isEssentialApprover =
-      (
-        departmentId === 7 &&
-        ["Dy. Conservator", "Fire Safety Officer"].includes(
+      const isEssentialApprover =
+        (departmentId === 7 &&
+          ["Dy. Conservator", "Fire Safety Officer"].includes(role)) ||
+        departmentId === 3 ||
+        departmentId === 4 ||
+        ["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"].includes(
           role,
-        )
-      ) ||
-      departmentId === 3 ||
-      departmentId === 4 ||
-      ["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"]
-        .includes(role) ||
-      role === "Approval" ||
-      role === "Safety Officer";
+        ) ||
+        role === "Approval" ||
+        role === "Safety Officer";
 
-    if (isEssentialApprover) {
-      if (role === "Safety Officer") {
-        router.replace("/traffic_approval/passes?tab=pending");
-      } else {
-        router.replace("/traffic_approval/dashboard");
+      if (isEssentialApprover) {
+        if (role === "Safety Officer") {
+          router.replace("/traffic_approval/passes?tab=pending");
+        } else {
+          router.replace("/traffic_approval/dashboard");
+        }
       }
-    }
-        } catch (error) {
+    } catch (error) {
       console.error("Failed to parse logged-in user:", error);
       router.push("/");
     }
@@ -2150,7 +2146,7 @@ export default function DashboardPage() {
               {greeting}
             </div>
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-stone-900 dark:text-stone-100 mb-2">
-              Welcome Company,{" "}
+              Welcome,{" "}
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-orange-500 dark:from-amber-300 dark:to-orange-400">
                 {username}
               </span>
@@ -2873,12 +2869,43 @@ const PassDetailModal = memo(function PassDetailModal({
                       <Field label="Email" value={p.email} />
                       <Field label="Nationality" value={p.nationality} />
                       <Field label="Pass Type" value={p.passType} />
-                      <Field label="Validity" value={dateRange(p.dateFrom, p.dateTo)} />
-                      <Field label="Amount" value={p.amount != null ? formatCurrency(parseFloat(p.amount)) : "—"} />
-                      <Field label="ID Proof" value={p.idProofType ? `${ID_PROOF_LABELS[p.idProofType] || p.idProofType}: ${p.idProofNumber || "—"}` : (p.idProofNumber || "—")} />
-                      {p.visaNo ? <Field label="Visa No" value={p.visaNo} mono /> : null}
-                      {p.cardNumber ? <Field label="QR Pass Reference" value={p.cardNumber} mono /> : null}
-                      {p.withTwoWheeler ? <Field label="Two-Wheeler" value={p.vehicleNo || "Yes"} mono /> : null}
+                      <Field
+                        label="Validity"
+                        value={dateRange(p.dateFrom, p.dateTo)}
+                      />
+                      <Field
+                        label="Amount"
+                        value={
+                          p.amount != null
+                            ? formatCurrency(parseFloat(p.amount))
+                            : "—"
+                        }
+                      />
+                      <Field
+                        label="ID Proof"
+                        value={
+                          p.idProofType
+                            ? `${ID_PROOF_LABELS[p.idProofType] || p.idProofType}: ${p.idProofNumber || "—"}`
+                            : p.idProofNumber || "—"
+                        }
+                      />
+                      {p.visaNo ? (
+                        <Field label="Visa No" value={p.visaNo} mono />
+                      ) : null}
+                      {p.cardNumber ? (
+                        <Field
+                          label="QR Pass Reference"
+                          value={p.cardNumber}
+                          mono
+                        />
+                      ) : null}
+                      {p.withTwoWheeler ? (
+                        <Field
+                          label="Two-Wheeler"
+                          value={p.vehicleNo || "Yes"}
+                          mono
+                        />
+                      ) : null}
                     </div>
                     {p.status === "reverted" && p.rejectedReason && (
                       <div className="mt-3 rounded-xl bg-orange-50 dark:bg-orange-400/10 ring-1 ring-orange-200/70 dark:ring-orange-400/20 p-2.5">
@@ -2971,7 +2998,11 @@ const PassDetailModal = memo(function PassDetailModal({
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <Field label="Vehicle Type" value={v.vehicleTypeId} />
-                      <Field label="QR Pass Reference" value={v.qrCode || v.rfidCardNumber} mono />
+                      <Field
+                        label="QR Pass Reference"
+                        value={v.qrCode || v.rfidCardNumber}
+                        mono
+                      />
                       <Field label="Pass Type" value={v.passType} />
                       <Field
                         label="Validity"

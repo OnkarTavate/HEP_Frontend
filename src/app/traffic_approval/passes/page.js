@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
@@ -1924,13 +1924,15 @@ export default function TrafficPassesPage() {
 
       {/* ── 4 PREMIUM STAT CARDS ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-
         {/* ── Card 1: Total Applications ── */}
         <div
           onClick={() => handleCardClick("pending", "ALL")}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick("pending", "ALL")}
+          onKeyDown={(e) =>
+            (e.key === "Enter" || e.key === " ") &&
+            handleCardClick("pending", "ALL")
+          }
           className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1e3a8a] via-[#3730a3] to-[#4c1d95] p-5 text-white shadow-xl shadow-indigo-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-700/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
@@ -1942,19 +1944,34 @@ export default function TrafficPassesPage() {
           <div className="relative flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shadow-inner shrink-0">
-                <PackageCheck className="h-4 w-4 text-blue-200" strokeWidth={2.2} />
+                <PackageCheck
+                  className="h-4 w-4 text-blue-200"
+                  strokeWidth={2.2}
+                />
               </span>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-blue-200/80 leading-tight">Total</span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-blue-200/80 leading-tight">
+                Total
+              </span>
             </div>
-            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white/10 text-blue-200 border border-white/15">ALL</span>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white/10 text-blue-200 border border-white/15">
+              ALL
+            </span>
           </div>
           <div className="relative mt-3">
-            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">{globalCounts.total}</p>
-            <p className="text-[11px] font-semibold text-blue-200/70 mt-1.5 leading-snug">{globalCounts.pending} pending · {globalCounts.processed} authorized</p>
+            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">
+              {globalCounts.total}
+            </p>
+            <p className="text-[11px] font-semibold text-blue-200/70 mt-1.5 leading-snug">
+              {globalCounts.pending} pending · {globalCounts.processed}{" "}
+              authorized
+            </p>
           </div>
           <div className="relative mt-4">
             <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-blue-300 via-indigo-300 to-violet-300 transition-all duration-700" style={{ width: globalCounts.total > 0 ? "100%" : "0%" }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-blue-300 via-indigo-300 to-violet-300 transition-all duration-700"
+                style={{ width: globalCounts.total > 0 ? "100%" : "0%" }}
+              />
             </div>
           </div>
         </div>
@@ -1964,7 +1981,10 @@ export default function TrafficPassesPage() {
           onClick={() => handleCardClick("pending", "ALL")}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick("pending", "ALL")}
+          onKeyDown={(e) =>
+            (e.key === "Enter" || e.key === " ") &&
+            handleCardClick("pending", "ALL")
+          }
           className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#92400e] via-[#c2410c] to-[#b91c1c] p-5 text-white shadow-xl shadow-orange-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-orange-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
@@ -1978,7 +1998,9 @@ export default function TrafficPassesPage() {
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shadow-inner shrink-0">
                 <Clock className="h-4 w-4 text-amber-200" strokeWidth={2.2} />
               </span>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-amber-200/80 leading-tight">Pending</span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-amber-200/80 leading-tight">
+                Pending
+              </span>
             </div>
             {globalCounts.pending > 0 && (
               <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-orange-600 shadow-md animate-pulse">
@@ -1988,15 +2010,30 @@ export default function TrafficPassesPage() {
             )}
           </div>
           <div className="relative mt-3">
-            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">{globalCounts.pending}</p>
-            <p className="text-[11px] font-semibold text-orange-200/70 mt-1.5 leading-snug">{globalCounts.pending} awaiting review of {globalCounts.total} total</p>
+            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">
+              {globalCounts.pending}
+            </p>
+            <p className="text-[11px] font-semibold text-orange-200/70 mt-1.5 leading-snug">
+              {globalCounts.pending} awaiting review of {globalCounts.total}{" "}
+              total
+            </p>
           </div>
           <div className="relative mt-4">
             <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-amber-300 via-orange-300 to-red-300 transition-all duration-700" style={{ width: globalCounts.total > 0 ? `${Math.round((globalCounts.pending / globalCounts.total) * 100)}%` : "0%" }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-300 via-orange-300 to-red-300 transition-all duration-700"
+                style={{
+                  width:
+                    globalCounts.total > 0
+                      ? `${Math.round((globalCounts.pending / globalCounts.total) * 100)}%`
+                      : "0%",
+                }}
+              />
             </div>
             <p className="text-[10px] text-orange-200/50 mt-1 tabular-nums">
-              {globalCounts.total > 0 ? `${Math.round((globalCounts.pending / globalCounts.total) * 100)}% of total` : "—"}
+              {globalCounts.total > 0
+                ? `${Math.round((globalCounts.pending / globalCounts.total) * 100)}% of total`
+                : "—"}
             </p>
           </div>
         </div>
@@ -2006,7 +2043,10 @@ export default function TrafficPassesPage() {
           onClick={() => handleCardClick("processed", "ALL")}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick("processed", "ALL")}
+          onKeyDown={(e) =>
+            (e.key === "Enter" || e.key === " ") &&
+            handleCardClick("processed", "ALL")
+          }
           className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#064e3b] via-[#0f766e] to-[#0e7490] p-5 text-white shadow-xl shadow-emerald-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-emerald-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
@@ -2018,59 +2058,134 @@ export default function TrafficPassesPage() {
           <div className="relative flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shadow-inner shrink-0">
-                <CheckCircle2 className="h-4 w-4 text-emerald-200" strokeWidth={2.2} />
+                <CheckCircle2
+                  className="h-4 w-4 text-emerald-200"
+                  strokeWidth={2.2}
+                />
               </span>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-200/80 leading-tight">Processed</span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-200/80 leading-tight">
+                Processed
+              </span>
             </div>
-            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">Authorized</span>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
+              Authorized
+            </span>
           </div>
           <div className="relative mt-3">
-            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">{globalCounts.processed}</p>
-            <p className="text-[11px] font-semibold text-emerald-200/70 mt-1.5 leading-snug">{globalCounts.processed} authorized · {globalCounts.pending} awaiting review</p>
+            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">
+              {globalCounts.processed}
+            </p>
+            <p className="text-[11px] font-semibold text-emerald-200/70 mt-1.5 leading-snug">
+              {globalCounts.processed} authorized · {globalCounts.pending}{" "}
+              awaiting review
+            </p>
           </div>
           <div className="relative mt-4">
             <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 transition-all duration-700" style={{ width: globalCounts.total > 0 ? `${Math.round((globalCounts.processed / globalCounts.total) * 100)}%` : "0%" }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 transition-all duration-700"
+                style={{
+                  width:
+                    globalCounts.total > 0
+                      ? `${Math.round((globalCounts.processed / globalCounts.total) * 100)}%`
+                      : "0%",
+                }}
+              />
             </div>
             <p className="text-[10px] text-emerald-200/50 mt-1 tabular-nums">
-              {globalCounts.total > 0 ? `${Math.round((globalCounts.processed / globalCounts.total) * 100)}% clearance rate` : "—"}
+              {globalCounts.total > 0
+                ? `${Math.round((globalCounts.processed / globalCounts.total) * 100)}% clearance rate`
+                : "—"}
             </p>
           </div>
         </div>
 
-        {/* ── Card 4: Vehicle Updates ── */}
+        {/* ── Card 4: Rejected ── */}
         <div
-          onClick={() => handleCardClick("pass_updates", "ALL")}
+          onClick={() => handleCardClick("processed", "ALL")}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick("pass_updates", "ALL")}
-          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#4a1d96] via-[#6d28d9] to-[#3730a3] p-5 text-white shadow-xl shadow-purple-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-violet-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          onKeyDown={(e) =>
+            (e.key === "Enter" || e.key === " ") &&
+            handleCardClick("processed", "ALL")
+          }
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#7f1d1d] via-[#b91c1c] to-[#9f1239] p-5 text-white shadow-xl shadow-red-900/40 ring-1 ring-inset ring-white/15 cursor-pointer min-h-[148px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-red-600/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
-          <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-violet-400/20 blur-2xl" />
-          <div className="pointer-events-none absolute -left-4 -bottom-4 h-20 w-20 rounded-full bg-indigo-600/25 blur-xl" />
+          <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-red-400/20 blur-2xl" />
+          <div className="pointer-events-none absolute -left-4 -bottom-4 h-20 w-20 rounded-full bg-rose-600/25 blur-xl" />
           <div className="pointer-events-none absolute right-3 bottom-3 opacity-[0.08] group-hover:opacity-[0.13] transition-opacity duration-300">
-            <RotateCcw className="h-20 w-20 text-white" strokeWidth={1.2} />
+            <XCircle className="h-20 w-20 text-white" strokeWidth={1.2} />
           </div>
           <div className="relative flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 shadow-inner shrink-0">
-                <RotateCcw className="h-4 w-4 text-violet-200" strokeWidth={2.2} />
+                <XCircle className="h-4 w-4 text-red-200" strokeWidth={2.2} />
               </span>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-violet-200/80 leading-tight">Vehicle Updates</span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-red-200/80 leading-tight">
+                Rejected
+              </span>
             </div>
+            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-400/20 text-red-200 border border-red-400/30">
+              Denied
+            </span>
           </div>
           <div className="relative mt-3">
-            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">{passUpdatesCount}</p>
-            <p className="text-[11px] font-semibold text-violet-200/70 mt-1.5 leading-snug">Two-wheeler change requests</p>
+            <p className="text-4xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">
+              {Math.max(
+                0,
+                globalCounts.total -
+                  globalCounts.pending -
+                  globalCounts.processed,
+              )}
+            </p>
+            <p className="text-[11px] font-semibold text-red-200/70 mt-1.5 leading-snug">
+              {Math.max(
+                0,
+                globalCounts.total -
+                  globalCounts.pending -
+                  globalCounts.processed,
+              )}{" "}
+              rejected · {globalCounts.pending} still pending
+            </p>
           </div>
           <div className="relative mt-4">
             <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-violet-300 via-purple-300 to-indigo-300 transition-all duration-700" style={{ width: passUpdatesCount > 0 ? "60%" : "0%" }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-red-300 via-rose-300 to-pink-300 transition-all duration-700"
+                style={{
+                  width:
+                    globalCounts.total > 0
+                      ? `${Math.round(
+                          (Math.max(
+                            0,
+                            globalCounts.total -
+                              globalCounts.pending -
+                              globalCounts.processed,
+                          ) /
+                            globalCounts.total) *
+                            100,
+                        )}%`
+                      : "0%",
+                }}
+              />
             </div>
+            <p className="text-[10px] text-red-200/50 mt-1 tabular-nums">
+              {globalCounts.total > 0
+                ? `${Math.round(
+                    (Math.max(
+                      0,
+                      globalCounts.total -
+                        globalCounts.pending -
+                        globalCounts.processed,
+                    ) /
+                      globalCounts.total) *
+                      100,
+                  )}% rejection rate`
+                : "—"}
+            </p>
           </div>
         </div>
-
       </div>
 
       {/* ── TABS BAR ── */}
