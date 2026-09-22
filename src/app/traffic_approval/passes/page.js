@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
@@ -166,7 +166,6 @@ export default function TrafficPassesPage() {
         if (Array.isArray(parsed) && parsed.length === 3) {
           setCardOrder(parsed);
         }
-      } catch (e) {}
       } catch (e) {}
     }
   }, []);
@@ -2294,57 +2293,65 @@ export default function TrafficPassesPage() {
           const personIndex = extractEntityIndex(p.id);
           const remark = entityRemarks.persons[p.id];
           if (status === "APPROVED") {
-            allPromises.push(axios.put(`${AGENT_API}/vendor-pass/${selectedRequest.id}/approve-person/${personIndex}`, {}, { headers }));
+            personPromises.push(
+              axios.put(
+                `${AGENT_API}/vendor-pass/${selectedRequest.id}/approve-person/${personIndex}`,
+                {},
+                { headers },
+              ),
+            );
           } else if (status === "REVERTED") {
-            allPromises.push(axios.put(`${AGENT_API}/vendor-pass/${selectedRequest.id}/revert-person/${personIndex}`, { revertReason: remark }, { headers }));
+            personPromises.push(
+              axios.put(
+                `${AGENT_API}/vendor-pass/${selectedRequest.id}/revert-person/${personIndex}`,
+                { revertReason: remark },
+                { headers },
+              ),
+            );
           } else {
-            allPromises.push(axios.put(`${AGENT_API}/vendor-pass/${selectedRequest.id}/reject-person/${personIndex}`, { rejectedReason: remark }, { headers }));
+            personPromises.push(
+              axios.put(
+                `${AGENT_API}/vendor-pass/${selectedRequest.id}/reject-person/${personIndex}`,
+                { rejectedReason: remark },
+                { headers },
+              ),
+            );
           }
-        } else {
-          const remark = entityRemarks.persons[p.id];
-          const payload = {
-            personId: p.id,
-            decision: status === "APPROVED" ? "approve-person" : status === "REVERTED" ? "revert-person" : "reject-person",
-          };
-          if (status === "REJECTED") payload.rejectedReason = remark;
-          else if (status === "REVERTED") payload.revertReason = remark;
-          allPromises.push(axios.patch(`${ADMIN_API}/pass-request/agent-pass-request-action`, payload, { headers }));
-        }
-      });
+        });
 
-      // B. PROCESS VEHICLES ASSIGNED TO THIS ROLE
-      vehicles.forEach((v) => {
-        if (!canUserVerifyVehicle(v)) return;
-        const status = entityStatuses.vehicles[v.id];
-        if (!status) return;
+        // 3. BUILD VEHICLE PROMISES for vendor passes
+        const vehiclePromises = [];
+        vehicles.forEach((v) => {
+          if (!canUserVerifyVehicle(v)) return;
+          const status = entityStatuses.vehicles[v.id];
+          if (!status) return;
 
-        const vState = String(v?.essentialWorkflowState || "").trim().toUpperCase();
-        const isEssentialVehicle =
-          vState.endsWith("_ESSENTIAL") ||
-          Boolean(v?.conversionWorkflowState) ||
-          (v?.essentialDepartmentId !== null && v?.essentialDepartmentId !== undefined);
-
-        if (isEssentialVehicle) {
-          allPromises.push(
-            axios.put(
-              `${AGENT_API}/pass-request/essential-oil-dock/vehicle-action`,
-              {
-                vehicleId: v.id,
-                decision: String(status).trim().toUpperCase(),
-                remarks: entityRemarks.vehicles[v.id] || null,
-              },
-              { headers }
-            )
-          );
-        } else if (isVendorPass) {
           const vehicleIndex = extractEntityIndex(v.id);
           const remark = entityRemarks.vehicles[v.id];
           if (status === "APPROVED") {
-            allPromises.push(axios.put(`${AGENT_API}/vendor-pass/${selectedRequest.id}/approve-vehicle/${vehicleIndex}`, {}, { headers }));
+            vehiclePromises.push(
+              axios.put(
+                `${AGENT_API}/vendor-pass/${selectedRequest.id}/approve-vehicle/${vehicleIndex}`,
+                {},
+                { headers },
+              ),
+            );
           } else if (status === "REVERTED") {
-            allPromises.push(axios.put(`${AGENT_API}/vendor-pass/${selectedRequest.id}/revert-vehicle/${vehicleIndex}`, { revertReason: remark }, { headers }));
+            vehiclePromises.push(
+              axios.put(
+                `${AGENT_API}/vendor-pass/${selectedRequest.id}/revert-vehicle/${vehicleIndex}`,
+                { revertReason: remark },
+                { headers },
+              ),
+            );
           } else {
-            allPromises.push(axios.put(`${AGENT_API}/vendor-pass/${selectedRequest.id}/reject-vehicle/${vehicleIndex}`, { rejectedReason: remark }, { headers }));
+            vehiclePromises.push(
+              axios.put(
+                `${AGENT_API}/vendor-pass/${selectedRequest.id}/reject-vehicle/${vehicleIndex}`,
+                { rejectedReason: remark },
+                { headers },
+              ),
+            );
           }
         });
 
@@ -2401,28 +2408,54 @@ export default function TrafficPassesPage() {
           const remark = entityRemarks.vehicles[v.id];
           const payload = {
             vehicleId: v.id,
-            decision: status === "APPROVED" ? "approve-vehicle" : status === "REVERTED" ? "revert-vehicle" : "reject-vehicle",
+            decision:
+              status === "APPROVED"
+                ? "approve-vehicle"
+                : status === "REVERTED"
+                  ? "revert-vehicle"
+                  : "reject-vehicle",
           };
           if (status === "REJECTED") payload.rejectedReason = remark;
           else if (status === "REVERTED") payload.revertReason = remark;
-          allPromises.push(axios.patch(`${ADMIN_API}/pass-request/agent-pass-request-action`, payload, { headers }));
+          vehiclePromises.push(
+            axios.patch(
+              `${ADMIN_API}/pass-request/agent-pass-request-action`,
+              payload,
+              { headers },
+            ),
+          );
+        });
+
+        const allNormalPromises = [...personPromises, ...vehiclePromises];
+        if (allNormalPromises.length === 0) {
+          toast.dismiss(loadingToastId);
+          toast.warning("No Actions Prepared", {
+            description:
+              "Please record a decision for at least one entity assigned to your role.",
+          });
+          return;
         }
-      });
 
-      if (allPromises.length === 0) {
-        toast.dismiss(loadingToastId);
-        toast.warning("No Actions Prepared", { description: "Please record a decision for at least one entity assigned to your role." });
-        return;
-      }
+        await Promise.all(allNormalPromises);
 
-      await Promise.all(allPromises);
-
-      if (isVendorPass) {
-        await axios.put(`${AGENT_API}/vendor-pass/${selectedRequest.id}/complete-review`, {}, { headers });
-      } else {
-        const hasOrdinaryEntities = persons.some(p => canUserVerifyPerson(p) && !p.essentialWorkflowState) || vehicles.some(v => canUserVerifyVehicle(v) && !v.essentialWorkflowState);
+        const hasOrdinaryEntities =
+          persons.some(
+            (p) => canUserVerifyPerson(p) && !p.essentialWorkflowState,
+          ) ||
+          vehicles.some(
+            (v) => canUserVerifyVehicle(v) && !v.essentialWorkflowState,
+          );
         if (hasOrdinaryEntities) {
-          await axios.patch(`${ADMIN_API}/pass-request/agent-pass-request-action`, { passRequestId: selectedRequest.id, decision: "complete-review" }, { headers }).catch(() => {});
+          await axios
+            .patch(
+              `${ADMIN_API}/pass-request/agent-pass-request-action`,
+              {
+                passRequestId: selectedRequest.id,
+                decision: "complete-review",
+              },
+              { headers },
+            )
+            .catch(() => {});
         }
       }
 
@@ -3688,11 +3721,6 @@ export default function TrafficPassesPage() {
                                               ? "text-amber-600 bg-amber-50 border-amber-100"
                                               : "text-red-600 bg-red-50 border-red-100"
                                           }`}
-                                          className={`mt-1 text-[10px] p-1 rounded border inline-block ${
-                                            personStatus === "REVERTED"
-                                              ? "text-amber-600 bg-amber-50 border-amber-100"
-                                              : "text-red-600 bg-red-50 border-red-100"
-                                          }`}
                                         >
                                           {personStatus === "REVERTED"
                                             ? "Revert: "
@@ -3941,20 +3969,18 @@ export default function TrafficPassesPage() {
                                       );
 
                                     if (isEssential) {
-                                      const workflowState = String(v.essentialWorkflowState || "").toUpperCase();
-                                      const deptId = Number(v.essentialDepartmentId || v.departmentId || selectedRequest?.essentialDepartmentId || selectedRequest?.departmentId);
                                       const workflowState = String(
                                         v.essentialWorkflowState || "",
                                       ).toUpperCase();
                                       const deptId = Number(
-                                        v.essentialDepartmentId,
+                                        v.essentialDepartmentId ||
+                                          v.departmentId ||
+                                          selectedRequest?.essentialDepartmentId ||
+                                          selectedRequest?.departmentId,
                                       );
                                       const sparkApproved =
                                         v.sparkArresterCertified === true ||
                                         v.marineSafetyApproved === true ||
-                                        (userRole === "Fire Safety Officer" &&
-                                          entityStatuses.vehicles[v.id] ===
-                                            "APPROVED");
                                         (userRole === "Fire Safety Officer" &&
                                           entityStatuses.vehicles[v.id] ===
                                             "APPROVED");
@@ -3966,12 +3992,6 @@ export default function TrafficPassesPage() {
                                             "FIRE_SAFETY",
                                           ));
 
-                                      const isCivilDept =
-                                        deptId === 3 ||
-                                        workflowState.includes("CIVIL");
-                                      const isMechDept =
-                                        deptId === 4 ||
-                                        workflowState.includes("MECHANICAL");
                                       const isCivilDept =
                                         deptId === 3 ||
                                         workflowState.includes("CIVIL");
@@ -4153,102 +4173,6 @@ export default function TrafficPassesPage() {
                                 </>
                               )}
                             </div>
-                            {/* <div className="flex flex-wrap gap-1 mt-1">
-                              {["MONTHLY", "YEARLY", "ANNUAL"].includes(
-                                v.passType,
-                              ) && (
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                    v.twistLockCertified ||
-                                    (userRole === "Safety Officer" &&
-                                      entityStatuses.vehicles[v.id] ===
-                                        "APPROVED")
-                                      ? "bg-emerald-100 text-emerald-700"
-                                      : "bg-amber-100 text-amber-700"
-                                  }`}
-                                >
-                                  {v.twistLockCertified ||
-                                  (userRole === "Safety Officer" &&
-                                    entityStatuses.vehicles[v.id] ===
-                                      "APPROVED")
-                                        "APPROVED")
-                                      ? "✓ Fire Safety"
-                                      : "⏳ Pending Fire Safety"}
-                                  </span>
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                      v.srDtmApproved ||
-                                      (userRole ===
-                                        "Senior Deputy Traffic Manager" &&
-                                        entityStatuses.vehicles[v.id] ===
-                                          "APPROVED")
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : "bg-amber-100 text-amber-700"
-                                    }`}
-                                  >
-                                    {v.srDtmApproved ||
-                                    (userRole ===
-                                      "Senior Deputy Traffic Manager" &&
-                                      entityStatuses.vehicles[v.id] ===
-                                        "APPROVED")
-                                      ? "✓ Sr. DTM"
-                                      : "⏳ Pending Sr. DTM"}
-                                  </span>
-                                </>
-                              )}
-                              <span
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                  [
-                                    "APPROVED",
-                                    "REJECTED",
-                                    "REVERTED",
-                                    "approved",
-                                    "rejected",
-                                    "reverted",
-                                  ].includes(
-                                    selectedRequest?.status ||
-                                      selectedRequest?.decision,
-                                  ) ||
-                                  [
-                                    "approved",
-                                    "rejected",
-                                    "reverted",
-                                    "APPROVED",
-                                    "REJECTED",
-                                    "REVERTED",
-                                  ].includes(v.status || v.decision) ||
-                                  (userRole === "Approval" &&
-                                    entityStatuses.vehicles[v.id] ===
-                                      "APPROVED")
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-amber-100 text-amber-700"
-                                }`}
-                              >
-                                {[
-                                  "APPROVED",
-                                  "REJECTED",
-                                  "REVERTED",
-                                  "approved",
-                                  "rejected",
-                                  "reverted",
-                                ].includes(
-                                  selectedRequest?.status ||
-                                    selectedRequest?.decision,
-                                ) ||
-                                [
-                                  "approved",
-                                  "rejected",
-                                  "reverted",
-                                  "APPROVED",
-                                  "REJECTED",
-                                  "REVERTED",
-                                ].includes(v.status || v.decision) ||
-                                (userRole === "Approval" &&
-                                  entityStatuses.vehicles[v.id] === "APPROVED")
-                                  ? "✓ Pass Section"
-                                  : "⏳ Pending Pass Section"}
-                              </span>
-                            </div> */}
                           </td>
                           <td className="p-3 text-right">
                             <div className="flex justify-end items-center gap-3">
