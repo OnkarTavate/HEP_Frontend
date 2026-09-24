@@ -358,7 +358,7 @@ export default function TrafficManagerLogin() {
                   fontStyle: "italic",
                 }}
               >
-                {isCaptchaLoading ? "Loading…" : captchaData.question || "Loading…"}
+                {isCaptchaLoading ? "Loadingâ€¦" : captchaData.question || "Loadingâ€¦"}
               </div>
 
               {/* Captcha answer */}
@@ -432,7 +432,7 @@ export default function TrafficManagerLogin() {
             {isLoading ? (
               <>
                 <RefreshCw size={16} style={{ animation: "spin-slow 0.8s linear infinite" }} />
-                Authenticating…
+                Authenticatingâ€¦
               </>
             ) : (
               <>
@@ -447,10 +447,10 @@ export default function TrafficManagerLogin() {
         <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.06)", textAlign: "center" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 8 }}>
             <Activity size={12} color="#334155" />
-            <span style={{ color: "#334155", fontSize: 11, fontWeight: 600 }}>APACS — Automated Port Access & Control System</span>
+            <span style={{ color: "#334155", fontSize: 11, fontWeight: 600 }}>APACS â€” Automated Port Access & Control System</span>
           </div>
           <p style={{ color: "#1e293b", fontSize: 10, margin: 0 }}>
-            Authorised access only · Chennai Port Authority
+            Authorised access only Â· Chennai Port Authority
           </p>
         </div>
 

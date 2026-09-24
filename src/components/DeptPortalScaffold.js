@@ -22,7 +22,7 @@ import {
   LogOut, Moon, Sun, Lock, RefreshCw, EyeOff, Eye,
   ShieldAlert, CheckCircle,
 } from "lucide-react";
-import useSessionHeartbeat from "@/lib/useSessionHeartbeat";
+import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
 
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5006";
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
