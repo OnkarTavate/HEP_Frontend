@@ -675,30 +675,17 @@ export default function TrafficManagerDashboard() {
         r.status === "fulfilled" && r.value?.data && r.value.status < 400;
       const val = (r, fb) => (ok(r) ? r.value.data : fb);
 
-      // 1. Hydrate ALL pass requests across all pages
-      let allPassList = firstPassRes?.data?.data || [];
-      const totalPassPages = num(
-        firstPassRes?.data?.pagination?.totalPages ?? 1,
-      );
-      if (totalPassPages > 1) {
-        const extraReqs = [];
-        for (let pg = 2; pg <= totalPassPages; pg++) {
-          extraReqs.push(
-            g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
-              limit: 100,
-              page: pg,
-            }),
-          );
-        }
-        const extraResults = await Promise.allSettled(extraReqs);
-        extraResults.forEach((r) => {
-          if (r.status === "fulfilled" && r.value?.data?.data) {
-            allPassList = allPassList.concat(r.value.data.data);
-          }
-        });
-      }
+      // 1. Use page-1 data for list display only — DO NOT loop all pages.
+      // Aggregate counts come from the server-side counts/pagination metadata
+      // that the backend already computes via SQL COUNT queries.
+      // Fetching all 194 pages concurrently was exhausting the DB connection pool.
+      const allPassList = firstPassRes?.data?.data || [];
 
-      // 2. Classify by status
+      // Server-supplied aggregate counts (avoids fetching all records client-side)
+      const apiCounts = firstPassRes?.data?.counts || {};
+      const apiPagination = firstPassRes?.data?.pagination || {};
+
+      // 2. Classify page-1 slice by status (for queue display / recent items only)
       const pendingList = allPassList.filter((p) =>
         ["SUBMITTED", "PENDING", "IN_REVIEW", "UNDER_REVIEW"].includes(
           String(p.status || "").toUpperCase(),
@@ -716,12 +703,18 @@ export default function TrafficManagerDashboard() {
         ["REJECTED"].includes(String(p.status || "").toUpperCase()),
       );
 
+      // Use server-provided counts; fall back to page-1 slice counts only if
+      // the API doesn't return them (older backend versions).
       const passCounts = {
-        total: allPassList.length,
-        pending: pendingList.length,
-        processed: processedList.length,
-        reverted: revertedList.length,
-        rejected: rejectedList.length,
+        total: num(
+          apiCounts.total ??
+            apiPagination.totalRecords ??
+            allPassList.length,
+        ),
+        pending: num(apiCounts.pending ?? pendingList.length),
+        processed: num(apiCounts.processed ?? processedList.length),
+        reverted: num(apiCounts.reverted ?? revertedList.length),
+        rejected: num(apiCounts.rejected ?? rejectedList.length),
       };
 
       const passMineCounts = val(passMineRes, {}).counts || {};
@@ -750,6 +743,8 @@ export default function TrafficManagerDashboard() {
         0,
       );
 
+      // persons/vehicles totals are derived from page-1 slice only.
+      // For accurate all-time totals, a dedicated backend stats endpoint is needed.
       const allPersons = allPassList.reduce(
         (s, p) => s + (p.persons?.length || 0),
         0,

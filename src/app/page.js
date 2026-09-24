@@ -703,15 +703,15 @@ const LoginPage = () => {
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30"></div>
 
       {/* Subtle floating orbs to keep the orange brand glow */}
-      <div className="absolute top-20 left-10 w-72 h-72 bg-orange-500/20 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-600/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute top-10 left-5 w-40 h-40 sm:w-56 sm:h-56 lg:w-72 lg:h-72 2xl:w-96 2xl:h-96 bg-orange-500/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-10 right-5 w-52 h-52 sm:w-72 sm:h-72 lg:w-96 lg:h-96 2xl:w-[28rem] 2xl:h-[28rem] bg-orange-600/20 rounded-full blur-3xl pointer-events-none"></div>
 
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 sm:p-6 lg:pl-12 lg:pr-16 lg:py-6">
-        <div className="w-full mx-auto grid lg:grid-cols-[5fr_6fr] gap-6 lg:gap-10 items-center">
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-2 sm:p-4 md:p-5 lg:px-6 lg:py-4 xl:pl-8 xl:pr-10 2xl:px-16 2xl:py-6">
+        <div className="w-full max-w-[1440px] mx-auto grid xl:grid-cols-[5fr_6fr] gap-4 md:gap-5 xl:gap-7 2xl:gap-10 items-center">
           {/* Left Section - Branding */}
-          <div className="hidden lg:block space-y-8 animate-in fade-in duration-700">
-            <div className="inline-flex items-center gap-4 bg-white/10 backdrop-blur-xl p-5 rounded-3xl shadow-xl ring-1 ring-white/20">
-              <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center shadow-lg shadow-orange-950/20 p-2 shrink-0 ring-4 ring-orange-500/20">
+          <div className="hidden xl:block space-y-4 2xl:space-y-6 animate-in fade-in duration-700">
+            <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-xl p-3 xl:p-4 2xl:p-5 rounded-3xl shadow-xl ring-1 ring-white/20">
+              <div className="w-16 h-16 xl:w-20 xl:h-20 2xl:w-24 2xl:h-24 bg-white rounded-full flex items-center justify-center shadow-lg shadow-orange-950/20 p-1.5 shrink-0 ring-4 ring-orange-500/20">
                 <img
                   src="/chennaiport.jpg"
                   alt="Chennai Port Logo"
@@ -719,7 +719,7 @@ const LoginPage = () => {
                 />
               </div>
               <div>
-                <h1 className="text-4xl font-extrabold text-white leading-none drop-shadow-md chennai-port-glow tracking-tight">
+                <h1 className="text-xl xl:text-2xl 2xl:text-3xl font-extrabold text-white leading-none drop-shadow-md chennai-port-glow tracking-tight">
                   Chennai Port
                 </h1>
                 <style jsx>{`
@@ -751,8 +751,8 @@ const LoginPage = () => {
               </div>
             </div>
 
-            <div className="space-y-6">
-              <h2 className="text-4xl xl:text-5xl font-black leading-tight text-white drop-shadow-[0_4px_20px_rgba(0,0,0,0.5)] min-h-[7rem] xl:min-h-[8.5rem] tracking-tight">
+            <div className="space-y-3 2xl:space-y-5">
+              <h2 className="text-2xl xl:text-3xl 2xl:text-4xl font-black leading-tight text-white drop-shadow-[0_4px_20px_rgba(0,0,0,0.5)] min-h-[5rem] xl:min-h-[5.5rem] 2xl:min-h-[7rem] tracking-tight">
                 {(() => {
                   const newlineIdx = HEADLINE_FULL.indexOf("\n");
                   const firstPart = typedHeadline.slice(
@@ -786,7 +786,7 @@ const LoginPage = () => {
                   );
                 })()}
               </h2>
-              <p className="text-base xl:text-lg text-stone-200 leading-relaxed max-w-xl font-medium">
+              <p className="text-xs xl:text-sm 2xl:text-base text-stone-200 leading-relaxed max-w-xl font-medium">
                 A next-generation digital logistics gateway streamlining access
                 control, commercial fleet movement, and gate-pass security
                 verification at Chennai Port.
@@ -794,7 +794,7 @@ const LoginPage = () => {
             </div>
 
             {/* Feature Cards */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 xl:grid-cols-3 gap-2 xl:gap-3">
               {[
                 {
                   icon: Shield,
@@ -814,13 +814,13 @@ const LoginPage = () => {
               ].map((item, i) => (
                 <div
                   key={i}
-                  className="bg-white/5 backdrop-blur-xl p-5 rounded-2xl ring-1 ring-white/10 hover:bg-white/10 hover:ring-white/20 hover:scale-[1.03] hover:shadow-xl hover:shadow-black/10 transition-all duration-300 cursor-default flex flex-col justify-between"
+                  className="bg-white/5 backdrop-blur-xl p-3 xl:p-4 rounded-2xl ring-1 ring-white/10 hover:bg-white/10 hover:ring-white/20 hover:scale-[1.03] hover:shadow-xl hover:shadow-black/10 transition-all duration-300 cursor-default flex flex-col justify-between"
                 >
                   <div>
-                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center mb-3.5 shadow-lg shadow-orange-950/40">
-                      <item.icon className="h-6 w-6 text-white" />
+                    <div className="w-8 h-8 xl:w-10 xl:h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center mb-2 xl:mb-2.5 shadow-lg shadow-orange-950/40">
+                      <item.icon className="h-4 w-4 xl:h-5 xl:w-5 text-white" />
                     </div>
-                    <p className="font-bold text-white text-sm tracking-wide">
+                    <p className="font-bold text-white text-xs tracking-wide">
                       {item.title}
                     </p>
                   </div>
@@ -838,17 +838,17 @@ const LoginPage = () => {
             <div className="relative w-full">
               <div
                 aria-hidden
-                className="hidden lg:block absolute -inset-6 bg-gradient-to-br from-orange-400/30 via-orange-300/20 to-transparent blur-3xl rounded-[40px] -z-10"
+                className="hidden xl:block absolute -inset-6 bg-gradient-to-br from-orange-400/30 via-orange-300/20 to-transparent blur-3xl rounded-[40px] -z-10"
               />
-              <div className="relative bg-white/95 backdrop-blur-2xl rounded-[30px] shadow-[0_30px_80px_-15px_rgba(0,0,0,0.6)] ring-1 ring-white/40 overflow-hidden w-full max-w-[820px] mx-auto lg:ml-auto lg:mr-0 min-h-0 md:min-h-[560px] sm:min-h-[600px] lg:h-[78vh] lg:max-h-[680px] transition-shadow duration-500 hover:shadow-[0_35px_90px_-15px_rgba(0,0,0,0.7)]">
+              <div className="relative bg-white/95 backdrop-blur-2xl rounded-[20px] sm:rounded-[24px] md:rounded-[30px] shadow-[0_30px_80px_-15px_rgba(0,0,0,0.6)] ring-1 ring-white/40 overflow-hidden w-full max-w-[480px] sm:max-w-[560px] md:max-w-[780px] xl:max-w-[800px] 2xl:max-w-[880px] mx-auto xl:ml-auto xl:mr-0 min-h-0 md:min-h-[460px] lg:min-h-[480px] lg:h-[72vh] lg:max-h-[580px] 2xl:max-h-[680px] transition-shadow duration-500 hover:shadow-[0_35px_90px_-15px_rgba(0,0,0,0.7)]">
                 {/* ── Form column (slides to the right half when forgot is active) ─── */}
                 <div
                   className={`md:absolute md:top-0 md:left-0 md:w-1/2 md:h-full bg-white z-[2] transition-transform duration-700 ease-in-out ${authMode === "forgot" ? "md:translate-x-full" : "md:translate-x-0"}`}
                 >
-                  <div className="h-full flex flex-col justify-center px-6 md:px-8 lg:px-10 py-8 max-w-md mx-auto w-full">
+                  <div className="h-full flex flex-col justify-center px-4 sm:px-5 md:px-6 lg:px-8 2xl:px-10 py-4 sm:py-5 max-w-md mx-auto w-full">
                     {/* Mobile/Tablet Header (Hidden on Desktop lg) */}
-                    <div className="flex items-center gap-3 mb-6 lg:hidden justify-center bg-stone-50 border border-stone-100 p-3 rounded-2xl">
-                      <div className="w-18 h-18 bg-white rounded-full flex items-center justify-center shadow-md p-2 shrink-0 border border-stone-200">
+                    <div className="flex items-center gap-3 mb-4 sm:mb-6 xl:hidden justify-center bg-stone-50 border border-stone-100 p-2.5 sm:p-3 rounded-2xl">
+                      <div className="w-14 h-14 sm:w-18 sm:h-18 bg-white rounded-full flex items-center justify-center shadow-md p-1.5 sm:p-2 shrink-0 border border-stone-200">
                         <img
                           src="/chennaiport.jpg"
                           alt="Chennai Port Logo"
@@ -856,7 +856,7 @@ const LoginPage = () => {
                         />
                       </div>
                       <div className="text-left">
-                        <div className="text-lg font-bold text-gray-900 leading-none">
+                        <div className="text-base sm:text-lg font-bold text-gray-900 leading-none">
                           Chennai Port
                         </div>
                         <p className="text-xs font-semibold text-orange-600 mt-0.5 mb-0">
@@ -866,8 +866,8 @@ const LoginPage = () => {
                     </div>
 
                     {/* Mobile-only Greeting */}
-                    <div className="md:hidden text-center mb-4">
-                      <h2 className="text-2xl font-bold text-orange-600">
+                    <div className="md:hidden text-center mb-3 sm:mb-4">
+                      <h2 className="text-xl sm:text-2xl font-bold text-orange-600">
                         Hello,
                         <br />
                         ChennaiPort User
@@ -879,13 +879,13 @@ const LoginPage = () => {
                         key="signin-panel"
                         className="animate-in fade-in duration-500 ease-out"
                       >
-                        <div className="text-center mb-4">
-                          <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">
+                        <div className="text-center mb-2 sm:mb-3">
+                          <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">
                             Sign In
                           </h3>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        <form onSubmit={handleSubmit} className="space-y-2.5 sm:space-y-3">
                           {error && (
                             <div className="p-3 text-sm bg-red-50 border border-red-200 text-red-800 rounded-lg">
                               {error}
@@ -905,7 +905,7 @@ const LoginPage = () => {
                                   username: e.target.value,
                                 })
                               }
-                              className="w-full pl-11 pr-3 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
+                              className="w-full pl-11 pr-3 py-2.5 sm:py-3 text-sm bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
                               required
                             />
                           </div>
@@ -923,7 +923,7 @@ const LoginPage = () => {
                                   password: e.target.value,
                                 })
                               }
-                              className="w-full pl-11 pr-11 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
+                              className="w-full pl-11 pr-11 py-2.5 sm:py-3 text-sm bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
                               required
                             />
                             <button
@@ -942,11 +942,11 @@ const LoginPage = () => {
                             </button>
                           </div>
 
-                          {/* Captcha — input on the left, captcha image + refresh on the right.
-                      Stacks vertically on very small screens for readability. */}
-                          <div className="flex flex-col sm:flex-row gap-2.5 w-full">
+                          {/* Captcha — always stacked vertically so the input never gets crushed
+                              inside the narrow half-width form column */}
+                          <div className="flex flex-col gap-2 w-full">
                             <input
-                              placeholder="Security Code"
+                              placeholder="Enter Security Code"
                               value={formData.captcha}
                               onChange={(e) =>
                                 setFormData({
@@ -954,40 +954,15 @@ const LoginPage = () => {
                                   captcha: e.target.value,
                                 })
                               }
-                              className="flex-1 min-w-0 px-4 py-3.5 text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
+                              className="w-full px-4 py-2.5 sm:py-3 text-sm bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none transition-all duration-200"
                               required
                             />
-                            {/* <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 w-full sm:w-[170px] shrink-0 justify-between">
-                      <div className="flex-1 flex items-center justify-center min-w-0 overflow-hidden">
-                        {isCaptchaLoading ? (
-                          <RefreshCw className="h-5 w-5 text-orange-400 animate-spin" />
-                        ) : (
-                          <div
-                            className="flex items-center justify-center w-full [&>svg]:w-full [&>svg]:max-w-[130px] [&>svg]:h-11"
-                            dangerouslySetInnerHTML={{
-                              __html: captchaData.svg,
-                            }}
-                          />
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={fetchCaptcha}
-                        disabled={!!isCaptchaLoading}
-                        title="Get a new security code"
-                        className="shrink-0 bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100 active:scale-95 transition-all disabled:opacity-50"
-                      >
-                        <RefreshCw
-                          className={`h-4 w-4 text-orange-600 ${isCaptchaLoading ? "animate-spin" : ""}`}
-                        />
-                      </button>
-                    </div> */}
-                            <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 w-full sm:w-[190px] shrink-0 justify-between">
+                            <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 w-full justify-between">
                               <div className="flex-1 flex items-center justify-center min-w-0 overflow-hidden">
                                 {isCaptchaLoading ? (
                                   <RefreshCw className="h-5 w-5 text-orange-400 animate-spin" />
                                 ) : (
-                                  <div className="font-bold text-lg text-blue-700 tracking-wide select-none">
+                                  <div className="font-bold text-sm sm:text-base text-blue-700 tracking-wide select-none">
                                     {captchaData.question}
                                   </div>
                                 )}
@@ -1021,7 +996,7 @@ const LoginPage = () => {
 
                           <button
                             type="submit"
-                            className="w-full py-3.5 bg-orange-600 text-white text-base font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 hover:shadow-orange-600/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] shadow-lg shadow-orange-600/20 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-orange-500/20"
+                            className="w-full py-2.5 sm:py-3 bg-orange-600 text-white text-sm font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 hover:shadow-orange-600/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] shadow-lg shadow-orange-600/20 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-orange-500/20"
                           >
                             Sign In
                           </button>
@@ -1035,7 +1010,7 @@ const LoginPage = () => {
                               setTrackError("");
                               setTrackReference("");
                             }}
-                            className="w-full py-3.5 bg-white text-orange-600 text-base font-semibold tracking-wider uppercase rounded-xl border-2 border-orange-600 hover:bg-orange-50 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-orange-500/20"
+                            className="w-full py-2.5 sm:py-3 bg-white text-orange-600 text-sm font-semibold tracking-wider uppercase rounded-xl border-2 border-orange-600 hover:bg-orange-50 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-orange-500/20"
                           >
                             Track Registration Status
                           </button>
@@ -1079,7 +1054,7 @@ const LoginPage = () => {
                         className="animate-in fade-in slide-in-from-right-6 duration-500 ease-out"
                       >
                         <div className="text-center mb-6">
-                          <h3 className="text-2xl lg:text-3xl font-bold text-gray-900">
+                          <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
                             Reset Password
                           </h3>
                           <p className="text-sm text-gray-500 mt-2">
@@ -1115,23 +1090,23 @@ const LoginPage = () => {
                                   required
                                 />
                               </div>
-                              <div className="flex flex-col sm:flex-row gap-2.5 w-full">
+                              <div className="flex flex-col gap-2 w-full">
                                 <input
                                   type="text"
-                                  placeholder="Security Code"
+                                  placeholder="Enter Security Code"
                                   value={forgotCaptcha}
                                   onChange={(e) =>
                                     setForgotCaptcha(e.target.value)
                                   }
-                                  className="flex-1 min-w-0 px-4 py-3.5 text-base bg-stone-50 border border-stone-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
+                                  className="w-full px-4 py-3 sm:py-3.5 text-sm sm:text-base bg-stone-50 border border-stone-200 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:outline-none transition-all duration-200"
                                 />
 
-                                <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 w-full sm:w-[190px] shrink-0 justify-between">
+                                <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5 w-full justify-between">
                                   <div className="flex-1 flex items-center justify-center">
                                     {forgotCaptchaLoading ? (
                                       <RefreshCw className="h-5 w-5 animate-spin text-orange-500" />
                                     ) : (
-                                      <div className="font-bold text-lg text-blue-700 tracking-wide">
+                                      <div className="font-bold text-base sm:text-lg text-blue-700 tracking-wide">
                                         {forgotCaptchaData.question}
                                       </div>
                                     )}
@@ -1392,26 +1367,26 @@ const LoginPage = () => {
 
                 {/* ── Orange side panel (slides from right to left when forgot is active) ─── */}
                 <div
-                  className={`hidden md:flex absolute top-0 right-0 w-1/2 h-full flex-col items-center justify-center text-center text-white px-8 bg-gradient-to-br from-orange-500 to-orange-700 transition-all duration-700 ease-in-out ${authMode === "forgot" ? "md:-translate-x-full" : "md:translate-x-0"}`}
+                  className={`hidden md:flex absolute top-0 right-0 w-1/2 h-full flex-col items-center justify-center text-center text-white px-5 lg:px-8 bg-gradient-to-br from-orange-500 to-orange-700 transition-all duration-700 ease-in-out ${authMode === "forgot" ? "md:-translate-x-full" : "md:translate-x-0"}`}
                   style={{
                     borderRadius:
                       authMode === "forgot"
-                        ? "0 150px 100px 0"
-                        : "150px 0 0 100px",
+                        ? "0 100px 80px 0"
+                        : "100px 0 0 80px",
                   }}
                 >
-                  <h2 className="text-2xl lg:text-3xl font-bold mb-3">
+                  <h2 className="text-lg md:text-xl lg:text-2xl font-bold mb-1.5 md:mb-2">
                     Hello,
                     <br />
                     ChennaiPort User
                   </h2>
-                  <p className="text-sm leading-relaxed opacity-95 max-w-[280px] mb-6">
+                  <p className="text-xs leading-relaxed opacity-95 max-w-[240px] md:max-w-[260px] mb-3 md:mb-4">
                     Register with your personal details to use all site features
                   </p>
                   <button
                     type="button"
                     onClick={() => router.push("/register")}
-                    className="px-10 py-3 border border-white text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors mb-3"
+                    className="px-6 md:px-8 py-2 md:py-2.5 border border-white text-white text-xs font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors mb-1.5 md:mb-2"
                   >
                     Sign Up
                   </button>
@@ -1425,7 +1400,7 @@ const LoginPage = () => {
                         setAuthMode("signin");
                       }
                     }}
-                    className="px-10 py-3 bg-white/10 border border-white/60 text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors"
+                    className="px-6 md:px-8 py-2 md:py-2.5 bg-white/10 border border-white/60 text-white text-xs font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors"
                   >
                     {authMode === "forgot"
                       ? "Back to Sign In"
@@ -1434,7 +1409,7 @@ const LoginPage = () => {
                   <button
                     type="button"
                     onClick={() => router.push("/public/bulk-pass-request")}
-                    className="mt-2 px-10 py-3 bg-white/10 border border-white/60 text-white text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors flex items-center justify-center gap-2"
+                    className="mt-1.5 md:mt-2 px-6 md:px-10 py-2.5 md:py-3 bg-white/10 border border-white/60 text-white text-xs md:text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors flex items-center justify-center gap-2"
                   >
                     <FileText className="h-4 w-4" />
                     Request Bulk Pass
@@ -1447,11 +1422,11 @@ const LoginPage = () => {
       </div>
       {/* 🚀 TRACKING MODAL OVERLAY 🚀 */}
       {isTrackModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200 max-h-[90vh] sm:max-h-[85vh] overflow-y-auto">
             {/* Header */}
-            <div className="flex justify-between items-center px-6 py-4 bg-slate-50 border-b border-gray-100">
-              <h3 className="font-bold text-xl text-gray-900 flex items-center gap-2">
+            <div className="flex justify-between items-center px-4 sm:px-6 py-3 sm:py-4 bg-slate-50 border-b border-gray-100">
+              <h3 className="font-bold text-lg sm:text-xl text-gray-900 flex items-center gap-2">
                 <Search className="h-6 w-6 text-orange-600" />
                 Track Registration
               </h3>
@@ -1463,7 +1438,7 @@ const LoginPage = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               {/* Form */}
               <form
                 onSubmit={handleTrackSubmit}
@@ -1476,14 +1451,14 @@ const LoginPage = () => {
                   onChange={(e) =>
                     setTrackReference(e.target.value.toUpperCase())
                   }
-                  className="flex-1 px-4 py-4 text-lg bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none font-medium uppercase transition-all duration-200"
+                  className="flex-1 px-3 sm:px-4 py-3 sm:py-4 text-base sm:text-lg bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none font-medium uppercase transition-all duration-200"
                   style={{ fontFamily: "Arial, sans-serif" }}
                   required
                 />
                 <button
                   type="submit"
                   disabled={trackLoading}
-                  className="px-8 py-4 text-lg bg-[#0a1e4d] text-white font-bold rounded-xl hover:bg-orange-600 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 shadow-md disabled:opacity-70 flex items-center justify-center min-w-[130px] focus:outline-none focus:ring-4 focus:ring-orange-500/20"
+                  className="px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg bg-[#0a1e4d] text-white font-bold rounded-xl hover:bg-orange-600 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 shadow-md disabled:opacity-70 flex items-center justify-center min-w-[100px] sm:min-w-[130px] focus:outline-none focus:ring-4 focus:ring-orange-500/20"
                   style={{ fontFamily: "Arial, sans-serif" }}
                 >
                   {trackLoading ? (
@@ -1608,9 +1583,9 @@ const LoginPage = () => {
 
       {/* 🔐 FORCE LOGOUT DIALOG 🔐 */}
       {showForceLogoutDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-orange-200 animate-in zoom-in-95 duration-200">
-            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 text-white">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden border border-orange-200 animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-4 sm:p-6 text-white">
               <div className="flex items-center gap-3">
                 <ShieldAlert className="h-8 w-8" />
                 <div>
@@ -1622,7 +1597,7 @@ const LoginPage = () => {
               </div>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                 <p className="text-sm text-gray-700 leading-relaxed">
                   Your account is currently active on another device or browser.
@@ -1648,7 +1623,7 @@ const LoginPage = () => {
                 </ul>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3">
                 <button
                   onClick={() => setShowForceLogoutDialog(false)}
                   disabled={forceLogoutLoading}

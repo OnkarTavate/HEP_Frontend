@@ -84,10 +84,10 @@ const fmtDate = (d) => {
   return isNaN(dt.getTime())
     ? "—"
     : dt.toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
 };
 const fmtDateTime = () =>
   new Date().toLocaleString("en-IN", {
@@ -498,11 +498,10 @@ function IconStatRow({
   return (
     <Wrapper
       {...wp}
-      className={`group/row relative overflow-hidden flex items-center justify-between gap-3 -mx-2 rounded-xl px-3 py-2.5 transition-all duration-200 border border-transparent ring-1 ring-inset ring-transparent ${
-        href
-          ? `group-hover/row:border-white/20 group-hover/row:ring-white/20 hover:-translate-y-[1px] ${glowCls} cursor-pointer`
-          : ""
-      }`}
+      className={`group/row relative overflow-hidden flex items-center justify-between gap-3 -mx-2 rounded-xl px-3 py-2.5 transition-all duration-200 border border-transparent ring-1 ring-inset ring-transparent ${href
+        ? `group-hover/row:border-white/20 group-hover/row:ring-white/20 hover:-translate-y-[1px] ${glowCls} cursor-pointer`
+        : ""
+        }`}
     >
       {/* ── Gradient background layer — fades in on hover ── */}
       {href && (
@@ -841,6 +840,9 @@ export default function TrafficManagerDashboard() {
   const [expandedPassId, setExpandedPassId] = useState(null);
   const [copiedRef, setCopiedRef] = useState(null);
 
+
+  console.log("this is data", data);
+
   const copyToClipboard = useCallback((text) => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(text);
@@ -973,30 +975,17 @@ export default function TrafficManagerDashboard() {
         r.status === "fulfilled" && r.value?.data && r.value.status < 400;
       const val = (r, fb) => (ok(r) ? r.value.data : fb);
 
-      // 1. Hydrate ALL pass requests across all pages
-      let allPassList = firstPassRes?.data?.data || [];
-      const totalPassPages = num(
-        firstPassRes?.data?.pagination?.totalPages ?? 1,
-      );
-      if (totalPassPages > 1) {
-        const extraReqs = [];
-        for (let pg = 2; pg <= totalPassPages; pg++) {
-          extraReqs.push(
-            g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
-              limit: 100,
-              page: pg,
-            }),
-          );
-        }
-        const extraResults = await Promise.allSettled(extraReqs);
-        extraResults.forEach((r) => {
-          if (r.status === "fulfilled" && r.value?.data?.data) {
-            allPassList = allPassList.concat(r.value.data.data);
-          }
-        });
-      }
+      // 1. Use page-1 data for list display only — DO NOT loop all pages.
+      // Aggregate counts come from the server-side counts/pagination metadata
+      // that the backend already computes via SQL COUNT queries.
+      // Fetching all 194 pages concurrently was exhausting the DB connection pool.
+      const allPassList = firstPassRes?.data?.data || [];
 
-      // 2. Classify by status
+      // Server-supplied aggregate counts (avoids fetching all records client-side)
+      const apiCounts = firstPassRes?.data?.counts || {};
+      const apiPagination = firstPassRes?.data?.pagination || {};
+
+      // 2. Classify page-1 slice by status (for queue display / recent items only)
       const pendingList = allPassList.filter((p) =>
         ["SUBMITTED", "PENDING", "IN_REVIEW", "UNDER_REVIEW"].includes(
           String(p.status || "").toUpperCase(),
@@ -1014,12 +1003,18 @@ export default function TrafficManagerDashboard() {
         ["REJECTED"].includes(String(p.status || "").toUpperCase()),
       );
 
+      // Use server-provided counts; fall back to page-1 slice counts only if
+      // the API doesn't return them (older backend versions).
       const passCounts = {
-        total: allPassList.length,
-        pending: pendingList.length,
-        processed: processedList.length,
-        reverted: revertedList.length,
-        rejected: rejectedList.length,
+        total: num(
+          apiCounts.total ??
+          apiPagination.totalRecords ??
+          allPassList.length,
+        ),
+        pending: num(apiCounts.pending ?? pendingList.length),
+        processed: num(apiCounts.processed ?? processedList.length),
+        reverted: num(apiCounts.reverted ?? revertedList.length),
+        rejected: num(apiCounts.rejected ?? rejectedList.length),
       };
 
       const passMineCounts = val(passMineRes, {}).counts || {};
@@ -1048,6 +1043,8 @@ export default function TrafficManagerDashboard() {
         0,
       );
 
+      // persons/vehicles totals are derived from page-1 slice only.
+      // For accurate all-time totals, a dedicated backend stats endpoint is needed.
       const allPersons = allPassList.reduce(
         (s, p) => s + (p.persons?.length || 0),
         0,
@@ -1073,8 +1070,8 @@ export default function TrafficManagerDashboard() {
       const excData = val(overstayExcRes, {});
       const ovExc = num(
         excData.count ??
-          excData.pagination?.totalRecords ??
-          (excData.data || []).length,
+        excData.pagination?.totalRecords ??
+        (excData.data || []).length,
       );
 
       const now = new Date();
@@ -1127,13 +1124,13 @@ export default function TrafficManagerDashboard() {
       const getPassAmt = (p) => {
         const direct = parseFloat(
           p.netAmount ??
-            p.net_amount ??
-            p.netamount ??
-            p.baseTotal ??
-            p.basetotal ??
-            p.grossTotal ??
-            p.grosstotal ??
-            0,
+          p.net_amount ??
+          p.netamount ??
+          p.baseTotal ??
+          p.basetotal ??
+          p.grossTotal ??
+          p.grosstotal ??
+          0,
         );
         if (Number.isFinite(direct) && direct > 0) return direct;
         let sum = 0;
@@ -1400,13 +1397,13 @@ export default function TrafficManagerDashboard() {
     const getPassAmt = (p) => {
       const direct = parseFloat(
         p.netAmount ??
-          p.net_amount ??
-          p.netamount ??
-          p.baseTotal ??
-          p.basetotal ??
-          p.grossTotal ??
-          p.grosstotal ??
-          0,
+        p.net_amount ??
+        p.netamount ??
+        p.baseTotal ??
+        p.basetotal ??
+        p.grossTotal ??
+        p.grosstotal ??
+        0,
       );
       if (Number.isFinite(direct) && direct > 0) return direct;
       let sum = 0;
@@ -1428,8 +1425,8 @@ export default function TrafficManagerDashboard() {
     const dateFiltered = isAll
       ? passSourceList
       : passSourceList.filter((p) =>
-          inRange(p.createdAt || p.submittedAt || p.updatedAt),
-        );
+        inRange(p.createdAt || p.submittedAt || p.updatedAt),
+      );
     const filteredPasses = dateFiltered.filter((p) =>
       inShift(p.createdAt || p.submittedAt || p.updatedAt),
     );
@@ -1456,10 +1453,10 @@ export default function TrafficManagerDashboard() {
         date: d ? d.toLocaleDateString("en-IN") : "—",
         time: d
           ? d.toLocaleTimeString("en-IN", {
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: true,
-            })
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          })
           : "—",
         hour: d ? d.getHours() + "h" : "—",
         rawTimestamp: raw || "—",
@@ -1704,8 +1701,8 @@ export default function TrafficManagerDashboard() {
     const filteredCharges = isAll
       ? chargeSourceList
       : chargeSourceList.filter((c) =>
-          inRange(c.created_at || c.updatedAt || c.createdAt),
-        );
+        inRange(c.created_at || c.updatedAt || c.createdAt),
+      );
 
     const ovPending = filteredCharges.filter((c) => c.status === "PENDING");
     const ovPaid = filteredCharges.filter((c) => c.status === "PAID");
@@ -2160,11 +2157,10 @@ export default function TrafficManagerDashboard() {
             </span>
             {/* Shift subtitle — fixed height, opacity-only transition, no layout shift */}
             <span
-              className={`text-[11px] font-bold block leading-tight mt-0.5 transition-opacity duration-200 ${
-                shiftFilter === "all"
-                  ? "opacity-0 text-blue-200/60"
-                  : "opacity-100 text-blue-200/80"
-              }`}
+              className={`text-[11px] font-bold block leading-tight mt-0.5 transition-opacity duration-200 ${shiftFilter === "all"
+                ? "opacity-0 text-blue-200/60"
+                : "opacity-100 text-blue-200/80"
+                }`}
             >
               {shiftFilter === "shift1"
                 ? "🌅 Morning · 07:00–14:00"
@@ -2251,11 +2247,10 @@ export default function TrafficManagerDashboard() {
               <button
                 key={s.key}
                 onClick={() => setShiftFilter(s.key)}
-                className={`relative px-4 py-1.5 rounded-[10px] text-[12px] font-extrabold tracking-wide transition-colors duration-150 flex items-center gap-1.5 ${
-                  shiftFilter === s.key
-                    ? "bg-white/15 text-white shadow-sm"
-                    : "text-white/55 hover:text-white/80"
-                }`}
+                className={`relative px-4 py-1.5 rounded-[10px] text-[12px] font-extrabold tracking-wide transition-colors duration-150 flex items-center gap-1.5 ${shiftFilter === s.key
+                  ? "bg-white/15 text-white shadow-sm"
+                  : "text-white/55 hover:text-white/80"
+                  }`}
               >
                 <span>{s.icon}</span>
                 {s.label}
@@ -2285,12 +2280,12 @@ export default function TrafficManagerDashboard() {
               },
               ...(displayData.pass.reverted > 0
                 ? [
-                    {
-                      icon: RotateCcw,
-                      value: displayData.pass.reverted,
-                      label: "Reverted",
-                    },
-                  ]
+                  {
+                    icon: RotateCcw,
+                    value: displayData.pass.reverted,
+                    label: "Reverted",
+                  },
+                ]
                 : []),
             ]}
           />
@@ -3234,8 +3229,8 @@ export default function TrafficManagerDashboard() {
                   const q = allCompaniesSearch.trim().toLowerCase();
                   const filtered = q
                     ? displayData.hepRevenue.companyList.filter((c) =>
-                        c.name.toLowerCase().includes(q),
-                      )
+                      c.name.toLowerCase().includes(q),
+                    )
                     : displayData.hepRevenue.companyList;
 
                   if (filtered.length === 0)
@@ -3259,8 +3254,8 @@ export default function TrafficManagerDashboard() {
                     const pct =
                       displayData.hepRevenue.total > 0
                         ? Math.round(
-                            (c.total / displayData.hepRevenue.total) * 100,
-                          )
+                          (c.total / displayData.hepRevenue.total) * 100,
+                        )
                         : 0;
 
                     return (
@@ -3645,11 +3640,10 @@ export default function TrafficManagerDashboard() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setLedgerActiveTab("transactions")}
-                  className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${
-                    ledgerActiveTab === "transactions"
-                      ? "border-orange-500 text-orange-600 bg-white shadow-sm rounded-t-xl"
-                      : "border-transparent text-slate-600 hover:text-slate-900"
-                  }`}
+                  className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${ledgerActiveTab === "transactions"
+                    ? "border-orange-500 text-orange-600 bg-white shadow-sm rounded-t-xl"
+                    : "border-transparent text-slate-600 hover:text-slate-900"
+                    }`}
                 >
                   <Receipt className="h-4 w-4" />
                   Pass Transactions
@@ -3660,11 +3654,10 @@ export default function TrafficManagerDashboard() {
 
                 <button
                   onClick={() => setLedgerActiveTab("financials")}
-                  className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${
-                    ledgerActiveTab === "financials"
-                      ? "border-orange-500 text-orange-600 bg-white shadow-sm rounded-t-xl"
-                      : "border-transparent text-slate-600 hover:text-slate-900"
-                  }`}
+                  className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${ledgerActiveTab === "financials"
+                    ? "border-orange-500 text-orange-600 bg-white shadow-sm rounded-t-xl"
+                    : "border-transparent text-slate-600 hover:text-slate-900"
+                    }`}
                 >
                   <BarChart3 className="h-4 w-4" />
                   Financial Statement
@@ -3672,11 +3665,10 @@ export default function TrafficManagerDashboard() {
 
                 <button
                   onClick={() => setLedgerActiveTab("entities")}
-                  className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${
-                    ledgerActiveTab === "entities"
-                      ? "border-orange-500 text-orange-600 bg-white shadow-sm rounded-t-xl"
-                      : "border-transparent text-slate-600 hover:text-slate-900"
-                  }`}
+                  className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${ledgerActiveTab === "entities"
+                    ? "border-orange-500 text-orange-600 bg-white shadow-sm rounded-t-xl"
+                    : "border-transparent text-slate-600 hover:text-slate-900"
+                    }`}
                 >
                   <Users className="h-4 w-4" />
                   Fleet &amp; Personnel
@@ -3720,11 +3712,10 @@ export default function TrafficManagerDashboard() {
                         <button
                           key={st}
                           onClick={() => setLedgerStatusFilter(st)}
-                          className={`px-2 py-1 rounded-lg transition-colors cursor-pointer text-[10px] font-extrabold ${
-                            ledgerStatusFilter === st
-                              ? "bg-[#0a1e4d] text-white shadow-sm"
-                              : "text-slate-600 hover:text-slate-900"
-                          }`}
+                          className={`px-2 py-1 rounded-lg transition-colors cursor-pointer text-[10px] font-extrabold ${ledgerStatusFilter === st
+                            ? "bg-[#0a1e4d] text-white shadow-sm"
+                            : "text-slate-600 hover:text-slate-900"
+                            }`}
                         >
                           {st === "ALL"
                             ? "All"
@@ -3737,31 +3728,28 @@ export default function TrafficManagerDashboard() {
                     <div className="flex items-center rounded-xl bg-white p-0.5 border border-slate-200 text-[11px] font-bold">
                       <button
                         onClick={() => setLedgerModeFilter("ALL")}
-                        className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer text-[10px] font-extrabold ${
-                          ledgerModeFilter === "ALL"
-                            ? "bg-[#0a1e4d] text-white"
-                            : "text-slate-600 hover:text-slate-900"
-                        }`}
+                        className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer text-[10px] font-extrabold ${ledgerModeFilter === "ALL"
+                          ? "bg-[#0a1e4d] text-white"
+                          : "text-slate-600 hover:text-slate-900"
+                          }`}
                       >
                         All Modes
                       </button>
                       <button
                         onClick={() => setLedgerModeFilter("ACCOUNT")}
-                        className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer text-[10px] font-extrabold ${
-                          ledgerModeFilter === "ACCOUNT"
-                            ? "bg-teal-600 text-white"
-                            : "text-slate-600 hover:text-slate-900"
-                        }`}
+                        className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer text-[10px] font-extrabold ${ledgerModeFilter === "ACCOUNT"
+                          ? "bg-teal-600 text-white"
+                          : "text-slate-600 hover:text-slate-900"
+                          }`}
                       >
                         Account
                       </button>
                       <button
                         onClick={() => setLedgerModeFilter("ECASH")}
-                        className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer text-[10px] font-extrabold ${
-                          ledgerModeFilter === "ECASH"
-                            ? "bg-violet-600 text-white"
-                            : "text-slate-600 hover:text-slate-900"
-                        }`}
+                        className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer text-[10px] font-extrabold ${ledgerModeFilter === "ECASH"
+                          ? "bg-violet-600 text-white"
+                          : "text-slate-600 hover:text-slate-900"
+                          }`}
                       >
                         E-Cash
                       </button>
@@ -3824,20 +3812,18 @@ export default function TrafficManagerDashboard() {
                                     )}
                                   </button>
                                   <span
-                                    className={`inline-block px-2 py-0.5 rounded-full font-extrabold text-[9px] border ${
-                                      PASS_STATUS_TONE[p.status] ||
+                                    className={`inline-block px-2 py-0.5 rounded-full font-extrabold text-[9px] border ${PASS_STATUS_TONE[p.status] ||
                                       "bg-slate-100 text-slate-600 border-slate-200"
-                                    }`}
+                                      }`}
                                   >
                                     {p.status.replace(/_/g, " ")}
                                   </span>
                                   <span
-                                    className={`inline-block px-2 py-0.5 rounded-full font-extrabold text-[9px] ${
-                                      p.paymentMode === "E-CASH" ||
+                                    className={`inline-block px-2 py-0.5 rounded-full font-extrabold text-[9px] ${p.paymentMode === "E-CASH" ||
                                       p.paymentMode === "ECASH"
-                                        ? "bg-violet-50 text-violet-700 border border-violet-200"
-                                        : "bg-teal-50 text-teal-700 border border-teal-200"
-                                    }`}
+                                      ? "bg-violet-50 text-violet-700 border border-violet-200"
+                                      : "bg-teal-50 text-teal-700 border border-teal-200"
+                                      }`}
                                   >
                                     {p.paymentMode}
                                   </span>
@@ -4220,10 +4206,9 @@ export default function TrafficManagerDashboard() {
                               </div>
                             </div>
                             <span
-                              className={`px-2 py-0.5 rounded-full font-black text-[9px] border shrink-0 ${
-                                PASS_STATUS_TONE[psn.passStatus] ||
+                              className={`px-2 py-0.5 rounded-full font-black text-[9px] border shrink-0 ${PASS_STATUS_TONE[psn.passStatus] ||
                                 "bg-slate-100 text-slate-600 border-slate-200"
-                              }`}
+                                }`}
                             >
                               {psn.passStatus}
                             </span>
@@ -4272,10 +4257,9 @@ export default function TrafficManagerDashboard() {
                               </div>
                             </div>
                             <span
-                              className={`px-2 py-0.5 rounded-full font-black text-[9px] border shrink-0 ${
-                                PASS_STATUS_TONE[veh.passStatus] ||
+                              className={`px-2 py-0.5 rounded-full font-black text-[9px] border shrink-0 ${PASS_STATUS_TONE[veh.passStatus] ||
                                 "bg-slate-100 text-slate-600 border-slate-200"
-                              }`}
+                                }`}
                             >
                               {veh.passStatus}
                             </span>
