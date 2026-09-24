@@ -54,6 +54,36 @@ export const reports = [
     description: "Combined issuance report for all supported pass types.",
     implemented: true,
   },
+  {
+    slug: "shift-wise-approval-rejection",
+    title: "Shift-Wise Daily Approval and Rejection Report",
+    description: "Daily pass decisions grouped by employee and derived work shift.",
+    implemented: true,
+  },
+  {
+    slug: "vehicle-master",
+    title: "Vehicle Report",
+    description: "Vehicle registration, type, insurance, RC validity, and RC document details.",
+    implemented: true,
+  },
+  {
+    slug: "bulk-pass-report",
+    title: "Bulk Pass Report",
+    description: "Bulk person, driver, and vehicle pass records.",
+    implemented: true,
+  },
+  {
+    slug: "blacklisting-report",
+    title: "Blacklisting Report",
+    description: "Blacklisted persons and vehicles with action date and time.",
+    implemented: true,
+  },
+  {
+    slug: "material-movement-report",
+    title: "Material Movement Report",
+    description: "Material pass movements with scan date and time.",
+    implemented: true,
+  },
 ];
 
 export const getReport = (slug) =>
