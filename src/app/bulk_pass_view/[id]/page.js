@@ -164,8 +164,8 @@ function BulkPassViewContent() {
             <Field label="Department" value={batch.departmentName} />
             <Field label="Visitor Type" value={visitorLabel(batch.visitorType)} />
             <Field label="Company" value={batch.companyName} />
-            <Field label="No. of Persons" value={String(batch.noOfPersons ?? persons.length)} />
-            <Field label="No. of Vehicles" value={String(batch.noOfVehicles ?? vehicles.length)} />
+            <Field label="Persons" value={String(batch.noOfPersons ?? persons.length)} />
+            <Field label="Vehicles" value={String(batch.noOfVehicles ?? vehicles.length)} />
             <Field label="Contact" value={batch.applicantMobile} />
             <Field label="Valid From" value={fmtDate(batch.validityFrom)} />
             <Field label="Valid Upto" value={fmtDate(batch.validityUpto)} />

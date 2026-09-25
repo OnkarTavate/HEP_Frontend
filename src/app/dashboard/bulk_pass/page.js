@@ -9,7 +9,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { listBulkBatches, returnToApplicant, downloadBulkPdf } from "@/lib/bulkPassApi";
-import { computeBulkPassStats } from "@/lib/bulkPassStats";
+import { computeBulkPassStats, computeBulkPassOverview } from "@/lib/bulkPassStats";
+import BulkPassOverviewPanel from "@/components/bulk-pass/BulkPassOverviewPanel.jsx";
+import { ValidityBadge } from "@/components/bulk-pass/ValidityBanner.jsx";
+import { getValidityState } from "@/lib/bulkPassValidity";
 
 const BASE = "/dashboard/bulk_pass";
 const PAGE_SIZE_OPTIONS = [10, 15, 25, 50];
@@ -146,8 +149,14 @@ export default function BulkPassListPage() {
   const [downloadingId, setDownloadingId] = useState(null);
   const [returnModal, setReturnModal] = useState(null);
 
-  const stats = useMemo(() => computeBulkPassStats(allBatches), [allBatches]);
+  // Status cards describe batches; a reusable pass is the container they arrive
+  // into, so counting it here would inflate every column. Mirrors /admin.
+  const stats = useMemo(
+    () => computeBulkPassStats(allBatches.filter((b) => !b.multipleSubmissionsEnabled)),
+    [allBatches]
+  );
   const summary = stats?.summary || {};
+  const bulkPassOverview = useMemo(() => computeBulkPassOverview(allBatches), [allBatches]);
 
   const fetchAllBatches = useCallback(async () => {
     try { const data = await listBulkBatches(); setAllBatches(Array.isArray(data) ? data : []); } catch {}
@@ -251,6 +260,15 @@ export default function BulkPassListPage() {
         </button>
       </div>
 
+      {/* ── BULK PASS OVERVIEW — the container level ── */}
+      <BulkPassOverviewPanel overview={bulkPassOverview} />
+
+      <div className="border-t border-slate-200/70 pt-5 -mb-2">
+        <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+          Batches by Status
+        </h3>
+      </div>
+
       {/* ── STAT CARDS (also act as filter tabs) ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {CARDS.map((card) => {
@@ -350,10 +368,10 @@ export default function BulkPassListPage() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] text-sm">
+              <table className="w-full min-w-[960px] text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
-                    {[ "Batch ID", "Company", "Persons", "Vehicles", "Submitted On", "Action","Status"].map((h) => (
+                    {[ "Batch ID", "Company", "Max Persons", "Max Vehicles", "Validity", "Submitted On", "Action","Status"].map((h) => (
                       <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -400,6 +418,9 @@ export default function BulkPassListPage() {
                           <Car className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <span className="font-semibold text-slate-700 tabular-nums">{batch.noOfVehicles ?? "—"}</span>
                         </div>
+                      </td>
+                      <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
+                        <ValidityBadge validity={getValidityState(batch)} />
                       </td>
                       <td className="px-5 py-3.5 whitespace-nowrap text-slate-500 text-xs">
                         {fmtDateShort(batch.updatedAt || batch.createdAt)}

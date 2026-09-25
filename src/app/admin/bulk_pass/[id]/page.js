@@ -9,7 +9,13 @@ import {
   XCircle, AlertCircle, X, RefreshCw, ChevronDown, ChevronUp, Car, ImageIcon, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
-import { getBulkBatchDetail, returnToApplicant, resendInvitation, downloadBulkPdf, fileUrl, getChildSubmissions } from "@/lib/bulkPassApi";
+import { getBulkBatchDetail, returnToApplicant, resendInvitation, resubmitBatch, downloadBulkPdfAdmin, fileUrl, getChildSubmissions } from "@/lib/bulkPassApi";
+import SubmissionHistory, { SubmissionSummaryStrip } from "@/components/bulk-pass/SubmissionHistory";
+import ValidityBanner from "@/components/bulk-pass/ValidityBanner";
+import ApplicantLinkCard from "@/components/bulk-pass/ApplicantLinkCard";
+import BulkPassLimitsPanel from "@/components/bulk-pass/BulkPassLimitsPanel";
+import { getValidityState } from "@/lib/bulkPassValidity";
+import { countLabelsFor } from "@/lib/bulkPassConstants";
 
 const BASE = "/admin/bulk_pass";
 
@@ -44,43 +50,6 @@ function ReadField({ label, value, mono }) {
     </div>
   );
 }
-
-function UploadLinkBanner({ tokenActive, tokenExpiresAt, onResend, resending }) {
-  const isExpired = tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now();
-  // canResend: link is active OR expired by time (admin can refresh the window).
-  // If tokenActive=false but NOT time-expired the applicant already submitted —
-  // resending an invitation makes no sense in that case.
-  const canResend = tokenActive || isExpired;
-  return (
-    <div className={`rounded-2xl ring-1 p-5 ${isExpired || !tokenActive ? "bg-red-50 ring-red-200" : "bg-sky-50 ring-sky-200"}`}>
-      <div className="flex items-center gap-2 mb-1">
-        <Send className={`h-4 w-4 shrink-0 ${isExpired || !tokenActive ? "text-red-500" : "text-sky-600"}`} />
-        <p className={`text-sm font-bold ${isExpired || !tokenActive ? "text-red-700" : "text-sky-700"}`}>
-          Applicant Upload Link
-          {isExpired && <span className="ml-2 text-xs font-normal text-red-500">· Link expired</span>}
-          {!tokenActive && !isExpired && <span className="ml-2 text-xs font-normal text-red-500">· Submitted</span>}
-          {tokenExpiresAt && !isExpired && tokenActive && (
-            <span className="ml-2 text-xs font-normal text-sky-500">· expires {new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(tokenExpiresAt))}</span>
-          )}
-        </p>
-      </div>
-      <p className="text-xs text-slate-500 mb-4">
-        {isExpired
-          ? "The applicant\'s upload link has expired. Resend the invitation to issue a fresh link."
-          : !tokenActive
-          ? "The applicant has already submitted. Use Return to Applicant if corrections are needed."
-          : "If the applicant hasn\'t received the invitation email, resend it through the application."}
-      </p>
-      {canResend && (
-        <button onClick={onResend} disabled={resending}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition">
-          <Send className="h-4 w-4" />{resending ? "Sending…" : "Resend Invitation Email"}
-        </button>
-      )}
-    </div>
-  );
-}
-
 
 function ReturnModal({ batchId, refNo, onClose, onSuccess }) {  const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
@@ -261,9 +230,11 @@ export default function AdminBulkPassDetailPage() {
   const [resending, setResending] = useState(false);
   const [user, setUser] = useState(null);
 
-  // Child submissions state (Multiple Pass Submissions Feature)
+  // Batches submitted against this Bulk Pass (reusable links only)
   const [childSubmissions, setChildSubmissions] = useState([]);
   const [childSubmissionsLoading, setChildSubmissionsLoading] = useState(false);
+  const [submissionSummary, setSubmissionSummary] = useState(null);
+  const [remaining, setRemaining] = useState(null);
 
   useEffect(() => {
     try { const r = localStorage.getItem("user"); if (r) setUser(JSON.parse(r)); } catch {}
@@ -287,37 +258,62 @@ export default function AdminBulkPassDetailPage() {
     const fetchChildSubmissions = async () => {
       if (!batch?.id || !batch.multipleSubmissionsEnabled) {
         setChildSubmissions([]);
+        setSubmissionSummary(null);
         return;
       }
-      
+
       setChildSubmissionsLoading(true);
       try {
         const res = await getChildSubmissions(batch.id);
         if (res?.success) {
           setChildSubmissions(res.submissions || []);
+          setSubmissionSummary(res.submissionSummary || null);
+          setRemaining(res.remaining || null);
         } else {
           setChildSubmissions([]);
+          setSubmissionSummary(null);
+          setRemaining(null);
         }
       } catch (err) {
         console.error("Failed to fetch child submissions:", err);
         setChildSubmissions([]);
+        setSubmissionSummary(null);
+        setRemaining(null);
       } finally {
         setChildSubmissionsLoading(false);
       }
     };
     
     fetchChildSubmissions();
-  }, [batch?.id, batch?.multipleSubmissionsEnabled]);
+  }, [batch?.id, batch?.multipleSubmissionsEnabled, batch?.maxSubmissions, batch?.maxTotalPersons, batch?.tokenActive, batch?.validityUpto]);
 
   const handleDownloadPdf = async () => {
     setDownloading(true);
     try {
-      const blob = await downloadBulkPdf(id);
+      // Self-healing proxy: regenerates + persists the PDF if it's missing, so a
+      // COMPLETED batch with a null qrPdfPath (QR gen failed at finalize) still works.
+      const blob = await downloadBulkPdfAdmin(id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `${batch.refNo}_QR.pdf`; a.click();
       URL.revokeObjectURL(url);
     } catch (err) { toast.error(err?.response?.data?.message || "Failed to download PDF."); }
     finally { setDownloading(false); }
+  };
+
+  // A rejected batch is a dead end unless it can be reopened; this hands it
+  // back to the applicant with a fresh upload link.
+  const [reopening, setReopening] = useState(false);
+  const handleReopen = async () => {
+    setReopening(true);
+    try {
+      await resubmitBatch(id);
+      toast.success("Batch reopened — the applicant can now correct and resubmit it.");
+      fetchBatch();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to reopen batch.");
+    } finally {
+      setReopening(false);
+    }
   };
 
   const handleResendInvitation = async () => {
@@ -328,8 +324,22 @@ export default function AdminBulkPassDetailPage() {
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center py-20">
-      <div className="h-10 w-10 rounded-full border-4 border-amber-400 border-t-transparent animate-spin" />
+    <div className="space-y-6 bp-reveal" aria-busy="true" aria-label="Loading bulk pass">
+      <div className="flex items-center gap-4">
+        <div className="bp-skeleton h-10 w-10 rounded-xl" />
+        <div className="space-y-2">
+          <div className="bp-skeleton h-6 w-56" />
+          <div className="bp-skeleton h-3.5 w-36" />
+        </div>
+      </div>
+      <div className="bp-skeleton h-24 rounded-2xl" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map((i) => <div key={i} className="bp-skeleton h-[74px] rounded-2xl" />)}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="bp-skeleton h-72 rounded-2xl lg:col-span-2" />
+        <div className="bp-skeleton h-72 rounded-2xl" />
+      </div>
     </div>
   );
 
@@ -348,6 +358,8 @@ export default function AdminBulkPassDetailPage() {
   );
 
   const { status } = batch;
+  const validity = getValidityState(batch);
+  const countLabels = countLabelsFor(batch);
   const persons = batch.persons || [];
   const vehicles = batch.vehicles || persons.filter((p) => !!p.vehicleNumber);
   const peopleRows = persons.filter((p) => !p.vehicleNumber);
@@ -355,7 +367,7 @@ export default function AdminBulkPassDetailPage() {
   const statusLogs = batch.statusLogs || [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bp-reveal">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -380,10 +392,16 @@ export default function AdminBulkPassDetailPage() {
               <RotateCcw className="h-4 w-4" />Return to Applicant
             </button>
           )}
-          {status === "COMPLETED" && batch.qrPdfPath && (
+          {status === "COMPLETED" && (
             <button onClick={handleDownloadPdf} disabled={downloading}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 transition">
               <Download className="h-4 w-4" />{downloading ? "Downloading…" : "Download QR PDF"}
+            </button>
+          )}
+          {status === "REJECTED" && (
+            <button onClick={handleReopen} disabled={reopening}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 disabled:opacity-50 transition">
+              <RotateCcw className="h-4 w-4" />{reopening ? "Reopening…" : "Reopen for Applicant"}
             </button>
           )}
           {(status === "DRAFT" || status === "RETURNED_TO_APPLICANT") && (
@@ -415,99 +433,89 @@ export default function AdminBulkPassDetailPage() {
         </div>
       )}
 
-      {/* Upload link (DRAFT / RETURNED) */}
-      {(status === "DRAFT" || status === "RETURNED_TO_APPLICANT") && batch.token && (
-        <UploadLinkBanner
+      {/* The applicant's link — visible and shareable, not just re-sendable.
+          Shown for every state in which the applicant can still act. */}
+      {["DRAFT", "RETURNED_TO_APPLICANT", "REJECTED"].includes(status) && batch.uploadLink && (
+        <ApplicantLinkCard
+          link={batch.uploadLink}
           tokenActive={batch.tokenActive}
+          expired={validity.state === "EXPIRED"}
           tokenExpiresAt={batch.tokenExpiresAt}
+          reusable={batch.multipleSubmissionsEnabled}
           onResend={handleResendInvitation}
           resending={resending}
         />
       )}
 
-      {/* Child Submissions (Multiple Pass Submissions Feature) */}
+      {/* ── Bulk Pass: validity, statistics and every batch inside it ── */}
       {batch.multipleSubmissionsEnabled && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-          <div className="flex items-center gap-2.5 mb-5">
-            <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-100 text-amber-600"><RefreshCw className="h-4 w-4" /></span>
-            <h3 className="text-base font-bold text-slate-800">Submission History</h3>
-          </div>
-          <p className="text-sm text-slate-500 mb-4">
-            This batch allows multiple submissions. Below are all submissions made so far.
-          </p>
-          
-          {childSubmissionsLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="h-10 w-10 rounded-full border-4 border-amber-400 border-t-transparent animate-spin" />
-            </div>
-          ) : childSubmissions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="h-12 w-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
-                <FileText className="h-6 w-6" />
+        <div className="flex flex-col gap-4">
+          <ValidityBanner validity={validity} canSubmit={validity?.canSubmit && batch.tokenActive !== false} />
+
+          <BulkPassLimitsPanel
+            batch={batch}
+            summary={submissionSummary}
+            remaining={remaining}
+            validity={validity}
+            canManage
+            onChanged={fetchBatch}
+          />
+
+          <SubmissionSummaryStrip summary={submissionSummary} submissions={childSubmissions} />
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2.5">
+                <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-100 text-amber-600">
+                  <RefreshCw className="h-4 w-4" />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Submission History</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {batch.companyName || "This organisation"} can submit batches with the same link
+                    until the validity above expires.
+                  </p>
+                </div>
               </div>
-              <p className="text-sm font-semibold text-slate-500">No submissions yet</p>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                The applicant will receive the upload link via email. Submissions will appear here after they upload their first batch.
-              </p>
+              <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg whitespace-nowrap">
+                {childSubmissions.length} batch{childSubmissions.length !== 1 ? "es" : ""}
+              </span>
             </div>
-          ) : (
-            <div className="overflow-x-auto rounded-xl ring-1 ring-slate-100">
-              <table className="w-full min-w-[700px] text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100">
-                    {["Submission #", "Reference No", "Persons", "Vehicles", "Status", "Submitted Date", "Actions"].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {childSubmissions.map((submission, idx) => {
-                    const submissionStatus = submission.status || "UNKNOWN";
-                    const statusConfig = STATUS_CONFIG[submissionStatus] || { 
-                      label: submissionStatus, 
-                      chip: "bg-stone-100 text-stone-500 border border-stone-200", 
-                      dot: "bg-stone-400" 
-                    };
-                    return (
-                      <tr key={submission.id || idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors last:border-b-0">
-                        <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-600">{submission.submissionNumber || "—"}</td>
-                        <td className="px-4 py-3 font-mono text-xs font-bold text-slate-800 whitespace-nowrap">{submission.refNo || "—"}</td>
-                        <td className="px-4 py-3 text-slate-600 tabular-nums">{submission.personsCount ?? 0}</td>
-                        <td className="px-4 py-3 text-slate-600 tabular-nums">{submission.vehiclesCount ?? 0}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${statusConfig.chip}`}>
-                            <span className={`h-2 w-2 rounded-full ${statusConfig.dot}`} />
-                            {statusConfig.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{fmtDate(submission.createdAt)}</td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => router.push(`/admin/bulk_pass/${submission.id}`)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 transition"
-                          >
-                            <Eye className="h-3.5 w-3.5" /> View
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-          
-          <div className="mt-4 pt-4 border-t border-slate-100">
-            <p className="text-xs text-slate-500 text-center">Total Submissions: {childSubmissions.length}</p>
+
+            <SubmissionHistory
+              submissions={childSubmissions}
+              loading={childSubmissionsLoading}
+              onView={(s) => router.push(`${BASE}/${s.id}`)}
+              emptyTitle="No batches submitted yet"
+              emptyHint="The applicant received the upload link by email. Batches appear here as soon as they submit."
+            />
           </div>
+        </div>
+      )}
+
+      {/* A child row is one batch inside a bulk pass — offer the way back up. */}
+      {batch.parentRequestId && (
+        <div className="flex flex-wrap items-center gap-3 px-5 py-4 rounded-2xl bg-slate-50 ring-1 ring-slate-200">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-bold">
+            Batch #{batch.submissionNumber ?? "—"}
+          </span>
+          <p className="text-xs text-slate-600">
+            This is one batch submitted against a reusable bulk pass.
+          </p>
+          <button
+            onClick={() => router.push(`${BASE}/${batch.parentRequestId}`)}
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-white ring-1 ring-slate-200 hover:bg-slate-100 transition"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Open the bulk pass
+          </button>
         </div>
       )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Persons (declared)", value: batch.noOfPersons ?? 0, icon: <Users className="h-5 w-5" />, color: "text-blue-500 bg-blue-100" },
-          { label: "Vehicles (declared)", value: batch.noOfVehicles ?? 0, icon: <Car className="h-5 w-5" />, color: "text-purple-500 bg-purple-100" },
+          { label: countLabels.persons, value: batch.noOfPersons ?? 0, icon: <Users className="h-5 w-5" />, color: "text-blue-500 bg-blue-100" },
+          { label: countLabels.vehicles, value: batch.noOfVehicles ?? 0, icon: <Car className="h-5 w-5" />, color: "text-purple-500 bg-purple-100" },
           { label: "Persons Uploaded", value: peopleRows.length, icon: <Users className="h-5 w-5" />, color: "text-emerald-500 bg-emerald-100" },
           { label: "Status Updates", value: statusLogs.length, icon: <Clock className="h-5 w-5" />, color: "text-amber-500 bg-amber-100" },
         ].map(({ label, value, icon, color }) => (
@@ -537,10 +545,25 @@ export default function AdminBulkPassDetailPage() {
             <ReadField label="Company / Organisation" value={batch.companyName} />
             <ReadField label="Applicant Email" value={batch.applicantEmail} />
             <ReadField label="Applicant Mobile" value={batch.applicantMobile ? `+91 ${batch.applicantMobile}` : null} />
-            <ReadField label="No. of Persons" value={batch.noOfPersons !== null && batch.noOfPersons !== undefined ? String(batch.noOfPersons) : null} />
-            <ReadField label="No. of Vehicles" value={batch.noOfVehicles !== null && batch.noOfVehicles !== undefined ? String(batch.noOfVehicles) : null} />
+            <ReadField label={countLabels.persons} value={batch.noOfPersons !== null && batch.noOfPersons !== undefined ? String(batch.noOfPersons) : null} />
+            <ReadField label={countLabels.vehicles} value={batch.noOfVehicles !== null && batch.noOfVehicles !== undefined ? String(batch.noOfVehicles) : null} />
             <ReadField label="Payment Mode" value={batch.paymentMode} />
-            <ReadField label="Work Order Required" value={batch.workOrderRequired === true || batch.workOrderRequired === "yes" ? "Yes" : "No"} />
+            <ReadField label="Request letter/supporting document" value={batch.workOrderRequired === true || batch.workOrderRequired === "yes" ? "Yes" : "No"} />
+            {batch.workOrderFilePath && (
+              <ReadField
+                label="Attached Document"
+                value={
+                  <a
+                    href={fileUrl(batch.workOrderFilePath)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm font-semibold text-amber-600 hover:text-amber-700 hover:underline"
+                  >
+                    <FileText className="h-3.5 w-3.5" /> {batch.workOrderFileName || "View document"}
+                  </a>
+                }
+              />
+            )}
             <ReadField label="Validity From" value={fmtDate(batch.validityFrom)} />
             <ReadField label="Validity Upto" value={fmtDate(batch.validityUpto)} />
             <div className="sm:col-span-2 lg:col-span-3"><ReadField label="Purpose of Visit" value={batch.purpose || batch.purposeOfVisit} /></div>

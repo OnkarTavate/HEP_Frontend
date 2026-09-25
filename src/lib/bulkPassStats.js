@@ -7,6 +7,8 @@
  * table backed by the exact same data source — no separate stats endpoint.
  */
 
+import { getValidityState } from "@/lib/bulkPassValidity";
+
 const STATUS_KEYS = [
   "DRAFT",
   "UNDER_REVIEW",
@@ -48,7 +50,13 @@ export function computeBulkPassStats(batches) {
   let totalVehicles = 0;
 
   for (const b of rows) {
-    if (statusCounts[b.status] !== undefined) statusCounts[b.status] += 1;
+    // A reusable Bulk Pass container keeps status="DRAFT" for its whole life —
+    // its child batches carry the workflow — so counting it in the batch-status
+    // cards overstates "Draft / Sent to User". Containers are surfaced separately
+    // by computeBulkPassOverview; exclude them from the batch-status tally.
+    const isContainer =
+      b.isBulkPassContainer || (b.multipleSubmissionsEnabled && !b.parentRequestId);
+    if (!isContainer && statusCounts[b.status] !== undefined) statusCounts[b.status] += 1;
     declaredPersons += toInt(b.noOfPersons);
     declaredVehicles += toInt(b.noOfVehicles);
     // submitted counts come from the list join; fall back to declared
@@ -130,5 +138,94 @@ export function computeBulkPassStats(batches) {
     trend: buckets,
     visitorTypes,
     recentActivity,
+  };
+}
+
+/**
+ * Bulk-Pass-level metrics for the management dashboard.
+ *
+ * `computeBulkPassStats` above counts rows — and in a multi-submission world a
+ * row is either a Bulk Pass container or one batch inside it. This function
+ * keeps those two levels apart so management can answer:
+ *
+ *   How many Bulk Passes exist? How many are still open? How many batches,
+ *   persons and vehicles have actually come through them?
+ *
+ * @param {Array} batches        rows from listBulkBatches()
+ * @param {Array} publicRequests rows from listPublicRequests() (optional)
+ */
+export function computeBulkPassOverview(batches, publicRequests = []) {
+  const rows = Array.isArray(batches) ? batches : [];
+  const requests = Array.isArray(publicRequests) ? publicRequests : [];
+
+  // A Bulk Pass is a container: a department intake (reusable or single-use)
+  // plus every approved public-website request. Child batches are submissions,
+  // not passes.
+  const containers = rows.filter((b) => !b.parentRequestId);
+  const childBatches = rows.filter((b) => !!b.parentRequestId);
+
+  let active = 0;
+  let expired = 0;
+  let notStarted = 0;
+  let reusable = 0;
+
+  const tally = (source) => {
+    const v = getValidityState(source);
+    if (v.state === "ACTIVE") active += 1;
+    else if (v.state === "EXPIRED") expired += 1;
+    else if (v.state === "NOT_STARTED") notStarted += 1;
+  };
+
+  for (const b of containers) {
+    tally(b);
+    if (b.multipleSubmissionsEnabled) reusable += 1;
+  }
+
+  // Only approved public requests are live Bulk Passes; the rest are still
+  // applications and would distort the active/expired split.
+  const activeRequests = requests.filter((r) => r.status === "ACTIVE");
+  for (const r of activeRequests) {
+    tally(r);
+    reusable += 1;
+  }
+
+  // Submissions: every child batch, plus what the public requests report.
+  const deptSubmissions = childBatches.length;
+  const publicSubmissions = requests.reduce((n, r) => n + toInt(r.submissions_count), 0);
+
+  // Persons/vehicles actually submitted. Child batches carry their own person
+  // rows; a single-submission Bulk Pass carries its own directly.
+  let totalPersons = 0;
+  let totalVehicles = 0;
+  for (const b of rows) {
+    if (b.parentRequestId || !b.multipleSubmissionsEnabled) {
+      totalPersons += toInt(b.submittedPersonsCount);
+      totalVehicles += toInt(b.submittedVehiclesCount);
+    }
+  }
+  for (const r of requests) {
+    totalPersons += toInt(r.submitted_persons_count);
+    totalVehicles += toInt(r.submitted_vehicles_count);
+  }
+
+  const pendingReview =
+    rows.filter((b) => b.status === "UNDER_REVIEW").length;
+  const pendingPublicApproval = requests.filter(
+    (r) => r.status === "PENDING_ADMIN_APPROVAL"
+  ).length;
+
+  return {
+    totalBulkPasses: containers.length + activeRequests.length,
+    activeBulkPasses: active,
+    expiredBulkPasses: expired,
+    notStartedBulkPasses: notStarted,
+    reusableBulkPasses: reusable,
+    totalSubmissions: deptSubmissions + publicSubmissions,
+    totalPersons,
+    totalVehicles,
+    pendingReview,
+    pendingPublicApproval,
+    departmentBulkPasses: containers.length,
+    publicBulkPasses: activeRequests.length,
   };
 }

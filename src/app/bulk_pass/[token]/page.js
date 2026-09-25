@@ -32,6 +32,9 @@ import { toast } from "sonner";
 import {
   getPublicBatch,
   validateUploadToken,
+  getBulkPassSubmissions,
+  getBulkPassSubmissionDetail,
+  downloadBulkPassSubmissionPdf,
   uploadExcelFiles,
   downloadTemplate,
   parseExcelOnly,
@@ -43,6 +46,13 @@ import {
   getBulkBatchDetail,
 } from "@/lib/bulkPassApi";
 import { processPhoto } from "@/lib/photoProcessor";
+import SubmissionHistory, {
+  SubmissionSummaryStrip,
+  SubmissionStatusBadge,
+} from "@/components/bulk-pass/SubmissionHistory";
+import ValidityBanner from "@/components/bulk-pass/ValidityBanner";
+import { getValidityState } from "@/lib/bulkPassValidity";
+import { BULK_PASS_LABELS, BULK_PASS_LIMITS } from "@/lib/bulkPassConstants";
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -256,7 +266,65 @@ function ErrorScreen({ type }) {
   );
 }
 
-function ConfirmationScreen({ refNo, email, isMultipleSubmissionEnabled, onNextSubmit, onHistoryClick, submissionNumber }) {
+/**
+ * Full-page confirmation, used only for single-submission links where the
+ * applicant's journey genuinely ends here. Reusable Bulk Passes stay on the
+ * portal and show an inline success panel instead, so the link, the validity
+ * and the submission history never leave the screen.
+ */
+/**
+ * The shape of the portal while the link is being resolved, so the page does
+ * not jump when the real content arrives.
+ */
+function PortalSkeleton() {
+  return (
+    <div
+      className="min-h-screen bg-gradient-to-br from-stone-50 to-amber-50/30"
+      style={{ fontFamily: "'Montserrat', sans-serif" }}
+      aria-busy="true"
+      aria-label="Loading your bulk pass"
+    >
+      <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-stone-200/70 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-400 text-white font-black text-sm">H</div>
+          <div className="space-y-1.5">
+            <div className="bp-skeleton h-3 w-28" />
+            <div className="bp-skeleton h-2.5 w-20" />
+          </div>
+        </div>
+        <div className="bp-skeleton h-7 w-32 rounded-full" />
+      </div>
+      <div className="max-w-[1400px] mx-auto px-4 pt-6 pb-10 flex flex-col gap-6">
+        <div className={`${card} p-6 space-y-5`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-2">
+              <div className="bp-skeleton h-2.5 w-16" />
+              <div className="bp-skeleton h-7 w-56" />
+              <div className="bp-skeleton h-3.5 w-40" />
+            </div>
+            <div className="bp-skeleton h-7 w-44 rounded-full" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="space-y-2">
+                <div className="bp-skeleton h-2.5 w-20" />
+                <div className="bp-skeleton h-4 w-28" />
+              </div>
+            ))}
+          </div>
+          <div className="bp-skeleton h-20 rounded-2xl" />
+        </div>
+        <div className="bp-skeleton h-24 rounded-2xl" />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          {[0, 1, 2, 3, 4].map((i) => <div key={i} className="bp-skeleton h-[68px] rounded-2xl" />)}
+        </div>
+        <div className="bp-skeleton h-56 rounded-3xl" />
+      </div>
+    </div>
+  );
+}
+
+function ConfirmationScreen({ refNo, email }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 to-amber-50/30 flex items-center justify-center px-4">
       <div className={`${card} p-10 max-w-md w-full text-center`}>
@@ -267,11 +335,9 @@ function ConfirmationScreen({ refNo, email, isMultipleSubmissionEnabled, onNextS
         {refNo && (
           <p className="text-sm font-mono font-bold text-amber-700 mb-3">{refNo}</p>
         )}
-        {submissionNumber && (
-          <p className="text-xs font-semibold text-emerald-600 mb-4">Submission #{submissionNumber} completed</p>
-        )}
         <p className="text-sm text-stone-500 leading-relaxed">
           Your visitor data has been submitted and is now with the department for review.
+          You will be emailed the outcome, usually within 1–2 working days.
         </p>
 
         {/* Email notification banner */}
@@ -292,194 +358,245 @@ function ConfirmationScreen({ refNo, email, isMultipleSubmissionEnabled, onNextS
           </div>
         )}
 
-        {/* Post-submission actions for multiple submissions */}
-        {isMultipleSubmissionEnabled && (
-          <div className="mt-6 space-y-3">
-            <div className="px-5 py-4 rounded-2xl bg-amber-50 ring-1 ring-amber-200 text-left">
-              <div className="flex gap-2">
-                <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-700 leading-relaxed">
-                  This link allows multiple submissions. You can submit another batch until{" "}
-                  <span className="font-semibold">validity expires</span>.
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={onNextSubmit}
-                className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-500 text-[#1f1f1f] font-bold text-sm transition"
-              >
-                <Plus className="h-4 w-4" />
-                Submit Another Batch
-              </button>
-              <button
-                onClick={onHistoryClick}
-                className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-sm transition"
-              >
-                <Eye className="h-4 w-4" />
-                View All Submissions
-              </button>
-            </div>
+        <div className="mt-4 px-5 py-4 rounded-2xl bg-amber-50 ring-1 ring-amber-200 text-left">
+          <div className="flex gap-2">
+            <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-700 leading-relaxed">
+              This upload link is now inactive. Contact the issuing department if corrections are
+              needed.
+            </p>
           </div>
-        )}
-
-        {!isMultipleSubmissionEnabled && (
-          <div className="mt-4 px-5 py-4 rounded-2xl bg-amber-50 ring-1 ring-amber-200 text-left">
-            <div className="flex gap-2">
-              <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700 leading-relaxed">
-                This upload link is now inactive. Contact the issuing department if corrections are
-                needed.
-              </p>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Intake info card ─────────────────────────────────────────────────────────
-
-function IntakeCard({ batch, isMultipleSubmissionEnabled, submissionHistory, nextSubmissionNumber }) {
-  const [expanded, setExpanded] = useState(false);
-  const isReturned = batch?.status === "RETURNED_TO_APPLICANT";
-  
-  // Multiple submission UI components
-  const MultipleSubmissionBanner = () => (
-    <div className="mb-6 rounded-2xl bg-blue-50 ring-1 ring-blue-200 p-4">
-      <div className="flex items-start gap-3">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
-          <Info className="h-4 w-4" />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-bold text-blue-900 mb-1">
-            Multiple submissions enabled
+/**
+ * Inline success panel for a reusable Bulk Pass. Confirms the batch that was
+ * just sent and immediately offers the next one, reinforcing that this is one
+ * continuous Bulk Pass rather than a series of unrelated forms.
+ */
+function BatchSubmittedPanel({ result, email, canSubmitMore, onNextBatch, onViewHistory }) {
+  return (
+    <div className={`${card} p-6 sm:p-8 bp-pop`}>
+      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+        <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
+          <span className="absolute inset-0 rounded-2xl ring-2 ring-emerald-300 bp-ring" aria-hidden="true" />
+          <svg className="h-7 w-7 bp-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M5 12.5l4.5 4.5L19 7.5" />
+          </svg>
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-lg font-black text-stone-900">
+            Batch{result?.submissionNumber ? ` #${result.submissionNumber}` : ""} submitted
+          </h3>
+          <p className="text-sm text-stone-500 mt-1 leading-relaxed">
+            {result?.refNo && (
+              <>
+                Reference <span className="font-mono font-bold text-amber-700">{result.refNo}</span> ·{" "}
+              </>
+            )}
+            {result?.personsSubmitted ?? 0} person(s) and {result?.vehiclesSubmitted ?? 0} vehicle(s)
+            are now with the Traffic Department for review. You will be emailed once they are
+            reviewed — usually within 1–2 working days.
           </p>
-          {batch?.validityUpto && (
-            <p className="text-xs text-blue-700 leading-relaxed mb-2">
-              You can submit passes until <span className="font-semibold">{fmtDate(batch.validityUpto)}</span>.
+          {email && (
+            <p className="text-xs text-stone-400 mt-2">
+              A confirmation was sent to <span className="font-mono font-semibold">{email}</span>.
             </p>
           )}
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-100 text-blue-800 text-xs font-bold">
-            <span>Current Submission: #{nextSubmissionNumber}</span>
+
+          {/* What happens from here, so nobody has to guess. */}
+          <ol className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            {[
+              { label: "Submitted", detail: "Received by the port", done: true },
+              { label: "Traffic review", detail: "Usually 1–2 working days", done: false },
+              { label: "Pass ready", detail: "Download it from the history below", done: false },
+            ].map((st, i) => (
+              <li
+                key={st.label}
+                className={`flex items-start gap-2 rounded-xl px-3 py-2.5 ring-1 bp-reveal ${
+                  st.done ? "bg-emerald-50 ring-emerald-200" : "bg-stone-50 ring-stone-200"
+                }`}
+                style={{ "--bp-delay": `${150 + i * 90}ms` }}
+              >
+                <span
+                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-black ${
+                    st.done ? "bg-emerald-500 text-white" : "bg-stone-200 text-stone-500"
+                  }`}
+                >
+                  {st.done ? "✓" : i + 1}
+                </span>
+                <span>
+                  <span className={`block font-bold ${st.done ? "text-emerald-800" : "text-stone-700"}`}>{st.label}</span>
+                  <span className="text-stone-500">{st.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+
+          <div className="mt-5 flex flex-col sm:flex-row gap-3">
+            {canSubmitMore ? (
+              <button
+                onClick={onNextBatch}
+                className="bp-press bp-lift inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-500 text-[#1f1f1f] font-bold text-sm transition"
+              >
+                <Plus className="h-4 w-4" />
+                Submit Another Batch
+              </button>
+            ) : (
+              <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-stone-100 text-stone-600">
+                <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                <p className="text-xs leading-relaxed">
+                  This bulk pass is no longer accepting new batches. Your submission history stays
+                  available below.
+                </p>
+              </div>
+            )}
+            <button
+              onClick={onViewHistory}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-sm transition"
+            >
+              <Eye className="h-4 w-4" />
+              View Submission History
+            </button>
           </div>
         </div>
       </div>
     </div>
   );
+}
 
-  const SubmissionHistoryCard = () => (
-    <div id="submission-history" className={`${card} mb-6`}>
-      <div className="px-6 py-4 border-b border-stone-100">
-        <h4 className="text-sm font-bold text-stone-800">Submission History</h4>
-        <p className="text-xs text-stone-500 mt-0.5">
-          This batch allows multiple submissions. Below are all submissions made so far.
-        </p>
-      </div>
-      {submissionHistory.length === 0 ? (
-        <div className="px-6 py-8 text-center">
-          <Archive className="h-10 w-10 mx-auto text-stone-300 mb-3" />
-          <p className="text-sm text-stone-500">
-            No submissions yet. Upload your first batch below.
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-stone-50 text-stone-600 font-semibold">
-              <tr>
-                <th className="px-6 py-3">Submission #</th>
-                <th className="px-6 py-3">Reference No</th>
-                <th className="px-6 py-3">Persons</th>
-                <th className="px-6 py-3">Vehicles</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Submitted Date</th>
-                <th className="px-6 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {submissionHistory.map((submission, i) => (
-                <tr key={i} className="hover:bg-stone-50">
-                  <td className="px-6 py-3 font-mono">{submission.submissionNumber || "—"}</td>
-                  <td className="px-6 py-3 font-mono">{submission.refNo || "—"}</td>
-                  <td className="px-6 py-3">{submission.personsCount || "—"}</td>
-                  <td className="px-6 py-3">{submission.vehiclesCount || "—"}</td>
-                  <td className="px-6 py-3">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                        submission.status === "COMPLETED"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : submission.status === "UNDER_REVIEW"
-                          ? "bg-amber-100 text-amber-700"
-                          : submission.status === "REJECTED"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-stone-100 text-stone-700"
-                      }`}
-                    >
-                      {submission.status || "—"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-3 text-stone-500">{fmtDate(submission.createdAt)}</td>
-                  <td className="px-6 py-3">
-                    <button
-                      onClick={() => {
-                        // Navigate to batch detail page
-                        window.location.href = `/bulk_pass_view/${submission.id}`;
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold transition"
-                    >
-                      <Eye className="h-3 w-3" />
-                      View
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <div className="px-6 py-3 bg-stone-50 text-center">
-        <p className="text-xs text-stone-500">
-          Total Submissions: {submissionHistory.length}
-        </p>
-      </div>
-    </div>
-  );
+// ── Bulk Pass overview ───────────────────────────────────────────────────────
 
-  const SubmitAnotherButton = () => (
-    <div className="mt-6 flex justify-center">
-      <button
-        onClick={() => {
-          // Reset form state
-          window.scrollTo({ top: 0, behavior: "smooth" });
-          // Trigger the reset in the parent component
-          toast.info("Use the Submit Another Batch button on the success screen to reset the form.");
-        }}
-        className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-500 text-[#1f1f1f] font-bold text-sm transition"
-      >
-        <Plus className="h-4 w-4" />
-        Submit Another Pass
-      </button>
-    </div>
-  );
-  
+/**
+ * The header of the applicant experience: which Bulk Pass this is, how long it
+ * stays open, and what each batch may contain. Everything below it — the
+ * history, the statistics and the upload form — belongs to this one pass.
+ */
+function BulkPassOverviewCard({ bulkPass, validity, canSubmit, blockedMessage, isMultiple, nextSubmissionNumber, batch, suppressReturnBanner, remaining }) {
+  const [expanded, setExpanded] = useState(false);
+  // A revision renders its own, better-placed notice — don't say it twice.
+  const isReturned = !suppressReturnBanner && batch?.status === "RETURNED_TO_APPLICANT";
+
   return (
-    <>
-      {/* Multiple submission UI components */}
-      {isMultipleSubmissionEnabled && (
-        <>
-          <MultipleSubmissionBanner />
-          <SubmissionHistoryCard />
-          <SubmitAnotherButton />
-        </>
-      )}
+    <div className="flex flex-col gap-4 bp-reveal">
+      {/* Identity + limits */}
+      <div className={card}>
+        <div className="px-5 sm:px-6 pt-6 pb-4 border-b border-stone-100">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-1">
+                Bulk Pass
+              </p>
+              <h2 className="text-xl sm:text-2xl font-black text-stone-900 font-mono break-all">
+                {bulkPass?.identifier || "—"}
+              </h2>
+              <p className="text-sm text-stone-500 mt-1">{bulkPass?.companyName || "—"}</p>
+            </div>
+            {isMultiple && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold">
+                <RefreshCw className="h-3 w-3" />
+                {suppressReturnBanner
+                  ? `Reusable link · Correcting batch #${nextSubmissionNumber}`
+                  : `Reusable link · Next batch #${nextSubmissionNumber}`}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="px-5 sm:px-6 py-5 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4">
+          <ReadField label="Department" value={bulkPass?.departmentName} />
+          <ReadField label="Visitor Type" value={visitorLabel(bulkPass?.visitorType)} />
+          <ReadField
+            label={isMultiple ? `${BULK_PASS_LABELS.MAX_PERSONS} (total)` : BULK_PASS_LABELS.MAX_PERSONS}
+            value={
+              bulkPass?.maxTotalPersons != null
+                ? String(bulkPass.maxTotalPersons)
+                : bulkPass?.maxPersons != null
+                ? String(bulkPass.maxPersons)
+                : null
+            }
+          />
+          <ReadField
+            label={isMultiple ? `${BULK_PASS_LABELS.MAX_VEHICLES} (total)` : BULK_PASS_LABELS.MAX_VEHICLES}
+            value={
+              bulkPass?.maxTotalVehicles != null
+                ? String(bulkPass.maxTotalVehicles)
+                : bulkPass?.maxVehicles != null
+                ? String(bulkPass.maxVehicles)
+                : null
+            }
+          />
+        </div>
+
+        {isMultiple && (
+          <p className="px-5 sm:px-6 pb-4 -mt-1 text-xs text-stone-400 leading-relaxed">
+            These are the totals for the <span className="font-semibold text-stone-500">whole bulk pass</span>.
+            Each batch you submit may carry up to{" "}
+            <span className="font-semibold text-stone-500">
+              {bulkPass?.perBatchMaxPersons ?? BULK_PASS_LIMITS.MAX_PERSONS_PER_BATCH} persons
+            </span>{" "}
+            and{" "}
+            <span className="font-semibold text-stone-500">
+              {bulkPass?.perBatchMaxVehicles ?? BULK_PASS_LIMITS.MAX_VEHICLES_PER_BATCH} vehicles
+            </span>
+            ; larger groups are sent as several batches with this same link.
+          </p>
+        )}
+
+        {/* What the whole bulk pass allows, and how much of it is left. */}
+        {isMultiple && (
+          <div className="px-5 sm:px-6 pb-5">
+            <RemainingAllowance remaining={remaining} bulkPass={bulkPass} />
+          </div>
+        )}
+
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full flex items-center justify-center gap-1.5 px-6 py-3 border-t border-stone-100 text-xs font-semibold text-stone-500 hover:text-amber-600 hover:bg-amber-50/50 transition"
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="h-3.5 w-3.5" /> Show less
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3.5 w-3.5" /> Show more details
+            </>
+          )}
+        </button>
+        {expanded && (
+          <div className="px-5 sm:px-6 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 border-t border-stone-100 pt-5">
+            <ReadField label="Applicant Email" value={bulkPass?.applicantEmail} />
+            <ReadField
+              label="Applicant Mobile"
+              value={bulkPass?.applicantMobile ? "+91 " + bulkPass.applicantMobile : null}
+            />
+            <ReadField label="Payment Mode" value={bulkPass?.paymentMode} />
+            <ReadField label="Ref. Doc No." value={bulkPass?.refDocNo} />
+            {bulkPass?.purpose && (
+              <div className="sm:col-span-2">
+                <ReadField label="Purpose of Visit" value={bulkPass.purpose} />
+              </div>
+            )}
+            {bulkPass?.remarks && (
+              <div className="sm:col-span-2">
+                <ReadField label="Remarks" value={bulkPass.remarks} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Validity — the rule that governs whether another batch is possible */}
+      <ValidityBanner validity={validity} canSubmit={canSubmit} message={blockedMessage} />
 
       {/* Return reason banner (if returned for revision) */}
-      {isReturned && batch.returnReason && (
-        <div className={`${card} mb-6`}>
-          <div className="px-6 py-4 flex items-start gap-3 bg-orange-50/70">
+      {isReturned && batch?.returnReason && (
+        <div className={card}>
+          <div className="px-5 sm:px-6 py-4 flex items-start gap-3 bg-orange-50/70 rounded-3xl">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500 text-white shrink-0">
               <AlertCircle className="h-5 w-5" />
             </div>
@@ -487,9 +604,7 @@ function IntakeCard({ batch, isMultipleSubmissionEnabled, submissionHistory, nex
               <p className="text-sm font-bold text-orange-900 mb-1">
                 Returned for Revision — Traffic Department Remarks
               </p>
-              <p className="text-sm text-orange-800 leading-relaxed">
-                {batch.returnReason}
-              </p>
+              <p className="text-sm text-orange-800 leading-relaxed">{batch.returnReason}</p>
               <p className="text-xs text-orange-700 mt-2 leading-relaxed">
                 Your previously entered information is pre-filled below. Please correct any errors,
                 re-upload photos and Aadhaar cards for all persons, and submit again.
@@ -498,88 +613,396 @@ function IntakeCard({ batch, isMultipleSubmissionEnabled, submissionHistory, nex
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Submission history for the Bulk Pass, with the aggregate statistics above it
+ * so the applicant can see everything they have sent through this one link.
+ */
+function SubmissionHistoryPanel({ submissions, summary, loading, onView, onDownload, downloadingId, nextSubmissionNumber, canSubmit }) {
+  return (
+    <div id="submission-history" className="flex flex-col gap-4 scroll-mt-24 bp-reveal" style={{ "--bp-delay": "120ms" }}>
+      <SubmissionSummaryStrip summary={summary} submissions={submissions} />
 
       <div className={card}>
-      <div className="px-6 pt-6 pb-4 border-b border-stone-100">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="px-5 sm:px-6 py-4 border-b border-stone-100 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-1">
-              Bulk Pass Request
+            <h3 className="text-base font-bold text-stone-800">Submission History</h3>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Every batch submitted with this bulk pass link.
             </p>
-            <h2 className="text-2xl font-black text-stone-900 font-mono">
-              {batch.refNo || "—"}
-            </h2>
-            <p className="text-sm text-stone-500 mt-1">{batch.companyName}</p>
           </div>
-          <div className="text-right">
-            {batch.validityFrom && (
-              <>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-                  Valid From
-                </p>
-                <p className="text-sm font-bold text-stone-800 mb-2">{fmtDate(batch.validityFrom)}</p>
-              </>
-            )}
-            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">
-              Valid Until
-            </p>
-            <p className="text-sm font-bold text-stone-800">{fmtDate(batch.validityUpto)}</p>
-          </div>
+          {canSubmit && (
+            <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-lg whitespace-nowrap">
+              Next batch will be #{nextSubmissionNumber}
+            </span>
+          )}
+        </div>
+        <div className="p-4 sm:p-5">
+          <SubmissionHistory
+            submissions={submissions}
+            loading={loading}
+            onView={onView}
+            onDownload={onDownload}
+            downloadingId={downloadingId}
+            emptyTitle="No batches submitted yet"
+            emptyHint="Upload your first batch below — it will appear here once submitted."
+          />
         </div>
       </div>
-      <div className="px-6 py-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
-        <ReadField label="Department" value={batch.departmentName || batch.department} />
-        <ReadField label="Visitor Type" value={visitorLabel(batch.visitorType)} />
-        <ReadField
-          label="Max No. of Persons"
-          value={batch.noOfPersons != null ? String(batch.noOfPersons) : null}
-        />
-        <ReadField
-          label="Max No. of Vehicles"
-          value={batch.noOfVehicles != null ? String(batch.noOfVehicles) : null}
-        />
+    </div>
+  );
+}
+
+/**
+ * Read-only detail of a previous batch, opened from the history. Scoped to this
+ * Bulk Pass link server-side; Aadhaar numbers arrive already masked.
+ */
+function SubmissionDetailModal({ token, submission, onClose, onDownload, downloading }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!token || !submission?.id) return;
+    let alive = true;
+    setLoading(true);
+    setError(null);
+    (async () => {
+      try {
+        const res = await getBulkPassSubmissionDetail(token, submission.id);
+        if (alive) setData(res);
+      } catch (err) {
+        if (alive) setError(err?.response?.data?.message || "Could not load this submission.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [token, submission?.id]);
+
+  const detail = data?.submission;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+      <div className="bg-white w-full sm:max-w-3xl max-h-[92vh] sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col bp-pop">
+        <div className="flex items-start justify-between gap-3 px-5 sm:px-6 py-4 border-b border-stone-100 shrink-0">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
+              Batch #{detail?.submissionNumber ?? submission?.number ?? "—"}
+            </p>
+            <h3 className="text-lg font-bold text-stone-900 font-mono truncate">
+              {detail?.refNo || submission?.refNo || "—"}
+            </h3>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {detail?.status && <SubmissionStatusBadge status={detail.status} />}
+            {onDownload && (detail?.status ?? submission?.status) === "COMPLETED" && (
+              <button
+                type="button"
+                onClick={() => onDownload(detail || submission)}
+                disabled={downloading}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition"
+              >
+                {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                Download pass
+              </button>
+            )}
+            <button onClick={onClose} className="text-stone-400 hover:text-stone-700 transition" aria-label="Close">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto px-5 sm:px-6 py-5 flex flex-col gap-6">
+          {loading ? (
+            <div className="flex items-center justify-center py-14">
+              <Loader2 className="h-7 w-7 animate-spin text-amber-500" />
+            </div>
+          ) : error ? (
+            <div className="flex items-start gap-3 px-4 py-4 rounded-2xl bg-red-50 ring-1 ring-red-200">
+              <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4">
+                <ReadField label="Persons" value={String(detail?.personsCount ?? 0)} />
+                <ReadField label="Vehicles" value={String(detail?.vehiclesCount ?? 0)} />
+                <ReadField label="Submitted On" value={fmtDate(detail?.submittedAt)} />
+                <ReadField label="Valid Until" value={fmtDate(detail?.validityUpto)} />
+              </div>
+
+              {detail?.returnReason && (
+                <div className="px-4 py-3 rounded-2xl bg-orange-50 ring-1 ring-orange-200">
+                  <p className="text-xs font-bold text-orange-800 mb-0.5">Returned for revision</p>
+                  <p className="text-sm text-orange-700">{detail.returnReason}</p>
+                </div>
+              )}
+              {detail?.rejectionReason && (
+                <div className="px-4 py-3 rounded-2xl bg-red-50 ring-1 ring-red-200">
+                  <p className="text-xs font-bold text-red-800 mb-0.5">Rejection reason</p>
+                  <p className="text-sm text-red-700">{detail.rejectionReason}</p>
+                </div>
+              )}
+
+              {data?.persons?.length > 0 && (
+                <div>
+                  <SectionHeading icon={<Users className="h-4 w-4" />} title={`Persons (${data.persons.length})`} />
+                  <div className="overflow-x-auto rounded-2xl ring-1 ring-stone-100">
+                    <table className="w-full min-w-[520px] text-sm">
+                      <thead>
+                        <tr className="bg-stone-50 border-b border-stone-100">
+                          {["#", "Name", "Aadhaar", "Mobile", "Decision"].map((h) => (
+                            <th
+                              key={h}
+                              className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-stone-400 whitespace-nowrap"
+                            >
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-50">
+                        {data.persons.map((p, i) => (
+                          <tr key={p.id}>
+                            <td className="px-4 py-2.5 text-xs text-stone-400 tabular-nums">{i + 1}</td>
+                            <td className="px-4 py-2.5 font-semibold text-stone-800">{p.name || "—"}</td>
+                            <td className="px-4 py-2.5 font-mono text-xs text-stone-600 whitespace-nowrap">
+                              {p.aadhaar || "—"}
+                            </td>
+                            <td className="px-4 py-2.5 font-mono text-xs text-stone-600">{p.mobile || "—"}</td>
+                            <td className="px-4 py-2.5">
+                              <PersonDecision status={p.approvalStatus} reason={p.approvalReason} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {data?.vehicles?.length > 0 && (
+                <div>
+                  <SectionHeading icon={<Car className="h-4 w-4" />} title={`Vehicles (${data.vehicles.length})`} />
+                  <div className="overflow-x-auto rounded-2xl ring-1 ring-stone-100">
+                    <table className="w-full min-w-[520px] text-sm">
+                      <thead>
+                        <tr className="bg-stone-50 border-b border-stone-100">
+                          {["#", "Reg. Number", "Type", "Driver", "Decision"].map((h) => (
+                            <th
+                              key={h}
+                              className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-stone-400 whitespace-nowrap"
+                            >
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-50">
+                        {data.vehicles.map((v, i) => (
+                          <tr key={v.id}>
+                            <td className="px-4 py-2.5 text-xs text-stone-400 tabular-nums">{i + 1}</td>
+                            <td className="px-4 py-2.5 font-mono font-bold text-stone-800 whitespace-nowrap">
+                              {v.vehicleNumber}
+                            </td>
+                            <td className="px-4 py-2.5 text-stone-600">{v.vehicleType || "—"}</td>
+                            <td className="px-4 py-2.5 text-stone-700">{v.driverName || "—"}</td>
+                            <td className="px-4 py-2.5">
+                              <PersonDecision status={v.approvalStatus} reason={v.approvalReason} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {data?.statusLog?.length > 0 && (
+                <div>
+                  <SectionHeading icon={<FileText className="h-4 w-4" />} title="Progress" />
+                  <ol className="relative border-l-2 border-stone-100 ml-2">
+                    {data.statusLog.map((log, i) => (
+                      <li key={i} className="ml-5 pb-5 last:pb-0">
+                        <span className="absolute -left-[9px] flex h-4 w-4 rounded-full ring-2 ring-white bg-amber-400" />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <SubmissionStatusBadge status={log.status} />
+                          <span className="text-xs text-stone-400">{fmtDate(log.createdAt)}</span>
+                        </div>
+                        {log.remarks && <p className="text-xs text-stone-500 mt-1">{log.remarks}</p>}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="px-5 sm:px-6 py-4 border-t border-stone-100 shrink-0">
+          <button
+            onClick={onClose}
+            className="w-full sm:w-auto sm:ml-auto sm:block px-6 py-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-sm transition"
+          >
+            Close
+          </button>
+        </div>
       </div>
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-center gap-1.5 px-6 py-3 border-t border-stone-100 text-xs font-semibold text-stone-500 hover:text-amber-600 hover:bg-amber-50/50 transition"
-      >
-        {expanded ? (
-          <>
-            <ChevronUp className="h-3.5 w-3.5" /> Show less
-          </>
-        ) : (
-          <>
-            <ChevronDown className="h-3.5 w-3.5" /> Show more details
-          </>
-        )}
-      </button>
-      {expanded && (
-        <div className="px-6 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 border-t border-stone-100 pt-5">
-          <ReadField label="Applicant Email" value={batch.applicantEmail} />
-          <ReadField
-            label="Applicant Mobile"
-            value={batch.applicantMobile ? "+91 " + batch.applicantMobile : null}
-          />
-          {batch.purposeOfVisit && (
-            <div className="sm:col-span-2">
-              <ReadField label="Purpose of Visit" value={batch.purposeOfVisit} />
+    </div>
+  );
+}
+
+function PersonDecision({ status, reason }) {
+  const s = status || "PENDING";
+  const cls =
+    s === "APPROVED"
+      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+      : s === "REJECTED"
+      ? "bg-red-50 text-red-600 ring-1 ring-red-200"
+      : "bg-stone-100 text-stone-600 ring-1 ring-stone-200";
+  const label = s === "APPROVED" ? "Approved" : s === "REJECTED" ? "Rejected" : "Pending";
+  return (
+    <span
+      title={reason || undefined}
+      className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold ${cls}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+// ── Intake info card (legacy single-submission link) ─────────────────────────
+//
+// Reusable Bulk Passes render <BulkPassOverviewCard /> instead; this card stays
+// for links that accept exactly one submission.
+
+function IntakeCard({ batch }) {
+  const [expanded, setExpanded] = useState(false);
+  const needsCorrection = ["RETURNED_TO_APPLICANT", "REJECTED"].includes(batch?.status);
+  const correctionReason = batch?.returnReason || batch?.rejectionReason;
+
+  // The body dereferences batch.refNo/companyName/validityUpto directly; a
+  // legacy link that resolves without a batch would otherwise white-screen.
+  if (!batch) return null;
+
+  return (
+    <>
+      {/* Correction banner — shown for a return or a rejection alike */}
+      {needsCorrection && (correctionReason || batch?.issues?.items?.length) && (
+        <div className={`${card} mb-6`}>
+          <div className="px-6 py-4 flex items-start gap-3 bg-orange-50/70 rounded-3xl">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500 text-white shrink-0">
+              <AlertCircle className="h-5 w-5" />
             </div>
-          )}
-          {batch.remarks && (
-            <div className="sm:col-span-2">
-              <ReadField label="Remarks" value={batch.remarks} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-orange-900 mb-1">
+                {batch.status === "REJECTED"
+                  ? "Not Approved — Corrections Needed"
+                  : "Returned for Revision — Traffic Department Remarks"}
+              </p>
+              {correctionReason && (
+                <p className="text-sm text-orange-800 leading-relaxed">{correctionReason}</p>
+              )}
+
+              <IssueList issues={batch.issues} className="mt-3" />
+
+              <p className="text-xs text-orange-700 mt-3 leading-relaxed">
+                Your previously entered information is pre-filled below — correct only what is
+                listed, re-attach photos and Aadhaar cards, and submit again.
+              </p>
             </div>
-          )}
+          </div>
         </div>
       )}
-    </div>
+
+      <div className={card}>
+        <div className="px-6 pt-6 pb-4 border-b border-stone-100">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-1">
+                Bulk Pass Request
+              </p>
+              <h2 className="text-2xl font-black text-stone-900 font-mono">
+                {batch.refNo || "—"}
+              </h2>
+              <p className="text-sm text-stone-500 mt-1">{batch.companyName}</p>
+            </div>
+            <div className="text-right">
+              {batch.validityFrom && (
+                <>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">
+                    Valid From
+                  </p>
+                  <p className="text-sm font-bold text-stone-800 mb-2">{fmtDate(batch.validityFrom)}</p>
+                </>
+              )}
+              <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">
+                Valid Until
+              </p>
+              <p className="text-sm font-bold text-stone-800">{fmtDate(batch.validityUpto)}</p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+          <ReadField label="Department" value={batch.departmentName || batch.department} />
+          <ReadField label="Visitor Type" value={visitorLabel(batch.visitorType)} />
+          <ReadField
+            label={BULK_PASS_LABELS.MAX_PERSONS}
+            value={batch.noOfPersons != null ? String(batch.noOfPersons) : null}
+          />
+          <ReadField
+            label={BULK_PASS_LABELS.MAX_VEHICLES}
+            value={batch.noOfVehicles != null ? String(batch.noOfVehicles) : null}
+          />
+        </div>
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full flex items-center justify-center gap-1.5 px-6 py-3 border-t border-stone-100 text-xs font-semibold text-stone-500 hover:text-amber-600 hover:bg-amber-50/50 transition"
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="h-3.5 w-3.5" /> Show less
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3.5 w-3.5" /> Show more details
+            </>
+          )}
+        </button>
+        {expanded && (
+          <div className="px-6 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 border-t border-stone-100 pt-5">
+            <ReadField label="Applicant Email" value={batch.applicantEmail} />
+            <ReadField
+              label="Applicant Mobile"
+              value={batch.applicantMobile ? "+91 " + batch.applicantMobile : null}
+            />
+            {batch.purposeOfVisit && (
+              <div className="sm:col-span-2">
+                <ReadField label="Purpose of Visit" value={batch.purposeOfVisit} />
+              </div>
+            )}
+            {batch.remarks && (
+              <div className="sm:col-span-2">
+                <ReadField label="Remarks" value={batch.remarks} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </>
   );
 }
 
+
 // ── Step 1: Upload Excel ──────────────────────────────────────────────────────
 
-function ExcelUploadStep({ token, onParsed }) {
+function ExcelUploadStep({ token, onParsed, onEnterManually }) {
   const inputRef = useRef(null);
   const [files, setFiles] = useState([]);
   const [dragging, setDragging] = useState(false);
@@ -726,7 +1149,7 @@ function ExcelUploadStep({ token, onParsed }) {
           onClick={() => !uploading && inputRef.current?.click()}
           className={
             "flex flex-col items-center justify-center gap-3 px-6 py-10 rounded-2xl border-2 " +
-            "border-dashed cursor-pointer transition select-none " +
+            "border-dashed cursor-pointer transition select-none bp-lift " +
             (dragging
               ? "border-amber-400 bg-amber-50"
               : uploading
@@ -796,6 +1219,30 @@ function ExcelUploadStep({ token, onParsed }) {
             </>
           )}
         </button>
+
+        {/* A spreadsheet is overkill for two or three people, and the review
+            step can already add rows by hand — so offer that door directly. */}
+        {onEnterManually && (
+          <div className="mt-4 flex items-center gap-3">
+            <span className="h-px flex-1 bg-stone-200" />
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">or</span>
+            <span className="h-px flex-1 bg-stone-200" />
+          </div>
+        )}
+        {onEnterManually && (
+          <button
+            type="button"
+            onClick={onEnterManually}
+            className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-sm transition"
+          >
+            <Plus className="h-4 w-4" /> Enter details manually
+          </button>
+        )}
+        {onEnterManually && (
+          <p className="mt-2 text-center text-[11px] text-stone-400">
+            Quicker for a handful of people — you can still add more rows later.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -1178,7 +1625,7 @@ function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors =
       </td>
 
       {/* DOB */}
-      <td className="px-3 py-3 min-w-[130px]">
+      <td className="px-3 py-3 min-w-[240px] max-w-[320px] whitespace-normal">
         {editing ? (
           <>
             <input
@@ -1788,8 +2235,8 @@ function VehicleModal({ vehicle, onSave, onClose }) {
                         </span>
                       </div>
                     )}
-                    {ulipValidity.validityChecks.map((c, i) => (
-                      <div key={i} className={`flex items-center justify-between px-3 py-1.5 ${i < ulipValidity.validityChecks.length - 1 ? "border-b border-stone-100" : ""} ${c.expired ? "bg-red-50" : "bg-white"}`}>
+                    {(ulipValidity.validityChecks || []).map((c, i) => (
+                      <div key={i} className={`flex items-center justify-between px-3 py-1.5 ${i < (ulipValidity.validityChecks || []).length - 1 ? "border-b border-stone-100" : ""} ${c.expired ? "bg-red-50" : "bg-white"}`}>
                         <span className="text-stone-500">{c.label}</span>
                         <span className={`font-bold ${c.expired ? "text-red-600" : "text-emerald-600"}`}>
                           {c.expired ? "✗ Expired" : "✓ Valid"}
@@ -1801,7 +2248,7 @@ function VehicleModal({ vehicle, onSave, onClose }) {
                       <div className="px-3 py-2 bg-emerald-50 text-emerald-700 font-bold text-center">✓ Vehicle documents verified</div>
                     ) : (
                       <div className="px-3 py-2 bg-red-50 text-red-700 font-bold text-center">
-                        ✗ {!ulipValidity.rcActive ? "RC not active" : `${ulipValidity.expired.length} expired certificate(s) — update before entering port`}
+                        ✗ {!ulipValidity.rcActive ? "RC not active" : `${(ulipValidity.expired || []).length} expired certificate(s) — update before entering port`}
                       </div>
                     )}
                   </div>
@@ -1883,14 +2330,20 @@ function VehicleModal({ vehicle, onSave, onClose }) {
   );
 }
 
-function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesChange, onBack, onSubmit, submitting }) {
+function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesChange, onBack, onSubmit, submitting, uploadPct }) {
   const zipInputRef = useRef(null);
   const [zipUploading, setZipUploading] = useState(false);
   const [zipResult, setZipResult] = useState(null);
   const [vehicleModal, setVehicleModal] = useState(null); // null | { index: number | null, data: object | null }
 
-  const maxPersons = Number(batch?.noOfPersons) || 30;
-  const maxVehicles = Number(batch?.noOfVehicles) || 0;
+  // A real cap of 0 (persons allowance fully spent) must stay 0, not fall back
+  // to 30 via `|| 30` — otherwise the form advertises 0/30 and lets the applicant
+  // build a batch the submit guard then rejects. Only an absent/invalid value defaults.
+  const maxPersons = Number.isFinite(Number(batch?.noOfPersons))
+    ? Math.max(0, Number(batch.noOfPersons))
+    : 30;
+  // 0 vehicles means vehicles are not allowed on this pass — not "unlimited".
+  const maxVehicles = Math.max(0, Number(batch?.noOfVehicles) || 0);
 
   // ── Effective per-row errors (field-level + cross-row duplicate Aadhaar) ──
   // Duplicate detection is computed across ALL current rows so that fixing one
@@ -1922,7 +2375,7 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
 
   // Count limits: fewer than the max is fine, more than the max is not.
   const personsExceeded = maxPersons > 0 && rows.length > maxPersons;
-  const vehiclesExceeded = maxVehicles > 0 && vehicles.length > maxVehicles;
+  const vehiclesExceeded = vehicles.length > maxVehicles;
 
   // Aadhaar card satisfied if a new file is uploaded OR a previous path is being kept
   const aadhaarCardsMissing = rows.filter((r) => !r.aadhaarCardFile && !r._keepAadhaarPath).length;
@@ -1940,10 +2393,9 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
     (v) => !v.driverAadhaarCard && !(v._keepVehicleDocs && v._keepVehicleDocs.driverAadhaarCard)
   ).length;
 
-  const vehiclesReady =
-    (maxVehicles === 0 || vehicles.length > 0) &&
-    !vehiclesExceeded &&
-    vehicleAadhaarCardsMissing === 0;
+  // "Max No. of Vehicles" is a ceiling, not a quota: a batch of people arriving
+  // on foot or by bus is perfectly valid. Only the upper bound is enforced.
+  const vehiclesReady = !vehiclesExceeded && vehicleAadhaarCardsMissing === 0;
   const canSubmit = personsReady && vehiclesReady;
 
   const handleRowChange = (index, updatedRow) => {
@@ -1958,7 +2410,7 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
     onRowsChange((prev) => [
       ...prev,
       {
-        id: "manual_" + Date.now(),
+        id: "manual_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
         fileName: "manual",
         rowNumber: prev.length + 1,
         name: "",
@@ -1975,7 +2427,7 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
     if (vehicleModal.index !== null) {
       onVehiclesChange((prev) => prev.map((v, i) => (i === vehicleModal.index ? data : v)));
     } else {
-      onVehiclesChange((prev) => [...prev, { ...data, id: "veh_" + Date.now() }]);
+      onVehiclesChange((prev) => [...prev, { ...data, id: "veh_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7) }]);
     }
     setVehicleModal(null);
   };
@@ -2156,8 +2608,9 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
           </button>
         </div>
 
-        {/* Revision mode notice — shown when data was pre-filled from a returned batch */}
-        {batch?.status === "RETURNED_TO_APPLICANT" && (
+        {/* Revision mode notice — shown when data was pre-filled from a returned
+            OR rejected batch (the loader restores previous data for both). */}
+        {["RETURNED_TO_APPLICANT", "REJECTED"].includes(batch?.status) && (
           <div className="mb-5 px-4 py-4 rounded-2xl bg-orange-50 ring-1 ring-orange-200">
             <p className="text-xs font-bold text-orange-800 mb-2 flex items-center gap-1.5">
               <AlertCircle className="h-3.5 w-3.5" /> Revision Mode — Pre-filled Data
@@ -2340,8 +2793,8 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
                 </span>
               ) : (
                 vehicles.length === 0 && (
-                  <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-600 border border-red-200">
-                    <AlertCircle className="h-3 w-3" /> Required
+                  <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-stone-100 text-stone-500 border border-stone-200">
+                    Optional
                   </span>
                 )
               )}
@@ -2349,7 +2802,7 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
 
             <div className="mb-4 px-4 py-3 rounded-2xl bg-blue-50 ring-1 ring-blue-100">
               <p className="text-xs text-blue-700 leading-relaxed">
-                Add vehicle details below (maximum {maxVehicles}). RC and Insurance are mandatory for each vehicle. Submission will be blocked until at least one vehicle is added.
+                Add vehicle details below if this batch includes vehicles — up to {maxVehicles}. RC and Insurance are mandatory for each vehicle you add. If nobody is bringing a vehicle, leave this empty and submit.
               </p>
             </div>
 
@@ -2479,8 +2932,59 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
           </div>
         )}
 
-        {/* Submit section */}
-        <div className="mt-6 flex flex-col gap-3">
+        {/* A pass that allows no vehicles, but a revision still carries some:
+            offer the one action that fixes it. */}
+        {maxVehicles === 0 && vehicles.length > 0 && (
+          <div className="mb-6 flex flex-wrap items-center gap-3 px-4 py-3 rounded-2xl bg-red-50 ring-1 ring-red-200">
+            <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+            <p className="text-xs text-red-700 flex-1 min-w-[200px]">
+              This bulk pass does not allow vehicles, but {vehicles.length} vehicle{vehicles.length === 1 ? " is" : "s are"} attached to this batch.
+            </p>
+            <button
+              type="button"
+              onClick={() => onVehiclesChange([])}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold text-red-700 bg-white ring-1 ring-red-200 hover:bg-red-100 transition"
+            >
+              Remove all vehicles
+            </button>
+          </div>
+        )}
+
+        {/* Submit section — stays in view while the applicant scrolls a long
+            list, and says exactly what is still missing. */}
+        <div className="mt-6 sticky bottom-3 z-10 flex flex-col gap-3 rounded-2xl bg-white/90 backdrop-blur-md ring-1 ring-stone-200/80 shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.35)] p-3 sm:p-4">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+              <CheckCircle2 className="h-3 w-3" /> {readyRows.length}/{rows.length} person{rows.length === 1 ? "" : "s"} ready
+            </span>
+            {noPhotoRows.length > 0 && (
+              <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 ring-1 ring-amber-200">
+                {noPhotoRows.length} need a photo
+              </span>
+            )}
+            {aadhaarCardsMissing > 0 && (
+              <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 ring-1 ring-amber-200">
+                {aadhaarCardsMissing} need an Aadhaar card
+              </span>
+            )}
+            {errorRows.length > 0 && (
+              <span className="px-2.5 py-1 rounded-full bg-red-50 text-red-700 ring-1 ring-red-200">
+                {errorRows.length} with errors
+              </span>
+            )}
+            {vehicles.length > 0 && (
+              <span className="px-2.5 py-1 rounded-full bg-stone-100 text-stone-600 ring-1 ring-stone-200">
+                {vehicles.length} vehicle{vehicles.length === 1 ? "" : "s"}
+                {vehicleAadhaarCardsMissing > 0 ? ` · ${vehicleAadhaarCardsMissing} need driver Aadhaar` : ""}
+              </span>
+            )}
+            <span className="ml-auto h-1.5 w-24 sm:w-40 rounded-full bg-stone-100 overflow-hidden" aria-hidden="true">
+              <span
+                className={`block h-full bp-bar ${canSubmit ? "bg-emerald-500" : "bg-amber-400"}`}
+                style={{ width: `${rows.length ? Math.round((readyRows.length / rows.length) * 100) : 0}%` }}
+              />
+            </span>
+          </div>
           {!canSubmit && (
             <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-amber-50 ring-1 ring-amber-200">
               <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
@@ -2492,19 +2996,38 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
                 {aadhaarCardsMissing > 0 &&
                   `Upload Aadhaar card for ${aadhaarCardsMissing} person(s) — Aadhaar card is mandatory for every individual. `}
                 {vehiclesExceeded &&
-                  `Too many vehicles: ${vehicles.length} added, maximum allowed is ${maxVehicles}. Remove ${vehicles.length - maxVehicles}. `}
+                  (maxVehicles === 0
+                    ? "This bulk pass does not allow vehicles. Remove the vehicle entries. "
+                    : `Too many vehicles: ${vehicles.length} added, maximum allowed is ${maxVehicles}. Remove ${vehicles.length - maxVehicles}. `)}
                 {vehicleAadhaarCardsMissing > 0 &&
                   `Upload driver Aadhaar card for ${vehicleAadhaarCardsMissing} vehicle(s) — it is mandatory for every vehicle. `}
-                {maxVehicles > 0 &&
-                  vehicles.length === 0 &&
-                  `Add at least 1 vehicle (${vehicles.length}/${maxVehicles} added).`}
+
+              </p>
+            </div>
+          )}
+          {/* Documents can take minutes on a slow connection — show movement. */}
+          {submitting && uploadPct != null && (
+            <div className="mb-3">
+              <div className="h-1.5 rounded-full bg-stone-200 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-amber-400 transition-all duration-200"
+                  style={{ width: `${uploadPct}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-center text-[11px] text-stone-400">
+                {uploadPct < 100
+                  ? "Uploading photos and documents — please keep this page open."
+                  : "Upload complete — finishing up…"}
               </p>
             </div>
           )}
           <button type="button" onClick={onSubmit} disabled={!canSubmit || submitting}
-            className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-amber-400 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-[#1f1f1f] font-black text-sm transition shadow-sm">
+            className="bp-press w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-amber-400 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-[#1f1f1f] font-black text-sm transition shadow-sm">
             {submitting ? (
-              <><Loader2 className="h-5 w-5 animate-spin" /> Submitting…</>
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                {uploadPct != null && uploadPct < 100 ? `Uploading… ${uploadPct}%` : "Submitting…"}
+              </>
             ) : (
               <><Send className="h-5 w-5" /> Submit ({rows.length} persons{vehicles.length > 0 ? ", " + vehicles.length + " vehicles" : ""})</>
             )}
@@ -2523,7 +3046,6 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
     </div>
   );
 }
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function BulkPassPublicPage() {
@@ -2546,115 +3068,150 @@ export default function BulkPassPublicPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [batch, setBatch] = useState(null);
+  // ── Bulk Pass context ────────────────────────────────────────────────────
+  const [batch, setBatch] = useState(null);           // raw batch/request row (legacy consumers)
+  const [bulkPass, setBulkPass] = useState(null);     // normalised Bulk Pass view
+  const [validity, setValidity] = useState(null);
+  const [canSubmit, setCanSubmit] = useState(true);
+  const [blockedMessage, setBlockedMessage] = useState(null);
   const [loadingBatch, setLoadingBatch] = useState(true);
   const [batchError, setBatchError] = useState(null); // "invalid" | "expired" | null
-  
-  // Multiple submission detection
+
+  // ── Multi-submission context ─────────────────────────────────────────────
   const [isMultipleSubmissionEnabled, setIsMultipleSubmissionEnabled] = useState(false);
-  const [isParentRequest, setIsParentRequest] = useState(false);
-  const [isParentBatch, setIsParentBatch] = useState(false);
   const [submissionHistory, setSubmissionHistory] = useState([]);
+  const [submissionSummary, setSubmissionSummary] = useState(null);
   const [nextSubmissionNumber, setNextSubmissionNumber] = useState(1);
-  const [withinValidityPeriod, setWithinValidityPeriod] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [openSubmission, setOpenSubmission] = useState(null);
+  // Batch whose approved pass is being fetched, so its button shows a spinner.
+  const [downloadingPassId, setDownloadingPassId] = useState(null);
+  const [remaining, setRemaining] = useState(null);
+  // Percentage for the submit upload, which can carry hundreds of documents.
+  const [uploadPct, setUploadPct] = useState(null);
+  // Set when this link opens one returned batch for correction rather than
+  // starting a new one.
+  const [revisionOf, setRevisionOf] = useState(null);
 
   // "excel" → "edit" → "submitted"
   const [step, setStep] = useState("excel");
   const [rows, setRows] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [lastResult, setLastResult] = useState(null);
 
-  // ── Auto-save draft state to localStorage ───────────────────────────────
-  const STORAGE_KEY = token ? `bulk_pass_draft_${token}` : null;
-
-  // Restore saved draft on mount
-  useEffect(() => {
-    if (!STORAGE_KEY) return;
+  // Pull the submission history + statistics for this Bulk Pass. Called after
+  // every batch so the applicant immediately sees what they just sent.
+  const refreshHistory = useCallback(async () => {
+    if (!token) return null;
+    setHistoryLoading(true);
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const draft = JSON.parse(saved);
-        if (draft.step && draft.step !== "submitted") {
-          setStep(draft.step);
-          if (Array.isArray(draft.rows) && draft.rows.length > 0) {
-            // File objects (Aadhaar card) cannot be persisted to localStorage,
-            // so clear them on restore — the user must re-attach if needed.
-            setRows(draft.rows.map((r) => ({ ...r, aadhaarCardFile: null })));
-          }
-          if (Array.isArray(draft.vehicles)) setVehicles(draft.vehicles);
+      const res = await getBulkPassSubmissions(token);
+      if (res) {
+        setSubmissionHistory(res.submissionHistory || []);
+        setSubmissionSummary(res.submissionSummary || null);
+        setNextSubmissionNumber(res.nextSubmissionNumber || 1);
+        if (res.validity) setValidity(res.validity);
+        if (res.remaining) setRemaining(res.remaining);
+        if (res.bulkPass) setBulkPass((prev) => ({ ...(prev || {}), ...res.bulkPass }));
+        // A correction link is gated by its own batch, which this endpoint
+        // does not know about — keep validate-token's answer for it.
+        if (!revisionOf) {
+          setCanSubmit(res.canSubmit !== false);
+          if (res.message !== undefined) setBlockedMessage(res.message || null);
         }
       }
-    } catch {}
-  }, [STORAGE_KEY]);
-
-  // Save draft whenever step/rows/vehicles change (skip if submitted)
-  useEffect(() => {
-    if (!STORAGE_KEY || step === "submitted") return;
-    // Only save if user has progressed past the initial excel step or has data
-    if (step === "excel" && rows.length === 0) return;
-    try {
-      const draft = { step, rows, vehicles, savedAt: Date.now() };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
-    } catch {}
-  }, [STORAGE_KEY, step, rows, vehicles]);
-
-  // Clear draft on successful submit
-  const clearDraft = useCallback(() => {
-    if (STORAGE_KEY) {
-      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      return res;
+    } catch (err) {
+      console.error("Failed to refresh submission history:", err);
+      return null;
+    } finally {
+      setHistoryLoading(false);
     }
-  }, [STORAGE_KEY]);
+  }, [token, revisionOf]);
 
   useEffect(() => {
     if (!token) return;
     let alive = true;
     (async () => {
       try {
-        // First, try to validate the token to detect multiple submission support
+        let resolvedBatch = null;
+
         try {
-          const tokenValidationData = await validateUploadToken(token);
-          if (alive) {
-            // Multiple submission detection
-            const isParentReq = tokenValidationData.isParentRequest || false;
-            const isParentBch = tokenValidationData.isParentBatch || false;
-            setIsParentRequest(isParentReq);
-            setIsParentBatch(isParentBch);
-            setIsMultipleSubmissionEnabled(isParentReq || isParentBch);
-            setSubmissionHistory(tokenValidationData.submissionHistory || []);
-            setNextSubmissionNumber(tokenValidationData.nextSubmissionNumber || 1);
-            setWithinValidityPeriod(tokenValidationData.withinValidityPeriod !== false);
-            
-            // If validation returns full batch data, use it; otherwise fall back to getPublicBatch
-            if (tokenValidationData.batch) {
-              setBatch(tokenValidationData.batch);
-            } else {
-              // Fall back to getPublicBatch if validation doesn't include batch data
-              const publicBatchData = await getPublicBatch(token);
-              if (alive) setBatch(publicBatchData);
-            }
+          const data = await validateUploadToken(token);
+          if (!alive) return;
+
+          const isMulti =
+            data.multipleSubmissionsEnabled ?? (data.isParentRequest || data.isParentBatch) ?? false;
+
+          setIsMultipleSubmissionEnabled(!!isMulti);
+          setRemaining(data.remaining || null);
+          setRevisionOf(data.isRevision ? data.revisionOf || null : null);
+          setSubmissionHistory(data.submissionHistory || []);
+          setSubmissionSummary(data.submissionSummary || null);
+          setNextSubmissionNumber(data.nextSubmissionNumber || 1);
+          setBulkPass(data.bulkPass || null);
+          setBlockedMessage(data.message || null);
+          setCanSubmit(data.canSubmit !== false);
+          // Older deployments answer without a `validity` block; derive it so
+          // the banner still tells the truth.
+          setValidity(data.validity || getValidityState(data.batch || data.parentRequest));
+
+          if (data.batch) {
+            resolvedBatch = data.batch;
+          } else if (data.parentRequest) {
+            // Present a public request through the same field names the rest of
+            // the page already uses.
+            const pr = data.parentRequest;
+            resolvedBatch = {
+              id: pr.id,
+              refNo: pr.trackingNumber,
+              companyName: pr.companyName,
+              applicantEmail: pr.applicantEmail,
+              applicantMobile: pr.applicantMobile,
+              visitorType: pr.visitorType,
+              noOfPersons: pr.noOfPersons,
+              noOfVehicles: pr.noOfVehicles,
+              purpose: pr.purpose,
+              paymentMode: pr.paymentMode,
+              validityFrom: pr.approvedTimeFrom || pr.validityFrom,
+              validityUpto: pr.approvedTimeUpto || pr.validityUpto,
+              departmentName: "General Administration",
+              status: pr.status,
+            };
+          } else {
+            resolvedBatch = await getPublicBatch(token);
           }
+          if (alive) setBatch(resolvedBatch);
         } catch (validationErr) {
-          // If token validation fails, fall back to getPublicBatch for backward compatibility
-          const publicBatchData = await getPublicBatch(token);
-          if (alive) setBatch(publicBatchData);
+          // Fall back to the legacy lookup so older links keep working.
+          resolvedBatch = await getPublicBatch(token);
+          if (!alive) return;
+          setBatch(resolvedBatch);
+          setValidity(getValidityState(resolvedBatch));
         }
-        
-        // If batch data was fetched and this is a revision (returned), pre-populate previously submitted data
-        // so the applicant can correct and re-submit without starting from scratch.
-        if (batch?.status === "RETURNED_TO_APPLICANT" && Array.isArray(batch.previousPersons) && batch.previousPersons.length > 0) {
-          // Map stored person data back into the row format the edit step expects.
-          // Photos and Aadhaar card files can't be restored (they're server-side files),
-          // so we mark them null — the applicant must re-upload them.
-          const restoredRows = batch.previousPersons.map((p) => ({
+
+        // A returned batch is pre-populated so the applicant can correct it
+        // without starting over.
+        if (
+          ["RETURNED_TO_APPLICANT", "REJECTED"].includes(resolvedBatch?.status) &&
+          Array.isArray(resolvedBatch.previousPersons) &&
+          resolvedBatch.previousPersons.length > 0
+        ) {
+          // Photos and Aadhaar card files can't be restored as File objects, so
+          // we keep references to the server-side copies instead.
+          const restoredRows = resolvedBatch.previousPersons.map((p, idx) => ({
+            // Stable key: without it these rows fall back to their array index,
+            // so deleting one row while another is being edited re-points the
+            // open editor at the wrong person and can save one person's details
+            // onto another. Excel/manual rows already carry an id.
+            id: p.id != null ? `prev_${p.id}` : `prev_${idx}`,
             name: p.name || "",
             aadhaar: p.aadhaar || "",
             dob: normaliseDob(p.dob),
             mobile: p.mobile || "",
             photoDataUrl: null,
             aadhaarCardFile: null,
-            // Keep references to previous server-side files so the applicant
-            // can reuse them without re-uploading. Set the _keep* flags to true
-            // by default — applicant can clear them by uploading a replacement.
             _previousPhotoPath: p.photoPath || null,
             _keepPhotoPath: p.photoPath || null,         // reuse unless replaced
             _previousAadhaarPath: p.aadhaarCardPath || null,
@@ -2663,11 +3220,11 @@ export default function BulkPassPublicPage() {
             _revisionReason: p.approvalReason || null,
             parseErrors: [],
           }));
-          setRows(restoredRows);
+          if (alive) setRows(restoredRows);
 
-          // Pre-populate vehicles too
-          if (Array.isArray(batch.previousVehicles) && batch.previousVehicles.length > 0) {
-            const restoredVehicles = batch.previousVehicles.map((v) => ({
+          if (Array.isArray(resolvedBatch.previousVehicles) && resolvedBatch.previousVehicles.length > 0) {
+            const restoredVehicles = resolvedBatch.previousVehicles.map((v, idx) => ({
+              id: v.id != null ? `prev_veh_${v.id}` : `prev_veh_${idx}`,
               regNo: v.regNo || "",
               vehicleType: v.vehicleType || "",
               driverName: v.driverName || "",
@@ -2679,18 +3236,16 @@ export default function BulkPassPublicPage() {
               rc: null, insurance: null, fitness: null,
               permit: null, roadTax: null, emission: null,
               driverAadhaarCard: null, driverLicense: null,
-              // Previous server-side doc paths — kept by default so the applicant
-              // doesn't have to re-upload unchanged documents.
               _previousVehicleDocs: v.vehicleDocs || {},
               _keepVehicleDocs: { ...(v.vehicleDocs || {}) },
               _revisionRejected: v.approvalStatus === "REJECTED",
               _revisionReason: v.approvalReason || null,
             }));
-            setVehicles(restoredVehicles);
+            if (alive) setVehicles(restoredVehicles);
           }
 
           // Skip the excel upload step — go straight to review/edit
-          setStep("edit");
+          if (alive) setStep("edit");
         }
       } catch (err) {
         if (!alive) return;
@@ -2707,33 +3262,102 @@ export default function BulkPassPublicPage() {
     };
   }, [token]);
 
+  // What one batch may carry: the system's per-batch ceiling, or the pass
+  // total when that is smaller (a 10-person pass never needs a 30-row form).
+  const PER_BATCH_P = Number(bulkPass?.perBatchMaxPersons) || BULK_PASS_LIMITS.MAX_PERSONS_PER_BATCH;
+  const PER_BATCH_V = Number(bulkPass?.perBatchMaxVehicles) || BULK_PASS_LIMITS.MAX_VEHICLES_PER_BATCH;
+  const totalPersons = Number(bulkPass?.maxTotalPersons ?? bulkPass?.maxPersons ?? batch?.noOfPersons ?? 0);
+  const totalVehicles = Number(bulkPass?.maxTotalVehicles ?? bulkPass?.maxVehicles ?? batch?.noOfVehicles ?? BULK_PASS_LIMITS.DEFAULT_MAX_VEHICLES);
+  const maxPersons = Math.min(totalPersons > 0 ? totalPersons : PER_BATCH_P, PER_BATCH_P);
+  const maxVehicles = Math.min(Math.max(0, totalVehicles), PER_BATCH_V);
+  // How big *this* batch may actually be: the per-batch ceiling, capped by what
+  // is left of the bulk pass allowance. Sizing the form by this number means
+  // the applicant is never asked for 30 photos only to be refused at the end.
+  const effectiveMaxPersons =
+    isMultipleSubmissionEnabled && remaining?.personsRemaining != null
+      ? Math.max(0, Math.min(maxPersons, remaining.personsRemaining))
+      : maxPersons;
+  const effectiveMaxVehicles =
+    isMultipleSubmissionEnabled && remaining?.vehiclesRemaining != null
+      ? Math.max(0, Math.min(maxVehicles, remaining.vehiclesRemaining))
+      : maxVehicles;
+
   const handleParsed = (parsedRows) => {
     setRows(parsedRows);
     setStep("edit");
-    const maxP = Number(batch?.noOfPersons) || 0;
-    if (maxP > 0 && parsedRows.length > maxP) {
+    if (effectiveMaxPersons > 0 && parsedRows.length > effectiveMaxPersons) {
+      const cappedByAllowance = effectiveMaxPersons < maxPersons;
       toast.warning(
-        `This form allows a maximum of ${maxP} person(s), but ${parsedRows.length} were found. Please remove ${parsedRows.length - maxP} before submitting.`
+        cappedByAllowance
+          ? `Only ${effectiveMaxPersons} person(s) can still be added on this bulk pass (${remaining.personsRemaining} of ${bulkPass?.maxTotalPersons} left), but ${parsedRows.length} were found. Please remove ${parsedRows.length - effectiveMaxPersons} before submitting.`
+          : `One batch may carry at most ${maxPersons} person(s), but ${parsedRows.length} were found. Please remove ${parsedRows.length - maxPersons} and send them in another batch.`
       );
     }
   };
+
+  // Skip the spreadsheet entirely: open the review step with one blank row.
+  const handleEnterManually = useCallback(() => {
+    setRows([
+      {
+        id: "manual_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+        fileName: "manual",
+        rowNumber: 1,
+        name: "",
+        aadhaar: "",
+        dob: "",
+        mobile: "",
+        photoDataUrl: null,
+        parseErrors: ["Name is required"],
+      },
+    ]);
+    setStep("edit");
+  }, []);
 
   const handleBack = () => {
     setRows([]);
     setVehicles([]);
     setStep("excel");
-    clearDraft();
   };
 
+  const scrollToSubmission = useCallback(() => {
+    const el = document.getElementById("submission-area");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const scrollToHistory = useCallback(() => {
+    const el = document.getElementById("submission-history");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    else window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
   const handleSubmit = async () => {
-    // Enforce person count limit from batch configuration
-    if (batch.noOfPersons > 0 && rows.length > batch.noOfPersons) {
-      toast.error(`Cannot submit: ${rows.length} persons exceed the allowed limit of ${batch.noOfPersons}`);
+    if (isMultipleSubmissionEnabled && !canSubmit) {
+      toast.error(blockedMessage || "This bulk pass is no longer accepting submissions.");
       return;
     }
-    // Enforce vehicle count limit from batch configuration
-    if (batch.noOfVehicles > 0 && vehicles.length > batch.noOfVehicles) {
-      toast.error(`Cannot submit: ${vehicles.length} vehicles exceed the allowed limit of ${batch.noOfVehicles}`);
+    // Ceilings apply to this batch; the allowance caps how big it may be.
+    if (rows.length > maxPersons) {
+      toast.error(`Cannot submit: ${rows.length} persons exceed the ${maxPersons} allowed in one batch. Please split them across batches.`);
+      return;
+    }
+    if (rows.length > effectiveMaxPersons) {
+      toast.error(
+        `Cannot submit: only ${effectiveMaxPersons} person(s) can still be added on this bulk pass. Please remove ${rows.length - effectiveMaxPersons}.`
+      );
+      return;
+    }
+    if (vehicles.length > maxVehicles) {
+      toast.error(
+        maxVehicles === 0
+          ? "Cannot submit: this bulk pass does not allow vehicles. Please remove the vehicle entries."
+          : `Cannot submit: ${vehicles.length} vehicles exceed the ${maxVehicles} allowed in one batch. Please split them across batches.`
+      );
+      return;
+    }
+    if (vehicles.length > effectiveMaxVehicles) {
+      toast.error(
+        `Cannot submit: only ${effectiveMaxVehicles} vehicle(s) can still be added on this bulk pass. Please remove ${vehicles.length - effectiveMaxVehicles}.`
+      );
       return;
     }
 
@@ -2795,70 +3419,123 @@ export default function BulkPassPublicPage() {
         if (v.driverLicense) formData.append(`vehicle_${i}_driverLicense`, v.driverLicense);
       });
 
-      await submitRowsDirectly(token, rows, formData);
-      clearDraft();
+      const res = await submitRowsDirectly(token, rows, formData, (e) => {
+        if (e.total) setUploadPct(Math.round((e.loaded / e.total) * 100));
+      });
+      setLastResult(res?.data || null);
+      setRows([]);
+      setVehicles([]);
       setStep("submitted");
-      toast.success("Batch submitted successfully.");
-      
-      // For multiple submissions, refresh the submission history
+      // The response already carries the refreshed allowance and gate; apply it
+      // before the history refresh lands so nothing stale is offered.
+      if (res?.data && isMultipleSubmissionEnabled) {
+        if (res.data.remaining) setRemaining(res.data.remaining);
+        if (res.data.validity) setValidity(res.data.validity);
+        if (res.data.submissionSummary) setSubmissionSummary(res.data.submissionSummary);
+        if (res.data.nextSubmissionNumber) setNextSubmissionNumber(res.data.nextSubmissionNumber);
+        setCanSubmit(res.data.canSubmitMore !== false);
+        setBlockedMessage(res.data.message || null);
+        // A correction has been sent; the link now behaves like the pass itself.
+        if (res.data.isRevision) setRevisionOf(null);
+      }
+      toast.success(
+        res?.data?.submissionNumber && isMultipleSubmissionEnabled
+          ? `Batch #${res.data.submissionNumber} submitted successfully.`
+          : "Batch submitted successfully."
+      );
+
       if (isMultipleSubmissionEnabled) {
-        try {
-          const tokenValidationData = await validateUploadToken(token);
-          setSubmissionHistory(tokenValidationData.submissionHistory || []);
-          setNextSubmissionNumber(tokenValidationData.nextSubmissionNumber || 1);
-        } catch (refreshErr) {
-          console.error("Failed to refresh submission history:", refreshErr);
-        }
+        await refreshHistory();
       }
     } catch (err) {
       const errData = err?.response?.data;
+      const reason = errData?.data?.blockReason || null;
       if (errData?.data?.errors && Array.isArray(errData.data.errors)) {
         errData.data.errors.slice(0, 5).forEach((e) => toast.error(e.message));
       } else {
         const errorMsg = errData?.message || errData?.errorDetails || err?.message || "Submission failed. Please try again.";
-        toast.error(errorMsg);
+        toast.error(errorMsg, { duration: 8000 });
+      }
+
+      if (!isMultipleSubmissionEnabled) return;
+
+      // Only a closed door closes the form. A blacklisted person, a duplicate,
+      // or a batch that is merely too big for what is left are things the
+      // applicant fixes in place — their rows must stay on screen.
+      const TERMINAL = new Set([
+        "EXPIRED", "NOT_STARTED", "UNKNOWN", "LINK_INACTIVE", "NOT_APPROVED",
+        "SUBMISSION_LIMIT_REACHED", "PERSON_LIMIT_REACHED", "NOT_SUBMITTABLE",
+      ]);
+      if (reason && TERMINAL.has(reason)) {
+        setCanSubmit(false);
+        setBlockedMessage(errData?.message || null);
+        if (errData?.data?.validity) setValidity(errData.data.validity);
+        await refreshHistory();
+      } else if (reason === "PERSON_LIMIT_EXCEEDS_REMAINING" || reason === "VEHICLE_LIMIT_EXCEEDS_REMAINING") {
+        // Size the form to what is actually left and let them trim.
+        if (typeof errData?.data?.remaining === "number") {
+          const key = reason === "PERSON_LIMIT_EXCEEDS_REMAINING" ? "personsRemaining" : "vehiclesRemaining";
+          setRemaining((prev) => ({ ...(prev || {}), [key]: errData.data.remaining }));
+        }
+        await refreshHistory();
+      } else if (err?.response?.status === 403 && !reason && !errData?.data?.blacklisted) {
+        // An older server that gives no reason: fall back to re-syncing.
+        await refreshHistory();
       }
     } finally {
       setSubmitting(false);
+      setUploadPct(null);
     }
   };
 
-  const handleResetForNextSubmission = useCallback(async () => {
-    // Reset the form to the excel upload step
+  // Fetch the approved pass (QR PDF) for one batch and hand it to the browser.
+  const handleDownloadPass = useCallback(
+    async (submission) => {
+      if (!token || !submission?.id) return;
+      setDownloadingPassId(submission.id);
+      try {
+        const blob = await downloadBulkPassSubmissionPdf(token, submission.id);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${(submission.refNo || `batch-${submission.id}`).replace(/[^A-Za-z0-9._-]/g, "_")}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        toast.success("Pass downloaded.");
+      } catch (err) {
+        toast.error(err?.response?.data?.message || "Could not download the pass. Please try again.");
+      } finally {
+        setDownloadingPassId(null);
+      }
+    },
+    [token]
+  );
+
+  const handleStartNextBatch = useCallback(async () => {
     setStep("excel");
     setRows([]);
     setVehicles([]);
-    clearDraft();
+    setLastResult(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
-    
-    // For multiple submissions, refresh the submission history after reset
-    if (isMultipleSubmissionEnabled) {
-      try {
-        const tokenValidationData = await validateUploadToken(token);
-        setSubmissionHistory(tokenValidationData.submissionHistory || []);
-        setNextSubmissionNumber(tokenValidationData.nextSubmissionNumber || 1);
-      } catch (refreshErr) {
-        console.error("Failed to refresh submission history after reset:", refreshErr);
-      }
-    }
-  }, [clearDraft, isMultipleSubmissionEnabled, token]);
+    if (isMultipleSubmissionEnabled) await refreshHistory();
+  }, [isMultipleSubmissionEnabled, refreshHistory]);
 
-  // Guards
-  if (step === "submitted") return <ConfirmationScreen refNo={batch?.refNo} email={batch?.applicantEmail} isMultipleSubmissionEnabled={isMultipleSubmissionEnabled} submissionNumber={isMultipleSubmissionEnabled ? nextSubmissionNumber : undefined} onNextSubmit={isMultipleSubmissionEnabled ? handleResetForNextSubmission : undefined} onHistoryClick={isMultipleSubmissionEnabled ? () => window.scrollTo({ top: document.getElementById('submission-history')?.offsetTop || 0, behavior: 'smooth' }) : undefined} />;
+  // ── Guards ───────────────────────────────────────────────────────────────
 
-  if (loadingBatch) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-stone-50 to-amber-50/30 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 rounded-full border-4 border-amber-400 border-t-transparent animate-spin" />
-          <p className="text-sm text-stone-500">Loading…</p>
-        </div>
-      </div>
-    );
-  }
+  if (loadingBatch) return <PortalSkeleton />;
 
   if (batchError === "invalid") return <ErrorScreen type="invalid" />;
   if (batchError === "expired") return <ErrorScreen type="expired" />;
+
+  // Single-submission links end on a dedicated confirmation screen — there is
+  // no ongoing Bulk Pass context to return to.
+  if (step === "submitted" && !isMultipleSubmissionEnabled) {
+    return <ConfirmationScreen refNo={batch?.refNo} email={batch?.applicantEmail} />;
+  }
+
+  const showUploadFlow = !isMultipleSubmissionEnabled || (canSubmit && step !== "submitted");
 
   return (
     <div
@@ -2866,98 +3543,459 @@ export default function BulkPassPublicPage() {
       style={{ fontFamily: "'Montserrat', sans-serif" }}
     >
       {/* Nav strip */}
-      <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-stone-200/70 px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-400 text-white font-black text-sm">
+      <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-stone-200/70 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-white font-black text-sm">
             H
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-bold text-stone-800 leading-none">HEP Automation</p>
             <p className="text-[10px] text-stone-400 leading-none mt-0.5">Chennai Port Authority</p>
           </div>
         </div>
-        {batch?.refNo && (
-          <span className="text-xs font-mono font-bold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-full">
-            {batch.refNo}
+        {(bulkPass?.identifier || batch?.refNo) && (
+          <span className="text-[11px] sm:text-xs font-mono font-bold text-amber-700 bg-amber-100 px-2.5 sm:px-3 py-1.5 rounded-full truncate max-w-[45%]">
+            {bulkPass?.identifier || batch?.refNo}
           </span>
         )}
       </div>
 
-      {/* Step indicator */}
-      <div className="max-w-[1400px] mx-auto px-4 pt-6">
-        <div className="flex items-center gap-2 mb-6">
-          {[
-            { label: "Upload Excel", key: "excel", num: 1 },
-            { label: "Review & Photos", key: "edit", num: 2 },
-          ].map((s, i) => {
-            const stepOrder = ["excel", "edit", "submitted"];
-            const currentIdx = stepOrder.indexOf(step);
-            const thisIdx = stepOrder.indexOf(s.key);
-            const isActive = step === s.key;
-            const isDone = currentIdx > thisIdx;
-            return (
-              <React.Fragment key={i}>
-                {i > 0 && (
-                  <div
-                    className={
-                      "flex-1 h-0.5 rounded " +
-                      (isDone || isActive ? "bg-amber-400" : "bg-stone-200")
-                    }
+      <div className="max-w-[1400px] mx-auto px-4 pt-6 pb-10 flex flex-col gap-6">
+        {isMultipleSubmissionEnabled ? (
+          <>
+            <BulkPassOverviewCard
+              bulkPass={bulkPass}
+              validity={validity}
+              canSubmit={canSubmit}
+              blockedMessage={blockedMessage}
+              isMultiple
+              nextSubmissionNumber={nextSubmissionNumber}
+              batch={batch}
+              suppressReturnBanner={!!revisionOf}
+              remaining={remaining}
+            />
+
+            {canSubmit && step !== "submitted" && (
+              <NextStepBanner
+                step={step}
+                revisionOf={revisionOf}
+                nextSubmissionNumber={nextSubmissionNumber}
+                maxPersons={effectiveMaxPersons}
+                maxVehicles={effectiveMaxVehicles}
+                rowsCount={rows.length}
+                onStart={scrollToSubmission}
+              />
+            )}
+
+            {revisionOf && step !== "submitted" && (
+              <div className={`${card} p-5 sm:p-6`}>
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">
+                    <AlertCircle className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <h3 className="text-base font-bold text-stone-900">
+                        Batch #{revisionOf.submissionNumber} needs correction
+                      </h3>
+                      <span className="font-mono text-xs font-bold text-stone-500">
+                        {revisionOf.refNo}
+                      </span>
+                    </div>
+                    {(revisionOf.returnReason || revisionOf.rejectionReason) && (
+                      <p className="text-sm text-orange-800 leading-relaxed">
+                        {revisionOf.returnReason || revisionOf.rejectionReason}
+                      </p>
+                    )}
+
+                    {/* Name the exact people or vehicles that were flagged, so
+                        the applicant fixes those rather than re-checking all. */}
+                    <IssueList issues={revisionOf.issues} className="mt-3" />
+
+                    <p className="text-xs text-stone-500 mt-3 leading-relaxed">
+                      Your previous details are already filled in below — correct only what is
+                      listed. Correcting this batch replaces its earlier contents and does not use
+                      up another submission on this bulk pass.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {step === "submitted" && (
+              <BatchSubmittedPanel
+                result={lastResult}
+                email={bulkPass?.applicantEmail || batch?.applicantEmail}
+                canSubmitMore={canSubmit}
+                onNextBatch={handleStartNextBatch}
+                onViewHistory={scrollToHistory}
+              />
+            )}
+
+            <SubmissionHistoryPanel
+              submissions={submissionHistory}
+              summary={submissionSummary}
+              loading={historyLoading}
+              onView={(s) => setOpenSubmission(s)}
+              onDownload={handleDownloadPass}
+              downloadingId={downloadingPassId}
+              nextSubmissionNumber={nextSubmissionNumber}
+              canSubmit={canSubmit}
+            />
+
+            {/* Submission area — only while the bulk pass is open */}
+            {canSubmit && step !== "submitted" ? (
+              <div id="submission-area" className="flex flex-col gap-6 scroll-mt-24 bp-reveal" style={{ "--bp-delay": "180ms" }}>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                  <h3 className="text-base font-bold text-stone-800">
+                    {revisionOf
+                      ? `Correct Batch #${revisionOf.submissionNumber}`
+                      : `Submit Batch #${nextSubmissionNumber}`}
+                  </h3>
+                  <StepIndicator step={step} />
+                </div>
+
+                {/* The size this batch may be: the per-batch ceiling, capped by
+                    what is left of the bulk pass allowance. */}
+                {((remaining?.personsRemaining != null && effectiveMaxPersons < maxPersons) ||
+                  (remaining?.vehiclesRemaining != null && effectiveMaxVehicles < maxVehicles)) && (
+                  <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-amber-50 ring-1 ring-amber-200">
+                    <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      <span className="font-bold">
+                        This batch may carry up to {effectiveMaxPersons} person{effectiveMaxPersons === 1 ? "" : "s"}
+                        {maxVehicles > 0 ? ` and ${effectiveMaxVehicles} vehicle${effectiveMaxVehicles === 1 ? "" : "s"}` : ""}.
+                      </span>{" "}
+                      A batch normally takes up to {maxPersons} persons{maxVehicles > 0 ? ` and ${maxVehicles} vehicles` : ""},
+                      but that is all that is left of the bulk pass allowance.
+                    </p>
+                  </div>
+                )}
+
+                {step === "excel" && (
+                  <ExcelUploadStep token={token} onParsed={handleParsed} onEnterManually={handleEnterManually} />
+                )}
+
+                {step === "edit" && (
+                  <EditFormStep
+                    rows={rows}
+                    token={token}
+                    batch={{ ...batch, noOfPersons: effectiveMaxPersons, noOfVehicles: effectiveMaxVehicles }}
+                    onRowsChange={setRows}
+                    vehicles={vehicles}
+                    onVehiclesChange={setVehicles}
+                    onBack={handleBack}
+                    onSubmit={handleSubmit}
+                    submitting={submitting}
+                    uploadPct={uploadPct}
                   />
                 )}
-                <div
-                  className={
-                    "flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition " +
-                    (isActive
-                      ? "bg-amber-400 text-[#1f1f1f]"
-                      : isDone
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-stone-100 text-stone-400")
-                  }
-                >
-                  {isDone ? (
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  ) : (
-                    <span className="h-4 w-4 flex items-center justify-center rounded-full bg-white/40 text-[10px]">
-                      {s.num}
-                    </span>
-                  )}
-                  {s.label}
+              </div>
+            ) : (
+              !canSubmit && (
+                <div className={`${card} p-6 sm:p-8 text-center bp-reveal`} style={{ "--bp-delay": "180ms" }}>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 text-stone-400 mx-auto mb-3">
+                    <XCircle className="h-6 w-6" />
+                  </div>
+                  <p className="text-base font-bold text-stone-800 mb-1">
+                    New submissions are closed
+                  </p>
+                  {/* The history sits directly above this panel, so the copy
+                      points upwards rather than reusing the banner's wording. */}
+                  <p className="text-sm text-stone-500 max-w-md mx-auto leading-relaxed">
+                    {validity?.state === "NOT_STARTED"
+                      ? "This bulk pass has not started accepting submissions yet."
+                      : validity?.state === "EXPIRED"
+                      ? "This bulk pass has expired. Your previous submissions remain available above."
+                      : blockedMessage ||
+                        "This bulk pass is no longer accepting new batches. Your previous submissions remain available above."}
+                  </p>
                 </div>
-              </React.Fragment>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="max-w-[1400px] mx-auto px-4 pb-10 flex flex-col gap-6">
-        <IntakeCard 
-          batch={batch} 
-          isMultipleSubmissionEnabled={isMultipleSubmissionEnabled}
-          submissionHistory={submissionHistory}
-          nextSubmissionNumber={nextSubmissionNumber}
-        />
-
-        {step === "excel" && <ExcelUploadStep token={token} onParsed={handleParsed} />}
-
-        {step === "edit" && (
-          <EditFormStep
-            rows={rows}
-            token={token}
-            batch={batch}
-            onRowsChange={setRows}
-            vehicles={vehicles}
-            onVehiclesChange={setVehicles}
-            onBack={handleBack}
-            onSubmit={handleSubmit}
-            submitting={submitting}
-          />
+              )
+            )}
+          </>
+        ) : (
+          <>
+            <StepIndicator step={step} />
+            <IntakeCard batch={batch} />
+            {step === "excel" && (
+                  <ExcelUploadStep token={token} onParsed={handleParsed} onEnterManually={handleEnterManually} />
+                )}
+            {step === "edit" && (
+              <EditFormStep
+                rows={rows}
+                token={token}
+                batch={batch}
+                onRowsChange={setRows}
+                vehicles={vehicles}
+                onVehiclesChange={setVehicles}
+                onBack={handleBack}
+                onSubmit={handleSubmit}
+                submitting={submitting}
+                uploadPct={uploadPct}
+              />
+            )}
+          </>
         )}
 
         <p className="text-center text-xs text-stone-400 pb-4">
           Chennai Port Authority · HEP Automation System · Secure Upload Portal
         </p>
       </div>
+
+      {openSubmission && (
+        <SubmissionDetailModal
+          token={token}
+          onDownload={handleDownloadPass}
+          downloading={downloadingPassId != null && openSubmission && String(downloadingPassId) === String(openSubmission.id)}
+          submission={openSubmission}
+          onClose={() => setOpenSubmission(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * How much of the bulk pass allowance is left, and where the rest went.
+ *
+ * Only persons who are approved or still awaiting review are charged against
+ * the allowance; anyone the officer rejected hands their place back. The strip
+ * says so explicitly — the applicant would otherwise read "80 used" and not
+ * understand why 10 of those may be sent again.
+ *
+ * Renders nothing when the pass has no cumulative limit, which is the case for
+ * every pass issued before limits existed — silence is the honest answer there.
+ */
+function RemainingAllowance({ remaining, bulkPass }) {
+  if (!remaining) return null;
+  const hasSubmissionCap = remaining.submissionsRemaining != null;
+  const hasPersonCap = remaining.personsRemaining != null;
+  // A vehicle total of 0 means "no vehicles on this pass" — nothing to meter.
+  const hasVehicleCap = remaining.vehiclesRemaining != null && Number(bulkPass?.maxTotalVehicles) > 0;
+  if (!hasSubmissionCap && !hasPersonCap && !hasVehicleCap) return null;
+
+  // Vehicles are optional, so running out of them never closes the pass.
+  const low =
+    (hasSubmissionCap && remaining.submissionsRemaining <= 1) ||
+    (hasPersonCap && remaining.personsRemaining <= 5);
+  const spent =
+    (hasSubmissionCap && remaining.submissionsRemaining === 0) ||
+    (hasPersonCap && remaining.personsRemaining === 0);
+
+  const tone = spent
+    ? { box: "bg-red-50 ring-red-200", label: "text-red-700", value: "text-red-900", bar: "bg-red-500" }
+    : low
+    ? { box: "bg-amber-50 ring-amber-200", label: "text-amber-700", value: "text-amber-900", bar: "bg-amber-500" }
+    : { box: "bg-stone-50 ring-stone-200", label: "text-stone-400", value: "text-stone-800", bar: "bg-emerald-500" };
+
+  const pct = (used, total) => (total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0);
+
+  return (
+    <div className={`rounded-2xl px-4 py-3.5 ring-1 ${tone.box}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${tone.label}`}>
+          Bulk pass allowance
+        </span>
+        <span className="text-[11px] text-stone-500">
+          Counts persons and vehicles approved or awaiting review · rejected ones can be sent again ·
+          up to {remaining.perBatchMaxPersons ?? BULK_PASS_LIMITS.MAX_PERSONS_PER_BATCH} persons and{" "}
+          {remaining.perBatchMaxVehicles ?? BULK_PASS_LIMITS.MAX_VEHICLES_PER_BATCH} vehicles per batch
+        </span>
+      </div>
+
+      <div className={`grid grid-cols-1 ${[hasSubmissionCap, hasPersonCap, hasVehicleCap].filter(Boolean).length > 2 ? "lg:grid-cols-3" : "sm:grid-cols-2"} gap-x-6 gap-y-3`}>
+        {hasSubmissionCap && (
+          <div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs font-semibold text-stone-600">Batches</span>
+              <span className={`text-sm font-bold tabular-nums ${tone.value}`}>
+                {remaining.submissionsRemaining} of {bulkPass?.maxSubmissions} left
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 rounded-full bg-white/70 ring-1 ring-black/5 overflow-hidden">
+              <div className={`h-full ${tone.bar}`} style={{ width: `${pct(remaining.submissionsUsed, bulkPass?.maxSubmissions)}%` }} />
+            </div>
+          </div>
+        )}
+        {hasPersonCap && (
+          <div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs font-semibold text-stone-600">Persons</span>
+              <span className={`text-sm font-bold tabular-nums ${tone.value}`}>
+                {remaining.personsRemaining} of {bulkPass?.maxTotalPersons} left
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 rounded-full bg-white/70 ring-1 ring-black/5 overflow-hidden">
+              <div className={`h-full ${tone.bar}`} style={{ width: `${pct(remaining.personsUsed, bulkPass?.maxTotalPersons)}%` }} />
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] font-semibold">
+              <span className="text-emerald-700">{remaining.personsApproved ?? 0} approved</span>
+              <span className="text-amber-700">{remaining.personsPending ?? 0} awaiting review</span>
+              {(remaining.personsRejected ?? 0) > 0 && (
+                <span className="text-red-600">{remaining.personsRejected} rejected · place released</span>
+              )}
+            </div>
+          </div>
+        )}
+        {hasVehicleCap && (
+          <div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs font-semibold text-stone-600">Vehicles</span>
+              <span className="text-sm font-bold tabular-nums text-stone-800">
+                {remaining.vehiclesRemaining} of {bulkPass?.maxTotalVehicles} left
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 rounded-full bg-white/70 ring-1 ring-black/5 overflow-hidden">
+              <div className="h-full bg-purple-500" style={{ width: `${pct(remaining.vehiclesUsed, bulkPass?.maxTotalVehicles)}%` }} />
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] font-semibold">
+              <span className="text-emerald-700">{remaining.vehiclesApproved ?? 0} approved</span>
+              <span className="text-amber-700">{remaining.vehiclesPending ?? 0} awaiting review</span>
+              {(remaining.vehiclesRejected ?? 0) > 0 && (
+                <span className="text-red-600">{remaining.vehiclesRejected} rejected · place released</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The officer's per-row verdicts. One batch-level sentence rarely tells the
+ * applicant which of thirty people is the problem, so each flagged entry is
+ * listed with its own reason.
+ */
+function IssueList({ issues, className = "" }) {
+  const items = Array.isArray(issues?.items) ? issues.items : [];
+  if (!items.length) return null;
+
+  return (
+    <div className={`rounded-2xl bg-red-50 ring-1 ring-red-200 overflow-hidden ${className}`}>
+      <p className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-red-700 bg-red-100/70">
+        {items.length} entr{items.length === 1 ? "y needs" : "ies need"} correction
+      </p>
+      <ul className="divide-y divide-red-100">
+        {items.map((item, i) => (
+          <li key={i} className="px-4 py-2.5 flex flex-col sm:flex-row sm:items-baseline gap-x-3 gap-y-0.5">
+            <span className="text-sm font-semibold text-red-900 shrink-0">
+              {item.label}
+              {item.identifier && (
+                <span className="ml-2 font-mono text-[11px] font-normal text-red-500">
+                  {item.identifier}
+                </span>
+              )}
+            </span>
+            <span className="text-xs text-red-700 leading-relaxed sm:ml-auto sm:text-right">
+              {item.reason}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Two-step progress marker for the batch currently being prepared. */
+/**
+ * One line that tells the applicant what to do right now, with the button that
+ * takes them there. The overview above explains the pass; this explains the
+ * next click.
+ */
+function NextStepBanner({ step, revisionOf, nextSubmissionNumber, maxPersons, maxVehicles, rowsCount, onStart }) {
+  const batchLabel = revisionOf ? `Correct batch #${revisionOf.submissionNumber}` : `Batch #${nextSubmissionNumber}`;
+  const copy =
+    step === "edit"
+      ? {
+          title: `${batchLabel} — review the details`,
+          detail: `${rowsCount} person${rowsCount === 1 ? "" : "s"} listed. Add a photo and Aadhaar card for each, then submit.`,
+          cta: "Continue to the form",
+        }
+      : revisionOf
+      ? {
+          title: `${batchLabel} — your earlier details are filled in`,
+          detail: "Fix only what the Traffic Department flagged and resend.",
+          cta: "Go to the correction",
+        }
+      : {
+          title: `Ready for ${batchLabel.toLowerCase()}`,
+          detail: `Upload an Excel sheet or enter persons by hand — up to ${maxPersons} person${maxPersons === 1 ? "" : "s"}${
+            maxVehicles > 0 ? ` and ${maxVehicles} vehicle${maxVehicles === 1 ? "" : "s"}` : ""
+          } in this batch.`,
+          cta: `Start batch #${nextSubmissionNumber}`,
+        };
+
+  return (
+    <div
+      className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl px-5 py-4 bg-[#1f1f1f] text-white shadow-[0_18px_40px_-20px_rgba(15,23,42,0.6)] bp-reveal"
+      style={{ "--bp-delay": "60ms" }}
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-[#1f1f1f]">
+        {step === "edit" ? <Users className="h-5 w-5" /> : <Upload className="h-5 w-5" />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold">{copy.title}</p>
+        <p className="text-xs text-stone-300 mt-0.5 leading-relaxed">{copy.detail}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onStart}
+        className="bp-press bp-lift inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#1f1f1f] text-sm font-bold whitespace-nowrap"
+      >
+        {copy.cta}
+        <ChevronDown className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+function StepIndicator({ step }) {
+  const steps = [
+    { label: "Upload", key: "excel", num: 1 },
+    { label: "Review & Photos", key: "edit", num: 2 },
+    { label: "Submitted", key: "submitted", num: 3 },
+  ];
+  const stepOrder = ["excel", "edit", "submitted"];
+  const currentIdx = stepOrder.indexOf(step);
+
+  return (
+    <div className="flex items-center gap-2 flex-1" aria-label={`Step ${currentIdx + 1} of ${steps.length}`}>
+      {steps.map((s, i) => {
+        const thisIdx = stepOrder.indexOf(s.key);
+        const isActive = step === s.key;
+        const isDone = currentIdx > thisIdx;
+        return (
+          <React.Fragment key={s.key}>
+            {i > 0 && (
+              <div className="flex-1 h-0.5 rounded bg-stone-200 overflow-hidden">
+                <div className={"h-full bg-amber-400 bp-bar"} style={{ width: isDone || isActive ? "100%" : "0%" }} />
+              </div>
+            )}
+            <div
+              aria-current={isActive ? "step" : undefined}
+              className={
+                "flex items-center gap-2 px-3 sm:px-4 py-2 rounded-2xl text-[11px] sm:text-xs font-bold transition-all duration-300 whitespace-nowrap " +
+                (isActive
+                  ? "bg-amber-400 text-[#1f1f1f] shadow-[0_8px_20px_-10px_rgba(245,158,11,0.9)] bp-pop"
+                  : isDone
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-stone-100 text-stone-400")
+              }
+            >
+              {isDone ? (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              ) : (
+                <span className="h-4 w-4 flex items-center justify-center rounded-full bg-white/40 text-[10px]">
+                  {s.num}
+                </span>
+              )}
+              {s.label}
+            </div>
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }

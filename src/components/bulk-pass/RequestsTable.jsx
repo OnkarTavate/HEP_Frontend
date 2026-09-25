@@ -12,7 +12,8 @@ import {
  * RequestsTable Component for Admin Public Requests
  * 
  * Features:
- * - Table columns: Tracking No, Company Name, Contact (email + mobile), Persons, Vehicles, Validity, Status, Actions
+ * - Table columns: Tracking No, Company Name, Contact (email + mobile),
+ *   Max Persons, Max Vehicles, Batches, Validity, Status, Actions
  * - Display status badges with color coding: PENDING (yellow), ACTIVE (green), REJECTED (red)
  * - Sortable columns (tracking number, created date)
  * - Row click navigates to detail page
@@ -255,10 +256,13 @@ const RequestsTable = ({
                 Contact
               </th>
               <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">
-                Persons
+                Max Persons
               </th>
               <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">
-                Vehicles
+                Max Vehicles
+              </th>
+              <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">
+                Batches
               </th>
               <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">
                 Validity
@@ -322,6 +326,21 @@ const RequestsTable = ({
                       {request.no_of_vehicles ?? "—"}
                     </span>
                   </div>
+                </td>
+                {/* Batches received against this bulk pass, with the persons
+                    and vehicles they carried. */}
+                <td className="px-5 py-3.5 whitespace-nowrap">
+                  {request.status === "ACTIVE" || request.submissions_count > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                      <FileStack className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      {request.submissions_count ?? 0}
+                      <span className="font-normal text-slate-400">
+                        ({request.submitted_persons_count ?? 0}p / {request.submitted_vehicles_count ?? 0}v)
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-400">—</span>
+                  )}
                 </td>
                 <td className="px-5 py-3.5 whitespace-nowrap text-slate-600 text-xs">
                   {request.validity_from && request.validity_upto ? (

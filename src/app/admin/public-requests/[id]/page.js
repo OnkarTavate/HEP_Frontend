@@ -9,6 +9,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getPublicRequestDetail, approvePublicRequest, rejectPublicRequest } from "@/lib/bulkPassApi";
+import { BULK_PASS_LABELS, batchesNeededHint } from "@/lib/bulkPassConstants";
+import SubmissionHistory, { SubmissionSummaryStrip } from "@/components/bulk-pass/SubmissionHistory";
+import ApplicantLinkCard from "@/components/bulk-pass/ApplicantLinkCard";
+import { getValidityState } from "@/lib/bulkPassValidity";
 import {
   RequestSummaryCard,
   CompanyInformationCard,
@@ -115,6 +119,12 @@ function ApprovalModal({ request, onClose, onApprove, loading }) {
   const [remarks, setRemarks] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
 
+  // The applicant's requested numbers are the allowance for the whole pass;
+  // each batch is capped separately.
+  const totalPersons = Number(request?.no_of_persons) || 0;
+  const totalVehicles = Number(request?.no_of_vehicles) || 0;
+  const batchesNeeded = batchesNeededHint(totalPersons, totalVehicles, true);
+
   useEffect(() => {
     if (request) {
       const today = new Date().toISOString().split("T")[0];
@@ -132,7 +142,11 @@ function ApprovalModal({ request, onClose, onApprove, loading }) {
       toast.error("Validity from date must be before validity upto date.");
       return;
     }
-    setLoading(true);
+    // A past upto date yields an ACTIVE-but-expired (dead-on-arrival) pass.
+    if (new Date(validityUpto) < new Date(new Date().toDateString())) {
+      toast.error("Validity upto date must be today or in the future.");
+      return;
+    }
     try {
       await onApprove(request.id, {
         validityFrom,
@@ -142,8 +156,6 @@ function ApprovalModal({ request, onClose, onApprove, loading }) {
       onClose();
     } catch (err) {
       console.error("Approval error:", err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -162,16 +174,16 @@ function ApprovalModal({ request, onClose, onApprove, loading }) {
           </p>
           <div className="flex gap-3 justify-end">
             <button
-              onClick={() => setShowConfirmation(true)}
+              onClick={onClose}
               className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
             >
-              Back
+              Cancel
             </button>
             <button
-              onClick={handleSubmit}
+              onClick={() => setShowConfirmation(true)}
               className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition"
             >
-              Confirm & Approve
+              Continue
             </button>
           </div>
         </div>
@@ -218,6 +230,27 @@ function ApprovalModal({ request, onClose, onApprove, loading }) {
             />
           </div>
 
+          {/* What approving grants: the requested totals, spent in batches. */}
+          <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-4">
+            <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
+              Bulk Pass Allowance
+            </p>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total Persons</p>
+                <p className="font-extrabold text-slate-900 tabular-nums">{totalPersons}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total Vehicles</p>
+                <p className="font-extrabold text-slate-900 tabular-nums">{totalVehicles}</p>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-2">
+              {BULK_PASS_LABELS.PER_BATCH_NOTE}. {batchesNeeded || ""} Only persons and vehicles approved or awaiting
+              review count; rejected ones hand their place back.
+            </p>
+          </div>
+
           <div>
             <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
               Approval Remarks (Optional)
@@ -262,14 +295,13 @@ function RejectionModal({ request, onClose, onReject, loading }) {
       toast.error("Please enter a rejection reason (minimum 10 characters).");
       return;
     }
-    setLoading(true);
+    // Loading is owned by the parent (passed in as the `loading` prop), mirroring
+    // ApprovalModal — there is no local setLoading here.
     try {
       await onReject(request.id, reason.trim());
       onClose();
     } catch (err) {
       console.error("Rejection error:", err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -288,16 +320,16 @@ function RejectionModal({ request, onClose, onReject, loading }) {
           </p>
           <div className="flex gap-3 justify-end">
             <button
-              onClick={() => setShowConfirmation(true)}
+              onClick={onClose}
               className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
             >
-              Back
+              Cancel
             </button>
             <button
-              onClick={handleSubmit}
+              onClick={() => setShowConfirmation(true)}
               className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 transition"
             >
-              Confirm & Reject
+              Continue
             </button>
           </div>
         </div>
@@ -562,7 +594,7 @@ export default function AdminPublicRequestDetailPage() {
               Request Approved
             </p>
             <p className="text-sm text-emerald-600 mt-0.5">
-              Approved by {request.approved_by_user?.name || "Admin"} on{" "}
+              Approved by {request.approved_by_user?.userName || "Admin"} on{" "}
               {fmtDate(request.approved_at)}
               {request.approved_time_from && request.approved_time_upto && (
                 <>
@@ -674,7 +706,7 @@ export default function AdminPublicRequestDetailPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
             <ReadField
               label="Approved By"
-              value={request.approved_by_user?.name || "Admin"}
+              value={request.approved_by_user?.userName || "Admin"}
             />
             <ReadField
               label="Approved At"
@@ -692,24 +724,39 @@ export default function AdminPublicRequestDetailPage() {
         </div>
       )}
 
-      {/* Submission History (for approved requests with multiple submissions) */}
+      {/* The applicant's link — copy, QR or resend without digging out the approval email. */}
+      {status === "ACTIVE" && request.upload_link && (
+        <ApplicantLinkCard
+          link={request.upload_link}
+          tokenActive={request.token_active !== false}
+          expired={getValidityState({ validityUpto: request.approved_time_upto }).state === "EXPIRED"}
+          tokenExpiresAt={request.approved_time_upto}
+          reusable
+        />
+      )}
+
+      {/* Every batch submitted against this request, with the same history
+          view the department bulk passes use. */}
       {status === "ACTIVE" && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 bp-reveal">
           <SectionHeader title="Submission History" icon={Clock} />
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-slate-500">
-              Track all batch submissions under this request
+              Every batch the applicant has submitted with this request&apos;s link
             </p>
+            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg whitespace-nowrap">
+              {(request.child_batches || []).length} batch{(request.child_batches || []).length !== 1 ? "es" : ""}
+            </span>
           </div>
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center">
-            <Clock className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-500 font-medium">
-              No submissions yet
-            </p>
-            <p className="text-xs text-slate-400 mt-1">
-              Applicants will see their submission history here after making uploads
-            </p>
-          </div>
+          {(request.child_batches || []).length > 0 && (
+            <SubmissionSummaryStrip submissions={request.child_batches || []} className="mb-4" />
+          )}
+          <SubmissionHistory
+            submissions={request.child_batches || []}
+            onView={(s) => router.push(`/admin/bulk_pass/${s.id}`)}
+            emptyTitle="No batches submitted yet"
+            emptyHint="The applicant received the upload link by email. Batches appear here as soon as they submit."
+          />
         </div>
       )}
 

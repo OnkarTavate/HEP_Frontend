@@ -14,13 +14,20 @@ import {
   rejectPersonInBatch,
   undoPersonInBatch,
   finalizeBulkBatch,
+  approveAllPendingInBatch,
   rejectBulkBatch,
   returnBulkBatchByTraffic,
   downloadBulkPdf,
   downloadBulkPdfAdmin,
   resendBulkPassEmail,
+  getChildSubmissions,
   fileUrl,
 } from "@/lib/bulkPassApi";
+import SubmissionHistory, { SubmissionSummaryStrip } from "@/components/bulk-pass/SubmissionHistory";
+import ValidityBanner from "@/components/bulk-pass/ValidityBanner";
+import DocumentViewer from "@/components/bulk-pass/DocumentViewer";
+import { getValidityState } from "@/lib/bulkPassValidity";
+import { countLabelsFor } from "@/lib/bulkPassConstants";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -75,7 +82,37 @@ function Field({ label, value }) {
 
 // ── Reason modal (shared for Reject-person, Reject-batch, Return) ─────────────
 
-function ReasonModal({ title, label, placeholder, confirmLabel, confirmClass, onConfirm, onClose }) {
+// The handful of reasons that account for most rejections. Typing the same
+// sentence thirty times a day is the kind of friction that turns a considered
+// reason into a one-word one, so offer them as chips — still fully editable,
+// because the applicant has to act on whatever is written here.
+const QUICK_REJECTION_REASONS = [
+  "Photograph is unclear — face not clearly visible",
+  "Aadhaar card document is unreadable",
+  "Aadhaar number does not match the document",
+  "Required document is missing",
+  "Document has expired",
+  "Entry is blacklisted",
+  "Duplicate entry — already submitted",
+];
+
+const QUICK_RETURN_REASONS = [
+  "Photographs do not meet the required quality",
+  "Aadhaar cards missing for one or more persons",
+  "Vehicle documents incomplete",
+  "Details do not match the supporting documents",
+];
+
+function ReasonModal({
+  title,
+  label,
+  placeholder,
+  confirmLabel,
+  confirmClass,
+  onConfirm,
+  onClose,
+  presets = QUICK_REJECTION_REASONS,
+}) {
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -86,21 +123,57 @@ function ReasonModal({ title, label, placeholder, confirmLabel, confirmClass, on
     finally { setLoading(false); }
   };
 
+  // Chips append rather than replace, so several reasons can be combined.
+  const addPreset = (text) => {
+    setReason((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) return text;
+      if (trimmed.includes(text)) return prev;
+      return `${trimmed.replace(/\.?$/, ".")} ${text}`;
+    });
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-slate-900">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition"><X className="h-5 w-5" /></button>
         </div>
+
+        {presets?.length > 0 && (
+          <div className="mb-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+              Common reasons — tap to add
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {presets.map((text) => (
+                <button
+                  key={text}
+                  type="button"
+                  onClick={() => addPreset(text)}
+                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-amber-100 hover:text-amber-800 transition text-left"
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <label className="block text-sm font-semibold text-slate-700 mb-2">
           {label} <span className="text-red-500">*</span>
         </label>
         <textarea
           rows={4} value={reason} onChange={(e) => setReason(e.target.value)}
           placeholder={placeholder}
+          autoFocus
           className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-amber-400/50 resize-none"
         />
+        <p className="mt-1.5 text-[11px] text-slate-400">
+          The applicant sees this next to the entry it applies to — be specific enough to act on.
+        </p>
+
         <div className="flex gap-3 mt-5 justify-end">
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancel</button>
           <button onClick={handleSubmit} disabled={loading} className={`px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed transition ${confirmClass}`}>
@@ -114,44 +187,105 @@ function ReasonModal({ title, label, placeholder, confirmLabel, confirmClass, on
 
 // ── Approval summary bar ──────────────────────────────────────────────────────
 
-function ApprovalSummaryBar({ persons, canFinalize, onFinalize, finalizing }) {
+function ApprovalSummaryBar({ persons, canFinalize, onFinalize, finalizing, onApproveAll, approvingAll }) {
+  // Vehicles are reviewed alongside people: each carries a driver, documents and
+  // a blacklist history, and only approved rows reach the printed pass.
   const total    = persons.length;
   const approved = persons.filter((p) => p.approvalStatus === "APPROVED").length;
   const rejected = persons.filter((p) => p.approvalStatus === "REJECTED").length;
   const pending  = persons.filter((p) => !p.approvalStatus || p.approvalStatus === "PENDING").length;
+  const done     = approved + rejected;
+  const pct      = total ? Math.round((done / total) * 100) : 0;
+
+  const finalizeBlockedReason =
+    pending > 0
+      ? `${pending} still to review`
+      : approved === 0
+      ? "Nothing approved — use Reject Batch to close"
+      : null;
 
   return (
-    <div className="flex flex-wrap items-center gap-4 px-5 py-4 rounded-xl bg-slate-50 ring-1 ring-slate-200">
-      <div className="flex items-center gap-2 text-sm">
-        <Shield className="h-4 w-4 text-slate-500" />
-        <span className="font-semibold text-slate-700">Individual Review Progress</span>
+    <div className="px-5 py-4 rounded-xl bg-slate-50 ring-1 ring-slate-200">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 text-sm">
+          <Shield className="h-4 w-4 text-slate-500" />
+          <span className="font-semibold text-slate-700">Review Progress</span>
+        </div>
+
+        <div className="flex flex-wrap gap-2 items-center ml-auto">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />{pending} Pending
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{approved} Approved
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-red-500" />{rejected} Rejected
+          </span>
+
+          {/* Approving thirty entries one at a time was the biggest cost in this
+              queue. Anything already rejected is left untouched. */}
+          {canFinalize && pending > 0 && (
+            <button
+              onClick={onApproveAll}
+              disabled={approvingAll}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              <CheckCircle className="h-4 w-4" />
+              {approvingAll ? "Approving…" : `Approve Remaining (${pending})`}
+            </button>
+          )}
+
+          {/* Always rendered, so the officer can see the button and why it is
+              not yet available rather than wondering where it went. */}
+          {canFinalize && (
+            <button
+              onClick={onFinalize}
+              disabled={finalizing || !!finalizeBlockedReason}
+              title={finalizeBlockedReason || "Generate passes for approved entries"}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-sm"
+            >
+              <CheckCircle className="h-4 w-4" />
+              {finalizing ? "Generating passes…" : "Finalize & Generate Passes"}
+            </button>
+          )}
+        </div>
       </div>
-      <div className="flex flex-wrap gap-3 ml-auto items-center">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200">
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />{pending} Pending
-        </span>
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{approved} Approved
-        </span>
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
-          <span className="h-1.5 w-1.5 rounded-full bg-red-500" />{rejected} Rejected
-        </span>
-        <span className="text-xs text-slate-400 font-mono">{approved + rejected}/{total} actioned</span>
-        {canFinalize && pending === 0 && approved > 0 && (
-          <button
-            onClick={onFinalize}
-            disabled={finalizing}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
-          >
-            <CheckCircle className="h-4 w-4" />
-            {finalizing ? "Generating passes…" : "Finalize & Generate Passes"}
-          </button>
-        )}
-        {canFinalize && pending === 0 && approved === 0 && (
-          <span className="text-xs text-red-500 font-semibold">All rejected — use Reject Batch to close</span>
+
+      <div className="mt-3 flex items-center gap-3">
+        <div className="h-1.5 flex-1 rounded-full bg-slate-200 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <span className="text-xs text-slate-500 font-mono tabular-nums shrink-0">{done}/{total}</span>
+        {finalizeBlockedReason && canFinalize && (
+          <span className="text-xs font-semibold text-amber-600 shrink-0">{finalizeBlockedReason}</span>
         )}
       </div>
     </div>
+  );
+}
+
+
+/**
+ * Live blacklist verdict for a row.
+ *
+ * The blacklist is enforced when the applicant submits, but a person can be
+ * blacklisted afterwards — so the officer sees the current position here rather
+ * than assuming the submission-time check still holds.
+ */
+function BlacklistFlag({ entry }) {
+  if (!entry) return null;
+  return (
+    <span
+      title={entry.reason || "Blacklisted"}
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-100 text-red-700 border border-red-300 whitespace-nowrap"
+    >
+      <AlertCircle className="h-3 w-3 shrink-0" />
+      {entry.status === "BLACKLISTED" ? "Blacklisted" : "Blacklist pending"}
+    </span>
   );
 }
 
@@ -163,15 +297,108 @@ const DOC_LABELS = {
   driverAadhaarCard: "Aadhaar", driverLicense: "DL",
 };
 
+
+/**
+ * Review row as a card, for the tablet an officer actually holds at the gate.
+ * The wide tables stay for desktop; below `md` this is the same information
+ * stacked, with the decision controls always reachable.
+ */
+function ReviewCard({ entry, index, isVehicle, focused, actioning, canAct, onFocus, onApprove, onReject, onUndo, onView }) {
+  const status = entry.approvalStatus || "PENDING";
+  const actioned = status !== "PENDING";
+
+  return (
+    <li
+      id={`bp-card-${entry.id}`}
+      onClick={onFocus}
+      className={`rounded-2xl ring-1 p-4 bg-white ${
+        focused ? "ring-2 ring-amber-400" : "ring-slate-200"
+      } ${status === "APPROVED" ? "bg-emerald-50/40" : status === "REJECTED" ? "bg-red-50/40" : ""}`}
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="min-w-0">
+          <p className="font-bold text-slate-800 truncate">
+            <span className="text-slate-400 font-normal mr-1.5">{index + 1}.</span>
+            {isVehicle ? entry.vehicleNumber : entry.name || "—"}
+          </p>
+          <p className="text-[11px] text-slate-500 font-mono truncate">
+            {isVehicle
+              ? `${entry.vehicleType || "Vehicle"} · ${entry.name || "—"}`
+              : entry.aadhaar
+              ? `XXXX XXXX ${String(entry.aadhaar).slice(-4)}`
+              : "—"}
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <PersonStatusChip status={status} />
+          <BlacklistFlag entry={entry.blacklist} />
+        </div>
+      </div>
+
+      {status === "REJECTED" && entry.approvalReason && (
+        <p className="text-[11px] text-red-600 italic mb-2">{entry.approvalReason}</p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onView(); }}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition"
+        >
+          <FileText className="h-3.5 w-3.5" /> Documents
+        </button>
+
+        {canAct && (actioned ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onUndo(); }}
+            disabled={actioning}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 transition"
+          >
+            <RotateCcw className="h-3.5 w-3.5" /> Undo
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onApprove(); }}
+              disabled={actioning}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 transition"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onReject(); }}
+              disabled={actioning}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition"
+            >
+              <XCircle className="h-3.5 w-3.5" /> Reject
+            </button>
+          </>
+        ))}
+      </div>
+    </li>
+  );
+}
+
 function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonActioned }) {
   const [expanded, setExpanded]         = useState(true);
   const [lightboxSrc, setLightboxSrc]   = useState(null);
   const [showDetails, setShowDetails]   = useState(true);
   const [actioningId, setActioningId]   = useState(null); // personId being actioned
   const [rejectModal, setRejectModal]   = useState(null); // personId to reject
+  const [viewerEntry, setViewerEntry]   = useState(null); // entry open in the document viewer
+  const [focusedId, setFocusedId]       = useState(null); // row the keyboard is acting on
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   const peopleRows  = (persons || []).filter((p) => !p.vehicleNumber);
   const vehicleRows = (persons || []).filter((p) => !!p.vehicleNumber);
+  // People first, then vehicles — the order the officer reads them in, and the
+  // order the keyboard walks.
+  const reviewOrder = [...peopleRows, ...vehicleRows];
+  const focusedIndex = reviewOrder.findIndex((r) => r.id === focusedId);
+  const focusedRow = focusedIndex >= 0 ? reviewOrder[focusedIndex] : null;
 
   const handleApprovePerson = async (personId) => {
     setActioningId(personId);
@@ -208,6 +435,72 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
     } finally { setActioningId(null); }
   };
 
+
+  // ── Keyboard review ──────────────────────────────────────────────────────
+  // A queue role lives on the keyboard: J/K to walk the list, A to approve,
+  // R to reject, V to open the documents. Ignored while typing or when a
+  // dialog owns the screen, so it never fights the forms.
+  useEffect(() => {
+    if (!isUnderReview || !canApprove) return;
+
+    const onKey = (e) => {
+      const el = e.target;
+      const typing =
+        el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (rejectModal !== null || viewerEntry || lightboxSrc) return;
+
+      const move = (delta) => {
+        e.preventDefault();
+        if (!reviewOrder.length) return;
+        const from = focusedIndex >= 0 ? focusedIndex : delta > 0 ? -1 : 0;
+        const next = Math.min(Math.max(from + delta, 0), reviewOrder.length - 1);
+        const row = reviewOrder[next];
+        setFocusedId(row?.id ?? null);
+        document.getElementById(`bp-row-${row?.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+      };
+
+      switch (e.key.toLowerCase()) {
+        case "j": return move(1);
+        case "k": return move(-1);
+        case "a":
+          if (focusedRow && (focusedRow.approvalStatus || "PENDING") === "PENDING") {
+            e.preventDefault();
+            handleApprovePerson(focusedRow.id);
+          }
+          return;
+        case "r":
+          if (focusedRow && (focusedRow.approvalStatus || "PENDING") === "PENDING") {
+            e.preventDefault();
+            setRejectModal(focusedRow.id);
+          }
+          return;
+        case "u":
+          if (focusedRow && (focusedRow.approvalStatus || "PENDING") !== "PENDING") {
+            e.preventDefault();
+            handleUndoPerson(focusedRow.id);
+          }
+          return;
+        case "v":
+          if (focusedRow) { e.preventDefault(); setViewerEntry(focusedRow); }
+          return;
+        case "?":
+          e.preventDefault();
+          setShowShortcuts((v) => !v);
+          return;
+        case "escape":
+          setFocusedId(null);
+          setShowShortcuts(false);
+          return;
+        default:
+          return;
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   if (!persons?.length) {
     return <p className="text-sm text-slate-400 py-3">No persons or vehicles submitted yet.</p>;
   }
@@ -225,7 +518,7 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
             </button>
           </div>
           {expanded && (
-            <div className="overflow-x-auto rounded-xl ring-1 ring-slate-100">
+            <div className="hidden md:block overflow-x-auto rounded-xl ring-1 ring-slate-100">
               <table className="w-full min-w-[800px] text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
@@ -241,7 +534,14 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
                     const isActioning = actioningId === p.id;
                     const alreadyActioned = personStatus !== "PENDING";
                     return (
-                      <tr key={p.id || idx} className={`border-b border-slate-50 last:border-b-0 ${personStatus === "APPROVED" ? "bg-emerald-50/30" : personStatus === "REJECTED" ? "bg-red-50/30" : ""}`}>
+                      <tr
+                        key={p.id || idx}
+                        id={`bp-row-${p.id}`}
+                        onClick={() => setFocusedId(p.id)}
+                        className={`border-b border-slate-50 last:border-b-0 ${
+                          focusedId === p.id ? "ring-2 ring-inset ring-amber-400 bg-amber-50/40" : ""
+                        } ${personStatus === "APPROVED" ? "bg-emerald-50/30" : personStatus === "REJECTED" ? "bg-red-50/30" : ""}`}
+                      >
                         <td className="px-3 py-3 text-xs text-slate-400 tabular-nums">{idx + 1}</td>
                         <td className="px-3 py-3">
                           {photoSrc
@@ -253,11 +553,18 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
                         <td className="px-3 py-3 text-xs text-slate-600 whitespace-nowrap">{fmtShort(p.dob)}</td>
                         <td className="px-3 py-3 font-mono text-xs text-slate-600">{p.mobile || "—"}</td>
                         <td className="px-3 py-3">
+                          {/* Opens beside the photograph rather than in a new
+                              tab, so the officer keeps their place. */}
                           {p.aadhaarCardPath
-                            ? <a href={fileUrl(p.aadhaarCardPath)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline"><FileText className="h-3 w-3" /> View</a>
+                            ? <button type="button" onClick={() => { setFocusedId(p.id); setViewerEntry(p); }} className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline"><FileText className="h-3 w-3" /> View</button>
                             : <span className="text-[10px] text-red-400 font-semibold">Missing</span>}
                         </td>
-                        <td className="px-3 py-3"><PersonStatusChip status={personStatus} /></td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1">
+                            <PersonStatusChip status={personStatus} />
+                            <BlacklistFlag entry={p.blacklist} />
+                          </div>
+                        </td>
                         {isUnderReview && canApprove && (
                           <td className="px-3 py-3">
                             {alreadyActioned ? (
@@ -301,20 +608,45 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
               </table>
             </div>
           )}
+
+          {/* Below md the same entries as cards — the wide tables are unusable
+              on the tablet an officer is actually holding. */}
+          {expanded && (
+            <ul className="md:hidden flex flex-col gap-3">
+              {peopleRows.map((p, idx) => (
+                <ReviewCard
+                  key={p.id || idx}
+                  entry={p}
+                  index={idx}
+                  isVehicle={false}
+                  focused={focusedId === p.id}
+                  actioning={actioningId === p.id}
+                  canAct={isUnderReview && canApprove}
+                  onFocus={() => setFocusedId(p.id)}
+                  onApprove={() => handleApprovePerson(p.id)}
+                  onReject={() => setRejectModal(p.id)}
+                  onUndo={() => handleUndoPerson(p.id)}
+                  onView={() => { setFocusedId(p.id); setViewerEntry(p); }}
+                />
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
-      {/* ── Vehicle rows (display only — no individual approval for vehicles) ── */}
+      {/* ── Vehicle rows — reviewed individually, like people. Only approved
+          rows reach the generated pass, so a vehicle left pending would never
+          produce a vehicle pass at all. ── */}
       {vehicleRows.length > 0 && (
         <div>
           <p className="flex items-center gap-2 text-sm font-semibold text-slate-600 mb-3">
             <Car className="h-4 w-4" /> Vehicles ({vehicleRows.length})
           </p>
-          <div className="overflow-x-auto rounded-xl ring-1 ring-slate-100">
+          <div className="hidden md:block overflow-x-auto rounded-xl ring-1 ring-slate-100">
             <table className="w-full min-w-[700px] text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {["#", "Reg. Number", "Type", "Driver", "Aadhaar", "Mobile", "DL Number", "Documents"].map((h) => (
+                  {["#", "Reg. Number", "Type", "Driver", "Aadhaar", "Mobile", "DL Number", "Documents", "Status", ...(isUnderReview && canApprove ? ["Action"] : [])].map((h) => (
                     <th key={h} className="px-3 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -324,7 +656,14 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
                   const docMap = v.vehicleDocs && typeof v.vehicleDocs === "object" ? v.vehicleDocs : v.photoPath ? { rc: v.photoPath } : {};
                   const docs = Object.keys(DOC_LABELS).filter((k) => docMap[k]).map((k) => ({ label: DOC_LABELS[k], path: docMap[k] }));
                   return (
-                    <tr key={v.id || idx} className="border-b border-slate-50 last:border-b-0 hover:bg-slate-50/50">
+                    <tr
+                      key={v.id || idx}
+                      id={`bp-row-${v.id}`}
+                      onClick={() => setFocusedId(v.id)}
+                      className={`border-b border-slate-50 last:border-b-0 hover:bg-slate-50/50 ${
+                        focusedId === v.id ? "ring-2 ring-inset ring-amber-400 bg-amber-50/40" : ""
+                      }`}
+                    >
                       <td className="px-3 py-3 text-xs text-slate-400 tabular-nums">{idx + 1}</td>
                       <td className="px-3 py-3 font-mono font-bold text-slate-800">{v.vehicleNumber || "—"}</td>
                       <td className="px-3 py-3 text-slate-600">{v.vehicleType || "—"}</td>
@@ -340,21 +679,151 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
                         <div className="flex flex-wrap gap-1">
                           {docs.length > 0
                             ? docs.map((doc, di) => (
-                                <a key={di} href={fileUrl(doc.path)} target="_blank" rel="noopener noreferrer"
+                                <button key={di} type="button"
+                                  onClick={() => { setFocusedId(v.id); setViewerEntry(v); }}
                                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 transition">
                                   <FileText className="h-3 w-3" />{doc.label}
-                                </a>
+                                </button>
                               ))
                             : <span className="text-xs text-slate-400">—</span>}
                         </div>
                       </td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-col gap-1">
+                          <PersonStatusChip status={v.approvalStatus || "PENDING"} />
+                          <BlacklistFlag entry={v.blacklist} />
+                        </div>
+                      </td>
+                      {isUnderReview && canApprove && (
+                        <td className="px-3 py-3">
+                          {(v.approvalStatus || "PENDING") !== "PENDING" ? (
+                            <div className="flex flex-col gap-1.5">
+                              {v.approvalStatus === "REJECTED" && v.approvalReason && (
+                                <span className="text-[10px] text-slate-400 italic max-w-[160px] block truncate" title={v.approvalReason}>{v.approvalReason}</span>
+                              )}
+                              <button
+                                onClick={() => handleUndoPerson(v.id)}
+                                disabled={actioningId === v.id}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 transition"
+                              >
+                                {actioningId === v.id ? "…" : <><RotateCcw className="h-3 w-3" /> Undo</>}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleApprovePerson(v.id)}
+                                disabled={actioningId === v.id}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 transition"
+                              >
+                                {actioningId === v.id ? "…" : <><CheckCircle2 className="h-3 w-3" /> Approve</>}
+                              </button>
+                              <button
+                                onClick={() => setRejectModal(v.id)}
+                                disabled={actioningId === v.id}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition"
+                              >
+                                <XCircle className="h-3 w-3" /> Reject
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+
+          <ul className="md:hidden flex flex-col gap-3">
+            {vehicleRows.map((v, idx) => (
+              <ReviewCard
+                key={v.id || idx}
+                entry={v}
+                index={idx}
+                isVehicle
+                focused={focusedId === v.id}
+                actioning={actioningId === v.id}
+                canAct={isUnderReview && canApprove}
+                onFocus={() => setFocusedId(v.id)}
+                onApprove={() => handleApprovePerson(v.id)}
+                onReject={() => setRejectModal(v.id)}
+                onUndo={() => handleUndoPerson(v.id)}
+                onView={() => { setFocusedId(v.id); setViewerEntry(v); }}
+              />
+            ))}
+          </ul>
         </div>
+      )}
+
+      {/* ── Document viewer — photo and papers side by side ── */}
+      {viewerEntry && (
+        <DocumentViewer
+          entry={viewerEntry}
+          position={
+            focusedIndex >= 0 ? `${focusedIndex + 1} of ${reviewOrder.length}` : undefined
+          }
+          onPrev={
+            focusedIndex > 0
+              ? () => {
+                  const next = reviewOrder[focusedIndex - 1];
+                  setFocusedId(next.id);
+                  setViewerEntry(next);
+                }
+              : undefined
+          }
+          onNext={
+            focusedIndex >= 0 && focusedIndex < reviewOrder.length - 1
+              ? () => {
+                  const next = reviewOrder[focusedIndex + 1];
+                  setFocusedId(next.id);
+                  setViewerEntry(next);
+                }
+              : undefined
+          }
+          onClose={() => setViewerEntry(null)}
+        />
+      )}
+
+      {/* ── Keyboard shortcuts, for a role that lives in this queue ── */}
+      {isUnderReview && canApprove && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowShortcuts((v) => !v)}
+            className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 transition"
+          >
+            Keyboard shortcuts <kbd className="font-mono">?</kbd>
+          </button>
+          {showShortcuts && (
+            <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/50 p-4" onClick={() => setShowShortcuts(false)}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-bold text-slate-900">Keyboard shortcuts</h3>
+                  <button onClick={() => setShowShortcuts(false)} className="text-slate-400 hover:text-slate-700">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <dl className="space-y-2 text-sm">
+                  {[
+                    ["J / K", "Move down / up the list"],
+                    ["A", "Approve the highlighted entry"],
+                    ["R", "Reject the highlighted entry"],
+                    ["U", "Undo a decision"],
+                    ["V", "View photo and documents"],
+                    ["Esc", "Clear the highlight"],
+                  ].map(([key, what]) => (
+                    <div key={key} className="flex items-center justify-between gap-4">
+                      <kbd className="px-2 py-1 rounded-md bg-slate-100 font-mono text-xs font-bold text-slate-700 shrink-0">{key}</kbd>
+                      <dd className="text-slate-600 text-right">{what}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* ── Photo lightbox ── */}
@@ -417,11 +886,51 @@ export default function TrafficBulkPassDetailPage() {
 
   useEffect(() => { fetchBatch(); }, [fetchBatch]);
 
+  // When this record is a reusable bulk pass, load the batches submitted
+  // against it so an officer can see the whole picture in one place.
+  const [childSubmissions, setChildSubmissions] = useState([]);
+  const [childSubmissionsLoading, setChildSubmissionsLoading] = useState(false);
+  const [submissionSummary, setSubmissionSummary] = useState(null);
+
+  useEffect(() => {
+    if (!batch?.id || !batch.multipleSubmissionsEnabled) {
+      setChildSubmissions([]);
+      setSubmissionSummary(null);
+      return;
+    }
+    let alive = true;
+    setChildSubmissionsLoading(true);
+    getChildSubmissions(batch.id)
+      .then((res) => {
+        if (!alive) return;
+        setChildSubmissions(res?.submissions || []);
+        setSubmissionSummary(res?.submissionSummary || null);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch submission history:", err);
+        if (alive) { setChildSubmissions([]); setSubmissionSummary(null); }
+      })
+      .finally(() => { if (alive) setChildSubmissionsLoading(false); });
+    return () => { alive = false; };
+  }, [batch?.id, batch?.multipleSubmissionsEnabled]);
+
+  const [approvingAll, setApprovingAll] = useState(false);
+  const handleApproveAll = async () => {
+    setApprovingAll(true);
+    try {
+      const res = await approveAllPendingInBatch(id);
+      toast.success(res?.message || "Remaining entries approved.");
+      fetchBatch(true);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to approve remaining entries.");
+    } finally { setApprovingAll(false); }
+  };
+
   const handleFinalize = async () => {
     setFinalizing(true);
     try {
       await finalizeBulkBatch(id);
-      toast.success(`Batch ${batch.refNo} finalized — passes generated for approved persons.`);
+      toast.success(`Batch ${batch.refNo} finalized — passes generated for approved entries.`);
       router.push("/traffic_manager/bulk-pass");
     } catch (err) {
       toast.error(err?.response?.data?.message || "Failed to finalize batch.");
@@ -503,6 +1012,8 @@ export default function TrafficBulkPassDetailPage() {
   const persons       = batch.persons || [];
   const uploads       = batch.uploads || [];
   const statusLogs    = batch.statusLogs || [];
+  const validity      = getValidityState(batch);
+  const countLabels   = countLabelsFor(batch);
 
   // Compute pending count to decide whether Finalize button should show
   const pendingCount  = persons.filter((p) => !p.approvalStatus || p.approvalStatus === "PENDING").length;
@@ -565,6 +1076,63 @@ export default function TrafficBulkPassDetailPage() {
         </div>
       </div>
 
+      {/* ── Bulk Pass context ──
+          A batch is never standalone when it came through a reusable link:
+          surface the pass it belongs to, and for the pass itself show every
+          batch received so far. */}
+      {batch.parentRequestId && (
+        <div className="flex flex-wrap items-center gap-3 px-5 py-4 rounded-2xl bg-slate-50 ring-1 ring-slate-200">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-bold">
+            Batch #{batch.submissionNumber ?? "\u2014"}
+          </span>
+          <p className="text-xs text-slate-600">
+            Submitted against a reusable bulk pass held by{" "}
+            <span className="font-semibold text-slate-800">{batch.companyName || "this organisation"}</span>.
+          </p>
+          <button
+            onClick={() => router.push(`/traffic_manager/bulk-pass/${batch.parentRequestId}`)}
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-white ring-1 ring-slate-200 hover:bg-slate-100 transition"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Open the bulk pass
+          </button>
+        </div>
+      )}
+
+      {batch.multipleSubmissionsEnabled && (
+        <div className="flex flex-col gap-4">
+          <ValidityBanner validity={validity} canSubmit={validity?.canSubmit} />
+
+          <SubmissionSummaryStrip summary={submissionSummary} submissions={childSubmissions} />
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-amber-100 text-amber-600">
+                  <FileText className="h-4 w-4" />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Submission History</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Every batch submitted against this bulk pass. Each is reviewed separately.
+                  </p>
+                </div>
+              </div>
+              <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg whitespace-nowrap">
+                {childSubmissions.length} batch{childSubmissions.length !== 1 ? "es" : ""}
+              </span>
+            </div>
+            <SubmissionHistory
+              submissions={childSubmissions}
+              loading={childSubmissionsLoading}
+              accent="#ff6b00"
+              onView={(s) => router.push(`/traffic_manager/bulk-pass/${s.id}`)}
+              emptyTitle="No batches submitted yet"
+              emptyHint="Batches appear here as soon as the organisation submits them."
+            />
+          </div>
+        </div>
+      )}
+
       {/* Return reason banner */}
       {batch.returnReason && (
         <div className="flex items-start gap-3 px-5 py-4 rounded-xl bg-orange-50 ring-1 ring-orange-200">
@@ -576,13 +1144,16 @@ export default function TrafficBulkPassDetailPage() {
         </div>
       )}
 
-      {/* Individual approval progress bar */}
-      {isUnderReview && persons.filter((p) => !p.vehicleNumber).length > 0 && (
+      {/* Review progress — counts people and vehicles together, because both
+          must be approved before they appear on the generated pass. */}
+      {isUnderReview && persons.length > 0 && (
         <ApprovalSummaryBar
-          persons={persons.filter((p) => !p.vehicleNumber)}
+          persons={persons}
           canFinalize={canApprove}
           onFinalize={handleFinalize}
           finalizing={finalizing}
+          onApproveAll={handleApproveAll}
+          approvingAll={approvingAll}
         />
       )}
 
@@ -614,8 +1185,8 @@ export default function TrafficBulkPassDetailPage() {
             <Field label="Company / Organisation" value={batch.companyName} />
             <Field label="Applicant Email" value={batch.applicantEmail} />
             <Field label="Applicant Mobile" value={batch.applicantMobile ? "+91 " + batch.applicantMobile : null} />
-            <Field label="No. of Persons" value={batch.noOfPersons != null ? String(batch.noOfPersons) : null} />
-            <Field label="No. of Vehicles" value={batch.noOfVehicles != null ? String(batch.noOfVehicles) : null} />
+            <Field label={countLabels.persons} value={batch.noOfPersons != null ? String(batch.noOfPersons) : null} />
+            <Field label={countLabels.vehicles} value={batch.noOfVehicles != null ? String(batch.noOfVehicles) : null} />
             <Field label="Payment Mode" value={batch.paymentMode} />
             <Field label="Validity From" value={fmtDate(batch.validityFrom)} />
             <Field label="Validity Upto" value={fmtDate(batch.validityUpto)} />
@@ -717,6 +1288,7 @@ export default function TrafficBulkPassDetailPage() {
           placeholder="Describe what needs to be corrected — the applicant will see this message…"
           confirmLabel="Return to Applicant"
           confirmClass="bg-orange-500 hover:bg-orange-600"
+          presets={QUICK_RETURN_REASONS}
           onConfirm={handleReturn}
           onClose={() => setModal(null)}
         />

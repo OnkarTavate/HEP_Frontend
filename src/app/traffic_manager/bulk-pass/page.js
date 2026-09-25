@@ -36,6 +36,38 @@ const STATUS_META = {
   COMPLETED:             { label: "Approved",           cls: "bg-emerald-100 text-emerald-700 border border-emerald-300", dot: "bg-emerald-500" },
 };
 
+
+/**
+ * How long a batch has been waiting, and how loudly to say so.
+ *
+ * The queue is sorted oldest-first, but order alone does not tell an officer
+ * that something has been sitting for three days — or that a pass whose
+ * validity starts tomorrow needs attention before an older one that does not.
+ */
+function describeWait(seconds) {
+  const s = Number(seconds) || 0;
+  const hours = s / 3600;
+  if (hours < 1) return { label: `${Math.max(1, Math.round(s / 60))}m`, tone: "fresh" };
+  if (hours < 24) return { label: `${Math.round(hours)}h`, tone: hours >= 8 ? "warm" : "fresh" };
+  const days = Math.floor(hours / 24);
+  return { label: `${days}d`, tone: days >= 3 ? "hot" : "warm" };
+}
+
+const WAIT_TONE = {
+  fresh: "text-slate-500",
+  warm: "text-amber-600 font-semibold",
+  hot: "text-red-600 font-bold",
+};
+
+/** True when the pass this batch belongs to opens within a day. */
+function startsImminently(batch, now) {
+  if (!batch?.validityFrom) return false;
+  const from = new Date(batch.validityFrom).getTime();
+  if (Number.isNaN(from)) return false;
+  const delta = from - now;
+  return delta > 0 && delta < 36 * 3600 * 1000;
+}
+
 function StatusChip({ status }) {
   const cfg = STATUS_META[status] || { label: status || "Unknown", cls: "bg-stone-100 text-stone-500 border border-stone-200", dot: "bg-stone-400" };
   return (
@@ -98,7 +130,7 @@ function RejectModal({ batch, onClose, onSuccess }) {
 
 // ── Batches table — shared for both queue and status-filtered views ────────────
 
-function BatchTable({ rows, loading, emptyMessage, emptySubMessage, canApprove, onReject, router, showStatus = false }) {
+function BatchTable({ rows, loading, emptyMessage, emptySubMessage, canApprove, onReject, router, showStatus = false, nowMs = 0 }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -123,8 +155,8 @@ function BatchTable({ rows, loading, emptyMessage, emptySubMessage, canApprove, 
   }
 
   const headers = showStatus
-    ? ["Ref Number", "Company", "Visitor Type", "Persons", "Valid Until", "Submitted", "Status"]
-    : ["Ref Number", "Company", "Visitor Type", "Persons", "Valid Until", "Submitted", "Actions"];
+    ? ["Ref Number", "Company", "Visitor Type", "Persons", "Waiting", "Valid Until", "Submitted", "Status"]
+    : ["Ref Number", "Company", "Visitor Type", "Persons", "Waiting", "Valid Until", "Submitted", "Actions"];
 
   return (
     <div className="overflow-x-auto">
@@ -161,6 +193,21 @@ function BatchTable({ rows, loading, emptyMessage, emptySubMessage, canApprove, 
               </td>
               <td className="px-5 py-4 text-center tabular-nums font-semibold text-slate-700">
                 {batch.noOfPersons ?? "—"}
+              </td>
+              <td className="px-5 py-4 whitespace-nowrap">
+                {(() => {
+                  const wait = describeWait(batch.waitingSeconds);
+                  return (
+                    <span className={`text-xs ${WAIT_TONE[wait.tone]}`} title="Time since the applicant submitted">
+                      {wait.label}
+                    </span>
+                  );
+                })()}
+                {startsImminently(batch, nowMs) && (
+                  <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700" title="This pass starts within 36 hours">
+                    Starts soon
+                  </span>
+                )}
               </td>
               <td className="px-5 py-4 whitespace-nowrap text-slate-600">{fmtDate(batch.validityUpto)}</td>
               <td className="px-5 py-4 whitespace-nowrap text-slate-500">{fmtDate(batch.updatedAt || batch.createdAt)}</td>
@@ -239,6 +286,15 @@ export default function TrafficBulkPassPage() {
 
   // ── User / permissions ──
   const [user, setUser] = useState(null);
+  // One clock reference for the whole table, refreshed on a timer, so render
+  // itself stays idempotent.
+  // Lazy initialiser reads the clock once, outside render; the interval keeps
+  // the ages honest while the queue stays open.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
   useEffect(() => {
     try { const r = localStorage.getItem("user"); if (r) setUser(JSON.parse(r)); } catch {}
   }, []);
@@ -258,16 +314,17 @@ export default function TrafficBulkPassPage() {
   const fetchAllBatches = useCallback(async () => {
     setDashLoading(true);
     try {
-      const filters = {};
-      if (statusFilter) filters.status = statusFilter;
-      if (multipleSubmissionsFilter !== null) filters.multipleSubmissionsEnabled = multipleSubmissionsFilter;
-      const data = await listBulkBatches(filters);
+      // Full population: the dashboard tiles (computeBulkPassStats) must reflect
+      // every batch, and the table filters this set client-side (filteredBatches).
+      // Fetching with statusFilter/multipleSubmissionsFilter here made the tiles
+      // show only a subset after clicking a card or toggling the filter.
+      const data = await listBulkBatches({});
       setAllBatches(Array.isArray(data) ? data : []);
     } catch {
       toast.error("Failed to load dashboard data.");
       setAllBatches([]);
     } finally { setDashLoading(false); }
-  }, [statusFilter, multipleSubmissionsFilter]);
+  }, []);
 
   useEffect(() => {
     fetchQueue();
@@ -425,6 +482,7 @@ export default function TrafficBulkPassPage() {
             onReject={setRejectModal}
             router={router}
             showStatus={statusFilter !== "UNDER_REVIEW"}
+            nowMs={nowMs}
           />
           {filteredBatches.length > 0 && (
             <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50">
@@ -446,6 +504,7 @@ export default function TrafficBulkPassPage() {
             onReject={setRejectModal}
             router={router}
             showStatus={false}
+            nowMs={nowMs}
           />
           {batches.length > 0 && (
             <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50">

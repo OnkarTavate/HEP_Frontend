@@ -17,14 +17,19 @@ import {
   Clock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { BULK_PASS_LIMITS, BULK_PASS_LABELS, validatePassTotals, batchesNeededHint } from "@/lib/bulkPassConstants";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+// The same visitor types the port's own departments use, so a public request
+// and a department-issued pass read the same way everywhere.
 const VISITOR_TYPES = [
-  { value: "VENDOR", label: "Vendor" },
-  { value: "CONTRACTOR", label: "Contractor" },
-  { value: "VISITOR", label: "Visitor" },
-  { value: "TEMPORARY_STAFF", label: "Temporary Staff" },
+  { value: "Govt Officials", label: "Government Officials" },
+  { value: "Consultants", label: "Consultants" },
+  { value: "Students", label: "Students" },
+  { value: "Vendors", label: "Vendors" },
+  { value: "VIPs", label: "VIPs" },
+  { value: "Others", label: "Others" },
 ];
 
 const PAYMENT_MODES = [
@@ -37,6 +42,10 @@ const PAYMENT_MODES = [
 // ── Validation ────────────────────────────────────────────────────────────────
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Mirror the server (publicRequestValidator) so the applicant gets immediate,
+// accurate feedback instead of an opaque post-submit "Validation failed" toast.
+const COMPANY_NAME_RE = /^[a-zA-Z0-9\s\.\-,&()'\/]+$/;
+const REF_DOC_RE = /^[a-zA-Z0-9\-\/]*$/;
 
 function validate(fields) {
   const errors = {};
@@ -51,6 +60,13 @@ function validate(fields) {
     errors.companyName = "Company name is required.";
   } else if (fields.companyName.trim().length < 3 || fields.companyName.trim().length > 255) {
     errors.companyName = "Company name must be between 3 and 255 characters.";
+  } else if (!COMPANY_NAME_RE.test(fields.companyName.trim())) {
+    errors.companyName = "Only letters, numbers and basic punctuation (.,&-()'/ ) are allowed.";
+  }
+
+  // Reference document number (optional) — must match the server charset.
+  if (fields.refDocNo?.trim() && !REF_DOC_RE.test(fields.refDocNo.trim())) {
+    errors.refDocNo = "Only letters, numbers, hyphen and forward slash are allowed.";
   }
 
   if (!fields.visitorType) {
@@ -69,16 +85,10 @@ function validate(fields) {
     errors.applicantMobile = "Mobile number must be exactly 10 digits.";
   }
 
-  // Pass requirements
-  const persons = parseInt(fields.noOfPersons, 10);
-  if (isNaN(persons) || persons < 0 || persons > 30) {
-    errors.noOfPersons = "Number of persons must be between 0 and 30.";
-  }
-
-  const vehicles = parseInt(fields.noOfVehicles, 10);
-  if (isNaN(vehicles) || vehicles < 0 || vehicles > 20) {
-    errors.noOfVehicles = "Number of vehicles must be between 0 and 20.";
-  }
+  // Pass requirements — totals for the whole pass. A public request always
+  // becomes a reusable link, so any size is allowed; each batch is capped
+  // separately at the per-batch ceiling.
+  Object.assign(errors, validatePassTotals(fields.noOfPersons, fields.noOfVehicles, true));
 
   if (!fields.validityUpto) {
     errors.validityUpto = "Validity date is required.";
@@ -163,8 +173,8 @@ export default function PublicBulkPassRequestPage() {
     applicantMobile: "",
 
     // Pass requirements
-    noOfPersons: "0",
-    noOfVehicles: "0",
+    noOfPersons: String(BULK_PASS_LIMITS.DEFAULT_MAX_PERSONS),
+    noOfVehicles: String(BULK_PASS_LIMITS.DEFAULT_MAX_VEHICLES),
     validityUpto: "",
     paymentMode: "",
 
@@ -175,6 +185,14 @@ export default function PublicBulkPassRequestPage() {
     // Purpose & remarks
     purpose: "",
     remarks: "",
+  });
+
+  // The server requires a validity date strictly after today; read the clock
+  // once so the input's floor does not change between renders.
+  const [minValidityDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
   });
 
   // UI state
@@ -247,38 +265,17 @@ export default function PublicBulkPassRequestPage() {
 
     setSendingOtp(true);
     try {
-      // Step 1: Verify captcha first
-      const captchaRes = await fetch(
-        `${process.env.NEXT_PUBLIC_USER_SERVICE_URL}/api/captcha/verify-captcha`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            token: captcha?.token,
-            answer: form.captchaAnswer.trim(),
-          }),
-        }
-      );
-
-      const captchaData = await captchaRes.json();
-
-      if (!captchaRes.ok || !captchaData.success || !captchaData.valid) {
-        toast.error(captchaData.message || "Invalid security code. Please try again.");
-        fetchCaptcha(); // Get a new captcha
-        setForm({ ...form, captchaAnswer: "" }); // Clear the captcha answer
-        setSendingOtp(false);
-        return; // STOP HERE - do not proceed to OTP request
-      }
-
-      setCaptchaVerified(true);
-
-      // Step 2: Send OTP after captcha is verified
+      // The server checks the security code and sends the OTP in one step.
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_USER_SERVICE_URL}/api/bulk-pass/public/request-otp`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: form.applicantEmail.trim() }),
+          body: JSON.stringify({
+            email: form.applicantEmail.trim(),
+            captchaToken: captcha?.token,
+            captchaAnswer: form.captchaAnswer.trim(),
+          }),
         }
       );
 
@@ -290,11 +287,15 @@ export default function PublicBulkPassRequestPage() {
         } else {
           toast.error(data.message || "Failed to send OTP. Please try again.");
         }
+        // A security code is single-use, whatever the outcome — fetch a fresh one.
+        fetchCaptcha();
         setSendingOtp(false);
         return;
       }
 
+      setCaptchaVerified(true);
       setOtpSent(true);
+      set("otp", "");
       setOtpTimer(600); // 10 minutes
       toast.success("OTP sent to your email. Please check your inbox.");
     } catch (err) {
@@ -303,6 +304,16 @@ export default function PublicBulkPassRequestPage() {
     } finally {
       setSendingOtp(false);
     }
+  };
+
+  // Back to the email + security code step, keeping everything else typed so
+  // far. Used to fix a mistyped address or to ask for a fresh OTP.
+  const restartVerification = () => {
+    setOtpSent(false);
+    setOtpTimer(0);
+    setCaptchaVerified(false);
+    set("otp", "");
+    fetchCaptcha();
   };
 
   const verifyOTP = async () => {
@@ -393,7 +404,11 @@ export default function PublicBulkPassRequestPage() {
             delay *= 2; // Exponential backoff
             continue;
           }
-          throw new Error(data.message || data.error || "Failed to submit request");
+          const submitErr = new Error(data.message || data.error || "Failed to submit request");
+          // Carry the server's per-field validation errors so the UI can point at
+          // the offending field instead of showing only a generic toast.
+          submitErr.fieldErrors = Array.isArray(data.errors) ? data.errors : null;
+          throw submitErr;
         }
 
         return data;
@@ -461,6 +476,17 @@ export default function PublicBulkPassRequestPage() {
       setShowSuccessModal(true);
 
     } catch (err) {
+      // Map any server-side per-field errors onto the fields so the applicant
+      // can see exactly what to fix, not just a generic "Validation failed".
+      if (Array.isArray(err.fieldErrors) && err.fieldErrors.length) {
+        setErrors((prev) => {
+          const next = { ...prev };
+          err.fieldErrors.forEach((fe) => {
+            if (fe && fe.field) next[fe.field] = fe.message;
+          });
+          return next;
+        });
+      }
       toast.error(err.message || "Failed to submit request. Please try again.");
       // Refresh CAPTCHA on error
       fetchCaptcha();
@@ -488,10 +514,12 @@ export default function PublicBulkPassRequestPage() {
           </p>
         </div>
 
+        <TrackRequestCard />
+
         <form onSubmit={handleSubmit} noValidate>
           <div className="flex flex-col gap-6">
             {/* ── Section 1: Email Verification (with inline CAPTCHA) ── */}
-            <div className={`${cardShell} p-6`}>
+            <div className={`${cardShell} p-6 bp-reveal`}>
               <SectionHeading
                 icon={<Mail className="h-4 w-4" />}
                 title="Email Verification"
@@ -616,20 +644,34 @@ export default function PublicBulkPassRequestPage() {
                         )}
                       </button>
                     </div>
-                    {otpTimer > 0 && (
-                      <p className="flex items-center gap-1.5 mt-1.5 text-xs text-stone-500">
-                        <Clock className="h-3.5 w-3.5" />
-                        OTP expires in {Math.floor(otpTimer / 60)}:
-                        {String(otpTimer % 60).padStart(2, "0")}
-                      </p>
-                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
+                      {otpTimer > 0 ? (
+                        <p className="flex items-center gap-1.5 text-xs text-stone-500">
+                          <Clock className="h-3.5 w-3.5" />
+                          OTP expires in {Math.floor(otpTimer / 60)}:
+                          {String(otpTimer % 60).padStart(2, "0")}
+                        </p>
+                      ) : (
+                        <p className="flex items-center gap-1.5 text-xs font-semibold text-red-600">
+                          <Clock className="h-3.5 w-3.5" /> This OTP has expired — request a new one.
+                        </p>
+                      )}
+                      {/* A wrong address or a lost email must not be a dead end. */}
+                      <button
+                        type="button"
+                        onClick={restartVerification}
+                        className="text-xs font-bold text-amber-700 hover:text-amber-900 underline-offset-2 hover:underline"
+                      >
+                        {otpTimer > 540 ? "Change email" : "Change email or resend OTP"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
             {/* ── Section 3: Company Details ── */}
-            <div className={`${cardShell} p-6`}>
+            <div className={`${cardShell} p-6 bp-reveal`}>
               <SectionHeading
                 icon={<Building2 className="h-4 w-4" />}
                 title="Company Details"
@@ -694,16 +736,16 @@ export default function PublicBulkPassRequestPage() {
             </div>
 
             {/* ── Section 4: Pass Requirements ── */}
-            <div className={`${cardShell} p-6`}>
+            <div className={`${cardShell} p-6 bp-reveal`}>
               <SectionHeading icon={<Users className="h-4 w-4" />} title="Pass Requirements" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
-                {/* Number of persons */}
+                {/* Max No. of Persons — total across every batch */}
                 <div>
-                  <FieldLabel required>Number of Persons (0-30)</FieldLabel>
+                  <FieldLabel required>{BULK_PASS_LABELS.MAX_PERSONS} (total)</FieldLabel>
                   <input
                     type="number"
-                    min={0}
-                    max={30}
+                    min={1}
+                    max={BULK_PASS_LIMITS.MAX_TOTAL_PERSONS}
                     value={form.noOfPersons}
                     onChange={(e) => set("noOfPersons", e.target.value)}
                     onBlur={() => touch("noOfPersons")}
@@ -712,13 +754,13 @@ export default function PublicBulkPassRequestPage() {
                   <FieldError msg={errors.noOfPersons} />
                 </div>
 
-                {/* Number of vehicles */}
+                {/* Max No. of Vehicles — total across every batch */}
                 <div>
-                  <FieldLabel required>Number of Vehicles (0-20)</FieldLabel>
+                  <FieldLabel required>{BULK_PASS_LABELS.MAX_VEHICLES} (total)</FieldLabel>
                   <input
                     type="number"
                     min={0}
-                    max={20}
+                    max={BULK_PASS_LIMITS.MAX_TOTAL_VEHICLES}
                     value={form.noOfVehicles}
                     onChange={(e) => set("noOfVehicles", e.target.value)}
                     onBlur={() => touch("noOfVehicles")}
@@ -727,12 +769,22 @@ export default function PublicBulkPassRequestPage() {
                   <FieldError msg={errors.noOfVehicles} />
                 </div>
 
+                <p className="sm:col-span-2 text-xs text-stone-500 dark:text-stone-400 -mt-1">
+                  These are the totals for the whole bulk pass. {BULK_PASS_LABELS.PER_BATCH_NOTE}; larger
+                  groups are sent as several batches with the same link.
+                  {batchesNeededHint(form.noOfPersons, form.noOfVehicles, true) && (
+                    <span className="block mt-1 text-amber-700 dark:text-amber-300">
+                      {batchesNeededHint(form.noOfPersons, form.noOfVehicles, true)}
+                    </span>
+                  )}
+                </p>
+
                 {/* Validity date */}
                 <div>
                   <FieldLabel required>Validity Upto</FieldLabel>
                   <input
                     type="date"
-                    min={new Date().toISOString().split("T")[0]}
+                    min={minValidityDate}
                     value={form.validityUpto}
                     onChange={(e) => set("validityUpto", e.target.value)}
                     onBlur={() => touch("validityUpto")}
@@ -762,11 +814,11 @@ export default function PublicBulkPassRequestPage() {
               </div>
             </div>
 
-            {/* ── Section 5: Work Order ── */}
-            <div className={`${cardShell} p-6`}>
-              <SectionHeading icon={<FileText className="h-4 w-4" />} title="Work Order" />
+            {/* ── Section 5: Request letter / supporting document ── */}
+            <div className={`${cardShell} p-6 bp-reveal`}>
+              <SectionHeading icon={<FileText className="h-4 w-4" />} title="Request letter/supporting document" />
               <div className="space-y-4 mt-5">
-                {/* Work order required checkbox */}
+                {/* Request letter / supporting document checkbox */}
                 <div>
                   <label className="flex items-center gap-3 cursor-pointer select-none">
                     <input
@@ -776,7 +828,7 @@ export default function PublicBulkPassRequestPage() {
                       className="h-5 w-5 rounded border-stone-300 dark:border-white/20 text-amber-500 focus:ring-amber-400/50"
                     />
                     <span className="text-sm font-semibold text-stone-700 dark:text-stone-300">
-                      Work Order Required
+                      Request letter/supporting document
                     </span>
                   </label>
                 </div>
@@ -786,17 +838,19 @@ export default function PublicBulkPassRequestPage() {
                   <FieldLabel>Reference Document Number (optional)</FieldLabel>
                   <input
                     type="text"
-                    placeholder="e.g. WO/2026/1234"
+                    placeholder="e.g. REF/2026/1234"
                     value={form.refDocNo}
                     onChange={(e) => set("refDocNo", e.target.value)}
-                    className={inputCls(false)}
+                    onBlur={() => touch("refDocNo")}
+                    className={inputCls(!!errors.refDocNo)}
                   />
+                  <FieldError msg={errors.refDocNo} />
                 </div>
               </div>
             </div>
 
             {/* ── Section 6: Purpose & Remarks ── */}
-            <div className={`${cardShell} p-6`}>
+            <div className={`${cardShell} p-6 bp-reveal`}>
               <SectionHeading
                 icon={<MessageSquare className="h-4 w-4" />}
                 title="Purpose & Remarks"
@@ -853,7 +907,7 @@ export default function PublicBulkPassRequestPage() {
               <button
                 type="submit"
                 disabled={submitting || !form.emailVerified}
-                className="inline-flex items-center gap-2.5 px-10 py-4 rounded-2xl bg-amber-400 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-[#1f1f1f] font-bold text-base shadow-lg hover:shadow-xl transition"
+                className="bp-press bp-lift inline-flex items-center gap-2.5 px-10 py-4 rounded-2xl bg-amber-400 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-[#1f1f1f] font-bold text-base shadow-lg hover:shadow-xl transition"
               >
                 {submitting ? (
                   <>
@@ -905,8 +959,8 @@ export default function PublicBulkPassRequestPage() {
                 companyName: "",
                 visitorType: "",
                 applicantMobile: "",
-                noOfPersons: "0",
-                noOfVehicles: "0",
+                noOfPersons: String(BULK_PASS_LIMITS.DEFAULT_MAX_PERSONS),
+                noOfVehicles: String(BULK_PASS_LIMITS.DEFAULT_MAX_VEHICLES),
                 validityUpto: "",
                 paymentMode: "",
                 workOrderRequired: false,
@@ -924,6 +978,135 @@ export default function PublicBulkPassRequestPage() {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Track an existing request ─────────────────────────────────────────────────
+
+const REQUEST_STATUS_META = {
+  PENDING_ADMIN_APPROVAL: { label: "Under review", cls: "bg-amber-100 text-amber-800", note: "The General Administration department is reviewing your request. You will be emailed once a decision is made." },
+  ACTIVE: { label: "Approved", cls: "bg-emerald-100 text-emerald-800", note: "Your request is approved. Use the upload link below to submit visitor details in batches." },
+  REJECTED_BY_ADMIN: { label: "Rejected", cls: "bg-red-100 text-red-700", note: "Your request was not approved. You may submit a new request that addresses the reason given." },
+  EXPIRED: { label: "Expired", cls: "bg-stone-200 text-stone-700", note: "The approved validity period has ended." },
+};
+
+function TrackRequestCard() {
+  const [open, setOpen] = useState(false);
+  const [trackingNumber, setTrackingNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  const fmt = (v) =>
+    v ? new Date(v).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" }) : "—";
+
+  const check = async (e) => {
+    e?.preventDefault?.();
+    if (!trackingNumber.trim() || !EMAIL_RE.test(email.trim())) {
+      setError("Enter your tracking number and the email address you applied with.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const params = new URLSearchParams({ trackingNumber: trackingNumber.trim(), email: email.trim() });
+      const res = await fetch(`${process.env.NEXT_PUBLIC_USER_SERVICE_URL}/api/bulk-pass/public/request-status?${params}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "Could not find that request.");
+      setResult(data.data);
+    } catch (err) {
+      setError(err.message || "Could not check the request right now.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const meta = result ? REQUEST_STATUS_META[result.status] || { label: result.status, cls: "bg-stone-200 text-stone-700", note: "" } : null;
+
+  return (
+    <div className={`${cardShell} mb-6 bp-reveal`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-3 px-6 py-4 text-left"
+      >
+        <span className="flex items-center gap-2.5">
+          <span className="flex items-center justify-center h-8 w-8 rounded-xl bg-stone-100 dark:bg-white/10 text-stone-600 dark:text-stone-300">
+            <Clock className="h-4 w-4" />
+          </span>
+          <span>
+            <span className="block text-sm font-bold text-stone-800 dark:text-stone-200">Already applied? Track your request</span>
+            <span className="block text-xs text-stone-500 dark:text-stone-400">Enter the tracking number from your acknowledgment email.</span>
+          </span>
+        </span>
+        <RefreshCw className={`h-4 w-4 text-stone-400 transition-transform ${open ? "rotate-90" : ""}`} />
+      </button>
+
+      {open && (
+        <form onSubmit={check} className="px-6 pb-6 flex flex-col gap-4 bp-reveal">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3">
+            <input
+              value={trackingNumber}
+              onChange={(e) => setTrackingNumber(e.target.value.toUpperCase())}
+              placeholder="Tracking number, e.g. PBR-220926-ABC123"
+              className={inputCls(false)}
+              autoComplete="off"
+            />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email you applied with"
+              className={inputCls(false)}
+              autoComplete="email"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="bp-press px-5 py-3 rounded-2xl bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white text-sm font-bold whitespace-nowrap"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Check status"}
+            </button>
+          </div>
+          {error && <FieldError msg={error} />}
+
+          {result && meta && (
+            <div className="rounded-2xl ring-1 ring-stone-200 dark:ring-white/10 bg-stone-50 dark:bg-white/5 p-4 bp-pop">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{result.trackingNumber}</p>
+                  <p className="text-sm font-bold text-stone-800 dark:text-stone-200">{result.companyName}</p>
+                </div>
+                <span className={`px-3 py-1 rounded-full text-xs font-bold ${meta.cls}`}>{meta.label}</span>
+              </div>
+              <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">{meta.note}</p>
+              {result.rejectionReason && (
+                <p className="mt-2 text-xs text-red-700 bg-red-50 ring-1 ring-red-200 rounded-xl px-3 py-2">
+                  Reason: {result.rejectionReason}
+                </p>
+              )}
+              <dl className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div><dt className="text-stone-400 font-bold uppercase tracking-widest text-[10px]">Submitted</dt><dd className="font-semibold text-stone-700 dark:text-stone-300">{fmt(result.submittedAt)}</dd></div>
+                {result.approvedAt && <div><dt className="text-stone-400 font-bold uppercase tracking-widest text-[10px]">Approved</dt><dd className="font-semibold text-stone-700 dark:text-stone-300">{fmt(result.approvedAt)}</dd></div>}
+                {result.status === "ACTIVE" && <div><dt className="text-stone-400 font-bold uppercase tracking-widest text-[10px]">Valid until</dt><dd className="font-semibold text-stone-700 dark:text-stone-300">{fmt(result.validityUpto)}</dd></div>}
+                <div><dt className="text-stone-400 font-bold uppercase tracking-widest text-[10px]">Allowance</dt><dd className="font-semibold text-stone-700 dark:text-stone-300">{result.maxTotalPersons} persons · {result.maxTotalVehicles} vehicles</dd></div>
+              </dl>
+              {result.uploadLink && (
+                <a
+                  href={result.uploadLink}
+                  className="bp-press bp-lift mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-500 text-[#1f1f1f] text-sm font-bold"
+                >
+                  <Shield className="h-4 w-4" /> Open your upload link
+                </a>
+              )}
+            </div>
+          )}
+        </form>
+      )}
     </div>
   );
 }
@@ -989,6 +1172,10 @@ function SuccessModal({ result, onClose, onSubmitAnother }) {
                 </span>
               </div>
             </div>
+            <p className="mt-3 text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+              Keep this number. You can check progress any time with it and your email address in the
+              <span className="font-bold"> Track your request</span> box on this page.
+            </p>
           </div>
 
           {/* Next Steps */}

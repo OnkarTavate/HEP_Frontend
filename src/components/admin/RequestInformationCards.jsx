@@ -237,7 +237,7 @@ export function ValidityCard({ validityFrom, validityUpto, approvedTimeFrom, app
 }
 
 /**
- * PurposeCard: purpose text, remarks, work order info (required?, ref doc no)
+ * PurposeCard: purpose text, remarks, request letter/supporting document (required?, ref doc no)
  */
 export function PurposeCard({ purpose, remarks, workOrderRequired, refDocNo }) {
   return (
@@ -257,12 +257,12 @@ export function PurposeCard({ purpose, remarks, workOrderRequired, refDocNo }) {
           <div className="flex items-center gap-2 mb-3">
             <FileCheck className="h-4 w-4 text-slate-400" />
             <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-              Work Order Information
+              Request letter/supporting document
             </p>
           </div>
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">
             <ReadField
-              label="Work Order Required"
+              label="Request letter/supporting document"
               value={workOrderRequired === true || workOrderRequired === "yes" ? "Yes" : "No"}
             />
             {remarks && (

@@ -75,10 +75,24 @@ export async function getBulkBatchDetail(id) {
   const raw = res.data?.data;
   if (!raw) return null;
   return {
-    ...raw.batch,
+    ...normaliseBatchRow(raw.batch),
     persons: raw.persons || [],
     uploads: raw.uploads || [],
     statusLogs: raw.statusLog || raw.statusLogs || [],
+  };
+}
+
+/**
+ * The batch table keeps the multi-submission columns in snake_case. Expose
+ * camelCase aliases so pages can read them the same way as every other field.
+ */
+function normaliseBatchRow(batch) {
+  if (!batch) return {};
+  return {
+    ...batch,
+    parentRequestId: batch.parentRequestId ?? batch.parent_request_id ?? null,
+    submissionNumber: batch.submissionNumber ?? batch.submission_number ?? null,
+    requestSource: batch.requestSource ?? batch.request_source ?? null,
   };
 }
 
@@ -90,10 +104,15 @@ export async function updateBulkBatch(id, data) {
   return res.data?.data;
 }
 
-export async function forwardToApproval(id) {
+/**
+ * Switch the applicant link off (or back on) before the validity window ends.
+ * On a reusable Bulk Pass this stops new batches while the history stays
+ * readable; batches already under review are untouched.
+ */
+export async function setBulkPassLinkActive(id, active, reason) {
   const res = await axios.post(
-    `${AGENT_API}/bulk-pass/${id}/forward`,
-    {},
+    `${AGENT_API}/bulk-pass/${id}/link-status`,
+    { active: !!active, reason: reason || undefined },
     { headers: authHeaders() }
   );
   return res.data;
@@ -108,6 +127,10 @@ export async function returnToApplicant(id, remarks) {
   return res.data;
 }
 
+/**
+ * Reopen a REJECTED batch so the applicant can correct and resend it.
+ * Moves the batch to RETURNED_TO_APPLICANT and re-issues its upload link.
+ */
 export async function resubmitBatch(id) {
   const res = await axios.post(
     `${AGENT_API}/bulk-pass/${id}/resubmit`,
@@ -130,11 +153,15 @@ export async function downloadBulkPdf(id) {
   const res = await axios.get(`${AGENT_API}/bulk-pass/${id}/pdf`, {
     headers: authHeaders(),
     responseType: "blob",
+    // Without this, axios rejects on 4xx/5xx BEFORE the JSON-in-blob parse below,
+    // so the server's helpful message ("PDF not yet generated") is lost and the
+    // user sees a generic "Request failed with status code 404".
+    validateStatus: () => true,
   });
   // If the server returned JSON (error), the blob will contain JSON text
   // Parse it so callers can read err.response.data.message
   const contentType = res.headers["content-type"] || "";
-  if (!contentType.includes("application/pdf")) {
+  if (res.status !== 200 || !contentType.includes("application/pdf")) {
     const text = await res.data.text();
     let parsed;
     try { parsed = JSON.parse(text); } catch { parsed = { message: text }; }
@@ -174,21 +201,70 @@ export async function getPublicBatch(token) {
 }
 
 /**
- * Validate upload token and check for multiple submission support
- * Requirements: 8.1-8.6, 11.1-11.6, 4.1-4.6
- * 
- * Returns: {
- *   success: true,
- *   isParentRequest: boolean,  // true for public request workflow
- *   isParentBatch: boolean,    // true for department-created multiple-submission batch
- *   withinValidityPeriod: boolean,
- *   batch: {...},              // parent batch/request data
- *   submissionHistory: [],     // array of child submissions
- *   nextSubmissionNumber: number
+ * Resolve an applicant link into the whole Bulk Pass context in one call.
+ *
+ * Returns the flattened `data` object:
+ * {
+ *   isParentRequest, isParentBatch, multipleSubmissionsEnabled,
+ *   canSubmit, blockReason, message,
+ *   validity: { state, expiringSoon, daysRemaining, validityFrom, validityUpto },
+ *   bulkPass: { identifier, companyName, maxPersons, maxVehicles, ... },
+ *   batch | parentRequest,          // legacy shapes, still populated
+ *   submissionHistory: [],
+ *   submissionSummary: { totalSubmissions, totalPersons, totalVehicles, byStatus },
+ *   nextSubmissionNumber
  * }
+ *
+ * An expired multi-submission Bulk Pass still resolves: `canSubmit` is false
+ * but the history stays readable.
  */
 export async function validateUploadToken(token) {
   const res = await axios.get(`${AGENT_API}/bulk-pass/validate-token/${token}`);
+  // Older callers read the envelope directly, so keep both levels available.
+  return { ...(res.data?.data || {}), ...res.data };
+}
+
+/**
+ * Refresh the submission history, aggregate statistics and the remaining
+ * allowance for a Bulk Pass. Answers with the same gate as validate-token
+ * (`canSubmit`, `blockReason`, `message`, `remaining`), so the portal never
+ * offers a batch the server would refuse.
+ */
+export async function getBulkPassSubmissions(token) {
+  const res = await axios.get(`${AGENT_API}/bulk-pass/public/${token}/submissions`);
+  return res.data?.data;
+}
+
+/**
+ * Detail of one previous batch, readable only through the Bulk Pass link that
+ * owns it. Aadhaar numbers arrive masked.
+ */
+export async function getBulkPassSubmissionDetail(token, submissionId) {
+  const res = await axios.get(
+    `${AGENT_API}/bulk-pass/public/${token}/submissions/${submissionId}`
+  );
+  return res.data?.data;
+}
+
+/**
+ * Download the approved pass (QR PDF) of one batch through the Bulk Pass link
+ * that owns it. Resolves to a Blob; a JSON error body is surfaced as an Error
+ * with `response.data` so callers can show the server's message.
+ */
+export async function downloadBulkPassSubmissionPdf(token, submissionId) {
+  const res = await axios.get(
+    `${AGENT_API}/bulk-pass/public/${token}/submissions/${submissionId}/pdf`,
+    { responseType: "blob", validateStatus: () => true }
+  );
+  const contentType = res.headers["content-type"] || "";
+  if (res.status !== 200 || !contentType.includes("application/pdf")) {
+    const text = await res.data.text();
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { parsed = { message: text }; }
+    const err = new Error(parsed.message || "Pass not available");
+    err.response = { data: parsed, status: res.status };
+    throw err;
+  }
   return res.data;
 }
 
@@ -216,14 +292,6 @@ export async function parsePreview(token, filePaths) {
     { filePaths }
   );
   return res.data?.data;
-}
-
-export async function submitBulkBatch(token) {
-  const res = await axios.post(
-    `${AGENT_API}/bulk-pass/public/${token}/submit`,
-    {}
-  );
-  return res.data;
 }
 
 export async function downloadTemplate() {
@@ -269,13 +337,18 @@ export async function uploadZipPhotos(token, zipFile, onProgress) {
   return res.data?.data;
 }
 
-export async function submitRowsDirectly(token, rows, formData) {
-  // If formData is provided (vehicles with docs), send as multipart
+export async function submitRowsDirectly(token, rows, formData, onProgress) {
+  // If formData is provided (vehicles with docs), send as multipart.
+  // A full batch can carry hundreds of documents, so report progress rather
+  // than leaving the applicant staring at a spinner for minutes.
   if (formData) {
     const res = await axios.post(
       `${AGENT_API}/bulk-pass/public/${token}/submit-rows`,
       formData,
-      { headers: { "Content-Type": "multipart/form-data" } }
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: onProgress,
+      }
     );
     return res.data;
   }
@@ -326,6 +399,19 @@ export async function undoPersonInBatch(batchId, personId) {
   return res.data;
 }
 
+/**
+ * Approve every entry in a batch that is still awaiting a decision.
+ * Anything already rejected is left as it is.
+ */
+export async function approveAllPendingInBatch(batchId) {
+  const res = await axios.post(
+    `${ADMIN_API}/bulk-pass/${batchId}/persons/approve-all`,
+    {},
+    { headers: authHeaders() }
+  );
+  return res.data;
+}
+
 export async function finalizeBulkBatch(id) {
   const res = await axios.post(
     `${ADMIN_API}/bulk-pass/${id}/finalize`,
@@ -368,7 +454,7 @@ export async function getBulkBatchDetailAdmin(id) {
   const raw = res.data?.data;
   if (!raw) return null;
   return {
-    ...raw.batch,
+    ...normaliseBatchRow(raw.batch),
     persons: raw.persons || [],
     uploads: raw.uploads || [],
     statusLogs: raw.statusLog || raw.statusLogs || [],
@@ -383,9 +469,12 @@ export async function downloadBulkPdfAdmin(id) {
   const res = await axios.get(`${ADMIN_API}/bulk-pass/${id}/pdf`, {
     headers: authHeaders(),
     responseType: "blob",
+    // See downloadBulkPdf: reach the JSON-in-blob parse on non-2xx instead of
+    // rejecting early and losing the server's message.
+    validateStatus: () => true,
   });
   const contentType = res.headers["content-type"] || "";
-  if (!contentType.includes("application/pdf")) {
+  if (res.status !== 200 || !contentType.includes("application/pdf")) {
     const text = await res.data.text();
     let parsed;
     try { parsed = JSON.parse(text); } catch { parsed = { message: text }; }
@@ -412,22 +501,33 @@ export async function resendBulkPassEmail(id) {
 // ── Admin Public Request Management (Multiple Pass Submissions) ──────────────
 
 /**
- * Get list of public bulk pass requests with filtering
- * Requirements: 25.1, 25.2, 25.3
- * 
- * Returns: { requests: [], total: 0, page: 1, limit: 20, totalPages: 1 }
+ * Get public bulk pass requests with filtering.
+ *
+ * The endpoint answers { success, requests, pagination } and defaults to the
+ * pending queue, so callers that want everything must ask for status "ALL".
+ * Returns the request array directly; read pagination via
+ * `listPublicRequestsPaged` when it is needed.
  */
 export async function listPublicRequests(filters = {}) {
+  const { requests } = await listPublicRequestsPaged(filters);
+  return requests;
+}
+
+export async function listPublicRequestsPaged(filters = {}) {
   const params = new URLSearchParams();
-  Object.entries(filters).forEach(([k, v]) => {
+  // Without an explicit status the backend narrows to PENDING_ADMIN_APPROVAL.
+  const withDefaults = { status: "ALL", limit: 100, ...filters };
+  Object.entries(withDefaults).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== "") params.append(k, v);
   });
   const res = await axios.get(
     `${AGENT_API}/bulk-pass/admin/public-requests?${params.toString()}`,
     { headers: authHeaders() }
   );
-  // Return the full response with pagination metadata
-  return res.data;
+  return {
+    requests: Array.isArray(res.data?.requests) ? res.data.requests : [],
+    pagination: res.data?.pagination || { total: 0, page: 1, limit: 100, totalPages: 1 },
+  };
 }
 
 /**

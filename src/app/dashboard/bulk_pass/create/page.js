@@ -16,16 +16,19 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { createBulkIntake } from "@/lib/bulkPassApi";
+import { BULK_PASS_LIMITS, BULK_PASS_LABELS, validatePassTotals } from "@/lib/bulkPassConstants";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+// Values MUST match the backend's accepted list (constants.js → BULK_VISITOR_TYPES);
+// the create endpoint rejects anything else with "Invalid visitor type".
 const BULK_VISITOR_TYPES = [
-  { value: "CRUISE_VESSEL", label: "Cruise Vessel" },
-  { value: "EDUCATIONAL_VISIT", label: "Educational Visit" },
-  { value: "INTERNSHIP", label: "Internship" },
-  { value: "VIP", label: "VIP" },
-  { value: "GOVT_OFFICIAL", label: "Government Official" },
-  { value: "OTHER", label: "Other" },
+  { value: "Govt Officials", label: "Govt Officials" },
+  { value: "Consultants", label: "Consultants" },
+  { value: "Students", label: "Students" },
+  { value: "Vendors", label: "Vendors" },
+  { value: "VIPs", label: "VIPs" },
+  { value: "Others", label: "Others" },
 ];
 
 const PAYMENT_MODES = [
@@ -55,15 +58,9 @@ function validate(fields) {
     errors.applicantMobile = "Applicant mobile must be 10 digits.";
   }
 
-  const persons = parseInt(fields.noOfPersons, 10);
-  if (isNaN(persons) || persons < 0 || persons > 30) {
-    errors.noOfPersons = "Number of persons must be between 0 and 30.";
-  }
-
-  const vehicles = parseInt(fields.noOfVehicles, 10);
-  if (isNaN(vehicles) || vehicles < 0 || vehicles > 20) {
-    errors.noOfVehicles = "Number of vehicles must be between 0 and 20.";
-  }
+  // Totals for the whole pass. Any size on a reusable link; a single-use pass
+  // carries one batch, so its totals are bounded by the per-batch ceiling.
+  Object.assign(errors, validatePassTotals(fields.noOfPersons, fields.noOfVehicles, !!fields.multipleSubmissionsEnabled));
 
   if (!fields.paymentMode) errors.paymentMode = "Payment mode is required.";
   if (!fields.purposeOfVisit?.trim()) errors.purposeOfVisit = "Purpose of visit is required.";
@@ -125,6 +122,20 @@ const inputCls = (hasError) =>
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+
+/**
+ * Default validity dates so an officer is not typing them on every pass:
+ * open today, close thirty days out. Both remain editable.
+ */
+function defaultValidityDates() {
+  const pad = (n) => String(n).padStart(2, "0");
+  const toDateInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const from = new Date();
+  const upto = new Date(from.getTime() + 30 * 86400000);
+  return { from: toDateInput(from), upto: toDateInput(upto) };
+}
+
+
 export default function CreateBulkPassPage() {
   const router = useRouter();
   const fileRef = useRef(null);
@@ -144,31 +155,36 @@ export default function CreateBulkPassPage() {
     } catch {
       // ignore
     }
+
   }, []);
 
-  const [form, setForm] = useState({
+  // Lazy initialiser: the default window is computed once, not on every render.
+  const [form, setForm] = useState(() => ({
     visitorType: "",
     companyName: "",
     applicantEmail: "",
     applicantMobile: "",
     refDocNo: "",
     workOrderRequired: "no",
-    noOfPersons: "30",
-    noOfVehicles: "0",
+    noOfPersons: String(BULK_PASS_LIMITS.DEFAULT_MAX_PERSONS),
+    noOfVehicles: String(BULK_PASS_LIMITS.DEFAULT_MAX_VEHICLES),
     paymentMode: "",
     purposeOfVisit: "",
-    validityFrom: "",
-    validityUpto: "",
+    validityFrom: `${defaultValidityDates().from}T06:00`,
+    validityUpto: `${defaultValidityDates().upto}T23:59`,
     remarks: "",
-    multipleSubmissionsEnabled: false,
-  });
+    // Every bulk pass is a reusable link: the organisation submits batches of up
+    // to 30 persons / 30 vehicles until the totals above are used up.
+    multipleSubmissionsEnabled: true,
+  }));
 
   // Split date/time state for validity fields — defaults: 06:00 start, 23:59 end
   const DEFAULT_FROM_TIME = "06:00";
   const DEFAULT_UPTO_TIME = "23:59";
-  const [validityFromDate, setValidityFromDate] = useState("");
+  // Lazy initialisers run once and keep the clock out of render.
+  const [validityFromDate, setValidityFromDate] = useState(() => defaultValidityDates().from);
   const [validityFromTime, setValidityFromTime] = useState(DEFAULT_FROM_TIME);
-  const [validityUptoDate, setValidityUptoDate] = useState("");
+  const [validityUptoDate, setValidityUptoDate] = useState(() => defaultValidityDates().upto);
   const [validityUptoTime, setValidityUptoTime] = useState(DEFAULT_UPTO_TIME);
 
   // Sync split date+time → form.validityFrom / form.validityUpto
@@ -203,7 +219,7 @@ export default function CreateBulkPassPage() {
   const handleFileChange = (e) => {
     const file = e.target.files?.[0] || null;
     if (file && file.size > 10 * 1024 * 1024) {
-      toast.error("Work order file must be under 10 MB.");
+      toast.error("Request letter/supporting document must be under 10 MB.");
       return;
     }
     setWorkOrderFile(file);
@@ -211,6 +227,9 @@ export default function CreateBulkPassPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // The disabled attribute updates asynchronously; guard against a fast
+    // double-submit firing two createIntake calls (two batches + two emails).
+    if (submitting) return;
     // Mark all as touched and validate
     const allTouched = Object.keys(form).reduce((acc, k) => ({ ...acc, [k]: true }), {});
     setTouched(allTouched);
@@ -230,7 +249,8 @@ export default function CreateBulkPassPage() {
       fd.append("applicantEmail", form.applicantEmail.trim());
       fd.append("applicantMobile", form.applicantMobile.trim());
       fd.append("refDocNo", form.refDocNo.trim());
-      fd.append("workOrderRequired", form.workOrderRequired);
+      // Backend coerces via === "true"; the radio holds "yes"/"no", so map it.
+      fd.append("workOrderRequired", form.workOrderRequired === "yes" ? "true" : "false");
       fd.append("noOfPersons", form.noOfPersons);
       fd.append("noOfVehicles", form.noOfVehicles);
       fd.append("paymentMode", form.paymentMode);
@@ -298,7 +318,7 @@ export default function CreateBulkPassPage() {
       <form onSubmit={handleSubmit} noValidate>
         <div className="flex flex-col gap-5">
           {/* ── Section 1: Basic Details ── */}
-          <div className={`${cardShell} p-6`}>
+          <div className={`${cardShell} p-6 bp-reveal`}>
             <SectionHeading icon={<Users className="h-4 w-4" />} title="Group Details" />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5">
               {/* Department (read-only) */}
@@ -348,7 +368,7 @@ export default function CreateBulkPassPage() {
           </div>
 
           {/* ── Section 2: Applicant Contact ── */}
-          <div className={`${cardShell} p-6`}>
+          <div className={`${cardShell} p-6 bp-reveal`}>
             <SectionHeading icon={<Mail className="h-4 w-4" />} title="Applicant Contact" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
               {/* Applicant Email */}
@@ -390,7 +410,7 @@ export default function CreateBulkPassPage() {
           </div>
 
           {/* ── Section 3: Pass Configuration ── */}
-          <div className={`${cardShell} p-6`}>
+          <div className={`${cardShell} p-6 bp-reveal`}>
             <SectionHeading icon={<Hash className="h-4 w-4" />} title="Pass Configuration" />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5">
               {/* Ref Doc No */}
@@ -405,13 +425,13 @@ export default function CreateBulkPassPage() {
                 />
               </div>
 
-              {/* No. of Persons */}
+              {/* Max No. of Persons — the ceiling for each batch */}
               <div>
-                <FieldLabel required>No. of Persons (0–30)</FieldLabel>
+                <FieldLabel required>{BULK_PASS_LABELS.MAX_PERSONS} (total)</FieldLabel>
                 <input
                   type="number"
-                  min={0}
-                  max={30}
+                  min={1}
+                  max={BULK_PASS_LIMITS.MAX_TOTAL_PERSONS}
                   value={form.noOfPersons}
                   onChange={(e) => set("noOfPersons", e.target.value)}
                   onBlur={() => touch("noOfPersons")}
@@ -420,13 +440,13 @@ export default function CreateBulkPassPage() {
                 <FieldError msg={errors.noOfPersons} />
               </div>
 
-              {/* No. of Vehicles */}
+              {/* Max No. of Vehicles — the ceiling for each batch */}
               <div>
-                <FieldLabel required>No. of Vehicles (0–20)</FieldLabel>
+                <FieldLabel required>{BULK_PASS_LABELS.MAX_VEHICLES} (total)</FieldLabel>
                 <input
                   type="number"
                   min={0}
-                  max={20}
+                  max={BULK_PASS_LIMITS.MAX_TOTAL_VEHICLES}
                   value={form.noOfVehicles}
                   onChange={(e) => set("noOfVehicles", e.target.value)}
                   onBlur={() => touch("noOfVehicles")}
@@ -515,9 +535,9 @@ export default function CreateBulkPassPage() {
               </div>
             </div>
 
-            {/* Work Order Required */}
+            {/* Request letter / supporting document */}
             <div className="mt-5">
-              <FieldLabel>Work Order Required</FieldLabel>
+              <FieldLabel>Request letter/supporting document</FieldLabel>
               <div className="flex items-center gap-6 mt-1">
                 {[
                   { value: "yes", label: "Yes" },
@@ -547,10 +567,10 @@ export default function CreateBulkPassPage() {
               </div>
             </div>
 
-            {/* Work Order File — shown only when required = yes */}
+            {/* Request letter / supporting document file — shown only when required = yes */}
             {form.workOrderRequired === "yes" && (
               <div className="mt-5">
-                <FieldLabel>Work Order Document</FieldLabel>
+                <FieldLabel>Request letter/supporting document file</FieldLabel>
                 <div
                   onClick={() => fileRef.current?.click()}
                   className="relative flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-dashed border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-white/5 cursor-pointer hover:border-amber-400/60 hover:bg-amber-50/50 dark:hover:bg-amber-900/10 transition"
@@ -567,7 +587,7 @@ export default function CreateBulkPassPage() {
                     </div>
                   ) : (
                     <span className="text-sm text-stone-400">
-                      Click to upload work order (PDF, max 10 MB)
+                      Click to upload the request letter or supporting document (PDF, max 10 MB)
                     </span>
                   )}
                   {workOrderFile && (
@@ -593,58 +613,10 @@ export default function CreateBulkPassPage() {
                 />
               </div>
             )}
-
-            {/* ── Section: Multiple Submissions ── */}
-            <div className="mt-5">
-              <div className="flex items-start gap-3 p-4 rounded-2xl border border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-white/[0.03]">
-                <div className="mt-0.5">
-                  <div
-                    onClick={() => set("multipleSubmissionsEnabled", !form.multipleSubmissionsEnabled)}
-                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition cursor-pointer ${
-                      form.multipleSubmissionsEnabled
-                        ? "border-amber-500 bg-amber-400"
-                        : "border-stone-300 dark:border-white/20 bg-transparent"
-                    }`}
-                  >
-                    {form.multipleSubmissionsEnabled && (
-                      <div className="w-2.5 h-2.5 rounded-full bg-white" />
-                    )}
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <label
-                    className="flex items-start gap-2 cursor-pointer"
-                    onClick={() => set("multipleSubmissionsEnabled", !form.multipleSubmissionsEnabled)}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={form.multipleSubmissionsEnabled}
-                      onChange={(e) => set("multipleSubmissionsEnabled", e.target.checked)}
-                      className="hidden"
-                    />
-                    <span className="text-sm font-bold text-stone-800 dark:text-stone-200">
-                      Enable multiple submissions
-                    </span>
-                  </label>
-                  <p className="text-[11px] text-stone-500 mt-1">
-                    Organization can submit multiple batches with same link until validity expires
-                  </p>
-                  
-                  <InfoPanel title="How Multiple Submissions Work" defaultExpanded={false}>
-                    <ul className="list-disc space-y-1 marker:text-amber-500">
-                      <li>The organization receives ONE link that remains active</li>
-                      <li>They can submit multiple batches within validity period</li>
-                      <li>Each batch (max 30 persons) is reviewed separately by Traffic</li>
-                      <li>Useful for schools with changing visitors or film productions with evolving crews</li>
-                    </ul>
-                  </InfoPanel>
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* ── Section 4: Additional Info ── */}
-          <div className={`${cardShell} p-6`}>
+          <div className={`${cardShell} p-6 bp-reveal`}>
             <SectionHeading icon={<MessageSquare className="h-4 w-4" />} title="Additional Information" />
             <div className="grid grid-cols-1 gap-5 mt-5">
               {/* Purpose of Visit */}
@@ -687,7 +659,7 @@ export default function CreateBulkPassPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center gap-2.5 px-8 py-3 rounded-2xl bg-amber-400 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-[#1f1f1f] font-bold text-sm shadow-sm transition"
+              className="bp-press bp-lift inline-flex items-center gap-2.5 px-8 py-3 rounded-2xl bg-amber-400 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-[#1f1f1f] font-bold text-sm shadow-sm transition"
             >
               {submitting ? (
                 <>
@@ -723,32 +695,3 @@ function SectionHeading({ icon, title }) {
 
 // ── Multiple Submissions Info Panel ─────────────────────────────────────────────────
 
-function InfoPanel({ title, children, defaultExpanded = false }) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-
-  return (
-    <div className="mt-4 rounded-2xl border border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-white/[0.03] overflow-hidden transition-all">
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-center justify-between text-left"
-      >
-        <span className="text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
-          {title}
-        </span>
-        <span
-          className={`text-amber-500 transition-transform duration-300 ${
-            expanded ? "rotate-180" : ""
-          }`}
-        >
-          ▼
-        </span>
-      </button>
-      {expanded && (
-        <div className="px-4 pb-4 text-sm text-stone-600 dark:text-stone-400 pl-6">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}

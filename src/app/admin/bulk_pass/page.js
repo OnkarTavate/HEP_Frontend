@@ -13,8 +13,11 @@ import {
   listBulkBatches, returnToApplicant, downloadBulkPdf,
   listPublicRequests, approvePublicRequest, rejectPublicRequest,
 } from "@/lib/bulkPassApi";
-import { computeBulkPassStats } from "@/lib/bulkPassStats";
+import { computeBulkPassStats, computeBulkPassOverview } from "@/lib/bulkPassStats";
 import RequestsTable from "@/components/bulk-pass/RequestsTable.jsx";
+import BulkPassOverviewPanel from "@/components/bulk-pass/BulkPassOverviewPanel.jsx";
+import { ValidityBadge } from "@/components/bulk-pass/ValidityBanner.jsx";
+import { getValidityState } from "@/lib/bulkPassValidity";
 
 const BASE = "/admin/bulk_pass";
 const PAGE_SIZE_OPTIONS = [10, 15, 25, 50];
@@ -57,6 +60,28 @@ const visitorLabel = (v) => v ? v.toLowerCase().replace(/_/g, " ").replace(/\b\w
 
 function BatchStatusBadge({ status }) {
   const cfg = BATCH_STATUS_CFG[status] || { label: status || "Unknown", badge: "bg-slate-100 text-slate-500 ring-1 ring-slate-200", dot: "bg-slate-400" };
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap ${cfg.badge}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot} shrink-0`} />
+      {cfg.label}
+    </span>
+  );
+}
+
+// ── Bulk Pass container lifecycle badge ───────────────────────────────────────
+const BULK_PASS_STATE_CFG = {
+  ACTIVE:      { label: "Accepting Batches", badge: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200", dot: "bg-emerald-500" },
+  EXPIRED:     { label: "Closed",            badge: "bg-red-50 text-red-600 ring-1 ring-red-200",             dot: "bg-red-500" },
+  NOT_STARTED: { label: "Not Started",       badge: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",             dot: "bg-sky-500" },
+  REVOKED:     { label: "Revoked",           badge: "bg-orange-50 text-orange-700 ring-1 ring-orange-200",    dot: "bg-orange-500" },
+};
+
+function BulkPassStatusBadge({ state }) {
+  const cfg = BULK_PASS_STATE_CFG[state] || {
+    label: "No Validity",
+    badge: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
+    dot: "bg-slate-400",
+  };
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap ${cfg.badge}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot} shrink-0`} />
@@ -286,6 +311,9 @@ function AdminBulkPassPageContent() {
   const [batchPage, setBatchPage] = useState(1);
   const [returnModal, setReturnModal] = useState(null);
   const [multipleSubmissionsFilter, setMultipleSubmissionsFilter] = useState(null);
+  // Bulk-Pass-level filter driven by the overview tiles:
+  // null | "VALIDITY_ACTIVE" | "VALIDITY_EXPIRED" | "MULTI"
+  const [bulkPassFilter, setBulkPassFilter] = useState(null);
 
   // ── PUBLIC REQUESTS STATE ──
   const [publicRequests, setPublicRequests] = useState([]);
@@ -310,8 +338,20 @@ function AdminBulkPassPageContent() {
   })();
 
   // Department Batches Stats
-  const batchStats = useMemo(() => computeBulkPassStats(allBatches), [allBatches]);
+  // Status cards describe batches. A reusable pass is the container those
+  // batches arrive into, so counting it here would inflate every column.
+  const batchStats = useMemo(
+    () => computeBulkPassStats(allBatches.filter((b) => !b.multipleSubmissionsEnabled)),
+    [allBatches]
+  );
   const batchSummary = batchStats?.summary || {};
+
+  // Bulk-Pass-level metrics (containers + the batches flowing through them).
+  // Public requests are folded in so the totals cover the whole module.
+  const bulkPassOverview = useMemo(
+    () => computeBulkPassOverview(allBatches, allPublicRequests),
+    [allBatches, allPublicRequests]
+  );
 
   // Public Requests Stats
   const publicSummary = useMemo(() => {
@@ -323,15 +363,16 @@ function AdminBulkPassPageContent() {
     return { total, pending, active, rejected, expired };
   }, [allPublicRequests]);
 
-  // ── Fetch Department Batches ──
+  // ── Fetch Department Batches (stats/overview population) ──
+  // This backs the status cards and the Bulk-Pass overview, which must always
+  // reflect the FULL set. Applying the table's multipleSubmissions filter here
+  // made every status card drop to 0 when the filter was toggled on.
   const fetchAllBatches = useCallback(async () => {
     try {
-      const filters = {};
-      if (multipleSubmissionsFilter !== null) filters.multipleSubmissionsEnabled = multipleSubmissionsFilter;
-      const data = await listBulkBatches(filters);
+      const data = await listBulkBatches({});
       setAllBatches(Array.isArray(data) ? data : []);
     } catch {}
-  }, [multipleSubmissionsFilter]);
+  }, []);
 
   const fetchBatches = useCallback(async () => {
     setBatchLoading(true);
@@ -422,9 +463,28 @@ function AdminBulkPassPageContent() {
     }
   };
 
+  // Bulk-Pass-level filtering. Each tile narrows the table to the containers
+  // (a reusable intake or a stand-alone batch) rather than the individual
+  // submissions inside them, which is the level the tiles count at.
+  const visibleBatches = useMemo(() => {
+    if (!bulkPassFilter) return batches;
+    const containers = batches.filter((b) => !b.parentRequestId);
+    switch (bulkPassFilter) {
+      case "VALIDITY_ACTIVE":
+        return containers.filter((b) => getValidityState(b).state === "ACTIVE");
+      case "VALIDITY_EXPIRED":
+        return containers.filter((b) => getValidityState(b).state === "EXPIRED");
+      case "MULTI":
+        return containers.filter((b) => b.multipleSubmissionsEnabled);
+      case "ALL":
+      default:
+        return containers;
+    }
+  }, [batches, bulkPassFilter]);
+
   // Department Batches Pagination
-  const batchTotalPages = Math.max(1, Math.ceil(batches.length / batchPageSize));
-  const batchPaginated = batches.slice((batchPage - 1) * batchPageSize, batchPage * batchPageSize);
+  const batchTotalPages = Math.max(1, Math.ceil(visibleBatches.length / batchPageSize));
+  const batchPaginated = visibleBatches.slice((batchPage - 1) * batchPageSize, batchPage * batchPageSize);
   const batchHasFilters = batchSearch || batchFromDate || batchToDate;
 
   // Public Requests Pagination
@@ -496,8 +556,45 @@ function AdminBulkPassPageContent() {
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {mainTab === "DEPARTMENT" && (
         <>
+          {/* BULK PASS OVERVIEW — the container level: how many passes exist,
+              how many are still open, and what has flowed through them. */}
+          <BulkPassOverviewPanel
+            overview={bulkPassOverview}
+            activeKey={bulkPassFilter}
+            onFilter={(key) => {
+              // Re-clicking a tile clears it, so the table returns to every row.
+              setBulkPassFilter((prev) => (prev === key ? null : key));
+              setBatchActiveTab("ALL");
+              setBatchPage(1);
+            }}
+          />
+
+          {bulkPassFilter && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-50 ring-1 ring-amber-200">
+              <p className="text-xs font-semibold text-amber-800">
+                Showing bulk passes only
+                {bulkPassFilter === "VALIDITY_ACTIVE" && " · active validity"}
+                {bulkPassFilter === "VALIDITY_EXPIRED" && " · expired validity"}
+                {bulkPassFilter === "MULTI" && " · reusable links"}
+                {" "}— individual batch submissions are hidden.
+              </p>
+              <button
+                onClick={() => { setBulkPassFilter(null); setBatchPage(1); }}
+                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 transition"
+              >
+                <X className="h-3.5 w-3.5" /> Clear
+              </button>
+            </div>
+          )}
+
+          <div className="border-t border-slate-200/70 pt-5">
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2.5">
+              Batches by Status
+            </h3>
+          </div>
+
           {/* STAT CARDS */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 -mt-2">
             {[
               {
                 key: "ALL", label: "Total Batches", value: batchSummary.totalBatches ?? 0,
@@ -626,7 +723,7 @@ function AdminBulkPassPageContent() {
                 <X className="h-3.5 w-3.5" />Clear
               </button>
             )}
-            <span className="ml-auto text-xs text-slate-400 hidden sm:inline">{batches.length} result{batches.length !== 1 ? "s" : ""}</span>
+            <span className="ml-auto text-xs text-slate-400 hidden sm:inline">{visibleBatches.length} result{visibleBatches.length !== 1 ? "s" : ""}</span>
           </div>
 
           {/* TABLE */}
@@ -636,7 +733,7 @@ function AdminBulkPassPageContent() {
                 <div className="h-9 w-9 rounded-full border-[3px] border-amber-400 border-t-transparent animate-spin" />
                 <p className="text-sm text-slate-400">Loading department batches…</p>
               </div>
-            ) : batches.length === 0 ? (
+            ) : visibleBatches.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
                   <FileStack className="h-7 w-7" />
@@ -657,21 +754,30 @@ function AdminBulkPassPageContent() {
             ) : (
               <>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[860px] text-sm">
+                  <table className="w-full min-w-[1040px] text-sm">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100">
-                        {["Status", "Batch ID", "Company", "Persons", "Vehicles", "Submitted On", "Action"].map((h) => (
+                        {["Status", "Batch ID", "Company", "Max Persons", "Max Vehicles", "Batches", "Validity", "Submitted On", "Action"].map((h) => (
                           <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {batchPaginated.map((batch) => (
+                      {batchPaginated.map((batch) => {
+                        const isChild = !!batch.parentRequestId;
+                        return (
                         <tr key={batch.id}
                           className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
                           onClick={() => router.push(`${BASE}/${batch.id}`)}>
                           <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
-                            <BatchStatusBadge status={batch.status} />
+                            {/* A reusable bulk pass is a container, not a batch —
+                                its own status never moves past DRAFT, so show the
+                                lifecycle the backend derives from validity. */}
+                            {batch.isBulkPassContainer ? (
+                              <BulkPassStatusBadge state={batch.bulkPassStatus} />
+                            ) : (
+                              <BatchStatusBadge status={batch.status} />
+                            )}
                           </td>
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-2">
@@ -681,6 +787,12 @@ function AdminBulkPassPageContent() {
                               {batch.multipleSubmissionsEnabled && (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[9px] font-bold">
                                   Multi
+                                </span>
+                              )}
+                              {/* A child row is one batch inside a reusable bulk pass. */}
+                              {isChild && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[9px] font-bold">
+                                  Batch #{batch.submissionNumber ?? "—"}
                                 </span>
                               )}
                             </div>
@@ -701,6 +813,26 @@ function AdminBulkPassPageContent() {
                               <span className="font-semibold text-slate-700 tabular-nums">{batch.noOfVehicles ?? "—"}</span>
                             </div>
                           </td>
+                          {/* Submission activity: batches received for a reusable pass,
+                              or the persons/vehicles actually uploaded for a single one. */}
+                          <td className="px-5 py-3.5 whitespace-nowrap">
+                            {batch.multipleSubmissionsEnabled ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                                <FileStack className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                {batch.childSubmissionsCount ?? 0}
+                                <span className="font-normal text-slate-400">
+                                  ({batch.childPersonsCount ?? 0}p / {batch.childVehiclesCount ?? 0}v)
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-500">
+                                {batch.submittedPersonsCount ?? 0}p / {batch.submittedVehiclesCount ?? 0}v
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
+                            <ValidityBadge validity={getValidityState(batch)} />
+                          </td>
                           <td className="px-5 py-3.5 whitespace-nowrap text-slate-500 text-xs">
                             {fmtDateShort(batch.updatedAt || batch.createdAt)}
                           </td>
@@ -708,7 +840,8 @@ function AdminBulkPassPageContent() {
                             <BatchActionBtn batch={batch} onEdit={(b) => router.push(`${BASE}/${b.id}`)} />
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -722,7 +855,7 @@ function AdminBulkPassPageContent() {
                       {PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
                     <span className="ml-2 font-semibold text-slate-700">
-                      {(batchPage - 1) * batchPageSize + 1}–{Math.min(batchPage * batchPageSize, batches.length)} of {batches.length}
+                      {(batchPage - 1) * batchPageSize + 1}–{Math.min(batchPage * batchPageSize, visibleBatches.length)} of {visibleBatches.length}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">

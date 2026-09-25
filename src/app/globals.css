@@ -335,3 +335,74 @@ body {
 .animate-fade-in {
   animation: fade-in 1s ease-out forwards;
 }
+
+/* ── Bulk Pass motion system ──────────────────────────────────────────────
+   Small, consistent transitions shared by every Bulk Pass surface: sections
+   settle in from below, success states pop, skeletons shimmer while data
+   loads, buttons press. Everything is disabled for users who ask for reduced
+   motion. */
+@keyframes bp-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes bp-pop {
+  0%   { opacity: 0; transform: scale(0.86); }
+  60%  { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes bp-shimmer {
+  from { background-position: -600px 0; }
+  to   { background-position: 600px 0; }
+}
+@keyframes bp-check {
+  from { stroke-dashoffset: 48; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes bp-ring {
+  0%   { transform: scale(0.7); opacity: 0.8; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
+.bp-reveal {
+  animation: bp-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--bp-delay, 0ms);
+}
+.bp-pop { animation: bp-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+.bp-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #efedea;
+  border-radius: 0.75rem;
+}
+.dark .bp-skeleton { background: rgba(255, 255, 255, 0.06); }
+.bp-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  background-size: 600px 100%;
+  animation: bp-shimmer 1.4s ease-in-out infinite;
+}
+.dark .bp-skeleton::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  background-size: 600px 100%;
+}
+
+.bp-press { transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease, opacity 0.2s ease; }
+.bp-press:active:not(:disabled) { transform: scale(0.97); }
+
+.bp-lift { transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease; }
+.bp-lift:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -16px rgba(15, 23, 42, 0.35); }
+
+.bp-row { transition: background-color 0.2s ease, box-shadow 0.2s ease; }
+.bp-bar { transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1); }
+
+.bp-check path { stroke-dasharray: 48; animation: bp-check 0.5s 0.15s ease-out both; }
+.bp-ring { animation: bp-ring 0.9s 0.1s ease-out both; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-reveal, .bp-pop, .bp-skeleton::after, .bp-check path, .bp-ring { animation: none !important; }
+  .bp-lift:hover, .bp-press:active:not(:disabled) { transform: none; }
+  .bp-bar { transition: none; }
+}
