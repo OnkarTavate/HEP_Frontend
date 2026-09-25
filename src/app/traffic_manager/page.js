@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import axios from "axios";
@@ -599,6 +599,7 @@ export default function TrafficManagerDashboard() {
   const router = useRouter();
   const [data, setData] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("");
   const [filterPeriod, setFilterPeriod] = useState("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -621,32 +622,61 @@ export default function TrafficManagerDashboard() {
     [router],
   );
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
+  // ── Refs for cache & fetch-guard ──────────────────────────────────────────
+  // Tracks whether this is the very first load (shows full skeleton only once)
+  const isInitialLoad = useRef(true);
+  // Guard against concurrent/overlapping fetch requests
+  const inFlightRef = useRef(false);
+  // Caches slow/static data so it isn't re-fetched on every fast refresh
+  const slowCache = useRef(null);
+  // Timestamp of the last slow-data fetch
+  const lastSlowFetch = useRef(0);
+  // Timestamp of the last successful fetch
+  const lastFetchTime = useRef(0);
+  // How long slow data stays fresh: 5 minutes
+  const SLOW_TTL_MS = 5 * 60 * 1000;
+
+  const fetchAll = useCallback(async (force = false) => {
+    // Avoid concurrent overlapping requests
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+
+    // Only show full loading skeleton on initial mount; show refreshing spinner on manual refresh
+    if (isInitialLoad.current) {
+      setLoading(true);
+    } else if (force) {
+      setRefreshing(true);
+    }
+
     const headers = getAuthHeaders();
     const g = (url, params) =>
       axios.get(url, { headers, params, validateStatus: (s) => s < 500 });
     try {
-      const [
-        [
-          passMineRes,
-          companyRes,
-          profileRes,
-          blStatsRes,
-          blRecentRes,
-          blPendingRes,
-          overstayRes,
-          overstayExcRes,
-          bulkRes,
-        ],
-        firstPassRes,
-      ] = await Promise.all([
-        Promise.allSettled([
-          g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
-            limit: 1,
-            page: 1,
-            processedByMe: "true",
-          }),
+      // ── Decide whether to refresh slow/static data ────────────────────────
+      // Slow data: blacklist stats, overstay charges, bulk queue, company list.
+      // These rarely change so we only refetch every SLOW_TTL_MS (5 minutes)
+      // or when force=true (e.g. manual refresh button).
+      const nowMs = Date.now();
+      const needsSlowFetch =
+        force || !slowCache.current || nowMs - lastSlowFetch.current > SLOW_TTL_MS;
+
+      // ── Always-fresh: pass counts + agent's processed count ────────────────
+      const [passMineRes, firstPassRes] = await Promise.all([
+        g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
+          limit: 1,
+          page: 1,
+          processedByMe: "true",
+        }),
+        g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
+          limit: 100,
+          page: 1,
+        }),
+      ]);
+
+      // ── Slow/static data: use cache or re-fetch ───────────────────────────
+      let slowResults;
+      if (needsSlowFetch) {
+        slowResults = await Promise.allSettled([
           g(`${ADMIN_API}/user/agent-users`, { limit: 1, page: 1 }),
           g(`${ADMIN_API}/user/profile-update-requests`, {
             status: "pending",
@@ -663,17 +693,36 @@ export default function TrafficManagerDashboard() {
           g(`${ADMIN_API}/overstay/charges`, { limit: 500, page: 1 }),
           g(`${ADMIN_API}/overstay/exception-requests`, { limit: 1, page: 1 }),
           g(`${ADMIN_API}/bulk-pass/queue`, { limit: 1, page: 1 }),
-        ]),
-        // Fetch page 1 of all pass requests (unrestricted by status) to capture all passes
-        g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
-          limit: 100,
-          page: 1,
-        }),
-      ]);
+        ]);
+        slowCache.current = slowResults;
+        lastSlowFetch.current = nowMs;
+      } else {
+        slowResults = slowCache.current;
+      }
 
-      const ok = (r) =>
-        r.status === "fulfilled" && r.value?.data && r.value.status < 400;
-      const val = (r, fb) => (ok(r) ? r.value.data : fb);
+      const [
+        companyRes,
+        profileRes,
+        blStatsRes,
+        blRecentRes,
+        blPendingRes,
+        overstayRes,
+        overstayExcRes,
+        bulkRes,
+      ] = slowResults;
+
+      // Robust helpers handling both Promise.allSettled results and direct Axios responses
+      const ok = (r) => {
+        if (!r) return false;
+        if (r.status === "fulfilled") return Boolean(r.value?.data && r.value.status < 400);
+        if (typeof r.status === "number") return r.status < 400 && Boolean(r.data);
+        return false;
+      };
+      const val = (r, fb) => {
+        if (!ok(r)) return fb;
+        if (r.status === "fulfilled") return r.value.data;
+        return r.data;
+      };
 
       // 1. Use page-1 data for list display only — DO NOT loop all pages.
       // Aggregate counts come from the server-side counts/pagination metadata
@@ -1028,18 +1077,43 @@ export default function TrafficManagerDashboard() {
         avgApprovalMins: avgMins,
       });
       setLastUpdated(fmtDateTime());
+      lastFetchTime.current = Date.now();
     } catch (err) {
       console.error("Dashboard fetchAll error:", err);
       toast.error("Failed to load dashboard. Please refresh.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
+      isInitialLoad.current = false;
+      inFlightRef.current = false;
     }
   }, []);
 
   useEffect(() => {
     fetchAll();
-    const iv = setInterval(fetchAll, 3 * 60 * 1000);
-    return () => clearInterval(iv);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        // Silently sync in background if tab becomes visible after > 90 seconds
+        if (Date.now() - lastFetchTime.current > 90 * 1000) {
+          fetchAll(false);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    const iv = setInterval(() => {
+      // Pause automatic polling when browser tab is inactive/hidden
+      if (document.visibilityState === "visible") {
+        fetchAll(false);
+      }
+    }, 90 * 1000);
+
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [fetchAll]);
 
   const filterRange = useMemo(() => {
@@ -1397,13 +1471,13 @@ export default function TrafficManagerDashboard() {
             </Link>
             <div className="flex items-center gap-2 rounded-xl bg-white/10 px-3.5 py-2 ring-1 ring-inset ring-white/15">
               <button
-                onClick={fetchAll}
-                disabled={loading}
+                onClick={() => fetchAll(true)}
+                disabled={loading || refreshing}
                 title="Refresh dashboard data"
                 className="text-white/80 hover:text-white hover:scale-110 active:scale-95 transition-all disabled:opacity-50"
               >
                 <RefreshCw
-                  className={`h-4 w-4 ${loading ? "animate-spin text-orange-300" : ""}`}
+                  className={`h-4 w-4 ${loading || refreshing ? "animate-spin text-orange-300" : ""}`}
                 />
               </button>
               <div className="leading-tight">
@@ -1898,33 +1972,33 @@ export default function TrafficManagerDashboard() {
             </div>
 
             {/* Revenue collection efficiency bar */}
-            <div className="mb-4 rounded-xl bg-gradient-to-r from-[#0a1e4d] to-[#12275f] p-3 text-white ring-1 ring-white/10">
+            <div className="mb-4 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-300 p-3 text-white ring-1 ring-amber-300/40 shadow-md">
               <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-                <span className="text-slate-200 flex items-center gap-1.5">
-                  <TrendingUp className="h-3 w-3 text-emerald-400" />
+                <span className="text-amber-900 flex items-center gap-1.5 font-black">
+                  <TrendingUp className="h-3 w-3 text-amber-800" />
                   Payment Mode Distribution
                 </span>
-                <span className="text-emerald-300 font-black">
+                <span className="text-amber-900 font-black">
                   {fmtMoney(displayData.hepRevenue.total)} total
                 </span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-white/10 flex">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-amber-900/20 flex">
                 <div
                   style={{
                     width: `${Math.round(((displayData.hepRevenue.accountTotal || 0) / (displayData.hepRevenue.total || 1)) * 100)}%`,
                   }}
-                  className="bg-emerald-400 h-full transition-all duration-700"
+                  className="bg-amber-800 h-full transition-all duration-700"
                 />
                 <div
                   style={{
                     width: `${Math.round(((displayData.hepRevenue.ecashTotal || 0) / (displayData.hepRevenue.total || 1)) * 100)}%`,
                   }}
-                  className="bg-violet-400 h-full transition-all duration-700"
+                  className="bg-white/70 h-full transition-all duration-700"
                 />
               </div>
-              <div className="flex items-center gap-4 text-[10px] text-slate-300 mt-1.5 font-medium">
+              <div className="flex items-center gap-4 text-[10px] text-amber-900 mt-1.5 font-bold">
                 <span className="flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-800" />
                   Account (
                   {Math.round(
                     ((displayData.hepRevenue.accountTotal || 0) /
@@ -1934,7 +2008,7 @@ export default function TrafficManagerDashboard() {
                   %)
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-white" />
                   E-Cash (
                   {Math.round(
                     ((displayData.hepRevenue.ecashTotal || 0) /
@@ -2154,13 +2228,13 @@ export default function TrafficManagerDashboard() {
             action="View Passes"
             actionHref="/traffic_manager/passes"
           >
-            <div className="mb-4 rounded-2xl bg-gradient-to-r from-[#0a1e4d] to-[#12275f] p-3.5 text-white ring-1 ring-white/10 shadow-sm">
+            <div className="mb-4 rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-300 p-3.5 text-white ring-1 ring-amber-300/40 shadow-md">
               <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-                <span className="text-slate-200 flex items-center gap-1.5">
-                  <CheckCircle className="h-3.5 w-3.5 text-blue-400" />
+                <span className="text-amber-900 flex items-center gap-1.5 font-black">
+                  <CheckCircle className="h-3.5 w-3.5 text-amber-800" />
                   Application Clearance Rate
                 </span>
-                <span className="text-blue-300 font-black text-lg">
+                <span className="text-amber-900 font-black text-lg">
                   {Math.round(
                     ((displayData.pass.processed || 0) /
                       (displayData.pass.total || 1)) *
@@ -2169,18 +2243,18 @@ export default function TrafficManagerDashboard() {
                   %
                 </span>
               </div>
-              <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/10 flex">
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-amber-900/20 flex">
                 <div
                   style={{
                     width: `${Math.round(((displayData.pass.processed || 0) / (displayData.pass.total || 1)) * 100)}%`,
                   }}
-                  className="bg-emerald-400 h-full transition-all duration-700"
+                  className="bg-amber-800 h-full transition-all duration-700"
                 />
                 <div
                   style={{
                     width: `${Math.round(((displayData.pass.pending || 0) / (displayData.pass.total || 1)) * 100)}%`,
                   }}
-                  className="bg-amber-400 h-full transition-all duration-700"
+                  className="bg-white/60 h-full transition-all duration-700"
                 />
                 <div
                   style={{
@@ -2189,13 +2263,13 @@ export default function TrafficManagerDashboard() {
                   className="bg-rose-500 h-full transition-all duration-700"
                 />
               </div>
-              <div className="flex items-center justify-between text-[10px] text-slate-300 mt-1.5 font-medium">
+              <div className="flex items-center justify-between text-[10px] text-amber-900 mt-1.5 font-bold">
                 <span className="flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{" "}
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-800" />{" "}
                   Cleared ({displayData.pass.processed})
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />{" "}
+                  <span className="h-1.5 w-1.5 rounded-full bg-white" />{" "}
                   Pending ({displayData.pass.pending})
                 </span>
                 <span className="flex items-center gap-1">

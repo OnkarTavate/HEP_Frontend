@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import axios from "axios";
@@ -282,16 +282,18 @@ const PANEL_ACCENT = {
 
 function SectionDivider({ label, icon: Icon }) {
   return (
-    <div className="flex items-center gap-3 pt-2 pb-1">
-      {Icon && (
-        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#0a1e4d]/8 text-[#0a1e4d] shrink-0">
-          <Icon className="h-3.5 w-3.5" />
+    <div className="flex items-center gap-3 pt-3 pb-1.5">
+      <div className="flex-none flex items-center gap-2 bg-gradient-to-r from-[#0a1e4d]/8 to-[#0a1e4d]/3 border border-[#0a1e4d]/10 rounded-full px-3 py-1">
+        {Icon && (
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0a1e4d] text-white shrink-0">
+            <Icon className="h-3 w-3" />
+          </span>
+        )}
+        <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#0a1e4d]/70">
+          {label}
         </span>
-      )}
-      <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
-        {label}
-      </span>
-      <div className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
+      </div>
+      <div className="flex-1 h-px bg-gradient-to-r from-[#0a1e4d]/15 via-slate-200/60 to-transparent" />
     </div>
   );
 }
@@ -384,6 +386,7 @@ function Panel({
 function MiniStat({
   label,
   value,
+  rawValue,
   tone = "blue",
   money = false,
   loading = false,
@@ -394,10 +397,21 @@ function MiniStat({
   const t = TONE[tone] || TONE.blue;
   const Wrapper = href ? Link : "div";
   const wp = href ? { href } : {};
+  // Determine display value: rawValue takes priority (for string values like "22P · 4V")
+  const displayVal = rawValue != null
+    ? rawValue
+    : money ? fmtMoney(value) : fmtNum(value);
+  // Auto-scale font: long values get smaller text
+  const valLen = String(displayVal).length;
+  const valFontCls = valLen > 10
+    ? "text-base"
+    : valLen > 7
+      ? "text-lg"
+      : "text-xl";
   return (
     <Wrapper
       {...wp}
-      className={`group/ms relative block overflow-hidden rounded-2xl border-2 ${t.border} bg-gradient-to-br ${t.grad} px-4 py-3.5 shadow-lg transition-all duration-200 ${href ? "hover:-translate-y-1.5 hover:shadow-xl cursor-pointer" : ""}`}
+      className={`group/ms relative block overflow-hidden rounded-2xl border-2 ${t.border} bg-gradient-to-br ${t.grad} px-3.5 py-3.5 shadow-lg transition-all duration-200 ${href ? "hover:-translate-y-1.5 hover:shadow-xl cursor-pointer" : ""}`}
     >
       {/* top shimmer */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
@@ -410,32 +424,32 @@ function MiniStat({
       <div
         className={`absolute left-0 inset-y-0 w-[4px] rounded-l-2xl ${t.accent}`}
       />
-      <div className="relative flex items-start justify-between gap-2">
+      <div className="relative flex items-start justify-between gap-1.5">
         <p
-          className={`text-[10px] font-bold uppercase tracking-wider ${t.label} leading-tight`}
+          className={`text-[9.5px] font-bold uppercase tracking-wider ${t.label} leading-tight pr-1`}
         >
           {label}
         </p>
         {Icon && (
           <span
-            className={`flex h-7 w-7 items-center justify-center rounded-xl ${t.chip} shrink-0 shadow-md`}
+            className={`flex h-6 w-6 items-center justify-center rounded-xl ${t.chip} shrink-0 shadow-md`}
           >
-            <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
+            <Icon className="h-3 w-3" strokeWidth={2.2} />
           </span>
         )}
       </div>
       {loading ? (
-        <div className="relative h-7 w-16 mt-1.5 rounded bg-white/30 animate-pulse" />
+        <div className="relative h-6 w-16 mt-2 rounded bg-white/30 animate-pulse" />
       ) : (
         <p
-          className={`relative text-2xl font-black ${t.text} mt-1.5 tabular-nums drop-shadow-sm`}
+          className={`relative ${valFontCls} font-black ${t.text} mt-2 tabular-nums drop-shadow-sm leading-none break-all`}
         >
-          {money ? fmtMoney(value) : fmtNum(value)}
+          {displayVal}
         </p>
       )}
       {sub && !loading && (
         <p
-          className={`relative text-[10px] ${t.label} opacity-80 font-medium mt-0.5`}
+          className={`relative text-[9px] ${t.label} opacity-80 font-semibold mt-1 leading-tight`}
         >
           {sub}
         </p>
@@ -824,6 +838,7 @@ export default function TrafficManagerDashboard() {
   const router = useRouter();
   const [data, setData] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("");
   const [filterPeriod, setFilterPeriod] = useState("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -840,8 +855,6 @@ export default function TrafficManagerDashboard() {
   const [expandedPassId, setExpandedPassId] = useState(null);
   const [copiedRef, setCopiedRef] = useState(null);
 
-
-  console.log("this is data", data);
 
   const copyToClipboard = useCallback((text) => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -921,32 +934,61 @@ export default function TrafficManagerDashboard() {
     [router],
   );
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
+  // ── Refs for cache & fetch-guard ──────────────────────────────────────────
+  // Tracks whether this is the very first load (shows full skeleton only once)
+  const isInitialLoad = useRef(true);
+  // Guard against concurrent/overlapping fetch requests
+  const inFlightRef = useRef(false);
+  // Caches slow/static data so it isn't re-fetched on every fast refresh
+  const slowCache = useRef(null);
+  // Timestamp of the last slow-data fetch
+  const lastSlowFetch = useRef(0);
+  // Timestamp of the last successful fetch
+  const lastFetchTime = useRef(0);
+  // How long slow data stays fresh: 5 minutes
+  const SLOW_TTL_MS = 5 * 60 * 1000;
+
+  const fetchAll = useCallback(async (force = false) => {
+    // Avoid concurrent overlapping requests
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+
+    // Only show full loading skeleton on initial mount; show refreshing spinner on manual refresh
+    if (isInitialLoad.current) {
+      setLoading(true);
+    } else if (force) {
+      setRefreshing(true);
+    }
+
     const headers = getAuthHeaders();
     const g = (url, params) =>
       axios.get(url, { headers, params, validateStatus: (s) => s < 500 });
     try {
-      const [
-        [
-          passMineRes,
-          companyRes,
-          profileRes,
-          blStatsRes,
-          blRecentRes,
-          blPendingRes,
-          overstayRes,
-          overstayExcRes,
-          bulkRes,
-        ],
-        firstPassRes,
-      ] = await Promise.all([
-        Promise.allSettled([
-          g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
-            limit: 1,
-            page: 1,
-            processedByMe: "true",
-          }),
+      // ── Decide whether to refresh slow/static data ────────────────────────
+      // Slow data: blacklist stats, overstay charges, bulk queue, company list.
+      // These rarely change so we only refetch every SLOW_TTL_MS (5 minutes)
+      // or when force=true (e.g. manual refresh button).
+      const nowMs = Date.now();
+      const needsSlowFetch =
+        force || !slowCache.current || nowMs - lastSlowFetch.current > SLOW_TTL_MS;
+
+      // ── Always-fresh: pass counts + agent's processed count ────────────────
+      const [passMineRes, firstPassRes] = await Promise.all([
+        g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
+          limit: 1,
+          page: 1,
+          processedByMe: "true",
+        }),
+        g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
+          limit: 100,
+          page: 1,
+        }),
+      ]);
+
+      // ── Slow/static data: use cache or re-fetch ───────────────────────────
+      let slowResults;
+      if (needsSlowFetch) {
+        slowResults = await Promise.allSettled([
           g(`${ADMIN_API}/user/agent-users`, { limit: 1, page: 1 }),
           g(`${ADMIN_API}/user/profile-update-requests`, {
             status: "pending",
@@ -963,17 +1005,36 @@ export default function TrafficManagerDashboard() {
           g(`${ADMIN_API}/overstay/charges`, { limit: 500, page: 1 }),
           g(`${ADMIN_API}/overstay/exception-requests`, { limit: 1, page: 1 }),
           g(`${ADMIN_API}/bulk-pass/queue`, { limit: 1, page: 1 }),
-        ]),
-        // Fetch page 1 of all pass requests (unrestricted by status) to capture all passes
-        g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
-          limit: 100,
-          page: 1,
-        }),
-      ]);
+        ]);
+        slowCache.current = slowResults;
+        lastSlowFetch.current = nowMs;
+      } else {
+        slowResults = slowCache.current;
+      }
 
-      const ok = (r) =>
-        r.status === "fulfilled" && r.value?.data && r.value.status < 400;
-      const val = (r, fb) => (ok(r) ? r.value.data : fb);
+      const [
+        companyRes,
+        profileRes,
+        blStatsRes,
+        blRecentRes,
+        blPendingRes,
+        overstayRes,
+        overstayExcRes,
+        bulkRes,
+      ] = slowResults;
+
+      // Robust helpers handling both Promise.allSettled results and direct Axios responses
+      const ok = (r) => {
+        if (!r) return false;
+        if (r.status === "fulfilled") return Boolean(r.value?.data && r.value.status < 400);
+        if (typeof r.status === "number") return r.status < 400 && Boolean(r.data);
+        return false;
+      };
+      const val = (r, fb) => {
+        if (!ok(r)) return fb;
+        if (r.status === "fulfilled") return r.value.data;
+        return r.data;
+      };
 
       // 1. Use page-1 data for list display only — DO NOT loop all pages.
       // Aggregate counts come from the server-side counts/pagination metadata
@@ -1328,18 +1389,43 @@ export default function TrafficManagerDashboard() {
         avgApprovalMins: avgMins,
       });
       setLastUpdated(fmtDateTime());
+      lastFetchTime.current = Date.now();
     } catch (err) {
       console.error("Dashboard fetchAll error:", err);
       toast.error("Failed to load dashboard. Please refresh.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
+      isInitialLoad.current = false;
+      inFlightRef.current = false;
     }
   }, []);
 
   useEffect(() => {
     fetchAll();
-    const iv = setInterval(fetchAll, 3 * 60 * 1000);
-    return () => clearInterval(iv);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        // Silently sync in background if tab becomes visible after > 90 seconds
+        if (Date.now() - lastFetchTime.current > 90 * 1000) {
+          fetchAll(false);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    const iv = setInterval(() => {
+      // Pause automatic polling when browser tab is inactive/hidden
+      if (document.visibilityState === "visible") {
+        fetchAll(false);
+      }
+    }, 90 * 1000);
+
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [fetchAll]);
 
   const filterRange = useMemo(() => {
@@ -2073,12 +2159,13 @@ export default function TrafficManagerDashboard() {
             </div>
             <div className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 ring-1 ring-inset ring-white/15">
               <button
-                onClick={fetchAll}
-                disabled={loading}
+                onClick={() => fetchAll(true)}
+                disabled={loading || refreshing}
+                title="Refresh dashboard data"
                 className="text-white/70 hover:text-white transition-colors disabled:opacity-50"
               >
                 <RefreshCw
-                  className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                  className={`h-4 w-4 ${loading || refreshing ? "animate-spin text-orange-300" : ""}`}
                 />
               </button>
               <div className="leading-tight">
@@ -3084,7 +3171,7 @@ export default function TrafficManagerDashboard() {
           className="lg:col-span-2"
         >
           {/* Period breakdown */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="grid grid-cols-3 gap-3 mb-5">
             {[
               {
                 label: "Today",
@@ -3092,6 +3179,7 @@ export default function TrafficManagerDashboard() {
                 icon: "⚡",
                 grad: "from-amber-400 via-orange-500 to-red-500",
                 shadow: "shadow-orange-400/30",
+                iconBg: "bg-white/20",
               },
               {
                 label: "This Month",
@@ -3099,6 +3187,7 @@ export default function TrafficManagerDashboard() {
                 icon: "🗓",
                 grad: "from-emerald-500 via-teal-500 to-cyan-600",
                 shadow: "shadow-emerald-500/30",
+                iconBg: "bg-white/20",
               },
               {
                 label: "All Time",
@@ -3106,29 +3195,36 @@ export default function TrafficManagerDashboard() {
                 icon: "🌐",
                 grad: "from-indigo-500 via-violet-500 to-purple-600",
                 shadow: "shadow-indigo-500/30",
+                iconBg: "bg-white/20",
               },
-            ].map((r) => (
-              <div
-                key={r.label}
-                className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${r.grad} shadow-lg ${r.shadow} px-4 py-3.5 ring-1 ring-inset ring-white/20`}
-              >
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
-                <div className="pointer-events-none absolute -right-3 -top-3 h-12 w-12 rounded-full bg-white/15" />
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[9px] font-extrabold uppercase tracking-wider text-white/70">
-                    {r.label}
-                  </p>
-                  <span className="text-sm">{r.icon}</span>
+            ].map((r) => {
+              const val = fmtMoney(r.value);
+              const valLen = val.length;
+              const valCls = valLen > 10 ? "text-base" : valLen > 7 ? "text-lg" : "text-xl";
+              return (
+                <div
+                  key={r.label}
+                  className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${r.grad} shadow-lg ${r.shadow} px-4 py-4 ring-1 ring-inset ring-white/20`}
+                >
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+                  <div className="pointer-events-none absolute -right-4 -top-4 h-16 w-16 rounded-full bg-white/10" />
+                  <div className="pointer-events-none absolute -left-4 -bottom-4 h-12 w-12 rounded-full bg-white/10" />
+                  <div className="relative flex items-center justify-between mb-2">
+                    <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-white/75 leading-tight">
+                      {r.label}
+                    </p>
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-lg ${r.iconBg} text-xs shadow-sm`}>{r.icon}</span>
+                  </div>
+                  {loading ? (
+                    <div className="h-6 w-20 rounded bg-white/30 animate-pulse" />
+                  ) : (
+                    <p className={`relative ${valCls} font-black text-white tabular-nums drop-shadow-sm leading-none`}>
+                      {val}
+                    </p>
+                  )}
                 </div>
-                {loading ? (
-                  <div className="h-6 w-20 rounded bg-white/30 animate-pulse" />
-                ) : (
-                  <p className="text-xl font-black text-white tabular-nums drop-shadow-sm">
-                    {fmtMoney(r.value)}
-                  </p>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Payment mode & Entity split */}
@@ -3162,7 +3258,7 @@ export default function TrafficManagerDashboard() {
             />
             <MiniStat
               label="Total Entities"
-              value={`${displayData.hepRevenue.totalPersons}P · ${displayData.hepRevenue.totalVehicles}V`}
+              rawValue={`${fmtNum(displayData.hepRevenue.totalPersons)}P · ${fmtNum(displayData.hepRevenue.totalVehicles)}V`}
               tone="blue"
               icon={Users}
               loading={loading}

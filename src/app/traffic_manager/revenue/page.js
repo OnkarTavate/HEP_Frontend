@@ -11,7 +11,7 @@ import {
   Wallet, TrendingUp, CircleDollarSign, ShieldBan, AlertTriangle, CheckCircle2,
   Clock, Activity, CalendarDays, ArrowUpRight, BadgeDollarSign, ReceiptText,
   Users, Car, ChevronRight, RefreshCw, FileText, Ban, Timer, Building2,
-  Download, ArrowLeft, CreditCard
+  Download, ArrowLeft, CreditCard, X, Hash, UserCircle2, CalendarClock, IndianRupee
 } from "lucide-react";
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
@@ -73,11 +73,11 @@ const BarTip = ({ active, payload, label }) => {
 /* ─────────── Premium Payment Mode Donut Chart ─────────── */
 const SLICE_ICONS_TM = {
   "HEP Account (Direct)": Wallet,
-  "E-Cash / Gateway":     CreditCard,
-  "Overstay Port Dues":   ReceiptText,
+  "E-Cash / Gateway": CreditCard,
+  "Overstay Port Dues": ReceiptText,
 };
 const GRAD_IDS_TM = [
-  { id: "tmPaySlice0", from: "#312e81", to: "#0a1e4d" },
+  { id: "tmPaySlice0", from: "#f59e0b", to: "#d97706" },
   { id: "tmPaySlice1", from: "#fb923c", to: "#ea580c" },
   { id: "tmPaySlice2", from: "#34d399", to: "#059669" },
 ];
@@ -94,9 +94,9 @@ function PaymentModeDonut({ pieChartData }) {
   return (
     <div className="relative overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200/60 shadow-xl flex flex-col p-5">
       {/* accent top stripe */}
-      <div className="absolute inset-x-0 top-0 h-1 rounded-t-2xl bg-gradient-to-r from-[#0a1e4d] via-orange-500 to-emerald-500" />
+      <div className="absolute inset-x-0 top-0 h-1 rounded-t-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-emerald-500" />
       <div className="flex items-center gap-2 mb-4">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#0a1e4d] to-indigo-700 text-white shadow-md shrink-0">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-yellow-400 text-white shadow-md shrink-0">
           <CircleDollarSign className="h-4 w-4" strokeWidth={2.2} />
         </span>
         <div>
@@ -205,6 +205,343 @@ function PaymentModeDonut({ pieChartData }) {
   );
 }
 
+/* ─────────── Company Detail Modal ─────────── */
+function CompanyDetailModal({ company, passes, onClose }) {
+  const [expandedIdx, setExpandedIdx] = useState(null);
+  if (!company) return null;
+
+  const companyPasses = passes.filter((p) => {
+    const name = (p.entityName || p.agentName || "Authorized Agent").trim();
+    return name === company.name;
+  });
+
+  const getPassAmt = (p) => {
+    const direct = parseFloat(p.netAmount ?? p.net_amount ?? p.baseTotal ?? p.grossTotal ?? 0);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+    let sum = 0;
+    (p.persons || []).forEach((x) => { sum += parseFloat(x.amount || 0) || 0; });
+    (p.vehicles || []).forEach((x) => { sum += parseFloat(x.amount || 0) || 0; });
+    return sum;
+  };
+
+  const STATUS_STYLE = {
+    APPROVED: { pill: "bg-emerald-100 text-emerald-700 border border-emerald-200", dot: "bg-emerald-500" },
+    PENDING: { pill: "bg-amber-100 text-amber-700 border border-amber-200", dot: "bg-amber-500" },
+    REJECTED: { pill: "bg-rose-100 text-rose-700 border border-rose-200", dot: "bg-rose-500" },
+    COMPLETED: { pill: "bg-blue-100 text-blue-700 border border-blue-200", dot: "bg-blue-500" },
+  };
+
+  /* ── Summary KPIs ── */
+  const totalAmt = companyPasses.reduce((s, p) => s + getPassAmt(p), 0);
+  const totalPersons = companyPasses.reduce((s, p) => s + (p.persons || []).length, 0);
+  const totalVehicles = companyPasses.reduce((s, p) => s + (p.vehicles || []).length, 0);
+  const statusCount = companyPasses.reduce((acc, p) => {
+    const k = (p.status || "PENDING").toUpperCase();
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Full-detail drawer */}
+      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col bg-[#f8fafc] shadow-2xl">
+
+        {/* ── HEADER ── */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-[#0a1e4d] via-[#12275f] to-[#1b1856] px-6 py-5 text-white shrink-0">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+          <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-orange-500/20 blur-3xl" />
+          <div className="pointer-events-none absolute left-1/3 bottom-0 h-24 w-24 rounded-full bg-blue-500/15 blur-2xl" />
+
+          <div className="relative flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 shrink-0">
+                <Building2 className="h-5 w-5 text-orange-300" strokeWidth={2.2} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-200/70">Company / Agent Profile</p>
+                <h2 className="text-xl font-black text-white leading-tight truncate">{company.name}</h2>
+              </div>
+            </div>
+            <button onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 hover:bg-white/25 transition shrink-0 mt-1">
+              <X className="h-4 w-4 text-white" />
+            </button>
+          </div>
+
+          {/* ── KPI Row ── */}
+          <div className="relative mt-5 grid grid-cols-4 gap-2">
+            {[
+              { label: "Applications", value: companyPasses.length, icon: Hash },
+              { label: "Total Revenue", value: fmtMoney(totalAmt), icon: IndianRupee },
+              { label: "Persons", value: totalPersons, icon: UserCircle2 },
+              { label: "Vehicles", value: totalVehicles, icon: Car },
+            ].map(({ label, value, icon: Icon }) => (
+              <div key={label} className="flex flex-col items-center rounded-2xl bg-white/10 ring-1 ring-white/15 px-2 py-2.5">
+                <Icon className="h-4 w-4 text-orange-300 mb-1" strokeWidth={2} />
+                <p className="text-base font-black text-white tabular-nums leading-none">{value}</p>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-white/50 mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Status breakdown ── */}
+          {Object.keys(statusCount).length > 0 && (
+            <div className="relative mt-3 flex flex-wrap gap-2">
+              {Object.entries(statusCount).map(([s, n]) => {
+                const st = STATUS_STYLE[s] || { dot: "bg-slate-400" };
+                return (
+                  <span key={s} className="flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white">
+                    <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
+                    {n} {s}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── PASS LIST ── */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+          {companyPasses.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-28 text-slate-400">
+              <Building2 className="h-12 w-12 mb-3 opacity-25" />
+              <p className="text-sm font-bold">No pass records found for this company</p>
+            </div>
+          ) : (
+            companyPasses.map((p, idx) => {
+              const amt = getPassAmt(p);
+              const status = (p.status || "PENDING").toUpperCase();
+              const st = STATUS_STYLE[status] || { pill: "bg-slate-100 text-slate-600", dot: "bg-slate-400" };
+              const passId = p._id || p.id || p.passId || `PASS-${idx + 1}`;
+              const fullId = String(passId);
+              const shortId = fullId.length > 10 ? fullId.slice(-8).toUpperCase() : fullId.toUpperCase();
+              const applicant = p.applicantName || p.submittedBy || p.agentName || company.name;
+              const mode = p.paymentMode || company.mode || "—";
+              const persons = p.persons || [];
+              const vehicles = p.vehicles || [];
+              const isOpen = expandedIdx === idx;
+
+              /* all possible extra fields */
+              const passType = p.passType || p.hepType || p.type || null;
+              const validFrom = fmtDate(p.validFrom || p.validityFrom || p.fromDate);
+              const validTo = fmtDate(p.validTo || p.validityTo || p.toDate);
+              const submittedAt = fmtDate(p.createdAt || p.submittedAt);
+              const purpose = p.purpose || p.workDescription || null;
+              const remark = p.remark || p.remarks || p.comments || null;
+              const accessArea = p.accessArea || p.accessAreaId || null;
+              const gateNo = p.gateNo || p.gate || null;
+              const contactNo = p.contactNumber || p.mobile || p.phone || null;
+              const email = p.email || null;
+              const invoiceNo = p.invoiceNumber || p.invoiceNo || p.receiptNo || null;
+              const txnRef = p.transactionRef || p.transactionId || p.txnId || null;
+
+              return (
+                <div key={passId + idx}
+                  className="rounded-2xl bg-white ring-1 ring-slate-200/80 shadow-sm overflow-hidden transition-all duration-200"
+                >
+                  {/* colour-coded top bar */}
+                  <div className={`h-1 w-full ${status === "APPROVED" ? "bg-gradient-to-r from-emerald-400 to-teal-400" :
+                    status === "REJECTED" ? "bg-gradient-to-r from-rose-400 to-red-400" :
+                      status === "COMPLETED" ? "bg-gradient-to-r from-blue-400 to-indigo-400" :
+                        "bg-gradient-to-r from-amber-400 to-orange-400"
+                    }`} />
+
+                  {/* ── Card Header (always visible) ── */}
+                  <button
+                    className="w-full text-left px-4 pt-3.5 pb-3"
+                    onClick={() => setExpandedIdx(isOpen ? null : idx)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#0a1e4d] to-indigo-700 text-white text-[10px] font-black shadow-md shrink-0">
+                          {String(idx + 1).padStart(2, "0")}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">#{shortId}</p>
+                          <p className="text-sm font-bold text-slate-800 truncate">{applicant}</p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                        <p className="text-base font-black text-emerald-700 tabular-nums">{fmtMoney(amt)}</p>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${st.pill}`}>{status}</span>
+                      </div>
+                    </div>
+
+                    {/* Quick-info pill row */}
+                    <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1">
+                      <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                        <CalendarClock className="h-3 w-3 text-slate-400" /> {submittedAt}
+                      </span>
+                      <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                        <CreditCard className="h-3 w-3 text-slate-400" /> {mode}
+                      </span>
+                      {persons.length > 0 && (
+                        <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                          <UserCircle2 className="h-3 w-3 text-slate-400" /> {persons.length} Person{persons.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                      {vehicles.length > 0 && (
+                        <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                          <Car className="h-3 w-3 text-slate-400" /> {vehicles.length} Vehicle{vehicles.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                      <span className="ml-auto text-[11px] font-bold text-[#0a1e4d]">
+                        {isOpen ? "▲ Less" : "▼ Details"}
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* ── Expanded Detail Section ── */}
+                  {isOpen && (
+                    <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-4 space-y-4">
+
+                      {/* ── Pass Info Grid ── */}
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 mb-2">Pass Information</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { label: "Full Pass ID", value: fullId },
+                            { label: "Pass Type", value: passType },
+                            { label: "Valid From", value: validFrom !== "—" ? validFrom : null },
+                            { label: "Valid To", value: validTo !== "—" ? validTo : null },
+                            { label: "Payment Mode", value: mode },
+                            { label: "Amount Paid", value: fmtMoney(amt) },
+                            { label: "Invoice / Receipt", value: invoiceNo },
+                            { label: "Transaction Ref", value: txnRef },
+                            { label: "Submitted Date", value: submittedAt },
+                            { label: "Access Area", value: accessArea },
+                            { label: "Gate No.", value: gateNo },
+                            { label: "Contact", value: contactNo },
+                            { label: "Email", value: email },
+                            { label: "Purpose", value: purpose },
+                            { label: "Remarks", value: remark },
+                          ].filter(f => f.value && f.value !== "—").map(({ label, value }) => (
+                            <div key={label} className="rounded-xl bg-white ring-1 ring-slate-200/60 px-3 py-2">
+                              <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">{label}</p>
+                              <p className="text-xs font-bold text-slate-800 break-all mt-0.5">{value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* ── Persons Table ── */}
+                      {persons.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 mb-2 flex items-center gap-1.5">
+                            <UserCircle2 className="h-3.5 w-3.5 text-indigo-500" /> Persons ({persons.length})
+                          </p>
+                          <div className="rounded-xl overflow-hidden ring-1 ring-slate-200/70">
+                            <table className="w-full text-[11px]">
+                              <thead className="bg-[#0a1e4d] text-white">
+                                <tr>
+                                  <th className="px-3 py-2 text-left font-bold">#</th>
+                                  <th className="px-3 py-2 text-left font-bold">Name</th>
+                                  <th className="px-3 py-2 text-left font-bold">ID / Aadhar</th>
+                                  <th className="px-3 py-2 text-left font-bold">Designation</th>
+                                  <th className="px-3 py-2 text-right font-bold">Amount</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 bg-white">
+                                {persons.map((person, pi) => (
+                                  <tr key={pi} className="hover:bg-slate-50">
+                                    <td className="px-3 py-2 text-slate-500 font-bold">{pi + 1}</td>
+                                    <td className="px-3 py-2 font-bold text-slate-800">
+                                      {person.name || person.fullName || person.personName || "—"}
+                                      {(person.dob || person.dateOfBirth) && (
+                                        <p className="text-[10px] font-semibold text-slate-400">
+                                          DOB: {fmtDate(person.dob || person.dateOfBirth)}
+                                        </p>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2 text-slate-600 font-semibold break-all">
+                                      {person.aadharNumber || person.idNumber || person.idNo || person.aadhaar || "—"}
+                                    </td>
+                                    <td className="px-3 py-2 text-slate-600 font-semibold">
+                                      {person.designation || person.role || person.hepType || "—"}
+                                    </td>
+                                    <td className="px-3 py-2 text-right font-black text-emerald-700 tabular-nums">
+                                      {person.amount ? fmtMoney(person.amount) : "—"}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── Vehicles Table ── */}
+                      {vehicles.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 mb-2 flex items-center gap-1.5">
+                            <Car className="h-3.5 w-3.5 text-orange-500" /> Vehicles ({vehicles.length})
+                          </p>
+                          <div className="rounded-xl overflow-hidden ring-1 ring-slate-200/70">
+                            <table className="w-full text-[11px]">
+                              <thead className="bg-[#0a1e4d] text-white">
+                                <tr>
+                                  <th className="px-3 py-2 text-left font-bold">#</th>
+                                  <th className="px-3 py-2 text-left font-bold">Reg. No.</th>
+                                  <th className="px-3 py-2 text-left font-bold">Type</th>
+                                  <th className="px-3 py-2 text-left font-bold">Pass Type</th>
+                                  <th className="px-3 py-2 text-right font-bold">Amount</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 bg-white">
+                                {vehicles.map((v, vi) => (
+                                  <tr key={vi} className="hover:bg-slate-50">
+                                    <td className="px-3 py-2 text-slate-500 font-bold">{vi + 1}</td>
+                                    <td className="px-3 py-2 font-black text-[#0a1e4d] uppercase">
+                                      {v.registrationNumber || v.regNo || v.vehicleNo || v.vehicleNumber || "—"}
+                                    </td>
+                                    <td className="px-3 py-2 text-slate-600 font-semibold">
+                                      {v.vehicleType || v.vehicleTypeName || v.type || "—"}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {(v.passType || v.hepType) ? (
+                                        <span className="px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold text-[10px]">
+                                          {v.passType || v.hepType}
+                                        </span>
+                                      ) : "—"}
+                                    </td>
+                                    <td className="px-3 py-2 text-right font-black text-emerald-700 tabular-nums">
+                                      {v.amount ? fmtMoney(v.amount) : "—"}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* ── FOOTER ── */}
+        <div className="shrink-0 border-t border-slate-200 px-5 py-4 bg-white flex items-center justify-between">
+          <p className="text-[11px] font-semibold text-slate-500">
+            {companyPasses.length} application{companyPasses.length !== 1 ? "s" : ""} &nbsp;·&nbsp; {fmtMoney(totalAmt)} total
+          </p>
+          <button
+            onClick={onClose}
+            className="px-5 py-2 rounded-xl bg-[#0a1e4d] text-white text-xs font-bold hover:bg-[#12275f] transition"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function TrafficRevenuePage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState("");
@@ -212,6 +549,7 @@ export default function TrafficRevenuePage() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [showCustom, setShowCustom] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState(null);
 
   const [revenueData, setRevenueData] = useState({
     total: 0,
@@ -317,7 +655,7 @@ export default function TrafficRevenuePage() {
 
   const pieChartData = useMemo(() => {
     const data = [
-      { name: "HEP Account (Direct)", value: revenueData.accountTotal, color: "#0a1e4d" },
+      { name: "HEP Account (Direct)", value: revenueData.accountTotal, color: "#f59e0b" },
       { name: "E-Cash / Gateway", value: revenueData.ecashTotal, color: "#f97316" },
       { name: "Overstay Port Dues", value: revenueData.overstayTotal, color: "#10b981" },
     ].filter((d) => d.value > 0);
@@ -392,7 +730,7 @@ export default function TrafficRevenuePage() {
             <p className="text-3xl font-black text-white tabular-nums tracking-tight leading-none drop-shadow-md">
               {loading ? <span className="block h-8 w-32 rounded-lg bg-white/20 animate-pulse" /> : fmtMoney(revenueData.total + revenueData.overstayTotal)}
             </p>
-            <p className="text-[11px] font-semibold text-blue-200/70 mt-1.5 leading-snug">HEP Fees + Overstay</p>
+            <p className="text-[11px] font-semibold text-blue-200/70 mt-1.5 leading-snug">APACS Fees + Overstay</p>
           </div>
           <div className="relative mt-4">
             <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
@@ -558,10 +896,15 @@ export default function TrafficRevenuePage() {
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {revenueData.topCompanies.map((c, i) => (
-                <tr key={i} className="hover:bg-slate-50 transition">
-                  <td className="py-3 px-3 font-bold text-[#0a1e4d] flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-orange-500 shrink-0" />
-                    {c.name}
+                <tr key={i} className="hover:bg-slate-50 transition group cursor-pointer"
+                  onClick={() => setSelectedCompany(c)}
+                >
+                  <td className="py-3 px-3 font-bold text-[#0a1e4d]">
+                    <span className="flex items-center gap-2 group-hover:text-orange-600 transition-colors">
+                      <Building2 className="h-4 w-4 text-orange-500 shrink-0" />
+                      {c.name}
+                      <ChevronRight className="h-3.5 w-3.5 text-slate-300 group-hover:text-orange-400 transition-colors ml-auto" />
+                    </span>
                   </td>
                   <td className="py-3 px-3">{c.count} applications</td>
                   <td className="py-3 px-3">
@@ -585,6 +928,15 @@ export default function TrafficRevenuePage() {
           </table>
         </div>
       </div>
+
+      {/* Company Detail Modal */}
+      {selectedCompany && (
+        <CompanyDetailModal
+          company={selectedCompany}
+          passes={revenueData.allPasses}
+          onClose={() => setSelectedCompany(null)}
+        />
+      )}
     </div>
   );
 }

@@ -58,8 +58,8 @@ const BarTip = ({ active, payload, label }) => {
 /* ─────────── Premium Payment Mode Donut Chart ─────────── */
 const SLICE_ICONS = {
   "HEP Account (Direct)": Wallet,
-  "E-Cash / Gateway":     CreditCard,
-  "Overstay Port Dues":   ReceiptText,
+  "E-Cash / Gateway": CreditCard,
+  "Overstay Port Dues": ReceiptText,
 };
 const GRAD_IDS = [
   { id: "paySlice0", from: "#312e81", to: "#0a1e4d" },
@@ -347,9 +347,7 @@ export default function TrafficRevenuePage() {
           <p className="text-2xl font-black text-[#0a1e4d] mt-1 tabular-nums">
             {loading ? "Syncing..." : fmtMoney(revenueData.total + revenueData.overstayTotal)}
           </p>
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full mt-2">
-            HEP Fees + Overstay
-          </span>
+
         </div>
 
         <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
