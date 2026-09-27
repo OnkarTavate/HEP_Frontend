@@ -617,7 +617,7 @@ export default function VendorPassApprovedPage() {
 
     fetchVendorPassData();
     fetchMasterData();
-  }, [vendorPassId]);
+  }, [vendorPassId, qrType, qrEntityId]);
 
   const fetchMasterData = async () => {
     try {

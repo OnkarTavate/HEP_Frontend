@@ -496,25 +496,56 @@ export default function TrafficPassesPage() {
     };
   }, []);
 
-  const extractEntityIndex = (entityId) => {
-    if (!entityId) return 0;
+  const extractEntityIndex = (entityId, entityType = null) => {
+    if (entityId === null || entityId === undefined) return 0;
+
     const isVendor = selectedRequest?.originType === "VENDOR";
+
     if (isVendor) {
-      const parts = String(entityId).split("-");
-      const index = parseInt(parts[parts.length - 1]);
-      return isNaN(index) ? 0 : index;
-    } else {
-      if (selectedRequest?.persons) {
-        const idx = selectedRequest.persons.findIndex((p) => p.id === entityId);
-        if (idx !== -1) return idx;
+      const source =
+        entityType === "person"
+          ? selectedRequest?.persons || []
+          : entityType === "vehicle"
+            ? selectedRequest?.vehicles || []
+            : [];
+
+      const normalizedId = String(entityId);
+
+      // First: support old synthetic vendor IDs such as vpr-30-p-0
+      const parts = normalizedId.split("-");
+      const lastPart = Number(parts[parts.length - 1]);
+
+      if (normalizedId.includes("-p-") || normalizedId.includes("-v-")) {
+        return Number.isInteger(lastPart) && lastPart >= 0 ? lastPart : 0;
       }
-      if (selectedRequest?.vehicles) {
-        const idx = selectedRequest.vehicles.findIndex(
-          (v) => v.id === entityId,
-        );
-        if (idx !== -1) return idx;
+
+      // Current Vendor API returns the real DB numeric ID.
+      // Backend approve/reject/revert endpoints expect zero-based index.
+      const idx = source.findIndex((item) => String(item?.id) === normalizedId);
+
+      if (idx >= 0) {
+        return idx;
       }
+
+      return 0;
     }
+
+    if (selectedRequest?.persons && entityType === "person") {
+      const idx = selectedRequest.persons.findIndex(
+        (p) => String(p?.id) === String(entityId),
+      );
+
+      if (idx !== -1) return idx;
+    }
+
+    if (selectedRequest?.vehicles && entityType === "vehicle") {
+      const idx = selectedRequest.vehicles.findIndex(
+        (v) => String(v?.id) === String(entityId),
+      );
+
+      if (idx !== -1) return idx;
+    }
+
     return 0;
   };
 
@@ -690,6 +721,27 @@ export default function TrafficPassesPage() {
     const workflowState = String(p?.workflowState || "")
       .trim()
       .toUpperCase();
+
+    // ==========================================================
+    // NORMAL VENDOR PERSON FLOW
+    //
+    // Other Gates Only
+    // Daily / Monthly / Annual
+    //
+    // Vendor Person -> Pass Section -> FINAL
+    // ==========================================================
+    const isVendorPass = selectedRequest?.originType === "VENDOR";
+
+    if (
+      isVendorPass &&
+      workflowState === "PENDING_PASS_SECTION" &&
+      !isOilDockArea(p?.accessAreaId || p?.accessArea) &&
+      role === "Approval" &&
+      departmentId === 9 &&
+      ["pending", "reverted"].includes(pStatus)
+    ) {
+      return true;
+    }
 
     if (workflowState === "COMPLETED" || workflowState === "REJECTED") {
       return false;
@@ -2216,7 +2268,9 @@ export default function TrafficPassesPage() {
       //     requestWorkflowState.endsWith("_ESSENTIAL") ||
       //     currentEssentialWorkflowStage.endsWith("_ESSENTIAL"));
       const shouldUseEssentialWorkflow =
-        !isVendorOilJettyWorkflow && isEssentialWorkflowRequest;
+        !isVendorPass &&
+        !isVendorOilJettyWorkflow &&
+        isEssentialWorkflowRequest;
 
       if (shouldUseEssentialWorkflow) {
         const essentialPersons = persons.filter((p) => {
@@ -2507,7 +2561,7 @@ export default function TrafficPassesPage() {
               return null;
             }
 
-            const vehicleIndex = extractEntityIndex(v.id);
+            const vehicleIndex = extractEntityIndex(v.id, "vehicle");
 
             const endpoint =
               decision === "APPROVED"
@@ -2576,7 +2630,7 @@ export default function TrafficPassesPage() {
           const remark = entityRemarks.persons[p.id];
 
           if (isVendorPass) {
-            const personIndex = extractEntityIndex(p.id);
+            const personIndex = extractEntityIndex(p.id, "person");
             const endpoint =
               status === "APPROVED"
                 ? `approve-person/${personIndex}`
@@ -2620,7 +2674,7 @@ export default function TrafficPassesPage() {
           const remark = entityRemarks.vehicles[v.id];
 
           if (isVendorPass) {
-            const vehicleIndex = extractEntityIndex(v.id);
+            const vehicleIndex = extractEntityIndex(v.id, "vehicle");
             const endpoint =
               status === "APPROVED"
                 ? `approve-vehicle/${vehicleIndex}`
@@ -2822,21 +2876,52 @@ export default function TrafficPassesPage() {
         ? []
         : selectedRequest.persons || []
       : (selectedRequest.persons || []).filter((p) => {
+          const isVendorPass = selectedRequest?.originType === "VENDOR";
+
+          const personState = String(p?.workflowState || "")
+            .trim()
+            .toUpperCase();
+
+          const personStatus = String(p?.status || "")
+            .trim()
+            .toLowerCase();
+
+          const personArea = p?.accessAreaId || p?.accessArea;
+
+          const isNormalVendorPassSectionPerson =
+            isVendorPass &&
+            !isOilDockArea(personArea) &&
+            personState === "PENDING_PASS_SECTION" &&
+            ["pending", "reverted"].includes(personStatus) &&
+            String(userRole || "").trim() === "Approval" &&
+            Number(userDepartmentId) === 9;
+
+          if (isNormalVendorPassSectionPerson) {
+            return true;
+          }
+
           if (isVendorScopedRequest) {
-            const state = String(p?.workflowState || "")
-              .trim()
-              .toUpperCase();
+            const state = personState;
+            const status = personStatus;
 
-            const status = String(p?.status || "")
-              .trim()
-              .toLowerCase();
-
-            return state === "PENDING_VENDOR_PERSON_CONCERN_DEPARTMENT" &&
+            if (
+              state === "PENDING_VENDOR_PERSON_CONCERN_DEPARTMENT" &&
               ["pending", "reverted"].includes(status)
-              ? Number(userDepartmentId) === Number(p?.concernDepartmentId)
-              : state === "PENDING_VENDOR_PERSON_TRAFFIC" &&
-                  Number(userDepartmentId) === 9 &&
-                  ["pending", "reverted"].includes(status);
+            ) {
+              return (
+                Number(userDepartmentId) === Number(p?.concernDepartmentId)
+              );
+            }
+
+            if (
+              state === "PENDING_VENDOR_PERSON_TRAFFIC" &&
+              Number(userDepartmentId) === 9 &&
+              ["pending", "reverted"].includes(status)
+            ) {
+              return true;
+            }
+
+            return false;
           }
 
           return canUserVerifyPerson(p);
