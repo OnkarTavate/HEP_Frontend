@@ -501,6 +501,11 @@ export default function TrafficLayout({ children }) {
         normalizedRole === "safety officer" ||
         normalizedRole === "fire safety officer";
 
+      // IMPORTANT:
+      // Set the authenticated user BEFORE any redirect.
+      // Otherwise the layout keeps user=null and remains on Loading...
+      setUser(parsedUser);
+
       if (
         isSafetyOfficerUser &&
         (pathname === "/traffic_approval" ||
@@ -512,9 +517,10 @@ export default function TrafficLayout({ children }) {
         );
         return;
       }
-      setUser(parsedUser);
-      if (parsedUser.isPasswordChanged === false)
+
+      if (parsedUser.isPasswordChanged === false) {
         setShowPasswordChangeModal(true);
+      }
     } else {
       setTimeout(() => router.push("/"), 0);
     }
@@ -655,35 +661,10 @@ export default function TrafficLayout({ children }) {
     expanded = sidebarExpanded,
     showCollapseToggle = true,
   }) => (
-    <div className="h-full flex flex-col justify-between py-6 bg-slate-900 text-white overflow-hidden">
-  const SidebarContent = ({
-    onNavigate,
-    expanded = sidebarExpanded,
-    showCollapseToggle = true,
-  }) => (
     <div className="h-full flex flex-col justify-between py-8 bg-[#0a0a0a] text-white overflow-hidden">
       <div className="flex flex-col gap-6">
         {/* Brand row */}
         <div className="flex flex-col gap-2 px-4">
-          <div
-            className={cn(
-              "flex items-center",
-              expanded ? "justify-between" : "justify-center",
-            )}
-          >
-            <Link
-              href="/traffic_approval/dashboard"
-              className="flex items-center gap-3 group min-w-0"
-              onClick={onNavigate}
-            >
-              <span className="flex items-center justify-center w-11 h-11 rounded-xl overflow-hidden bg-[#ff6b00] shadow-lg shadow-orange-600/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
-                <Image
-                  src="/logo1.png"
-                  alt="Chennai Port Logo"
-                  width={44}
-                  height={44}
-                  className="w-full h-full object-contain"
-                />
           <div
             className={cn(
               "flex items-center",
@@ -762,16 +743,12 @@ export default function TrafficLayout({ children }) {
             expanded ? "items-stretch" : "items-center",
           )}
         >
-        <div
-          className={cn(
-            "flex flex-col gap-1 px-3",
-            expanded ? "items-stretch" : "items-center",
-          )}
-        >
           {navigationItems.map((item) => {
             const isActive =
-              item.href === "/traffic_approval" || item.href === "/traffic_approval/dashboard"
-                ? pathname === "/traffic_approval" || pathname === "/traffic_approval/dashboard"
+              item.href === "/traffic_approval" ||
+              item.href === "/traffic_approval/dashboard"
+                ? pathname === "/traffic_approval" ||
+                  pathname === "/traffic_approval/dashboard"
                 : pathname === item.href ||
                   pathname.startsWith(`${item.href}/`);
             return (
@@ -811,19 +788,31 @@ export default function TrafficLayout({ children }) {
       </div>
 
       {/* Bottom help */}
-      <div className={cn("flex flex-col gap-2 px-3", expanded ? "items-stretch" : "items-center")}>
+      <div
+        className={cn(
+          "flex flex-col gap-2 px-3",
+          expanded ? "items-stretch" : "items-center",
+        )}
+      >
         <button
           title={!expanded ? "Help / Support" : undefined}
           className={cn(
             "flex items-center rounded-2xl bg-white/10 text-white hover:bg-amber-400 hover:text-black transition-colors duration-150 font-bold",
-            expanded ? "gap-3 px-4 py-3 text-base" : "justify-center w-12 h-12 mx-auto",
+            expanded
+              ? "gap-3 px-4 py-3 text-base"
+              : "justify-center w-12 h-12 mx-auto",
           )}
         >
-          <HelpCircle className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")} strokeWidth={2.5} />
+          <HelpCircle
+            className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")}
+            strokeWidth={2.5}
+          />
           <span
             className={cn(
               "truncate transition-[opacity,max-width] duration-300 ease-in-out",
-              expanded ? "opacity-100 max-w-[180px]" : "opacity-0 max-w-0 overflow-hidden",
+              expanded
+                ? "opacity-100 max-w-[180px]"
+                : "opacity-0 max-w-0 overflow-hidden",
             )}
           >
             Help / Support
@@ -890,7 +879,10 @@ export default function TrafficLayout({ children }) {
   return (
     <div
       className="h-screen w-screen overflow-hidden flex transition-colors duration-300 bg-[#d8d0c8]"
-      style={{ fontFamily: "'Plus Jakarta Sans', 'Montserrat', 'Inter', Arial, sans-serif" }}
+      style={{
+        fontFamily:
+          "'Plus Jakarta Sans', 'Montserrat', 'Inter', Arial, sans-serif",
+      }}
     >
       <div className="w-full h-full bg-[#f5f1eb] flex overflow-hidden transition-colors duration-300">
         {/* Desktop sidebar */}

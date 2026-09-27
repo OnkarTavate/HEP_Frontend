@@ -62,6 +62,7 @@ const isOilDockArea = (val) => {
   return str === "1" || str.includes("OIL JETTY") || str.includes("OIL_JETTY");
 };
 
+
 const formatDobWithAge = (dob) => {
   if (!dob) return null;
   const d = new Date(dob);
@@ -103,14 +104,6 @@ const formatAccessArea = (accessAreaId) => {
     return "Other Gates Only";
   }
   return accessAreaId;
-};
-
-const isOilDockArea = (val) => {
-  if (!val) return false;
-
-  const str = String(val).trim().toUpperCase();
-
-  return str === "1" || str.includes("OIL JETTY") || str.includes("OIL_JETTY");
 };
 
 const formatHepType = (hepType) => {
@@ -548,6 +541,7 @@ export default function AdminPassApprovalsPage() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [companyProfile, setCompanyProfile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [permitShare, setPermitShare] = useState(null);
 
   const isVendorOilJettyWorkflowRequest = (request) =>
     request?.originType === "VENDOR" &&

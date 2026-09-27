@@ -1541,27 +1541,54 @@ export default function DashboardPage() {
       //   router.replace("/traffic_approval/passes?tab=pending");
       // }
 
-      const role = String(parsedUser?.role || "").trim();
+      const role = String(
+        parsedUser?.role ?? parsedUser?.roleName ?? parsedUser?.role_name ?? "",
+      )
+        .trim()
+        .toLowerCase()
+        .replace(/_/g, " ")
+        .replace(/\s+/g, " ");
 
-      const departmentId = Number(parsedUser?.departmentId);
+      const roleId = Number(
+        parsedUser?.roleId ?? parsedUser?.roleID ?? parsedUser?.role_id,
+      );
+
+      const departmentId = Number(
+        parsedUser?.departmentId ??
+          parsedUser?.departmentID ??
+          parsedUser?.department_id,
+      );
+
+      const isDyConservator =
+        departmentId === 7 &&
+        (roleId === 29 ||
+          role === "dy. conservator" ||
+          role === "dy conservator");
+
+      const isFireSafetyOfficerMarine =
+        departmentId === 7 && (roleId === 27 || role === "fire safety officer");
 
       const isEssentialApprover =
-        (departmentId === 7 &&
-          ["Dy. Conservator", "Fire Safety Officer"].includes(role)) ||
+        isDyConservator ||
+        isFireSafetyOfficerMarine ||
         departmentId === 3 ||
         departmentId === 4 ||
-        ["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"].includes(
-          role,
-        ) ||
-        role === "Approval" ||
-        role === "Safety Officer";
+        [
+          "cisf",
+          "cisf asst commandant",
+          "cisf assistant commandant",
+          "cisf.assistant commandant",
+        ].includes(role) ||
+        role === "approval" ||
+        role === "safety officer";
 
       if (isEssentialApprover) {
-        if (role === "Safety Officer") {
+        if (role === "safety officer") {
           router.replace("/traffic_approval/passes?tab=pending");
         } else {
           router.replace("/traffic_approval/dashboard");
         }
+        return;
       }
     } catch (error) {
       console.error("Failed to parse logged-in user:", error);

@@ -280,8 +280,9 @@ export default function VendorPassApprovedPage() {
   const [formData, setFormData] = useState({});
   const [submitLoading, setSubmitLoading] = useState(false);
   const [selectedEntity, setSelectedEntity] = useState(null);
-  const [entityType, setEntityType] = useState(null); // 'person' or 'vehicle'
-  const [selectedIndex, setSelectedIndex] = useState(null);
+  const [entityType, setEntityType] = useState(null);
+  const [qrToken, setQrToken] = useState(null);
+  const [qrTokenLoading, setQrTokenLoading] = useState(false);
   const [masterData, setMasterData] = useState({
     designations: [],
     idProofTypes: [],
@@ -303,6 +304,38 @@ export default function VendorPassApprovedPage() {
       { id: 6, name: "Others" },
     ],
   });
+
+    useEffect(() => {
+    if (!selectedEntity || !entityType || !vendorPassId) {
+      return;
+    }
+
+    const fetchVendorQrToken = async () => {
+      try {
+        setQrTokenLoading(true);
+        setQrToken(null);
+
+        const response = await axios.get(
+          `${QR_API}/qr/vendor-generate-token/${vendorPassId}/${entityType}/${selectedEntity.id}`,
+        );
+
+        if (!response.data?.success || !response.data?.token) {
+          throw new Error(
+            response.data?.message || "Secure QR token was not returned",
+          );
+        }
+
+        setQrToken(response.data.token);
+      } catch (error) {
+        console.error("Failed to load secure vendor QR token:", error);
+        setQrToken(null);
+      } finally {
+        setQrTokenLoading(false);
+      }
+    };
+
+    fetchVendorQrToken();
+  }, [selectedEntity, entityType, vendorPassId]);
 
   const isOilDockArea = (areaId) => {
     if (!areaId) return false;
@@ -1326,46 +1359,78 @@ export default function VendorPassApprovedPage() {
     }
   };
 
-  const handleViewQR = (entity, type, index) => {
+  const handleViewQR = (entity, type) => {
     setSelectedEntity(entity);
     setEntityType(type);
-    setSelectedIndex(index);
+    setQrToken(null);
   };
 
   const handleBack = () => {
     setSelectedEntity(null);
     setEntityType(null);
-    setSelectedIndex(null);
+    setQrToken(null);
   };
 
   const downloadSinglePDF = async () => {
-    if (!selectedEntity || selectedIndex === null || !entityType) return;
-    try {
-      const response = await axios.get(
-        `${QR_API}/qr/vendor-generate-single-qr/${vendorPassId}/${entityType}/${selectedIndex}`,
-        { responseType: "blob" },
-      );
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      const passNo =
-        selectedEntity.personPassNo || selectedEntity.vehiclePassNo || "pass";
-      link.download = `Pass_${passNo}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Failed to download pass PDF:", error);
-      alert("Failed to download pass PDF. Please try again.");
-    }
-  };
+  if (
+    !selectedEntity ||
+    !entityType ||
+    !selectedEntity.id
+  ) {
+    return;
+  }
 
-  const downloadSinglePDFByIndex = async (entity, type, index) => {
+  try {
+    const response = await axios.get(
+      `${QR_API}/qr/vendor-generate-single-qr/${vendorPassId}/${entityType}/${selectedEntity.id}`,
+      {
+        responseType: "blob",
+      },
+    );
+
+    const blob = new Blob(
+      [response.data],
+      {
+        type: "application/pdf",
+      },
+    );
+
+    const url =
+      window.URL.createObjectURL(blob);
+
+    const link =
+      document.createElement("a");
+
+    link.href = url;
+
+    const passNo =
+      selectedEntity.personPassNo ||
+      selectedEntity.vehiclePassNo ||
+      "pass";
+
+    link.download = `Pass_${passNo}.pdf`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error(
+      "Failed to download vendor pass PDF:",
+      error,
+    );
+
+    alert(
+      "Failed to download pass PDF. Please try again.",
+    );
+  }
+};
+
+  const downloadSinglePDFByIndex = async (entity, type) => {
     try {
       const response = await axios.get(
-        `${QR_API}/qr/vendor-generate-single-qr/${vendorPassId}/${type}/${index}`,
+        `${QR_API}/qr/vendor-generate-single-qr/${vendorPassId}/${type}/${entity.id}`,
         { responseType: "blob" },
       );
       const blob = new Blob([response.data], { type: "application/pdf" });
@@ -1482,7 +1547,7 @@ export default function VendorPassApprovedPage() {
     const passNo = isPerson
       ? selectedEntity.personPassNo
       : selectedEntity.vehiclePassNo;
-    const qrData = passNo || String(selectedEntity.id);
+    const qrData = qrToken || "";
 
     return (
       <div className="min-h-screen bg-slate-50 py-8 px-4">
@@ -1508,14 +1573,28 @@ export default function VendorPassApprovedPage() {
             {/* QR Code */}
             <div className="p-8 text-center">
               <div className="bg-white p-4 rounded-xl shadow-inner inline-block mb-6">
-                <QRCodeSVG
-                  id="qr-code-svg"
-                  value={qrData}
-                  size={250}
-                  level="H"
-                  includeMargin={true}
-                  className="mx-auto"
-                />
+                {qrTokenLoading ? (
+                  <div className="w-[250px] h-[250px] flex items-center justify-center">
+                    <span className="text-sm text-slate-500">
+                      Generating secure QR...
+                    </span>
+                  </div>
+                ) : qrToken ? (
+                  <QRCodeSVG
+                    id="qr-code-svg"
+                    value={qrToken}
+                    size={250}
+                    level="H"
+                    includeMargin={true}
+                    className="mx-auto"
+                  />
+                ) : (
+                  <div className="w-[250px] h-[250px] flex items-center justify-center">
+                    <span className="text-sm text-red-500">
+                      Secure QR unavailable
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3 mb-6">
@@ -1743,7 +1822,7 @@ export default function VendorPassApprovedPage() {
                   </div>
 
                   <button
-                    onClick={() => handleViewQR(person, "person", index)}
+                    onClick={() => handleViewQR(person, "person")}
                     className="w-full mt-4 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white py-2 rounded-lg text-sm font-medium transition-colors"
                   >
                     <QrCode className="h-4 w-4" />
@@ -1793,7 +1872,7 @@ export default function VendorPassApprovedPage() {
                   </div>
 
                   <button
-                    onClick={() => handleViewQR(vehicle, "vehicle", index)}
+                    onClick={() => handleViewQR(vehicle, "vehicle")}
                     className="w-full mt-4 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white py-2 rounded-lg text-sm font-medium transition-colors"
                   >
                     <QrCode className="h-4 w-4" />
