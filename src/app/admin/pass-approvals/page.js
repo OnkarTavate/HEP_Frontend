@@ -105,6 +105,13 @@ const formatAccessArea = (accessAreaId) => {
   return accessAreaId;
 };
 
+const isOilDockArea = (val) => {
+  if (!val) return false;
+
+  const str = String(val).trim().toUpperCase();
+
+  return str === "1" || str.includes("OIL JETTY") || str.includes("OIL_JETTY");
+};
 
 const formatHepType = (hepType) => {
   if (!hepType) return "N/A";
