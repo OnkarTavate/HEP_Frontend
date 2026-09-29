@@ -23,6 +23,7 @@ import {
   ShieldAlert, CheckCircle,
 } from "lucide-react";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
+import GlowingBorderButton, { LiveClock } from "@/components/ui/GlowingBorderButton";
 
 const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5006";
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
@@ -170,7 +171,35 @@ export default function DeptPortalScaffold({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0">
+          <GlowingBorderButton
+            onClick={() => {
+              toast.success(`${portalTitle || "Department Portal"} Active`, {
+                description: `Department node synced • ${new Date().toLocaleTimeString("en-IN")}`,
+              });
+            }}
+            title={`${portalTitle || "Department"} Portal Active — Click to verify status`}
+            color="blue"
+            borderWidth="p-[3px]"
+            className="hidden sm:inline-flex"
+            innerClassName="px-3 sm:px-3.5 py-1.5 gap-2.5"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+            </span>
+            <span className="text-xs font-extrabold tracking-widest uppercase text-blue-400">
+              LIVE
+            </span>
+            <span className="w-px h-3.5 bg-white/20 hidden md:inline" />
+            <span className="hidden md:inline text-xs font-medium text-stone-300">
+              {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+            </span>
+            <span className="w-px h-3.5 bg-white/20" />
+            <span className="text-xs sm:text-sm font-mono font-bold tracking-wider text-blue-100/95 px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/[0.07]">
+              <LiveClock />
+            </span>
+          </GlowingBorderButton>
           {/* Dark mode toggle */}
           <button
             onClick={toggleDark}

@@ -1,18 +1,30 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import {
-  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from "recharts";
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip as ChartTooltip,
+  Legend as ChartLegend,
+} from "chart.js";
+import { Bar } from "react-chartjs-2";
 import {
   Wallet, TrendingUp, CircleDollarSign, ShieldBan, AlertTriangle, CheckCircle2,
   Clock, Activity, CalendarDays, ArrowUpRight, BadgeDollarSign, ReceiptText,
   Users, Car, ChevronRight, RefreshCw, FileText, Ban, Timer, Building2,
   Download, ArrowLeft, CreditCard
 } from "lucide-react";
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, ChartLegend);
+
+
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
@@ -41,19 +53,128 @@ const PieTip = ({ active, payload }) => {
   );
 };
 
-const BarTip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
+
+
+/* ─────────── Chart.js Top Companies Bar Chart ─────────── */
+const BAR_PALETTE_TA = [
+  { from: "#312e81", to: "#4f46e5" },
+  { from: "#f97316", to: "#ea580c" },
+  { from: "#10b981", to: "#059669" },
+  { from: "#0ea5e9", to: "#0284c7" },
+  { from: "#f43f5e", to: "#e11d48" },
+  { from: "#a855f7", to: "#9333ea" },
+  { from: "#eab308", to: "#ca8a04" },
+  { from: "#14b8a6", to: "#0d9488" },
+];
+
+function TopCompaniesBarChart({ companies }) {
+  const chartRef = useRef(null);
+  const chartData = (companies || []).slice(0, 8);
+
+  const data = useMemo(() => ({
+    labels: chartData.map((c) => {
+      const n = c.name || "";
+      return n.length > 18 ? n.slice(0, 16) + "…" : n;
+    }),
+    datasets: [
+      {
+        label: "Revenue (₹)",
+        data: chartData.map((c) => c.total || 0),
+        backgroundColor: BAR_PALETTE_TA.map((p) => p.from + "cc"),
+        hoverBackgroundColor: BAR_PALETTE_TA.map((p) => p.from),
+        borderRadius: { topLeft: 8, topRight: 8 },
+        borderSkipped: false,
+        borderWidth: 0,
+        barPercentage: 0.65,
+        categoryPercentage: 0.8,
+      },
+    ],
+  }), [chartData.map((c) => c.name + c.total).join()]);
+
+  const options = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 900, easing: "easeOutQuart" },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: "#fff",
+        titleColor: "#0f172a",
+        bodyColor: "#475569",
+        borderColor: "#e2e8f0",
+        borderWidth: 1,
+        padding: 12,
+        cornerRadius: 12,
+        titleFont: { weight: "bold", size: 12 },
+        bodyFont: { size: 11 },
+        displayColors: true,
+        boxWidth: 10,
+        boxHeight: 10,
+        boxPadding: 4,
+        callbacks: {
+          title: (items) => chartData[items[0].dataIndex]?.name || items[0].label,
+          label: (item) => " ₹" + item.raw.toLocaleString("en-IN", { maximumFractionDigits: 0 }),
+          afterLabel: (item) => {
+            const count = chartData[item.dataIndex]?.count || 0;
+            return ` ${count} pass application${count !== 1 ? "s" : ""}`;
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        border: { display: false },
+        ticks: { color: "#64748b", font: { size: 10, weight: "600" }, maxRotation: 20, minRotation: 0 },
+      },
+      y: {
+        grid: { color: "#f1f5f9" },
+        border: { display: false, dash: [4, 4] },
+        ticks: {
+          color: "#94a3b8",
+          font: { size: 10 },
+          callback: (v) => {
+            if (v >= 100000) return "₹" + (v / 100000).toFixed(1) + "L";
+            if (v >= 1000) return "₹" + (v / 1000).toFixed(0) + "k";
+            return "₹" + v;
+          },
+        },
+        beginAtZero: true,
+      },
+    },
+  }), []);
+
+  if (!chartData.length) {
+    return (
+      <div className="lg:col-span-2 p-6 rounded-3xl bg-white border border-slate-200 shadow-sm flex flex-col">
+        <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wider mb-4">Top Paying Companies &amp; Agents</h3>
+        <div className="flex flex-1 h-64 items-center justify-center text-xs text-slate-400 font-bold">No transaction data available</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white rounded-xl shadow-lg ring-1 ring-slate-200 px-3 py-2 text-xs">
-      <p className="font-bold text-gray-800">{label}</p>
-      {payload.map((p, i) => (
-        <p key={i} style={{ color: p.fill || p.color }} className="tabular-nums">
-          {p.name}: {fmtMoney(p.value)}
-        </p>
-      ))}
+    <div className="lg:col-span-2 p-6 rounded-3xl bg-white border border-slate-200 shadow-sm flex flex-col">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wider">Top Paying Companies &amp; Agents</h3>
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Top {chartData.length}</span>
+      </div>
+      <p className="text-[11px] text-slate-400 font-medium mb-4">Revenue contribution by company / agent</p>
+      <div style={{ height: 260 }}>
+        <Bar ref={chartRef} data={data} options={options} />
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4 pt-4 border-t border-slate-100">
+        {chartData.map((entry, i) => (
+          <div key={entry.name} className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: BAR_PALETTE_TA[i % BAR_PALETTE_TA.length].from }} />
+            <span className="text-[10px] font-semibold text-slate-600 max-w-[110px] truncate">{entry.name}</span>
+            <span className="text-[10px] font-bold text-slate-400 tabular-nums">{fmtMoney(entry.total)}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
-};
+}
 
 /* ─────────── Premium Payment Mode Donut Chart ─────────── */
 const SLICE_ICONS = {
@@ -383,29 +504,8 @@ export default function TrafficRevenuePage() {
 
       {/* Visual Analytics */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Top Companies Bar Chart */}
-        <div className="lg:col-span-2 p-6 rounded-3xl bg-white border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wider mb-4">
-            Top Paying Companies &amp; Agents
-          </h3>
-          {revenueData.topCompanies.length > 0 ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={revenueData.topCompanies.slice(0, 6)} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} interval={0} angle={-15} textAnchor="end" />
-                  <YAxis tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip content={<BarTip />} />
-                  <Bar dataKey="total" fill="#0a1e4d" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="flex h-64 items-center justify-center text-xs text-slate-400 font-bold">
-              No transaction data available
-            </div>
-          )}
-        </div>
+        {/* Top Companies Chart.js Bar Chart */}
+        <TopCompaniesBarChart companies={revenueData.topCompanies} />
 
         {/* Payment Mode Donut Chart — Premium Design */}
         <PaymentModeDonut pieChartData={pieChartData} loading={loading} />

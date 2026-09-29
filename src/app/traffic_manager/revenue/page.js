@@ -1,18 +1,28 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import {
-  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from "recharts";
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip as ChartTooltip,
+  Legend as ChartLegend,
+} from "chart.js";
+import { Bar } from "react-chartjs-2";
 import {
   Wallet, TrendingUp, CircleDollarSign, ShieldBan, AlertTriangle, CheckCircle2,
   Clock, Activity, CalendarDays, ArrowUpRight, BadgeDollarSign, ReceiptText,
   Users, Car, ChevronRight, RefreshCw, FileText, Ban, Timer, Building2,
   Download, ArrowLeft, CreditCard, X, Hash, UserCircle2, CalendarClock, IndianRupee
 } from "lucide-react";
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, ChartLegend);
 
 const ADMIN_API = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
@@ -69,6 +79,238 @@ const BarTip = ({ active, payload, label }) => {
     </div>
   );
 };
+
+/* ─────────── Chart.js Top Companies Bar Chart ─────────── */
+const BAR_PALETTE = [
+  { from: "#6366f1", mid: "#818cf8", hex: "#6366f1" },
+  { from: "#f97316", mid: "#fb923c", hex: "#f97316" },
+  { from: "#10b981", mid: "#34d399", hex: "#10b981" },
+  { from: "#3b82f6", mid: "#60a5fa", hex: "#3b82f6" },
+  { from: "#f43f5e", mid: "#fb7185", hex: "#f43f5e" },
+  { from: "#a855f7", mid: "#c084fc", hex: "#a855f7" },
+  { from: "#eab308", mid: "#facc15", hex: "#eab308" },
+  { from: "#14b8a6", mid: "#2dd4bf", hex: "#14b8a6" },
+];
+const RANK_MEDALS = ["🥇", "🥈", "🥉", "4th", "5th", "6th", "7th", "8th"];
+
+function TopCompaniesBarChart({ companies }) {
+  const chartRef = useRef(null);
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+  const chartData = (companies || []).slice(0, 8);
+  const maxTotal = Math.max(...chartData.map((c) => c.total || 0), 1);
+  const grandTotal = chartData.reduce((s, c) => s + (c.total || 0), 0);
+  const cacheKey = chartData.map((c) => c.name + c.total).join("|");
+
+  /* Build canvas-gradient backgrounds on each draw */
+  const buildGradients = useCallback((chart) => {
+    if (!chart?.ctx || !chart?.chartArea) return null;
+    const ctx = chart.ctx;
+    const { top, bottom } = chart.chartArea;
+    return chartData.map((_, i) => {
+      const p = BAR_PALETTE[i % BAR_PALETTE.length];
+      const g = ctx.createLinearGradient(0, top, 0, bottom);
+      g.addColorStop(0, p.from + "ff");
+      g.addColorStop(1, p.mid + "bb");
+      return g;
+    });
+  }, [cacheKey]);
+
+  const [gradients, setGradients] = useState(null);
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (chart) { const g = buildGradients(chart); if (g) setGradients(g); }
+  }, [buildGradients]);
+
+  const data = useMemo(() => ({
+    labels: chartData.map((c) => {
+      const n = c.name || "";
+      return n.length > 14 ? n.slice(0, 13) + "…" : n;
+    }),
+    datasets: [{
+      label: "Revenue (₹)",
+      data: chartData.map((c) => c.total || 0),
+      backgroundColor: gradients || BAR_PALETTE.slice(0, chartData.length).map((p) => p.from + "dd"),
+      hoverBackgroundColor: BAR_PALETTE.slice(0, chartData.length).map((p) => p.from),
+      borderRadius: 8,
+      borderSkipped: "bottom",
+      borderWidth: 0,
+      barPercentage: 0.55,
+      categoryPercentage: 0.9,
+    }],
+  }), [cacheKey, gradients]);
+
+  const options = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 900, easing: "easeOutQuart" },
+    onHover: (_, elements) => setHoveredIndex(elements.length ? elements[0].index : null),
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: "rgba(15,23,42,0.95)",
+        titleColor: "#f8fafc",
+        bodyColor: "#94a3b8",
+        borderColor: "rgba(99,102,241,0.3)",
+        borderWidth: 1,
+        padding: { x: 14, y: 10 },
+        cornerRadius: 12,
+        titleFont: { weight: "800", size: 12 },
+        bodyFont: { size: 11 },
+        displayColors: true,
+        boxWidth: 9,
+        boxHeight: 9,
+        boxPadding: 4,
+        callbacks: {
+          title: (items) => chartData[items[0].dataIndex]?.name || items[0].label,
+          label: (item) => {
+            const v = item.raw;
+            const pct = grandTotal ? Math.round((v / grandTotal) * 100) : 0;
+            return ` ₹${v.toLocaleString("en-IN", { maximumFractionDigits: 0 })} · ${pct}% share`;
+          },
+          afterLabel: (item) => {
+            const c = chartData[item.dataIndex];
+            return ` ${c?.count || 0} pass application${(c?.count || 0) !== 1 ? "s" : ""}`;
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        border: { display: false },
+        ticks: {
+          color: "#64748b",
+          font: { size: 10, weight: "600" },
+          maxRotation: 0,
+          minRotation: 0,
+          padding: 4,
+        },
+      },
+      y: {
+        grid: { color: "#f1f5f9", lineWidth: 1 },
+        border: { display: false, dash: [4, 4] },
+        ticks: {
+          color: "#94a3b8",
+          font: { size: 10 },
+          padding: 6,
+          callback: (v) => {
+            if (v >= 10000000) return "₹" + (v / 10000000).toFixed(1) + "Cr";
+            if (v >= 100000) return "₹" + (v / 100000).toFixed(1) + "L";
+            if (v >= 1000) return "₹" + (v / 1000).toFixed(0) + "k";
+            return v > 0 ? "₹" + v : "";
+          },
+        },
+        beginAtZero: true,
+      },
+    },
+  }), [grandTotal]);
+
+  if (!chartData.length) {
+    return (
+      <div className="lg:col-span-2 flex flex-col items-center justify-center min-h-[360px] rounded-2xl bg-white ring-1 ring-slate-200/60 shadow-sm">
+        <TrendingUp className="h-10 w-10 text-slate-200 mb-2" />
+        <p className="text-xs font-bold text-slate-400">No revenue data yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="lg:col-span-2 flex flex-col rounded-2xl bg-white ring-1 ring-slate-200/60 shadow-sm overflow-hidden">
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 shrink-0">
+            <TrendingUp className="h-4 w-4 text-indigo-600" strokeWidth={2.2} />
+          </span>
+          <div>
+            <h3 className="text-sm font-black text-[#0a1e4d] tracking-tight">Top Paying Companies &amp; Agents</h3>
+            <p className="text-[10px] text-slate-400 font-medium">Revenue by entity — top {chartData.length}</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total</p>
+          <p className="text-base font-black text-[#0a1e4d] tabular-nums">{fmtMoney(grandTotal)}</p>
+        </div>
+      </div>
+
+      {/* ── Chart ── */}
+      <div className="px-4 pt-4 pb-2" style={{ height: 240 }}>
+        <Bar
+          ref={chartRef}
+          data={data}
+          options={options}
+          plugins={[{
+            id: "tmGradFill",
+            beforeDraw: (chart) => {
+              const g = buildGradients(chart);
+              if (g && chart.data.datasets[0]) {
+                chart.data.datasets[0].backgroundColor = g;
+                setGradients(g);
+              }
+            },
+          }]}
+        />
+      </div>
+
+      {/* ── Legend rows ── */}
+      <div className="px-5 pb-5 pt-3 space-y-2">
+        {chartData.map((entry, i) => {
+          const p = BAR_PALETTE[i % BAR_PALETTE.length];
+          const pct = grandTotal ? Math.round(((entry.total || 0) / grandTotal) * 100) : 0;
+          const barW = maxTotal ? Math.round(((entry.total || 0) / maxTotal) * 100) : 0;
+          const isHov = hoveredIndex === i;
+          return (
+            <div
+              key={entry.name}
+              className="flex items-center gap-3 rounded-xl px-3 py-2 transition-all duration-150"
+              style={{ background: isHov ? p.from + "0f" : "transparent" }}
+            >
+              {/* medal */}
+              <span className="text-xs font-black text-slate-400 w-6 shrink-0 text-center">
+                {i < 3 ? RANK_MEDALS[i] : <span className="text-slate-300">#{i + 1}</span>}
+              </span>
+
+              {/* colour dot + name */}
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: p.from }} />
+                <span className="text-[11px] font-bold text-slate-700 truncate">{entry.name}</span>
+              </div>
+
+              {/* progress bar */}
+              <div className="hidden sm:block flex-1 max-w-[80px]">
+                <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${barW}%`, background: `linear-gradient(90deg,${p.from},${p.mid})`, transition: "width 0.7s ease" }}
+                  />
+                </div>
+              </div>
+
+              {/* pass count */}
+              <span className="text-[10px] font-semibold text-slate-400 tabular-nums shrink-0 hidden md:block">
+                {entry.count || 0} passes
+              </span>
+
+              {/* amount + % */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[11px] font-black tabular-nums" style={{ color: p.from }}>
+                  {fmtMoney(entry.total)}
+                </span>
+                <span
+                  className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0"
+                  style={{ background: p.from + "18", color: p.from }}
+                >
+                  {pct}%
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /* ─────────── Premium Payment Mode Donut Chart ─────────── */
 const SLICE_ICONS_TM = {
@@ -823,61 +1065,13 @@ export default function TrafficRevenuePage() {
 
       {/* Visual Analytics */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Top Companies Bar Chart */}
-        <div className="lg:col-span-2 p-6 rounded-2xl bg-white ring-1 ring-slate-200/60 shadow-xl">
-          <h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wider mb-4">
-            Top Paying Companies &amp; Agents
-          </h3>
-          {revenueData.topCompanies.length > 0 ? (() => {
-            const BAR_COLORS = [
-              "#6366f1", // indigo
-              "#f97316", // orange
-              "#10b981", // emerald
-              "#3b82f6", // blue
-              "#f43f5e", // rose
-              "#a855f7", // purple
-              "#eab308", // yellow
-              "#14b8a6", // teal
-            ];
-            const chartData = revenueData.topCompanies.slice(0, 6);
-            return (
-              <>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} interval={0} angle={-15} textAnchor="end" />
-                      <YAxis tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip content={<BarTip />} />
-                      <Bar dataKey="total" radius={[8, 8, 0, 0]}>
-                        {chartData.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                {/* Legend */}
-                <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3">
-                  {chartData.map((entry, index) => (
-                    <div key={entry.name} className="flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: BAR_COLORS[index % BAR_COLORS.length] }} />
-                      <span className="text-[10px] font-semibold text-slate-600 truncate max-w-[100px]">{entry.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            );
-          })() : (
-            <div className="flex h-64 items-center justify-center text-xs text-slate-400 font-bold">
-              No transaction data available
-            </div>
-          )}
-        </div>
+        {/* Top Companies Chart.js Bar Chart */}
+        <TopCompaniesBarChart companies={revenueData.topCompanies} />
 
-        {/* Payment Mode Donut Chart — Premium Design */}
+        {/* Payment Mode Donut Chart */}
         <PaymentModeDonut pieChartData={pieChartData} />
       </div>
+
 
       {/* Top Company Breakdown Table */}
       <div className="p-6 rounded-2xl bg-white ring-1 ring-slate-200/60 shadow-xl">

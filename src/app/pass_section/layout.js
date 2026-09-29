@@ -9,6 +9,7 @@ import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
 import { enforceRouteGuard } from "@/lib/roleRouting";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import GlowingBorderButton from "@/components/ui/GlowingBorderButton";
 import {
   LayoutDashboard,
   FileText,
@@ -355,11 +356,34 @@ export default function PassSectionLayout({ children }) {
             </div>
 
             <div className="flex items-center gap-2.5">
-              <div className="hidden md:flex items-center gap-2 text-xs text-stone-500 bg-white shadow-sm px-3 py-2 rounded-full">
-                <span className="font-medium">{new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
-                <span className="w-px h-3 bg-stone-300" />
-                <LiveClock />
-              </div>
+              <GlowingBorderButton
+                onClick={() => {
+                  toast.success("Pass Section Active", {
+                    description: `Live verification portal operational • Synced ${new Date().toLocaleTimeString("en-IN")}`,
+                  });
+                }}
+                title="Pass Section Live — Click to verify status"
+                color="blue"
+                borderWidth="p-[3px]"
+                className="hidden sm:inline-flex"
+                innerClassName="px-3 sm:px-3.5 py-1.5 gap-2.5"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+                </span>
+                <span className="text-xs font-extrabold tracking-widest uppercase text-blue-400">
+                  LIVE
+                </span>
+                <span className="w-px h-3.5 bg-white/20 hidden md:inline" />
+                <span className="hidden md:inline text-xs font-medium text-stone-300">
+                  {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                </span>
+                <span className="w-px h-3.5 bg-white/20" />
+                <span className="text-xs sm:text-sm font-mono font-bold tracking-wider text-blue-100/95 px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/[0.07]">
+                  <LiveClock />
+                </span>
+              </GlowingBorderButton>
               <button className="relative text-stone-500 hover:text-stone-700 p-2 rounded-full bg-white shadow-sm hover:bg-stone-50 transition-colors">
                 <Bell className="h-5 w-5" />
                 <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-amber-500" />

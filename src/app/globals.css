@@ -362,6 +362,11 @@ body {
   0%   { transform: scale(0.7); opacity: 0.8; }
   100% { transform: scale(1.7); opacity: 0; }
 }
+@keyframes glowing-border-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 
 .bp-reveal {
   animation: bp-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;

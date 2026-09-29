@@ -8,6 +8,7 @@ import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
 import { enforceRouteGuard, resolveHome } from "@/lib/roleRouting";
 import NotificationPanel from "@/components/NotificationPanel";
+import GlowingBorderButton, { LiveClock } from "@/components/ui/GlowingBorderButton";
 
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -352,7 +353,7 @@ export default function AdminLayout({ children }) {
       const next = !prev;
       try {
         localStorage.setItem("admin-theme", next ? "dark" : "light");
-      } catch {}
+      } catch { }
       return next;
     });
   };
@@ -376,7 +377,7 @@ export default function AdminLayout({ children }) {
       const next = !prev;
       try {
         localStorage.setItem("admin-sidebar", next ? "expanded" : "collapsed");
-      } catch {}
+      } catch { }
       return next;
     });
   };
@@ -604,7 +605,7 @@ export default function AdminLayout({ children }) {
   const isSafetyOfficer =
     user?.role?.toLowerCase() === "safety officer" ||
     user?.role?.toLowerCase() === "fire safety officer";
-  
+
   const userDeptId = Number(user?.departmentId);
   const userDeptName = String(user?.departmentName || "").toLowerCase();
 
@@ -619,10 +620,10 @@ export default function AdminLayout({ children }) {
   // Non-Civil & Non-Mechanical departmental officers (Finance, Medical, EDP, General Admin, etc.)
   const isOtherDepartmental = isDepartmental && !isCivilOrMechanicalDept;
 
-  const baseConsoleHref = isAdmin 
-    ? "/admin" 
+  const baseConsoleHref = isAdmin
+    ? "/admin"
     : (isSafetyOfficer || (isDepartmental && isCivilOrMechanicalDept))
-      ? "/admin/pass-approvals" 
+      ? "/admin/pass-approvals"
       : "/admin/vendor_pass";
 
   const navigationItems = [
@@ -940,15 +941,36 @@ export default function AdminLayout({ children }) {
             </div>
 
             <div className="flex items-center gap-3">
+              <GlowingBorderButton
+                onClick={() => {
+                  toast.success("Admin Console Active", {
+                    description: `Superuser node online • Synced at ${new Date().toLocaleTimeString("en-IN")}`,
+                  });
+                }}
+                title="Admin Console Active — Click to verify status"
+                color="rose"
+                borderWidth="p-[3px]"
+                className="hidden sm:inline-flex"
+                innerClassName="px-3 sm:px-3.5 py-1.5 gap-2.5"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+                </span>
+                <span className="text-xs font-extrabold tracking-widest uppercase text-rose-400">
+                  LIVE
+                </span>
+                <span className="w-px h-3.5 bg-white/20 hidden md:inline" />
+                <span className="hidden md:inline text-xs font-medium text-stone-300">
+                  {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                </span>
+                <span className="w-px h-3.5 bg-white/20" />
+                <span className="text-xs sm:text-sm font-mono font-bold tracking-wider text-rose-100/95 px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/[0.07]">
+                  <LiveClock />
+                </span>
+              </GlowingBorderButton>
               {/* Search pill */}
-              <div className="hidden md:flex bg-white dark:bg-slate-800/40 px-4 py-2.5 rounded-full shadow-sm items-center gap-2 w-72 border border-slate-200/60 dark:border-white/5 focus-within:ring-4 focus-within:ring-amber-500/10 focus-within:border-amber-400 transition-all duration-200">
-                <Search className="h-4 w-4 text-stone-400 dark:text-stone-500" />
-                <input
-                  type="text"
-                  placeholder="Search the admin console"
-                  className="outline-none bg-transparent w-full text-sm text-stone-700 dark:text-stone-200 placeholder:text-stone-400 dark:placeholder:text-stone-500"
-                />
-              </div>
+
 
               {/* Theme toggle */}
               <Button

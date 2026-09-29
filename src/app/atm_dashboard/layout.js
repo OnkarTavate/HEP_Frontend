@@ -7,6 +7,7 @@ import Image from "next/image";
 import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
 import { enforceRouteGuard } from "@/lib/roleRouting";
+import GlowingBorderButton, { LiveClock } from "@/components/ui/GlowingBorderButton";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -520,12 +521,43 @@ export default function ATMDashboardLayout({ children }) {
               </div>
             </div>
 
-            <UserProfilePanel
-              user={user}
-              departmentName="ATM Pass Section"
-              onChangePassword={() => setShowPasswordChangeModal(true)}
-              onLogout={handleLogout}
-            />
+            <div className="flex items-center gap-2.5">
+              <GlowingBorderButton
+                onClick={() => {
+                  toast.success("ATM Portal Active", {
+                    description: `ATM Pass services online • Synced at ${new Date().toLocaleTimeString("en-IN")}`,
+                  });
+                }}
+                title="ATM Portal Active — Click to verify status"
+                color="emerald"
+                borderWidth="p-[3px]"
+                className="hidden sm:inline-flex"
+                innerClassName="px-3 sm:px-3.5 py-1.5 gap-2.5"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                <span className="text-xs font-extrabold tracking-widest uppercase text-emerald-400">
+                  LIVE
+                </span>
+                <span className="w-px h-3.5 bg-white/20 hidden md:inline" />
+                <span className="hidden md:inline text-xs font-medium text-stone-300">
+                  {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                </span>
+                <span className="w-px h-3.5 bg-white/20" />
+                <span className="text-xs sm:text-sm font-mono font-bold tracking-wider text-emerald-100/95 px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/[0.07]">
+                  <LiveClock />
+                </span>
+              </GlowingBorderButton>
+
+              <UserProfilePanel
+                user={user}
+                departmentName="ATM Pass Section"
+                onChangePassword={() => setShowPasswordChangeModal(true)}
+                onLogout={handleLogout}
+              />
+            </div>
           </header>
 
           <main className="flex-1 px-4 sm:px-6 lg:px-8 pb-4 min-h-0 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.stone.300)_transparent]">

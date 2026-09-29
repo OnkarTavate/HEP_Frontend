@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
+import GlowingBorderButton, { LiveClock } from "@/components/ui/GlowingBorderButton";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -423,6 +424,34 @@ export default function MarineLayout({ children }) {
             </div>
 
             <div className="flex items-center gap-3">
+              <GlowingBorderButton
+                onClick={() => {
+                  toast.success("Marine Department Active", {
+                    description: `Vessel & berth approval services online • ${new Date().toLocaleTimeString("en-IN")}`,
+                  });
+                }}
+                title="Marine Department Active — Click to verify status"
+                color="cyan"
+                borderWidth="p-[3px]"
+                className="hidden sm:inline-flex"
+                innerClassName="px-3 sm:px-3.5 py-1.5 gap-2.5"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
+                </span>
+                <span className="text-xs font-extrabold tracking-widest uppercase text-cyan-400">
+                  LIVE
+                </span>
+                <span className="w-px h-3.5 bg-white/20 hidden md:inline" />
+                <span className="hidden md:inline text-xs font-medium text-stone-300">
+                  {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                </span>
+                <span className="w-px h-3.5 bg-white/20" />
+                <span className="text-xs sm:text-sm font-mono font-bold tracking-wider text-cyan-100/95 px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/[0.07]">
+                  <LiveClock />
+                </span>
+              </GlowingBorderButton>
               <Button
                 onClick={toggleDarkMode}
                 variant="ghost"
