@@ -8,6 +8,10 @@
  * a `validity` object and the UI should prefer it. These helpers exist so a
  * page that only has a raw batch row (the management tables, which are fed by
  * `listBulkBatches`) can still label a Bulk Pass consistently.
+ *
+ * Date-only validation: All validity dates are treated as date-only (no time
+ * component) and automatically extended to end of day (23:59:59.999) to ensure
+ * passes remain valid throughout the entire specified day.
  */
 
 export const EXPIRY_WARNING_DAYS = 3;
@@ -25,29 +29,21 @@ function toDate(value) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-// A validity-upto stored as a bare day means "all of that day". Date-only values
-// arrive as UTC midnight — detect that in UTC (not local time, which read as
-// 05:30 in an IST browser and skipped the stretch) and extend to the end of that
-// day in IST.
-function isMidnight(d) {
-  return (
-    d.getUTCHours() === 0 &&
-    d.getUTCMinutes() === 0 &&
-    d.getUTCSeconds() === 0 &&
-    d.getUTCMilliseconds() === 0
-  );
-}
-
+/**
+ * Normalise the end of a validity window. All dates are treated as date-only
+ * (no time component) and automatically extended to end of day (23:59:59.999)
+ * so a pass valid "upto 30 Sep" stays usable throughout the entire day.
+ */
 function normalizeValidityUpto(value) {
   const d = toDate(value);
   if (!d) return null;
+  
+  // Always treat as date-only and extend to END of that day in IST
+  // This ensures consistent behavior regardless of how the date was stored
   const ist = new Date(d.getTime() + IST_OFFSET_MS);
-  if (isMidnight(d) || isMidnight(ist)) {
-    const endUtcMs =
-      Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate(), 23, 59, 59, 999) - IST_OFFSET_MS;
-    return new Date(endUtcMs);
-  }
-  return d;
+  const endUtcMs =
+    Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate(), 23, 59, 59, 999) - IST_OFFSET_MS;
+  return new Date(endUtcMs);
 }
 
 /**

@@ -52,7 +52,7 @@ import SubmissionHistory, {
 } from "@/components/bulk-pass/SubmissionHistory";
 import ValidityBanner from "@/components/bulk-pass/ValidityBanner";
 import { getValidityState } from "@/lib/bulkPassValidity";
-import { BULK_PASS_LABELS, BULK_PASS_LIMITS } from "@/lib/bulkPassConstants";
+import { BULK_PASS_LABELS, BULK_PASS_LIMITS, isStudentVisitorType } from "@/lib/bulkPassConstants";
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -105,9 +105,12 @@ function validateAadhaarField(s) {
   return null;
 }
 
-function validateMobileField(s) {
+// On a student pass a blank mobile is allowed per person (the batch as a whole
+// still needs a couple of contact numbers — enforced in EditFormStep). Any
+// value that IS entered must still be a valid 10-digit number.
+function validateMobileField(s, optional = false) {
   const v = String(s ?? "").replace(/\s+/g, "");
-  if (!v) return "Mobile number is required";
+  if (!v) return optional ? null : "Mobile number is required";
   if (!/^[6-9][0-9]{9}$/.test(v))
     return "Invalid mobile number: must be 10 digits starting with 6–9";
   return null;
@@ -196,18 +199,19 @@ function isValidRegNo(value) {
 }
 
 // Returns a keyed map of field errors for a person row draft.
-function getPersonFieldErrors(draft) {
+// `mobileOptional` (student passes) makes a blank mobile acceptable per row.
+function getPersonFieldErrors(draft, mobileOptional = false) {
   return {
     name: validateNameField(draft.name),
     aadhaar: validateAadhaarField(draft.aadhaar),
     dob: validateDobField(draft.dob),
-    mobile: validateMobileField(draft.mobile),
+    mobile: validateMobileField(draft.mobile, mobileOptional),
   };
 }
 
 // Flattens field errors into the parseErrors array shape used elsewhere.
-function buildParseErrors(draft) {
-  const fe = getPersonFieldErrors(draft);
+function buildParseErrors(draft, mobileOptional = false) {
+  const fe = getPersonFieldErrors(draft, mobileOptional);
   return Object.values(fe).filter(Boolean);
 }
 
@@ -1452,7 +1456,7 @@ function AadhaarCardUpload({ file, existingPath, onChange, onClearKept, disabled
   );
 }
 
-function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors = [] }) {
+function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors = [], mobileOptional = false }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
     name: row.name,
@@ -1462,7 +1466,7 @@ function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors =
   });
 
   // Real-time field-level validation of the current draft
-  const fieldErrors = getPersonFieldErrors(draft);
+  const fieldErrors = getPersonFieldErrors(draft, mobileOptional);
   const draftHasErrors = Object.values(fieldErrors).some(Boolean);
 
   // Blacklist check state for this row
@@ -1661,14 +1665,17 @@ function EditableRow({ row, index, onChange, onDelete, disabled, derivedErrors =
                 }))
               }
               maxLength={10}
+              placeholder={mobileOptional ? "Optional" : ""}
               className={
                 "w-full px-2 py-1.5 rounded-lg ring-1 text-sm font-mono outline-none bg-white " +
                 (fieldErrors.mobile ? "ring-red-400" : "ring-amber-400")
               }
             />
-            {fieldErrors.mobile && (
+            {fieldErrors.mobile ? (
               <p className="text-[10px] text-red-500 mt-1 leading-snug">{fieldErrors.mobile}</p>
-            )}
+            ) : mobileOptional ? (
+              <p className="text-[10px] text-stone-400 mt-1 leading-snug">Optional for students</p>
+            ) : null}
           </>
         ) : (
           <span className="text-xs font-mono text-stone-600">{row.mobile || "—"}</span>
@@ -2345,6 +2352,15 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
   // 0 vehicles means vehicles are not allowed on this pass — not "unlimited".
   const maxVehicles = Math.max(0, Number(batch?.noOfVehicles) || 0);
 
+  // Student groups do not need a mobile per head — only a couple of contact
+  // numbers (teacher / escort) for the whole batch. Mirrors the server rule
+  // (BULK_PASS_LIMITS.MIN_STUDENT_CONTACT_MOBILES) so the form never lets an
+  // applicant build a batch the submit endpoint would then reject.
+  const mobileOptional = isStudentVisitorType(batch?.visitorType);
+  const minContactMobiles = mobileOptional
+    ? Math.min(BULK_PASS_LIMITS.MIN_STUDENT_CONTACT_MOBILES, rows.length)
+    : 0;
+
   // ── Effective per-row errors (field-level + cross-row duplicate Aadhaar) ──
   // Duplicate detection is computed across ALL current rows so that fixing one
   // row's Aadhaar immediately clears the duplicate flag on every affected row.
@@ -2361,7 +2377,7 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
   })();
 
   const rowErrors = rows.map((r) => {
-    const errs = buildParseErrors(r); // live field-level validation from row values
+    const errs = buildParseErrors(r, mobileOptional); // live field-level validation from row values
     const a = normAadhaar(r);
     if (/^\d{12}$/.test(a) && dupAadhaarSet.has(a)) errs.push("Duplicate Aadhaar");
     // Preserve rare structural errors (e.g. per-file row limit) from parsing.
@@ -2377,6 +2393,12 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
   const personsExceeded = maxPersons > 0 && rows.length > maxPersons;
   const vehiclesExceeded = vehicles.length > maxVehicles;
 
+  // Student batch: at least minContactMobiles rows must carry a valid mobile.
+  const rowsWithMobile = rows.filter(
+    (r) => validateMobileField(r.mobile, false) === null
+  ).length;
+  const contactMobilesShort = mobileOptional && rowsWithMobile < minContactMobiles;
+
   // Aadhaar card satisfied if a new file is uploaded OR a previous path is being kept
   const aadhaarCardsMissing = rows.filter((r) => !r.aadhaarCardFile && !r._keepAadhaarPath).length;
 
@@ -2387,6 +2409,7 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
     errorRows.length === 0 &&
     noPhotoRows.length === 0 &&
     !personsExceeded &&
+    !contactMobilesShort &&
     aadhaarCardsMissing === 0;
   // Driver Aadhaar card satisfied if a new file is uploaded OR a previous path is being kept
   const vehicleAadhaarCardsMissing = vehicles.filter(
@@ -2661,7 +2684,26 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
                 <FileText className="h-3.5 w-3.5" />{aadhaarCardsMissing} need Aadhaar card
               </span>
             )}
+            {contactMobilesShort && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
+                <AlertCircle className="h-3.5 w-3.5" />need {minContactMobiles - rowsWithMobile} more contact mobile{minContactMobiles - rowsWithMobile === 1 ? "" : "s"}
+              </span>
+            )}
           </div>
+
+          {/* Student contact-mobile requirement */}
+          {mobileOptional && (
+            <div className="mb-5 flex items-start gap-2 px-4 py-3 rounded-2xl bg-amber-50 ring-1 ring-amber-200">
+              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800 leading-relaxed">
+                <span className="font-bold">Students:</span> a mobile number is not
+                needed for every person. At least {minContactMobiles} contact
+                number{minContactMobiles === 1 ? "" : "s"} for the batch (a teacher
+                or escort) {minContactMobiles === 1 ? "is" : "are"} enough.
+                Currently {rowsWithMobile} provided.
+              </p>
+            </div>
+          )}
 
           {/* Aadhaar card requirement instruction */}
           <div className="mb-5 flex items-start gap-2 px-4 py-3 rounded-2xl bg-red-50 ring-1 ring-red-200">
@@ -2765,7 +2807,7 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
               </thead>
               <tbody>
                 {rows.map((row, i) => (
-                  <EditableRow key={row.id || i} row={row} index={i} onChange={handleRowChange} onDelete={handleDeleteRow} disabled={submitting} derivedErrors={rowErrors[i]} />
+                  <EditableRow key={row.id || i} row={row} index={i} onChange={handleRowChange} onDelete={handleDeleteRow} disabled={submitting} derivedErrors={rowErrors[i]} mobileOptional={mobileOptional} />
                 ))}
               </tbody>
             </table>
