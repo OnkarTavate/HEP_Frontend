@@ -2312,7 +2312,6 @@ export default function TrafficManagerDashboard() {
             icon={Timer}
             gradient="from-violet-500 to-purple-600"
             glow="shadow-violet-500/30"
-            href="/traffic_approval/overstay"
             loading={loading}
             chips={[
               {
@@ -2513,8 +2512,6 @@ export default function TrafficManagerDashboard() {
           subtitle="Authorised movements and transactions within port limits"
           icon={Globe}
           tone="cyan"
-          action="View Details"
-          actionHref="/traffic_approval/overstay"
         >
           <div className="grid grid-cols-2 gap-3 mb-4">
             <MiniStat
@@ -2531,7 +2528,6 @@ export default function TrafficManagerDashboard() {
               tone="rose"
               icon={Timer}
               loading={loading}
-              href="/traffic_approval/overstay"
             />
             <MiniStat
               label="Exceptions"
@@ -2539,7 +2535,6 @@ export default function TrafficManagerDashboard() {
               tone="amber"
               icon={AlertTriangle}
               loading={loading}
-              href="/traffic_approval/overstay"
             />
             <MiniStat
               label="Settled"
@@ -2547,7 +2542,6 @@ export default function TrafficManagerDashboard() {
               tone="emerald"
               icon={CheckCircle2}
               loading={loading}
-              href="/traffic_approval/overstay"
             />
           </div>
           <div className="grid grid-cols-3 gap-2.5">
@@ -2602,8 +2596,6 @@ export default function TrafficManagerDashboard() {
           subtitle={`Charges & exception requests (${filterRange.label})`}
           icon={Timer}
           tone="teal"
-          action="View Overstay"
-          actionHref="/traffic_approval/overstay"
         >
           <div className="space-y-1 mb-3">
             <IconStatRow
@@ -2613,7 +2605,6 @@ export default function TrafficManagerDashboard() {
               tone="emerald"
               money
               loading={loading}
-              href="/traffic_approval/overstay"
             />
             <IconStatRow
               label="Pending Dues"
@@ -2622,7 +2613,6 @@ export default function TrafficManagerDashboard() {
               tone="rose"
               money
               loading={loading}
-              href="/traffic_approval/overstay"
             />
             <IconStatRow
               label="Exception Requests"
@@ -2630,7 +2620,6 @@ export default function TrafficManagerDashboard() {
               icon={HelpCircle}
               tone="amber"
               loading={loading}
-              href="/traffic_approval/overstay"
             />
             <IconStatRow
               label="Settled Cases"
@@ -2638,7 +2627,6 @@ export default function TrafficManagerDashboard() {
               icon={CheckCircle2}
               tone="sky"
               loading={loading}
-              href="/traffic_approval/overstay"
             />
           </div>
           <div className="grid grid-cols-1 gap-2 mt-3">

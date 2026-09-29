@@ -639,15 +639,6 @@ export default function TrafficLayout({ children }) {
     ...(!isSafetyOfficer
       ? [
           {
-            name: "Overstay Exceptions",
-            href: "/traffic_approval/overstay",
-            icon: ShieldCheck,
-          },
-        ]
-      : []),
-    ...(!isSafetyOfficer
-      ? [
-          {
             name: "Bulk Pass",
             href: "/traffic_approval/bulk-pass",
             icon: Users,
