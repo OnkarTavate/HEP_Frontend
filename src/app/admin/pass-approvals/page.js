@@ -538,11 +538,9 @@ export default function AdminPassApprovalsPage() {
   };
 
   // Main Modal & Profile States
-  // Main Modal & Profile States
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [companyProfile, setCompanyProfile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [permitShare, setPermitShare] = useState(null);
 
   const isVendorOilJettyWorkflowRequest = (request) =>
     request?.originType === "VENDOR" &&
