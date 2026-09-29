@@ -170,29 +170,13 @@ export default function CreateBulkPassPage() {
     noOfVehicles: String(BULK_PASS_LIMITS.DEFAULT_MAX_VEHICLES),
     paymentMode: "",
     purposeOfVisit: "",
-    validityFrom: `${defaultValidityDates().from}T06:00`,
-    validityUpto: `${defaultValidityDates().upto}T23:59`,
+    validityFrom: defaultValidityDates().from,
+    validityUpto: defaultValidityDates().upto,
     remarks: "",
     // Every bulk pass is a reusable link: the organisation submits batches of up
     // to 30 persons / 30 vehicles until the totals above are used up.
     multipleSubmissionsEnabled: true,
   }));
-
-  // Split date/time state for validity fields — defaults: 06:00 start, 23:59 end
-  const DEFAULT_FROM_TIME = "06:00";
-  const DEFAULT_UPTO_TIME = "23:59";
-  // Lazy initialisers run once and keep the clock out of render.
-  const [validityFromDate, setValidityFromDate] = useState(() => defaultValidityDates().from);
-  const [validityFromTime, setValidityFromTime] = useState(DEFAULT_FROM_TIME);
-  const [validityUptoDate, setValidityUptoDate] = useState(() => defaultValidityDates().upto);
-  const [validityUptoTime, setValidityUptoTime] = useState(DEFAULT_UPTO_TIME);
-
-  // Sync split date+time → form.validityFrom / form.validityUpto
-  const syncValidity = (fromDate, fromTime, uptoDate, uptoTime) => {
-    const from = fromDate ? `${fromDate}T${fromTime}` : "";
-    const upto = uptoDate ? `${uptoDate}T${uptoTime}` : "";
-    setForm((prev) => ({ ...prev, validityFrom: from, validityUpto: upto }));
-  };
 
   const [workOrderFile, setWorkOrderFile] = useState(null);
   const [errors, setErrors] = useState({});
@@ -477,60 +461,36 @@ export default function CreateBulkPassPage() {
               {/* Validity From */}
               <div>
                 <FieldLabel required>Validity From</FieldLabel>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={validityFromDate}
-                    min={new Date().toISOString().slice(0, 10)}
-                    onChange={(e) => {
-                      setValidityFromDate(e.target.value);
-                      syncValidity(e.target.value, validityFromTime, validityUptoDate, validityUptoTime);
-                      if (touched.validityFrom) touch("validityFrom");
-                    }}
-                    onBlur={() => touch("validityFrom")}
-                    className={inputCls(!!errors.validityFrom) + " flex-1"}
-                  />
-                  <input
-                    type="time"
-                    value={validityFromTime}
-                    onChange={(e) => {
-                      setValidityFromTime(e.target.value);
-                      syncValidity(validityFromDate, e.target.value, validityUptoDate, validityUptoTime);
-                    }}
-                    className={inputCls(false) + " w-32"}
-                  />
-                </div>
-                <p className="text-[11px] text-stone-400 mt-1">Default start time: 06:00 AM</p>
+                <input
+                  type="date"
+                  value={form.validityFrom}
+                  min={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, validityFrom: e.target.value }));
+                    if (touched.validityFrom) touch("validityFrom");
+                  }}
+                  onBlur={() => touch("validityFrom")}
+                  className={inputCls(!!errors.validityFrom)}
+                />
+                <p className="text-[11px] text-stone-400 mt-1">Pass valid from start of this date</p>
                 <FieldError msg={errors.validityFrom} />
               </div>
 
               {/* Validity Upto */}
               <div>
                 <FieldLabel required>Validity Upto</FieldLabel>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={validityUptoDate}
-                    min={validityFromDate || new Date().toISOString().slice(0, 10)}
-                    onChange={(e) => {
-                      setValidityUptoDate(e.target.value);
-                      syncValidity(validityFromDate, validityFromTime, e.target.value, validityUptoTime);
-                      if (touched.validityUpto) touch("validityUpto");
-                    }}
-                    onBlur={() => touch("validityUpto")}
-                    className={inputCls(!!errors.validityUpto) + " flex-1"}
-                  />
-                  <input
-                    type="time"
-                    value={validityUptoTime}
-                    onChange={(e) => {
-                      setValidityUptoTime(e.target.value);
-                      syncValidity(validityFromDate, validityFromTime, validityUptoDate, e.target.value);
-                    }}
-                    className={inputCls(false) + " w-32"}
-                  />
-                </div>
-                <p className="text-[11px] text-stone-400 mt-1">Default end time: 11:59 PM</p>
+                <input
+                  type="date"
+                  value={form.validityUpto}
+                  min={form.validityFrom || new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, validityUpto: e.target.value }));
+                    if (touched.validityUpto) touch("validityUpto");
+                  }}
+                  onBlur={() => touch("validityUpto")}
+                  className={inputCls(!!errors.validityUpto)}
+                />
+                <p className="text-[11px] text-stone-400 mt-1">Pass valid throughout entire day</p>
                 <FieldError msg={errors.validityUpto} />
               </div>
             </div>

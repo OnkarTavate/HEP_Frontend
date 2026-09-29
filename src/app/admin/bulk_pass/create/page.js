@@ -257,16 +257,18 @@ export default function AdminCreateBulkPassPage() {
             </div>
             <div>
               <FieldLabel required>Validity From</FieldLabel>
-              <input type="datetime-local" value={form.validityFrom} onChange={(e) => set("validityFrom", e.target.value)} onBlur={() => touch("validityFrom")}
-                min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} className={inputCls(!!errors.validityFrom)} />
+              <input type="date" value={form.validityFrom} onChange={(e) => set("validityFrom", e.target.value)} onBlur={() => touch("validityFrom")}
+                min={new Date().toISOString().slice(0, 10)} className={inputCls(!!errors.validityFrom)} />
+              <p className="text-[11px] text-stone-400 mt-1">Pass valid from start of this date</p>
               <FieldError msg={errors.validityFrom} />
             </div>
-              <div>
-                <FieldLabel required>Validity Upto</FieldLabel>
-                <input type="datetime-local" value={form.validityUpto} onChange={(e) => set("validityUpto", e.target.value)} onBlur={() => touch("validityUpto")}
-                  min={form.validityFrom || new Date(Date.now() + 60000).toISOString().slice(0, 16)} className={inputCls(!!errors.validityUpto)} />
-                <FieldError msg={errors.validityUpto} />
-              </div>
+            <div>
+              <FieldLabel required>Validity Upto</FieldLabel>
+              <input type="date" value={form.validityUpto} onChange={(e) => set("validityUpto", e.target.value)} onBlur={() => touch("validityUpto")}
+                min={form.validityFrom || new Date().toISOString().slice(0, 10)} className={inputCls(!!errors.validityUpto)} />
+              <p className="text-[11px] text-stone-400 mt-1">Pass valid throughout entire day</p>
+              <FieldError msg={errors.validityUpto} />
+            </div>
             </div>
 
           <div className="mt-5">
