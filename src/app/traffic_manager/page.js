@@ -660,16 +660,15 @@ export default function TrafficManagerDashboard() {
       const needsSlowFetch =
         force || !slowCache.current || nowMs - lastSlowFetch.current > SLOW_TTL_MS;
 
-      // ── Always-fresh: pass counts + agent's processed count ────────────────
-      const [passMineRes, firstPassRes] = await Promise.all([
+      // ── Primary data: aggregated dashboard stats (SQL-computed, full dataset) ──
+      // This single call replaces the old pattern of fetching 100 hydrated records
+      // and computing counts, revenue, and entity totals client-side.
+      const [dashStatsRes, passMineRes] = await Promise.all([
+        g(`${AGENT_API}/pass-request/dashboard-stats`),
         g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
           limit: 1,
           page: 1,
           processedByMe: "true",
-        }),
-        g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
-          limit: 100,
-          page: 1,
         }),
       ]);
 
@@ -724,86 +723,32 @@ export default function TrafficManagerDashboard() {
         return r.data;
       };
 
-      // 1. Use page-1 data for list display only — DO NOT loop all pages.
-      // Aggregate counts come from the server-side counts/pagination metadata
-      // that the backend already computes via SQL COUNT queries.
-      // Fetching all 194 pages concurrently was exhausting the DB connection pool.
-      const allPassList = firstPassRes?.data?.data || [];
+      // ── Extract pre-aggregated stats from the new endpoint ──────────────
+      const ds = dashStatsRes?.data || {};
+      const dPass = ds.pass || {};
+      const dEntities = ds.entities || {};
+      const dRevenue = ds.revenue || {};
+      const dActivity = ds.portActivity || {};
+      const dPendingQueue = ds.pendingQueue || {};
+      const dCompanyList = ds.companyList || [];
 
-      // Server-supplied aggregate counts (avoids fetching all records client-side)
-      const apiCounts = firstPassRes?.data?.counts || {};
-      const apiPagination = firstPassRes?.data?.pagination || {};
+      // The pending list comes pre-built from the backend (limit 15, lightweight)
+      const pendingList = dPendingQueue.list || [];
 
-      // 2. Classify page-1 slice by status (for queue display / recent items only)
-      const pendingList = allPassList.filter((p) =>
-        ["SUBMITTED", "PENDING", "IN_REVIEW", "UNDER_REVIEW"].includes(
-          String(p.status || "").toUpperCase(),
-        ),
-      );
-      const processedList = allPassList.filter((p) =>
-        ["APPROVED", "PROCESSED", "COMPLETED", "ISSUED"].includes(
-          String(p.status || "").toUpperCase(),
-        ),
-      );
-      const revertedList = allPassList.filter((p) =>
-        ["REVERTED"].includes(String(p.status || "").toUpperCase()),
-      );
-      const rejectedList = allPassList.filter((p) =>
-        ["REJECTED"].includes(String(p.status || "").toUpperCase()),
-      );
-
-      // Use server-provided counts; fall back to page-1 slice counts only if
-      // the API doesn't return them (older backend versions).
-      const passCounts = {
-        total: num(
-          apiCounts.total ??
-            apiPagination.totalRecords ??
-            allPassList.length,
-        ),
-        pending: num(apiCounts.pending ?? pendingList.length),
-        processed: num(apiCounts.processed ?? processedList.length),
-        reverted: num(apiCounts.reverted ?? revertedList.length),
-        rejected: num(apiCounts.rejected ?? rejectedList.length),
-      };
-
-      const passMineCounts = val(passMineRes, {}).counts || {};
+      const passMineCounts = passMineRes?.data?.counts || {};
       const companyCounts = val(companyRes, {}).counts || {};
-
-      const pendingPersons = pendingList.reduce(
-        (s, p) => s + (p.persons?.length || 0),
-        0,
-      );
-      const pendingVehicles = pendingList.reduce(
-        (s, p) => s + (p.vehicles?.length || 0),
-        0,
-      );
-      const pendingCompanies = new Set(
-        pendingList
-          .map((p) => p.agentId || p.email || p.entityName)
-          .filter(Boolean),
-      ).size;
-
-      const processedPersons = processedList.reduce(
-        (s, p) => s + (p.persons?.length || 0),
-        0,
-      );
-      const processedVehicles = processedList.reduce(
-        (s, p) => s + (p.vehicles?.length || 0),
-        0,
-      );
-
-      // persons/vehicles totals are derived from page-1 slice only.
-      // For accurate all-time totals, a dedicated backend stats endpoint is needed.
-      const allPersons = allPassList.reduce(
-        (s, p) => s + (p.persons?.length || 0),
-        0,
-      );
-      const allVehicles = allPassList.reduce(
-        (s, p) => s + (p.vehicles?.length || 0),
-        0,
-      );
-
       const profilePagination = val(profileRes, {}).pagination || {};
+
+      // Build top companies from server-aggregated data
+      const companyList = dCompanyList;
+      const topCompanies = companyList.slice(0, 5).map((c) => ({
+        name: c.name.length > 18 ? c.name.slice(0, 16) + "..." : c.name,
+        fullName: c.name,
+        value: c.total,
+        passCount: c.passCount,
+        persons: c.persons,
+        vehicles: c.vehicles,
+      }));
 
       // 3. Blacklist stats
       const blRaw = val(blStatsRes, {});
@@ -842,23 +787,6 @@ export default function TrafficManagerDashboard() {
         )
         .reduce((s, c) => s + num(c.total_amount ?? c.amount), 0);
 
-      // 5. Port activity
-      const weekStart = new Date(now);
-      weekStart.setDate(weekStart.getDate() - 6);
-      weekStart.setHours(0, 0, 0, 0);
-      const activityToday = allPassList.filter((p) => {
-        const d = new Date(p.createdAt || p.submittedAt);
-        return !isNaN(d.getTime()) && d >= todayStart;
-      }).length;
-      const activityWeek = allPassList.filter((p) => {
-        const d = new Date(p.createdAt || p.submittedAt);
-        return !isNaN(d.getTime()) && d >= weekStart;
-      }).length;
-      const activityMonth = allPassList.filter((p) => {
-        const d = new Date(p.createdAt || p.submittedAt);
-        return !isNaN(d.getTime()) && d >= monthStart;
-      }).length;
-
       // 6. Bulk pass counts
       const bulkData = val(bulkRes, {});
       const bulkCounts = bulkData.counts || bulkData.pagination || {};
@@ -869,148 +797,48 @@ export default function TrafficManagerDashboard() {
       );
       const bulkRejected = num(bulkCounts.rejected ?? 0);
 
-      // 7. Comprehensive Revenue Calculation across ALL Pass Requests
-      const getPassAmt = (p) => {
-        const direct = parseFloat(
-          p.netAmount ??
-            p.net_amount ??
-            p.netamount ??
-            p.baseTotal ??
-            p.basetotal ??
-            p.grossTotal ??
-            p.grosstotal ??
-            0,
-        );
-        if (Number.isFinite(direct) && direct > 0) return direct;
-        let sum = 0;
-        (p.persons || []).forEach((x) => {
-          sum += parseFloat(x.amount || 0) || 0;
-        });
-        (p.vehicles || []).forEach((x) => {
-          sum += parseFloat(x.amount || 0) || 0;
-        });
-        return sum;
-      };
-
-      let hepTotal = 0,
-        hepAccount = 0,
-        hepEcash = 0,
-        hepToday = 0,
-        hepMonth = 0;
-      let hepProcessedTotal = 0,
-        hepPendingTotal = 0;
-      const companyMap = {};
-
-      allPassList.forEach((p) => {
-        const amt = getPassAmt(p);
-        hepTotal += amt;
-        const mode = String(
-          p.paymentMode || p.payment_mode || p.paymentmode || "",
-        ).toUpperCase();
-        if (mode === "E-CASH" || mode === "ECASH") {
-          hepEcash += amt;
-        } else {
-          hepAccount += amt;
-        }
-
-        const pStatus = String(p.status || "").toUpperCase();
-        if (
-          ["APPROVED", "PROCESSED", "COMPLETED", "ISSUED"].includes(pStatus)
-        ) {
-          hepProcessedTotal += amt;
-        } else {
-          hepPendingTotal += amt;
-        }
-
-        const d = new Date(p.createdAt || p.submittedAt || p.updatedAt);
-        if (!isNaN(d.getTime())) {
-          if (d >= todayStart) hepToday += amt;
-          if (d >= monthStart) hepMonth += amt;
-        }
-
-        const pCount = (p.persons || []).length;
-        const vCount = (p.vehicles || []).length;
-
-        const co = (
-          p.entityName ||
-          p.entity_name ||
-          p.agentName ||
-          p.agent_name ||
-          p.companyName ||
-          "Direct / Authorized Agent"
-        ).trim();
-        if (!companyMap[co]) {
-          companyMap[co] = {
-            name: co,
-            total: 0,
-            passCount: 0,
-            persons: 0,
-            vehicles: 0,
-            paymentMode: mode || "ACCOUNT",
-          };
-        }
-        companyMap[co].total += amt;
-        companyMap[co].passCount += 1;
-        companyMap[co].persons += pCount;
-        companyMap[co].vehicles += vCount;
-      });
-
-      const companyList = Object.values(companyMap).sort(
-        (a, b) => b.total - a.total,
-      );
-      const topCompanies = companyList.slice(0, 5).map((c) => ({
-        name: c.name.length > 18 ? c.name.slice(0, 16) + "..." : c.name,
-        fullName: c.name,
-        value: c.total,
-        passCount: c.passCount,
-        persons: c.persons,
-        vehicles: c.vehicles,
-      }));
-
-      const avgMins = calcAvgApprovalTime(processedList);
-
       console.log(
         "%c=== [TRAFFIC MANAGER EXECUTIVE DASHBOARD] FULL PORT REVENUE & STATISTICS ===",
         "background: #7c3aed; color: #fde68a; font-weight: bold; font-size: 12px; padding: 4px 8px; border-radius: 4px;",
       );
-      console.log("[Pass Request Counts] (Normal + Vendor):", passCounts);
-      console.log("[Revenue Summary] (Includes Normal & Vendor Passes):", {
-        "Total Revenue (All Passes)": `\u20B9 ${hepTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        "Account (HEP)": `\u20B9 ${hepAccount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        "E-Cash": `\u20B9 ${hepEcash.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        "Today's Revenue": `\u20B9 ${hepToday.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        "This Month's Revenue": `\u20B9 ${hepMonth.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      console.log("[Pass Request Counts] (SQL-aggregated, full dataset):", dPass);
+      console.log("[Revenue Summary] (SQL-aggregated, full dataset):", {
+        "Total Revenue (All Passes)": `\u20B9 ${num(dRevenue.total).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        "Account (HEP)": `\u20B9 ${num(dRevenue.account).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        "E-Cash": `\u20B9 ${num(dRevenue.ecash).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        "Today's Revenue": `\u20B9 ${num(dRevenue.today).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        "This Month's Revenue": `\u20B9 ${num(dRevenue.month).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       });
 
       setData({
         pass: {
-          pending: num(passCounts.pending),
-          processed: num(passCounts.processed),
-          total: num(passCounts.total),
-          rejected: num(passCounts.rejected ?? 0),
-          reverted: num(passCounts.reverted ?? 0),
+          pending: num(dPass.pending),
+          processed: num(dPass.processed),
+          total: num(dPass.total),
+          rejected: num(dPass.rejected),
+          reverted: num(dPass.reverted),
         },
         passMine: num(passMineCounts.processed),
         pendingQueue: {
-          persons: pendingPersons,
-          vehicles: pendingVehicles,
-          companies: pendingCompanies,
+          persons: num(dEntities.pendingPersons),
+          vehicles: num(dEntities.pendingVehicles),
+          companies: num(dPendingQueue.companies),
           list: pendingList,
           counted: pendingList.length,
         },
         processedQueue: {
-          persons: processedPersons,
-          vehicles: processedVehicles,
-          counted: processedList.length,
-          list: processedList,
+          persons: num(dEntities.processedPersons),
+          vehicles: num(dEntities.processedVehicles),
+          counted: num(dPass.processed),
+          list: [],
         },
         allPassesQueue: {
-          persons: allPersons,
-          vehicles: allVehicles,
-          list: allPassList,
-          counted: allPassList.length,
+          persons: num(dEntities.totalPersons),
+          vehicles: num(dEntities.totalVehicles),
+          list: pendingList,
+          counted: num(dPass.total),
         },
-        rawAllPasses: allPassList,
+        rawAllPasses: pendingList,
         company: {
           total: num(companyCounts.total),
           approved: num(companyCounts.approved),
@@ -1057,24 +885,24 @@ export default function TrafficManagerDashboard() {
           rawCharges: charges,
         },
         hepRevenue: {
-          total: hepTotal,
-          accountTotal: hepAccount,
-          ecashTotal: hepEcash,
-          todayTotal: hepToday,
-          monthTotal: hepMonth,
-          processedTotal: hepProcessedTotal,
-          pendingTotal: hepPendingTotal,
-          totalPersons: allPersons,
-          totalVehicles: allVehicles,
+          total: num(dRevenue.total),
+          accountTotal: num(dRevenue.account),
+          ecashTotal: num(dRevenue.ecash),
+          todayTotal: num(dRevenue.today),
+          monthTotal: num(dRevenue.month),
+          processedTotal: num(dRevenue.processed),
+          pendingTotal: num(dRevenue.pending),
+          totalPersons: num(dEntities.totalPersons),
+          totalVehicles: num(dEntities.totalVehicles),
           topCompanies,
           companyList,
         },
         portActivity: {
-          today: activityToday,
-          week: activityWeek,
-          month: activityMonth,
+          today: num(dActivity.today),
+          week: num(dActivity.week),
+          month: num(dActivity.month),
         },
-        avgApprovalMins: avgMins,
+        avgApprovalMins: null,
       });
       setLastUpdated(fmtDateTime());
       lastFetchTime.current = Date.now();
@@ -1315,36 +1143,36 @@ export default function TrafficManagerDashboard() {
 
     return {
       pass: {
-        total: filteredPasses.length,
-        pending: pendingList.length,
-        processed: processedList.length,
-        reverted: revertedList.length,
-        rejected: rejectedList.length,
+        total: isAll ? data.pass.total : filteredPasses.length,
+        pending: isAll ? data.pass.pending : pendingList.length,
+        processed: isAll ? data.pass.processed : processedList.length,
+        reverted: isAll ? data.pass.reverted : revertedList.length,
+        rejected: isAll ? data.pass.rejected : rejectedList.length,
       },
       pendingQueue: {
-        persons: pendingPersons,
-        vehicles: pendingVehicles,
-        companies: pendingCompanies,
+        persons: isAll ? data.pendingQueue.persons : pendingPersons,
+        vehicles: isAll ? data.pendingQueue.vehicles : pendingVehicles,
+        companies: isAll ? data.pendingQueue.companies : pendingCompanies,
         list: pendingList,
-        counted: pendingList.length,
+        counted: isAll ? data.pendingQueue.counted : pendingList.length,
       },
       processedQueue: {
-        persons: processedPersons,
-        vehicles: processedVehicles,
-        counted: processedList.length,
+        persons: isAll ? data.processedQueue.persons : processedPersons,
+        vehicles: isAll ? data.processedQueue.vehicles : processedVehicles,
+        counted: isAll ? data.processedQueue.counted : processedList.length,
         list: processedList,
       },
       hepRevenue: {
-        total: totalRevenue,
-        accountTotal: accountRevenue,
-        ecashTotal: ecashRevenue,
+        total: isAll ? data.hepRevenue.total : totalRevenue,
+        accountTotal: isAll ? data.hepRevenue.accountTotal : accountRevenue,
+        ecashTotal: isAll ? data.hepRevenue.ecashTotal : ecashRevenue,
         todayTotal: data.hepRevenue.todayTotal,
         monthTotal: data.hepRevenue.monthTotal,
         allTimeTotal: data.hepRevenue.total,
-        totalPersons,
-        totalVehicles,
-        topCompanies,
-        companyList,
+        totalPersons: isAll ? data.hepRevenue.totalPersons : totalPersons,
+        totalVehicles: isAll ? data.hepRevenue.totalVehicles : totalVehicles,
+        topCompanies: isAll ? data.hepRevenue.topCompanies : topCompanies,
+        companyList: isAll ? data.hepRevenue.companyList : companyList,
       },
       overstay: {
         total: filteredCharges.length,

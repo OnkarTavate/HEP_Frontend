@@ -258,6 +258,7 @@ export default function AdminPassApprovalsPage() {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [permitShare, setPermitShare] = useState(null);
 
   const isDepartmental = Boolean(
     currentUser?.role?.toLowerCase() === "approval" ||
@@ -1743,8 +1744,7 @@ export default function AdminPassApprovalsPage() {
 
             if (!Number.isInteger(vehicleEntityId) || vehicleEntityId <= 0) {
               throw new Error(
-                `Invalid Vendor vehicle database ID for ${
-                  v.registrationNo || v.id
+                `Invalid Vendor vehicle database ID for ${v.registrationNo || v.id
                 }.`,
               );
             }
@@ -2406,14 +2406,14 @@ export default function AdminPassApprovalsPage() {
             count: globalCounts.processed,
           },
           ...(currentUser?.role === "Approval" &&
-          Number(currentUser?.departmentId) === 9
+            Number(currentUser?.departmentId) === 9
             ? [
-                {
-                  id: "pass_updates",
-                  label: "Pass Updates",
-                  count: passUpdatesCount,
-                },
-              ]
+              {
+                id: "pass_updates",
+                label: "Pass Updates",
+                count: passUpdatesCount,
+              },
+            ]
             : []),
         ].map((tab) => (
           <button
@@ -2425,19 +2425,17 @@ export default function AdminPassApprovalsPage() {
               setProcessedByMe(false);
               setCurrentPage(1);
             }}
-            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${
-              activeTab === tab.id
+            className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition-all ${activeTab === tab.id
                 ? "bg-[#0a1e4d] text-white shadow"
                 : "text-slate-500 hover:text-[#0a1e4d] hover:bg-slate-100"
-            }`}
+              }`}
           >
             {tab.label}
             <span
-              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
-                activeTab === tab.id
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${activeTab === tab.id
                   ? "bg-white/20 text-white"
                   : "bg-slate-200 text-slate-600"
-              }`}
+                }`}
             >
               {tab.count}
             </span>
@@ -2521,31 +2519,31 @@ export default function AdminPassApprovalsPage() {
               <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-700/40">
                 {(activeTab === "pass_updates"
                   ? [
-                      "Pass No.",
-                      "Person Name",
-                      "Company",
-                      "Old Vehicle No.",
-                      "New Vehicle No.",
-                      "Requested On",
-                      "Status",
-                      "Actions",
-                    ]
+                    "Pass No.",
+                    "Person Name",
+                    "Company",
+                    "Old Vehicle No.",
+                    "New Vehicle No.",
+                    "Requested On",
+                    "Status",
+                    "Actions",
+                  ]
                   : activeTab === "processed"
                     ? [
-                        "Ref No",
-                        "Company Details",
-                        "Entities Included",
-                        "Applied On",
-                        "Approved By",
-                        "Status",
-                      ]
+                      "Ref No",
+                      "Company Details",
+                      "Entities Included",
+                      "Applied On",
+                      "Approved By",
+                      "Status",
+                    ]
                     : [
-                        "Ref No",
-                        "Company Details",
-                        "Entities Included",
-                        "Applied On",
-                        "Status",
-                      ]
+                      "Ref No",
+                      "Company Details",
+                      "Entities Included",
+                      "Applied On",
+                      "Status",
+                    ]
                 ).map((h) => {
                   const vis =
                     h === "Entities Included"
@@ -2558,9 +2556,8 @@ export default function AdminPassApprovalsPage() {
                   return (
                     <th
                       key={h}
-                      className={`px-4 sm:px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${
-                        h === "Status" ? "text-center" : ""
-                      } ${vis}`}
+                      className={`px-4 sm:px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${h === "Status" ? "text-center" : ""
+                        } ${vis}`}
                     >
                       {h}
                     </th>
@@ -2765,13 +2762,12 @@ export default function AdminPassApprovalsPage() {
                       <td className="px-4 sm:px-6 py-4 text-center">
                         <div className="flex flex-col items-center gap-1">
                           <span
-                            className={`px-3 py-1 rounded-full text-[11px] font-bold border ${
-                              ["approved", "completed"].includes(
-                                String(pass.status || "").toLowerCase(),
-                              )
+                            className={`px-3 py-1 rounded-full text-[11px] font-bold border ${["approved", "completed"].includes(
+                              String(pass.status || "").toLowerCase(),
+                            )
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20"
                                 : statusClass
-                            }`}
+                              }`}
                           >
                             {(["APPROVED", "COMPLETED", "ISSUED"].includes(
                               String(pass.status || "").toUpperCase(),
@@ -2854,21 +2850,21 @@ export default function AdminPassApprovalsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     {(selectedRequest.requisitionLetterFilePath ||
                       selectedRequest.requisitionLetterFileName) && (
-                      <button
-                        onClick={() =>
-                          handleViewDoc(
-                            selectedRequest.id,
-                            "passRequisitionLetter",
-                            selectedRequest.requisitionLetterFilePath ||
+                        <button
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedRequest.id,
+                              "passRequisitionLetter",
+                              selectedRequest.requisitionLetterFilePath ||
                               selectedRequest.requisitionLetterFileName,
-                          )
-                        }
-                        className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
-                      >
-                        <FileText className="h-4 w-4 text-blue-600" /> View
-                        Requisition Letter
-                      </button>
-                    )}
+                            )
+                          }
+                          className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
+                        >
+                          <FileText className="h-4 w-4 text-blue-600" /> View
+                          Requisition Letter
+                        </button>
+                      )}
                     {selectedRequest.authLetterFilePath && (
                       <button
                         onClick={() =>
@@ -2977,9 +2973,9 @@ export default function AdminPassApprovalsPage() {
 
                                   setCurrentRemark(
                                     entityRemarks.persons[p.id] ||
-                                      p.revertReason ||
-                                      p.rejectedReason ||
-                                      "",
+                                    p.revertReason ||
+                                    p.rejectedReason ||
+                                    "",
                                   );
                                 }
                               }}
@@ -3025,7 +3021,7 @@ export default function AdminPassApprovalsPage() {
 
                                       const concernDepartmentApproved =
                                         workflowState ===
-                                          "PENDING_VENDOR_PERSON_TRAFFIC" ||
+                                        "PENDING_VENDOR_PERSON_TRAFFIC" ||
                                         workflowState === "COMPLETED";
 
                                       const trafficApproved =
@@ -3035,11 +3031,10 @@ export default function AdminPassApprovalsPage() {
                                         return (
                                           <>
                                             <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                                concernDepartmentApproved
+                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${concernDepartmentApproved
                                                   ? "bg-emerald-100 text-emerald-700"
                                                   : "bg-amber-100 text-amber-700"
-                                              }`}
+                                                }`}
                                             >
                                               {concernDepartmentApproved
                                                 ? "✓ Civil Dept"
@@ -3047,11 +3042,10 @@ export default function AdminPassApprovalsPage() {
                                             </span>
 
                                             <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                                trafficApproved
+                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${trafficApproved
                                                   ? "bg-emerald-100 text-emerald-700"
                                                   : "bg-amber-100 text-amber-700"
-                                              }`}
+                                                }`}
                                             >
                                               {trafficApproved
                                                 ? "✓ Pass Section"
@@ -3065,11 +3059,10 @@ export default function AdminPassApprovalsPage() {
                                         return (
                                           <>
                                             <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                                concernDepartmentApproved
+                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${concernDepartmentApproved
                                                   ? "bg-emerald-100 text-emerald-700"
                                                   : "bg-amber-100 text-amber-700"
-                                              }`}
+                                                }`}
                                             >
                                               {concernDepartmentApproved
                                                 ? "✓ Mechanical Dept"
@@ -3077,11 +3070,10 @@ export default function AdminPassApprovalsPage() {
                                             </span>
 
                                             <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                                trafficApproved
+                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${trafficApproved
                                                   ? "bg-emerald-100 text-emerald-700"
                                                   : "bg-amber-100 text-amber-700"
-                                              }`}
+                                                }`}
                                             >
                                               {trafficApproved
                                                 ? "✓ Pass Section"
@@ -3094,11 +3086,10 @@ export default function AdminPassApprovalsPage() {
                                       if (personDepartmentId === 9) {
                                         return (
                                           <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                              trafficApproved
+                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${trafficApproved
                                                 ? "bg-emerald-100 text-emerald-700"
                                                 : "bg-amber-100 text-amber-700"
-                                            }`}
+                                              }`}
                                           >
                                             {trafficApproved
                                               ? "✓ Pass Section"
@@ -3122,7 +3113,7 @@ export default function AdminPassApprovalsPage() {
                                       Boolean(p.essentialWorkflowState) ||
                                       (p.essentialDepartmentId !== null &&
                                         p.essentialDepartmentId !==
-                                          undefined) ||
+                                        undefined) ||
                                       isOilDockArea(
                                         p.accessAreaId || p.accessArea,
                                       );
@@ -3173,7 +3164,7 @@ export default function AdminPassApprovalsPage() {
                                           "COMPLETED",
                                         ].includes(workflowState) ||
                                         String(p.status || "").toLowerCase() ===
-                                          "approved" ||
+                                        "approved" ||
                                         String(
                                           selectedRequest?.status || "",
                                         ).toLowerCase() === "approved" ||
@@ -3187,7 +3178,7 @@ export default function AdminPassApprovalsPage() {
                                           "COMPLETED",
                                         ].includes(workflowState) ||
                                         String(p.status || "").toLowerCase() ===
-                                          "approved" ||
+                                        "approved" ||
                                         String(
                                           selectedRequest?.status || "",
                                         ).toLowerCase() === "approved" ||
@@ -3199,11 +3190,10 @@ export default function AdminPassApprovalsPage() {
                                         <>
                                           {isCivilDept && (
                                             <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                                civilDone
+                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${civilDone
                                                   ? "bg-emerald-100 text-emerald-700"
                                                   : "bg-amber-100 text-amber-700"
-                                              }`}
+                                                }`}
                                             >
                                               {civilDone
                                                 ? "✓ Civil Dept"
@@ -3213,11 +3203,10 @@ export default function AdminPassApprovalsPage() {
 
                                           {isMechDept && (
                                             <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                                mechDone
+                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${mechDone
                                                   ? "bg-emerald-100 text-emerald-700"
                                                   : "bg-amber-100 text-amber-700"
-                                              }`}
+                                                }`}
                                             >
                                               {mechDone
                                                 ? "✓ Mech Dept"
@@ -3226,11 +3215,10 @@ export default function AdminPassApprovalsPage() {
                                           )}
 
                                           <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                              cisfDone
+                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${cisfDone
                                                 ? "bg-emerald-100 text-emerald-700"
                                                 : "bg-amber-100 text-amber-700"
-                                            }`}
+                                              }`}
                                           >
                                             {cisfDone
                                               ? "✓ CISF"
@@ -3238,11 +3226,10 @@ export default function AdminPassApprovalsPage() {
                                           </span>
 
                                           <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                              passSectionDone
+                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${passSectionDone
                                                 ? "bg-emerald-100 text-emerald-700"
                                                 : "bg-amber-100 text-amber-700"
-                                            }`}
+                                              }`}
                                           >
                                             {passSectionDone
                                               ? "✓ Pass Section"
@@ -3293,13 +3280,13 @@ export default function AdminPassApprovalsPage() {
 
                                     const personStatus =
                                       isPassApproved &&
-                                      String(
-                                        rawPersonStatus || "",
-                                      ).toLowerCase() === "pending"
+                                        String(
+                                          rawPersonStatus || "",
+                                        ).toLowerCase() === "pending"
                                         ? "APPROVED"
                                         : String(
-                                            rawPersonStatus || "",
-                                          ).toUpperCase();
+                                          rawPersonStatus || "",
+                                        ).toUpperCase();
 
                                     const personRemark =
                                       entityRemarks.persons[p.id] ||
@@ -3310,13 +3297,12 @@ export default function AdminPassApprovalsPage() {
                                       <>
                                         {personStatus && (
                                           <span
-                                            className={`px-2 py-1 rounded text-[10px] font-bold ${
-                                              personStatus === "APPROVED"
+                                            className={`px-2 py-1 rounded text-[10px] font-bold ${personStatus === "APPROVED"
                                                 ? "bg-emerald-100 text-emerald-700"
                                                 : personStatus === "REVERTED"
                                                   ? "bg-amber-100 text-amber-700"
                                                   : "bg-red-100 text-red-700"
-                                            }`}
+                                              }`}
                                           >
                                             {personStatus}
                                           </span>
@@ -3326,11 +3312,10 @@ export default function AdminPassApprovalsPage() {
                                           personStatus === "REVERTED") &&
                                           personRemark && (
                                             <div
-                                              className={`mt-1 text-[10px] p-1 rounded border inline-block ${
-                                                personStatus === "REVERTED"
+                                              className={`mt-1 text-[10px] p-1 rounded border inline-block ${personStatus === "REVERTED"
                                                   ? "text-amber-600 bg-amber-50 border-amber-100"
                                                   : "text-red-600 bg-red-50 border-red-100"
-                                              }`}
+                                                }`}
                                             >
                                               {personStatus === "REVERTED"
                                                 ? "Revert: "
@@ -3430,9 +3415,9 @@ export default function AdminPassApprovalsPage() {
 
                                   setCurrentRemark(
                                     entityRemarks.vehicles[v.id] ||
-                                      v.revertReason ||
-                                      v.rejectedReason ||
-                                      "",
+                                    v.revertReason ||
+                                    v.rejectedReason ||
+                                    "",
                                   );
                                 }
                               }}
@@ -3470,7 +3455,7 @@ export default function AdminPassApprovalsPage() {
                                       Boolean(v.essentialWorkflowState) ||
                                       (v.essentialDepartmentId !== null &&
                                         v.essentialDepartmentId !==
-                                          undefined) ||
+                                        undefined) ||
                                       isOilDockArea(
                                         v.accessAreaId || v.accessArea,
                                       );
@@ -3487,7 +3472,7 @@ export default function AdminPassApprovalsPage() {
                                         v.marineSafetyApproved === true ||
                                         (userRole === "Fire Safety Officer" &&
                                           entityStatuses.vehicles[v.id] ===
-                                            "APPROVED");
+                                          "APPROVED");
 
                                       const fireSafetyDone =
                                         sparkApproved ||
@@ -3532,7 +3517,7 @@ export default function AdminPassApprovalsPage() {
                                           "COMPLETED",
                                         ].includes(workflowState) ||
                                         String(v.status || "").toLowerCase() ===
-                                          "approved" ||
+                                        "approved" ||
                                         String(
                                           selectedRequest?.status || "",
                                         ).toLowerCase() === "approved" ||
@@ -3546,7 +3531,7 @@ export default function AdminPassApprovalsPage() {
                                           "COMPLETED",
                                         ].includes(workflowState) ||
                                         String(v.status || "").toLowerCase() ===
-                                          "approved" ||
+                                        "approved" ||
                                         String(
                                           selectedRequest?.status || "",
                                         ).toLowerCase() === "approved" ||
@@ -3626,13 +3611,13 @@ export default function AdminPassApprovalsPage() {
 
                                     const vehicleStatus =
                                       isPassApproved &&
-                                      String(
-                                        rawVehicleStatus || "",
-                                      ).toLowerCase() === "pending"
+                                        String(
+                                          rawVehicleStatus || "",
+                                        ).toLowerCase() === "pending"
                                         ? "APPROVED"
                                         : String(
-                                            rawVehicleStatus || "",
-                                          ).toUpperCase();
+                                          rawVehicleStatus || "",
+                                        ).toUpperCase();
 
                                     const vehicleRemark =
                                       entityRemarks.vehicles[v.id] ||
@@ -3643,13 +3628,12 @@ export default function AdminPassApprovalsPage() {
                                       <>
                                         {vehicleStatus && (
                                           <span
-                                            className={`px-2 py-1 rounded text-[10px] font-bold ${
-                                              vehicleStatus === "APPROVED"
+                                            className={`px-2 py-1 rounded text-[10px] font-bold ${vehicleStatus === "APPROVED"
                                                 ? "bg-emerald-100 text-emerald-700"
                                                 : vehicleStatus === "REVERTED"
                                                   ? "bg-amber-100 text-amber-700"
                                                   : "bg-red-100 text-red-700"
-                                            }`}
+                                              }`}
                                           >
                                             {vehicleStatus}
                                           </span>
@@ -3659,11 +3643,10 @@ export default function AdminPassApprovalsPage() {
                                           vehicleStatus === "REVERTED") &&
                                           vehicleRemark && (
                                             <div
-                                              className={`mt-1 text-[10px] p-1 rounded border inline-block ${
-                                                vehicleStatus === "REVERTED"
+                                              className={`mt-1 text-[10px] p-1 rounded border inline-block ${vehicleStatus === "REVERTED"
                                                   ? "text-amber-600 bg-amber-50 border-amber-100"
                                                   : "text-red-600 bg-red-50 border-red-100"
-                                              }`}
+                                                }`}
                                             >
                                               {vehicleStatus === "REVERTED"
                                                 ? "Revert: "
@@ -3718,11 +3701,10 @@ export default function AdminPassApprovalsPage() {
                 <button
                   onClick={handleSubmitReview}
                   disabled={isSubmitting}
-                  className={`bg-orange-600 text-white px-8 py-2.5 rounded-xl font-bold ${
-                    isSubmitting
+                  className={`bg-orange-600 text-white px-8 py-2.5 rounded-xl font-bold ${isSubmitting
                       ? "opacity-60 cursor-not-allowed"
                       : "hover:bg-orange-700"
-                  }`}
+                    }`}
                 >
                   {isSubmitting ? "Submitting..." : "Submit Complete Review"}
                 </button>
@@ -3843,11 +3825,11 @@ export default function AdminPassApprovalsPage() {
                           </span>
                           <span className="text-xs font-bold text-slate-800">
                             {data.conversionStartDate ||
-                            data.conversion_start_date
+                              data.conversion_start_date
                               ? String(
-                                  data.conversionStartDate ||
-                                    data.conversion_start_date,
-                                ).split("T")[0]
+                                data.conversionStartDate ||
+                                data.conversion_start_date,
+                              ).split("T")[0]
                               : "-"}
                           </span>
                         </div>
@@ -3858,9 +3840,9 @@ export default function AdminPassApprovalsPage() {
                           <span className="text-xs font-bold text-slate-800">
                             {data.conversionEndDate || data.conversion_end_date
                               ? String(
-                                  data.conversionEndDate ||
-                                    data.conversion_end_date,
-                                ).split("T")[0]
+                                data.conversionEndDate ||
+                                data.conversion_end_date,
+                              ).split("T")[0]
                               : "-"}
                           </span>
                         </div>
@@ -3929,7 +3911,7 @@ export default function AdminPassApprovalsPage() {
                         label="HEP Type"
                         value={formatHepType(
                           entityModal.data.hepType ||
-                            entityModal.data.hepTypeId,
+                          entityModal.data.hepTypeId,
                         )}
                       />
                       <DetailItem
@@ -3964,7 +3946,7 @@ export default function AdminPassApprovalsPage() {
                           (String(
                             entityModal.data.nationality || "",
                           ).toUpperCase() === "FOREIGNER" ||
-                          String(entityModal.data.nationality) === "2"
+                            String(entityModal.data.nationality) === "2"
                             ? ""
                             : "India")
                         }
@@ -4059,7 +4041,7 @@ export default function AdminPassApprovalsPage() {
                     label="Access Area"
                     value={formatAccessArea(
                       entityModal.data.accessAreaId ||
-                        entityModal.data.accessArea,
+                      entityModal.data.accessArea,
                     )}
                     highlight
                   />
@@ -4236,25 +4218,25 @@ export default function AdminPassApprovalsPage() {
                         entityModal.data.requisitionLetterPath ||
                         entityModal.data.conversionWorkflowState ||
                         entityModal.data.conversionStatus) && (
-                        <DocumentCard
-                          label="Requisition Letter (Conversion)"
-                          filePath={
-                            entityModal.data.conversionRequisitionFilePath ||
-                            entityModal.data.requisitionLetterPath ||
-                            "conversion_requisition.pdf"
-                          }
-                          documentType="passRequisitionLetter"
-                          passRequestId={
-                            entityModal.data.passRequestId ||
-                            selectedRequest?.id
-                          }
-                          onView={handleViewDoc}
-                          entityIndex={extractEntityIndex(entityModal.data.id)}
-                          isVendorPass={
-                            selectedRequest?.originType === "VENDOR"
-                          }
-                        />
-                      )}
+                          <DocumentCard
+                            label="Requisition Letter (Conversion)"
+                            filePath={
+                              entityModal.data.conversionRequisitionFilePath ||
+                              entityModal.data.requisitionLetterPath ||
+                              "conversion_requisition.pdf"
+                            }
+                            documentType="passRequisitionLetter"
+                            passRequestId={
+                              entityModal.data.passRequestId ||
+                              selectedRequest?.id
+                            }
+                            onView={handleViewDoc}
+                            entityIndex={extractEntityIndex(entityModal.data.id)}
+                            isVendorPass={
+                              selectedRequest?.originType === "VENDOR"
+                            }
+                          />
+                        )}
                     </>
                   ) : (
                     <>
@@ -4262,25 +4244,25 @@ export default function AdminPassApprovalsPage() {
                         entityModal.data.requisitionLetterPath ||
                         entityModal.data.conversionWorkflowState ||
                         entityModal.data.conversionStatus) && (
-                        <DocumentCard
-                          label="Requisition Letter (Conversion)"
-                          filePath={
-                            entityModal.data.conversionRequisitionFilePath ||
-                            entityModal.data.requisitionLetterPath ||
-                            "conversion_requisition.pdf"
-                          }
-                          documentType="passRequisitionLetter"
-                          passRequestId={
-                            entityModal.data.passRequestId ||
-                            selectedRequest?.id
-                          }
-                          onView={handleViewDoc}
-                          entityIndex={extractEntityIndex(entityModal.data.id)}
-                          isVendorPass={
-                            selectedRequest?.originType === "VENDOR"
-                          }
-                        />
-                      )}
+                          <DocumentCard
+                            label="Requisition Letter (Conversion)"
+                            filePath={
+                              entityModal.data.conversionRequisitionFilePath ||
+                              entityModal.data.requisitionLetterPath ||
+                              "conversion_requisition.pdf"
+                            }
+                            documentType="passRequisitionLetter"
+                            passRequestId={
+                              entityModal.data.passRequestId ||
+                              selectedRequest?.id
+                            }
+                            onView={handleViewDoc}
+                            entityIndex={extractEntityIndex(entityModal.data.id)}
+                            isVendorPass={
+                              selectedRequest?.originType === "VENDOR"
+                            }
+                          />
+                        )}
                       <DocumentCard
                         label="RC/NOC Document"
                         filePath={entityModal.data.scannedCopyFilePath}
