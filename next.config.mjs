@@ -180,6 +180,11 @@ const nextConfig = {
   },
 
   async headers() {
+    // HSTS and CSP upgrade-insecure-requests only make sense when the app is
+    // actually served over HTTPS. Headers are baked in at build time, so set
+    // DISABLE_HTTPS_UPGRADE=true when running `next build` for plain-HTTP hosts.
+    const forceHttps =
+      process.env.NODE_ENV !== "development" && process.env.DISABLE_HTTPS_UPGRADE !== "true";
     const headers = [
       // Cache public folder assets (images, icons, etc.)
       // Next.js route patterns don't support regex groups — use separate entries
@@ -220,9 +225,10 @@ const nextConfig = {
           { key: "Server", value: "" },
           // VAPT Vuln #12 – Strict-Transport-Security (HSTS)
           // Forces HTTPS for 1 year; includeSubDomains covers *.bosschn.in
-          // Skipped in development: the dev server is plain HTTP, and a cached
-          // HSTS entry makes the browser upgrade every asset to https → ERR_SSL_PROTOCOL_ERROR.
-          ...(process.env.NODE_ENV === "development"
+          // Skipped when served over plain HTTP (dev, or LAN builds with
+          // DISABLE_HTTPS_UPGRADE=true): the browser would upgrade every asset
+          // to https → ERR_SSL_PROTOCOL_ERROR.
+          ...(!forceHttps
             ? []
             : [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" }]),
           // VAPT Vuln #13 – Content-Security-Policy
@@ -246,7 +252,7 @@ const nextConfig = {
               "base-uri 'self'",
               "form-action 'self'",
               "frame-ancestors 'none'",
-              "upgrade-insecure-requests",
+              ...(forceHttps ? ["upgrade-insecure-requests"] : []),
             ].join("; "),
           },
           // VAPT Vuln #14 – Permissions-Policy
