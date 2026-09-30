@@ -619,11 +619,6 @@ export default function TrafficLayout({ children }) {
           href: "/traffic_approval/blacklist",
           icon: ShieldBan,
         },
-        {
-          name: "Overstay Exceptions",
-          href: "/traffic_approval/overstay",
-          icon: ShieldCheck,
-        },
         { name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users },
       ];
 
