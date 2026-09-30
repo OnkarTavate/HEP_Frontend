@@ -11,6 +11,7 @@ import {
   Building2,
 } from "lucide-react";
 import { getBulkPassScan } from "@/lib/bulkPassApi";
+import { formatDateKey, toIstDateKey } from "@/lib/bulkPassValidity";
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,9 @@ const fmtDate = (v) => {
   const d = new Date(v);
   return isNaN(d) ? v : fmt.format(d);
 };
+
+// Validity is date-only in IST — no time of day on the pass.
+const fmtDay = (v) => formatDateKey(toIstDateKey(v)) || "—";
 
 const visitorLabel = (v) =>
   v
@@ -167,8 +171,8 @@ function BulkPassViewContent() {
             <Field label="Persons" value={String(batch.noOfPersons ?? persons.length)} />
             <Field label="Vehicles" value={String(batch.noOfVehicles ?? vehicles.length)} />
             <Field label="Contact" value={batch.applicantMobile} />
-            <Field label="Valid From" value={fmtDate(batch.validityFrom)} />
-            <Field label="Valid Upto" value={fmtDate(batch.validityUpto)} />
+            <Field label="Valid From" value={fmtDay(batch.validityFrom)} />
+            <Field label="Valid Upto" value={fmtDay(batch.validityUpto)} />
             <div className="col-span-2 sm:col-span-3">
               <Field label="Purpose of Visit" value={batch.purpose} />
             </div>

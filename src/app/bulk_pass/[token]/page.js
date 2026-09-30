@@ -27,6 +27,7 @@ import {
   Car,
   Users,
   Eye,
+  CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -47,11 +48,18 @@ import {
 } from "@/lib/bulkPassApi";
 import { processPhoto } from "@/lib/photoProcessor";
 import SubmissionHistory, {
+  formatBatchWindow,
   SubmissionSummaryStrip,
   SubmissionStatusBadge,
 } from "@/components/bulk-pass/SubmissionHistory";
 import ValidityBanner from "@/components/bulk-pass/ValidityBanner";
-import { getValidityState } from "@/lib/bulkPassValidity";
+import {
+  getValidityState,
+  getBatchValidityBounds,
+  getBatchValidityErrors,
+  formatDateKey,
+  toIstDateKey,
+} from "@/lib/bulkPassValidity";
 import { BULK_PASS_LABELS, BULK_PASS_LIMITS, isStudentVisitorType } from "@/lib/bulkPassConstants";
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -405,6 +413,11 @@ function BatchSubmittedPanel({ result, email, canSubmitMore, onNextBatch, onView
             are now with the Traffic Department for review. You will be emailed once they are
             reviewed — usually within 1–2 working days.
           </p>
+          {result?.validityUpto && (
+            <p className="text-sm text-stone-600 mt-1">
+              Valid: <span className="font-bold">{formatBatchWindow(result.validityFrom, result.validityUpto)}</span>
+            </p>
+          )}
           {email && (
             <p className="text-xs text-stone-400 mt-2">
               A confirmation was sent to <span className="font-mono font-semibold">{email}</span>.
@@ -738,7 +751,7 @@ function SubmissionDetailModal({ token, submission, onClose, onDownload, downloa
                 <ReadField label="Persons" value={String(detail?.personsCount ?? 0)} />
                 <ReadField label="Vehicles" value={String(detail?.vehiclesCount ?? 0)} />
                 <ReadField label="Submitted On" value={fmtDate(detail?.submittedAt)} />
-                <ReadField label="Valid Until" value={fmtDate(detail?.validityUpto)} />
+                <ReadField label="Batch Validity" value={formatBatchWindow(detail?.validityFrom, detail?.validityUpto)} />
               </div>
 
               {detail?.returnReason && (
@@ -943,13 +956,13 @@ function IntakeCard({ batch }) {
                   <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">
                     Valid From
                   </p>
-                  <p className="text-sm font-bold text-stone-800 mb-2">{fmtDate(batch.validityFrom)}</p>
+                  <p className="text-sm font-bold text-stone-800 mb-2">{formatDateKey(toIstDateKey(batch.validityFrom)) || "—"}</p>
                 </>
               )}
               <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1">
                 Valid Until
               </p>
-              <p className="text-sm font-bold text-stone-800">{fmtDate(batch.validityUpto)}</p>
+              <p className="text-sm font-bold text-stone-800">{formatDateKey(toIstDateKey(batch.validityUpto)) || "—"}</p>
             </div>
           </div>
         </div>
@@ -2337,7 +2350,63 @@ function VehicleModal({ vehicle, onSave, onClose }) {
   );
 }
 
-function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesChange, onBack, onSubmit, submitting, uploadPct }) {
+/**
+ * The visit window of one batch, chosen by the applicant inside the Bulk Pass
+ * window. The server applies the same rules (resolveBatchValidity).
+ */
+function BatchValidityFields({ value, onChange, passWindow, errors, disabled }) {
+  const { min, max } = getBatchValidityBounds(passWindow);
+  const inputCls = (err) =>
+    `w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-stone-800 bg-white ring-1 ${
+      err ? "ring-red-300 focus:ring-red-400" : "ring-stone-200 focus:ring-amber-400"
+    } focus:outline-none focus:ring-2 disabled:opacity-50`;
+  // Only complain about a field once something has been entered in it.
+  const fromErr = value.validityFrom ? errors.validityFrom : null;
+  const uptoErr = value.validityUpto ? errors.validityUpto : null;
+
+  return (
+    <div className="mb-6 px-5 py-4 rounded-2xl bg-amber-50/60 ring-1 ring-amber-200">
+      <div className="flex items-center gap-2 mb-1">
+        <CalendarDays className="h-4 w-4 text-amber-600" />
+        <h4 className="text-sm font-bold text-stone-800">Batch Validity *</h4>
+      </div>
+      <p className="text-xs text-stone-500 mb-4 leading-relaxed">
+        The dates this batch will visit the port. Its pass is valid only on these days
+        {max ? ` — choose between ${formatDateKey(min)} and ${formatDateKey(max)}` : ""}.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <label className="block">
+          <span className="block text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-1">Valid From *</span>
+          <input
+            type="date"
+            value={value.validityFrom}
+            min={min}
+            max={max || undefined}
+            disabled={disabled}
+            onChange={(e) => onChange({ ...value, validityFrom: e.target.value })}
+            className={inputCls(fromErr)}
+          />
+          {fromErr && <span className="block mt-1 text-[11px] font-semibold text-red-600">{fromErr}</span>}
+        </label>
+        <label className="block">
+          <span className="block text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-1">Valid To *</span>
+          <input
+            type="date"
+            value={value.validityUpto}
+            min={value.validityFrom || min}
+            max={max || undefined}
+            disabled={disabled}
+            onChange={(e) => onChange({ ...value, validityUpto: e.target.value })}
+            className={inputCls(uptoErr)}
+          />
+          {uptoErr && <span className="block mt-1 text-[11px] font-semibold text-red-600">{uptoErr}</span>}
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesChange, onBack, onSubmit, submitting, uploadPct, batchDates, onBatchDatesChange, passWindow }) {
   const zipInputRef = useRef(null);
   const [zipUploading, setZipUploading] = useState(false);
   const [zipResult, setZipResult] = useState(null);
@@ -2419,7 +2488,10 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
   // "Max No. of Vehicles" is a ceiling, not a quota: a batch of people arriving
   // on foot or by bus is perfectly valid. Only the upper bound is enforced.
   const vehiclesReady = !vehiclesExceeded && vehicleAadhaarCardsMissing === 0;
-  const canSubmit = personsReady && vehiclesReady;
+  // Under a Bulk Pass every batch needs its own dates inside the pass window.
+  const dateErrors = passWindow ? getBatchValidityErrors(batchDates || {}, passWindow) : {};
+  const datesReady = Object.keys(dateErrors).length === 0;
+  const canSubmit = personsReady && vehiclesReady && datesReady;
 
   const handleRowChange = (index, updatedRow) => {
     onRowsChange((prev) => prev.map((r, i) => (i === index ? updatedRow : r)));
@@ -2645,6 +2717,16 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
               <li>• You may also click <strong>Re-upload Excel</strong> above to start fresh from a new spreadsheet.</li>
             </ul>
           </div>
+        )}
+
+        {passWindow && (
+          <BatchValidityFields
+            value={batchDates}
+            onChange={onBatchDatesChange}
+            passWindow={passWindow}
+            errors={dateErrors}
+            disabled={submitting}
+          />
         )}
 
         {/* ── PERSONS SECTION ── */}
@@ -3031,6 +3113,10 @@ function EditFormStep({ rows, token, batch, onRowsChange, vehicles, onVehiclesCh
             <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-amber-50 ring-1 ring-amber-200">
               <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
               <p className="text-xs text-amber-700 leading-relaxed">
+                {!datesReady &&
+                  (batchDates?.validityFrom && batchDates?.validityUpto
+                    ? `${dateErrors.validityFrom || dateErrors.validityUpto} `
+                    : "Choose the batch's Valid From and Valid To dates. ")}
                 {personsExceeded &&
                   `Too many persons: ${rows.length} entered, maximum allowed is ${maxPersons}. Remove ${rows.length - maxPersons}. `}
                 {errorRows.length > 0 && "Fix " + errorRows.length + " row(s) with errors. "}
@@ -3134,6 +3220,8 @@ export default function BulkPassPublicPage() {
   // Set when this link opens one returned batch for correction rather than
   // starting a new one.
   const [revisionOf, setRevisionOf] = useState(null);
+  // The visit window the applicant chooses for the batch being prepared.
+  const [batchDates, setBatchDates] = useState({ validityFrom: "", validityUpto: "" });
 
   // "excel" → "edit" → "submitted"
   const [step, setStep] = useState("excel");
@@ -3263,6 +3351,13 @@ export default function BulkPassPublicPage() {
             parseErrors: [],
           }));
           if (alive) setRows(restoredRows);
+          // A correction starts from the dates the batch was sent with.
+          if (alive) {
+            setBatchDates({
+              validityFrom: toIstDateKey(resolvedBatch.validityFrom) || "",
+              validityUpto: toIstDateKey(resolvedBatch.validityUpto) || "",
+            });
+          }
 
           if (Array.isArray(resolvedBatch.previousVehicles) && resolvedBatch.previousVehicles.length > 0) {
             const restoredVehicles = resolvedBatch.previousVehicles.map((v, idx) => ({
@@ -3323,6 +3418,14 @@ export default function BulkPassPublicPage() {
     isMultipleSubmissionEnabled && remaining?.vehiclesRemaining != null
       ? Math.max(0, Math.min(maxVehicles, remaining.vehiclesRemaining))
       : maxVehicles;
+
+  // The Bulk Pass window every batch's own dates must fall inside. The server's
+  // validity block describes the pass (never the batch being corrected).
+  const passWindow = isMultipleSubmissionEnabled
+    ? validity?.validityUpto
+      ? validity
+      : bulkPass
+    : null;
 
   const handleParsed = (parsedRows) => {
     setRows(parsedRows);
@@ -3403,10 +3506,23 @@ export default function BulkPassPublicPage() {
       return;
     }
 
+    if (isMultipleSubmissionEnabled) {
+      const dateErrors = getBatchValidityErrors(batchDates, passWindow);
+      const firstError = dateErrors.validityFrom || dateErrors.validityUpto;
+      if (firstError) {
+        toast.error(firstError);
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       // Vehicle docs are File objects — upload them via FormData, persons as JSON
       const formData = new FormData();
+      if (isMultipleSubmissionEnabled) {
+        formData.append("validityFrom", batchDates.validityFrom);
+        formData.append("validityUpto", batchDates.validityUpto);
+      }
       // Strip File objects (aadhaarCardFile) from the JSON; send them separately.
       // Also pass keep-paths for revision reuse so the backend can skip re-processing.
       const rowsPayload = rows.map((r) => ({
@@ -3467,6 +3583,7 @@ export default function BulkPassPublicPage() {
       setLastResult(res?.data || null);
       setRows([]);
       setVehicles([]);
+      setBatchDates({ validityFrom: "", validityUpto: "" });
       setStep("submitted");
       // The response already carries the refreshed allowance and gate; apply it
       // before the history refresh lands so nothing stale is offered.
@@ -3730,6 +3847,9 @@ export default function BulkPassPublicPage() {
                     onSubmit={handleSubmit}
                     submitting={submitting}
                     uploadPct={uploadPct}
+                    batchDates={batchDates}
+                    onBatchDatesChange={setBatchDates}
+                    passWindow={passWindow}
                   />
                 )}
               </div>

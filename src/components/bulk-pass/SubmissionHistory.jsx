@@ -13,7 +13,16 @@
  */
 
 import React from "react";
-import { Archive, Eye, Users, Car, Clock, CheckCircle2, XCircle, Download, Loader2 } from "lucide-react";
+import { Archive, Eye, Users, Car, Clock, CheckCircle2, XCircle, Download, Loader2, CalendarDays } from "lucide-react";
+import { formatDateKey, toIstDateKey } from "@/lib/bulkPassValidity";
+
+// Each batch carries its own visit window (date-only, IST).
+export function formatBatchWindow(from, upto) {
+  const f = formatDateKey(toIstDateKey(from));
+  const u = formatDateKey(toIstDateKey(upto));
+  if (f && u) return f === u ? f : `${f} – ${u}`;
+  return u ? `Until ${u}` : "—";
+}
 
 // Lifecycle labels for a single batch inside a Bulk Pass. Kept in one place so
 // the applicant never sees an internal enum name.
@@ -116,6 +125,7 @@ function normalise(submission, index) {
     rejected,
     status: submission.status,
     submittedAt: submission.submittedAt || submission.createdAt || null,
+    validityFrom: submission.validityFrom || null,
     validityUpto: submission.validityUpto || null,
     // The approved pass exists once Traffic has finalised the batch.
     passAvailable: submission.passAvailable ?? (submission.status === "COMPLETED" && !!submission.qrPdfPath),
@@ -222,7 +232,7 @@ export default function SubmissionHistory({
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-100">
-              {["Batch", "Reference No", "Persons", "Vehicles", "Status", "Submitted On", ...(showActions ? [""] : [])].map(
+              {["Batch", "Reference No", "Valid", "Persons", "Vehicles", "Status", "Submitted On", ...(showActions ? [""] : [])].map(
                 (h, i) => (
                   <th
                     key={`${h}-${i}`}
@@ -248,6 +258,9 @@ export default function SubmissionHistory({
                 </td>
                 <td className="px-4 py-3 font-mono text-xs font-bold text-slate-800 whitespace-nowrap">
                   {s.refNo}
+                </td>
+                <td className="px-4 py-3 text-xs font-semibold text-slate-700 whitespace-nowrap">
+                  {formatBatchWindow(s.validityFrom, s.validityUpto)}
                 </td>
                 <td className="px-4 py-3">
                   <span className="inline-flex items-center gap-1.5 text-slate-700 font-semibold tabular-nums">
@@ -309,6 +322,10 @@ export default function SubmissionHistory({
                 <p className="flex items-center gap-1.5 text-[11px] text-slate-400">
                   <Clock className="h-3 w-3 shrink-0" />
                   {formatWhen(s.submittedAt)}
+                </p>
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 mt-0.5">
+                  <CalendarDays className="h-3 w-3 shrink-0" />
+                  {formatBatchWindow(s.validityFrom, s.validityUpto)}
                 </p>
               </div>
               <SubmissionStatusBadge status={s.status} />

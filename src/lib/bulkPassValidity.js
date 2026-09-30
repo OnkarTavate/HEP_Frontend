@@ -11,7 +11,11 @@
  *
  * Date-only validation: All validity dates are treated as date-only (no time
  * component) and automatically extended to end of day (23:59:59.999) to ensure
- * passes remain valid throughout the entire specified day.
+ * passes remain valid throughout the entire specified day. `validityFrom` opens
+ * at 00:00 IST of its day.
+ *
+ * Each batch under a Bulk Pass carries its own window, chosen by the applicant
+ * inside the pass window — see getBatchValidityErrors.
  */
 
 export const EXPIRY_WARNING_DAYS = 3;
@@ -47,6 +51,80 @@ function normalizeValidityUpto(value) {
 }
 
 /**
+ * The IST calendar day of a date-ish value as "YYYY-MM-DD", or null.
+ * A bare "YYYY-MM-DD" (what a date input yields) is that IST day as-is.
+ */
+export function toIstDateKey(value) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    const key = value.trim();
+    const d = new Date(`${key}T00:00:00Z`);
+    // Reject impossible days ("2026-02-31") instead of rolling them over.
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === key ? key : null;
+  }
+  const d = toDate(value);
+  if (!d) return null;
+  return new Date(d.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Normalise the start of a validity window to 00:00 IST of that day.
+ */
+function normalizeValidityFrom(value) {
+  const key = toIstDateKey(value);
+  if (!key) return null;
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d) - IST_OFFSET_MS);
+}
+
+/**
+ * The earliest and latest day ("YYYY-MM-DD", IST) an applicant may choose for a
+ * batch under this Bulk Pass: from today or the pass start, whichever is later,
+ * up to the pass end. Mirrors the server's getBatchValidityBounds.
+ */
+export function getBatchValidityBounds(pass, now = new Date()) {
+  const from = pass?.validityFrom ?? pass?.approved_time_from ?? pass?.validity_from ?? null;
+  const upto = pass?.validityUpto ?? pass?.approved_time_upto ?? pass?.validity_upto ?? null;
+  const today = toIstDateKey(now);
+  const passFrom = toIstDateKey(from);
+  return {
+    min: passFrom && passFrom > today ? passFrom : today,
+    max: toIstDateKey(upto),
+  };
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2026-10-01" → "01 Oct 2026". */
+export function formatDateKey(key) {
+  if (!key) return "";
+  const [y, m, d] = key.split("-");
+  return `${d} ${MONTHS[Number(m) - 1]} ${y}`;
+}
+
+/**
+ * Check the window an applicant chose for one batch. Returns an error keyed by
+ * field ({ validityFrom?, validityUpto? }) — empty when the window is valid.
+ * Same rules, same wording as the server's resolveBatchValidity.
+ */
+export function getBatchValidityErrors({ validityFrom, validityUpto }, pass, now = new Date()) {
+  const fromKey = toIstDateKey(validityFrom);
+  const uptoKey = toIstDateKey(validityUpto);
+  const errors = {};
+  if (!fromKey) errors.validityFrom = "Please enter a valid 'Valid From' date for this batch.";
+  if (!uptoKey) errors.validityUpto = "Please enter a valid 'Valid To' date for this batch.";
+  const { min, max } = getBatchValidityBounds(pass, now);
+  if (fromKey && fromKey < min) {
+    errors.validityFrom = `'Valid From' cannot be earlier than ${formatDateKey(min)}.`;
+  }
+  if (fromKey && uptoKey && uptoKey < fromKey) {
+    errors.validityUpto = "'Valid To' cannot be earlier than 'Valid From'.";
+  } else if (uptoKey && max && uptoKey > max) {
+    errors.validityUpto = `'Valid To' cannot be later than the bulk pass validity (${formatDateKey(max)}).`;
+  }
+  return errors;
+}
+
+/**
  * Derive the validity state of a Bulk Pass from any row shape
  * (camelCase batch, snake_case public request, or an approved time window).
  *
@@ -57,7 +135,7 @@ export function getValidityState(source, now = new Date()) {
     return { state: "UNKNOWN", expiringSoon: false, daysRemaining: null, canSubmit: false, validityFrom: null, validityUpto: null };
   }
 
-  const from = toDate(source.validityFrom ?? source.approved_time_from ?? source.validity_from ?? null);
+  const from = normalizeValidityFrom(source.validityFrom ?? source.approved_time_from ?? source.validity_from ?? null);
   const upto = normalizeValidityUpto(
     source.validityUpto ?? source.approved_time_upto ?? source.validity_upto ?? null
   );
