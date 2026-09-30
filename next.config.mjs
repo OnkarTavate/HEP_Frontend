@@ -16,6 +16,8 @@ const connectSrc = isDev
       "http://localhost:5009", 
       "http://localhost:5010", 
       "http://localhost:5011",
+      "http://localhost:5013",
+      "http://localhost:7000",
       "ws://localhost:*",     // Next.js HMR websocket
       "wss://localhost:*",
     ].join(" ")
@@ -23,7 +25,7 @@ const connectSrc = isDev
 
 const nextConfig = {
   outputFileTracingRoot: process.cwd(),
-  allowedDevOrigins: ['10.184.3.133', '14.139.180.41', '127.0.0.1'],
+  allowedDevOrigins: ['10.184.3.133', '14.139.180.47','apacs.bosschn.in','10.184.3.129', '127.0.0.1'],
 
   // Remove the "X-Powered-By: Next.js" header from all responses
   poweredByHeader: false,
@@ -153,6 +155,16 @@ const nextConfig = {
         source: "/api/payment/:path*",
         destination: "http://localhost:5010/api/payment/:path*",
       },
+      // ── Face verification service (port 5013) ─────────────────────────
+      {
+        source: "/api/face/:path*",
+        destination: "http://localhost:5013/api/face/:path*",
+      },
+      // ── API Metrics / Data Providers service (port 7000) ─────────────
+      {
+        source: "/api/providers/:path*",
+        destination: "http://localhost:7000/api/providers/:path*",
+      },
       // ── User / Agent service (port 5001) — catch-all ─────────────────
       {
         source: "/api/:path*",
@@ -224,12 +236,13 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob: http: https:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' http://localhost:* http://127.0.0.1:* http://10.184.3.133:* http://14.139.180.41:* https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://tessdata.projectnaptha.com ws: wss:",
-              "frame-src 'self' http://localhost:* http://127.0.0.1:* http://10.184.3.133:* http://14.139.180.41:* blob: data:",
+              "connect-src 'self' http://localhost:* http://127.0.0.1:* http://10.184.38.219:* http://10.184.3.133:* http://14.139.180.41:* https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://tessdata.projectnaptha.com ws: wss:",
+              "frame-src 'self' http://localhost:* http://127.0.0.1:* http://10.184.38.219:* http://10.184.3.133:* http://14.139.180.41:* blob: data:",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",
               "frame-ancestors 'none'",
+              "upgrade-insecure-requests",
             ].join("; "),
           },
           // VAPT Vuln #14 – Permissions-Policy

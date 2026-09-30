@@ -35,6 +35,7 @@ import {
 import { Button } from "@/components/ui/button";
 import PaginationBar from "@/components/ui/PaginationBar";
 import { toast } from "sonner";
+import DataIngestionProvidersMatrix from "@/components/admin/DataIngestionProvidersMatrix";
 
 const BASE_URL = process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
 const AUTH_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5006/api";
@@ -869,6 +870,9 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {/* ── DATA INGESTION PROVIDERS MATRIX (TOS Terminals & IPortman Weighbridges) ── */}
+      <DataIngestionProvidersMatrix />
 
       {/* CREATE NEW ACCOUNT MODAL */}
       {showCreateAdmin && (
