@@ -220,7 +220,11 @@ const nextConfig = {
           { key: "Server", value: "" },
           // VAPT Vuln #12 – Strict-Transport-Security (HSTS)
           // Forces HTTPS for 1 year; includeSubDomains covers *.bosschn.in
-          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
+          // Skipped in development: the dev server is plain HTTP, and a cached
+          // HSTS entry makes the browser upgrade every asset to https → ERR_SSL_PROTOCOL_ERROR.
+          ...(process.env.NODE_ENV === "development"
+            ? []
+            : [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" }]),
           // VAPT Vuln #13 – Content-Security-Policy
           // Restrictive policy tailored to this Next.js + React application.
           // 'self' covers the same origin; 'unsafe-inline' for styles is
