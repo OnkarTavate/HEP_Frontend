@@ -1715,7 +1715,18 @@ export default function TrafficPassesPage() {
                             {p.personPassNo || "-"}
                           </td>
                           <td className="p-3 font-bold text-[#0a1e4d]">
-                            <span>{p.name}</span>
+                            <div>{p.name}</div>
+                            {(p.conversionWorkflowState ||
+                              p.isConvertedToEssential ||
+                              Boolean(p.essentialWorkflowState) ||
+                              (p.essentialDepartmentId !== null && p.essentialDepartmentId !== undefined) ||
+                              p.isEssential ||
+                              (p.concernDepartmentId != null && isOilDockArea(p.accessAreaId || p.accessArea)) ||
+                              isOilDockArea(p.accessAreaId || p.accessArea)) && (
+                              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold border bg-amber-50 text-amber-800 border-amber-300">
+                                ⚡ Essential Pass
+                              </span>
+                            )}
                             <div className="flex flex-wrap gap-1 mt-1">
                               {isOilDockArea(
                                 p.accessAreaId || p.accessArea,
@@ -1739,57 +1750,34 @@ export default function TrafficPassesPage() {
                                     : "⏳ Pending Sr. DTM"}
                                 </span>
                               )}
-                              <span
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                  [
-                                    "APPROVED",
-                                    "REJECTED",
-                                    "REVERTED",
-                                    "approved",
-                                    "rejected",
-                                    "reverted",
-                                  ].includes(
-                                    selectedRequest?.status ||
-                                      selectedRequest?.decision,
-                                  ) ||
-                                  [
-                                    "approved",
-                                    "rejected",
-                                    "reverted",
-                                    "APPROVED",
-                                    "REJECTED",
-                                    "REVERTED",
-                                  ].includes(p.status || p.decision) ||
-                                  (userRole === "Approval" &&
-                                    entityStatuses.persons[p.id] === "APPROVED")
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-amber-100 text-amber-700"
-                                }`}
-                              >
-                                {[
-                                  "APPROVED",
-                                  "REJECTED",
-                                  "REVERTED",
-                                  "approved",
-                                  "rejected",
-                                  "reverted",
-                                ].includes(
-                                  selectedRequest?.status ||
-                                    selectedRequest?.decision,
-                                ) ||
-                                [
-                                  "approved",
-                                  "rejected",
-                                  "reverted",
-                                  "APPROVED",
-                                  "REJECTED",
-                                  "REVERTED",
-                                ].includes(p.status || p.decision) ||
-                                (userRole === "Approval" &&
-                                  entityStatuses.persons[p.id] === "APPROVED")
-                                  ? "✓ Pass Section"
-                                  : "⏳ Pending Pass Section"}
-                              </span>
+                              {(() => {
+                                const currentPersonStatus = String(entityStatuses.persons[p.id] || p.status || p.decision || "").toLowerCase();
+                                const isApproved = currentPersonStatus === "approved" || (userRole === "Approval" && entityStatuses.persons[p.id] === "APPROVED") || ["APPROVED", "approved"].includes(selectedRequest?.status);
+                                const isRejected = currentPersonStatus === "rejected" || (userRole === "Approval" && entityStatuses.persons[p.id] === "REJECTED") || ["REJECTED", "rejected"].includes(selectedRequest?.status);
+                                const isReverted = currentPersonStatus === "reverted" || (userRole === "Approval" && entityStatuses.persons[p.id] === "REVERTED") || ["REVERTED", "reverted"].includes(selectedRequest?.status);
+
+                                return (
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                      isApproved
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : isRejected
+                                          ? "bg-red-100 text-red-700"
+                                          : isReverted
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-amber-100 text-amber-700"
+                                    }`}
+                                  >
+                                    {isApproved
+                                      ? "✓ Pass Section"
+                                      : isRejected
+                                        ? "✕ Pass Section Rejected"
+                                        : isReverted
+                                          ? "↩ Pass Section Reverted"
+                                          : "⏳ Pending Pass Section"}
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </td>
                           <td className="p-3">
@@ -1941,7 +1929,18 @@ export default function TrafficPassesPage() {
                             {v.vehiclePassNo || "-"}
                           </td>
                           <td className="p-3 font-bold text-[#0a1e4d] uppercase">
-                            {v.registrationNo}
+                            <div>{v.registrationNo}</div>
+                            {(v.conversionWorkflowState ||
+                              v.isConvertedToEssential ||
+                              Boolean(v.essentialWorkflowState) ||
+                              (v.essentialDepartmentId !== null && v.essentialDepartmentId !== undefined) ||
+                              v.isEssential ||
+                              (v.concernDepartmentId != null && isOilDockArea(v.accessAreaId || v.accessArea)) ||
+                              isOilDockArea(v.accessAreaId || v.accessArea)) && (
+                              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold border bg-amber-50 text-amber-800 border-amber-300">
+                                ⚡ Essential Pass
+                              </span>
+                            )}
                           </td>
                           <td className="p-3">
                             {(() => {
@@ -2025,58 +2024,34 @@ export default function TrafficPassesPage() {
                                   </span>
                                 </>
                               )}
-                              <span
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                  [
-                                    "APPROVED",
-                                    "REJECTED",
-                                    "REVERTED",
-                                    "approved",
-                                    "rejected",
-                                    "reverted",
-                                  ].includes(
-                                    selectedRequest?.status ||
-                                      selectedRequest?.decision,
-                                  ) ||
-                                  [
-                                    "approved",
-                                    "rejected",
-                                    "reverted",
-                                    "APPROVED",
-                                    "REJECTED",
-                                    "REVERTED",
-                                  ].includes(v.status || v.decision) ||
-                                  (userRole === "Approval" &&
-                                    entityStatuses.vehicles[v.id] ===
-                                      "APPROVED")
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-amber-100 text-amber-700"
-                                }`}
-                              >
-                                {[
-                                  "APPROVED",
-                                  "REJECTED",
-                                  "REVERTED",
-                                  "approved",
-                                  "rejected",
-                                  "reverted",
-                                ].includes(
-                                  selectedRequest?.status ||
-                                    selectedRequest?.decision,
-                                ) ||
-                                [
-                                  "approved",
-                                  "rejected",
-                                  "reverted",
-                                  "APPROVED",
-                                  "REJECTED",
-                                  "REVERTED",
-                                ].includes(v.status || v.decision) ||
-                                (userRole === "Approval" &&
-                                  entityStatuses.vehicles[v.id] === "APPROVED")
-                                  ? "✓ Pass Section"
-                                  : "⏳ Pending Pass Section"}
-                              </span>
+                              {(() => {
+                                const currentVehStatus = String(entityStatuses.vehicles[v.id] || v.status || v.decision || "").toLowerCase();
+                                const isApproved = currentVehStatus === "approved" || (userRole === "Approval" && entityStatuses.vehicles[v.id] === "APPROVED") || ["APPROVED", "approved"].includes(selectedRequest?.status);
+                                const isRejected = currentVehStatus === "rejected" || (userRole === "Approval" && entityStatuses.vehicles[v.id] === "REJECTED") || ["REJECTED", "rejected"].includes(selectedRequest?.status);
+                                const isReverted = currentVehStatus === "reverted" || (userRole === "Approval" && entityStatuses.vehicles[v.id] === "REVERTED") || ["REVERTED", "reverted"].includes(selectedRequest?.status);
+
+                                return (
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                      isApproved
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : isRejected
+                                          ? "bg-red-100 text-red-700"
+                                          : isReverted
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-amber-100 text-amber-700"
+                                    }`}
+                                  >
+                                    {isApproved
+                                      ? "✓ Pass Section"
+                                      : isRejected
+                                        ? "✕ Pass Section Rejected"
+                                        : isReverted
+                                          ? "↩ Pass Section Reverted"
+                                          : "⏳ Pending Pass Section"}
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </td>
                           <td className="p-3 text-right">

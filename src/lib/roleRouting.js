@@ -16,6 +16,7 @@ export const TRAFFIC_APPROVAL_ROLES = [
   "safety officer",
   "fire safety officer",
   "senior deputy traffic manager",
+  "dy. conservator",
 ];
 export const PASS_SECTION_ROLES = ["atm", "pass admin", "pass officer", "pass section"];
 
@@ -60,7 +61,27 @@ export function resolveHome(user) {
     return "/traffic_approval/dashboard";
   }
 
-  // 7. Traffic Approval Officers
+  // 7. Fire Safety Officer (Marine dept) → directly to passes pending tab
+  if (role === "fire safety officer" && deptId === MARINE_DEPT_ID) {
+    return "/traffic_approval/passes?tab=pending";
+  }
+
+  // 7a. Dy. Conservator (Marine dept) → traffic approval passes
+  if (role === "dy. conservator" && deptId === MARINE_DEPT_ID) {
+    return "/traffic_approval/passes?tab=pending";
+  }
+
+  // 7b. CISF Assistant Commandant → admin pass-approvals page
+  if (role === "cisf.assistant commandant" && deptId === 1) {
+    return "/admin/pass-approvals";
+  }
+
+  // 7c. Safety Officer (Traffic dept) → traffic approval passes pending tab
+  if (role === "safety officer" && TRAFFIC_DEPT_IDS.includes(deptId)) {
+    return "/traffic_approval/passes?tab=pending";
+  }
+
+  // 8. Traffic Approval Officers
   if (
     (TRAFFIC_APPROVAL_ROLES.includes(role) && TRAFFIC_DEPT_IDS.includes(deptId)) ||
     (role === "approval" && deptName.includes("traffic"))
@@ -68,7 +89,7 @@ export function resolveHome(user) {
     return "/traffic_approval/dashboard";
   }
 
-  // 8. Marine Approval Officers
+  // 9. Marine Approval Officers
   if (
     (role === "approval" && deptId === MARINE_DEPT_ID) ||
     (role === "approval" && deptName.includes("marine"))
@@ -84,7 +105,7 @@ export function resolveHome(user) {
     return "/gate_dashboard";
   }
   if (role === "safety officer" || role === "fire safety officer" || deptName.includes("safety")) {
-    return "/safety_dashboard";
+    return "/traffic_approval/passes?tab=pending";
   }
   if (role === "finance" || deptName.includes("finance")) {
     return "/finance_dashboard";
@@ -127,6 +148,10 @@ export function canAccess(portalKey, user) {
       if (SHIPPING_CONTROL_ROLES.includes(role)) return true;
       if (TRAFFIC_APPROVAL_ROLES.includes(role) && TRAFFIC_DEPT_IDS.includes(deptId)) return true;
       if (role === "approval" && deptName.includes("traffic")) return true;
+      // Oil-dock & Safety workflow roles: Fire Safety (Marine), Dy. Conservator (Marine), Safety Officer
+      if (role === "fire safety officer" && deptId === MARINE_DEPT_ID) return true;
+      if (role === "dy. conservator" && deptId === MARINE_DEPT_ID) return true;
+      if (role === "safety officer") return true;
       return false;
 
     case "atm_dashboard":

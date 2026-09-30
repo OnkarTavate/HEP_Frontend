@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
@@ -309,11 +309,7 @@ export default function TrafficPassesPage() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const isVendorOilJettyWorkflow =
     selectedRequest?.originType === "VENDOR" &&
-    Boolean(selectedRequest?.isOilDock) &&
-    String(selectedRequest?.workflowState || "")
-      .trim()
-      .toUpperCase()
-      .startsWith("PENDING_VENDOR_");
+    Boolean(selectedRequest?.isOilDock);
 
   const [companyProfile, setCompanyProfile] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -446,7 +442,8 @@ export default function TrafficPassesPage() {
         setUserDepartmentId(departmentId);
 
         setIsMarineFireSafety(
-          role === "Fire Safety Officer" && departmentId === 7,
+          departmentId === 7 &&
+            ["Fire Safety Officer", "Dy. Conservator"].includes(role),
         );
 
         let essentialStage = null;
@@ -465,6 +462,7 @@ export default function TrafficPassesPage() {
             "CISF",
             "CISF Asst Commandant",
             "CISF Assistant Commandant",
+            "Cisf.Assistant Commandant",
           ].includes(role)
         ) {
           essentialStage = "PENDING_CISF_ESSENTIAL";
@@ -568,20 +566,25 @@ export default function TrafficPassesPage() {
       .trim()
       .toUpperCase();
 
-    const workflowState = String(v?.workflowState || "")
-      .trim()
-      .toUpperCase();
+    const isAnnualTrailer =
+      ["YEARLY", "ANNUAL"].includes(passType) &&
+      ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(vehicleType);
 
-    const status = String(v?.status || "")
-      .trim()
-      .toLowerCase();
+    if (!isAnnualTrailer || isOilDockArea(v?.accessAreaId || v?.accessArea)) {
+      return false;
+    }
+
+    const status = String(v?.status || "").trim().toLowerCase();
+    const isTwistLockCertified = Boolean(v?.twistLockCertified);
+    const isMarineSafetyApproved = Boolean(v?.marineSafetyApproved);
+    const isWorkflowCompleted =
+      String(v?.workflowState || "").toUpperCase() === "COMPLETED";
 
     return (
-      !isOilDockArea(v?.accessAreaId || v?.accessArea) &&
-      ["YEARLY", "ANNUAL"].includes(passType) &&
-      ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(vehicleType) &&
-      workflowState === "COMPLETED" &&
-      status === "approved"
+      isTwistLockCertified ||
+      isMarineSafetyApproved ||
+      isWorkflowCompleted ||
+      ["approved", "rejected", "reverted"].includes(status)
     );
   };
 
@@ -616,28 +619,39 @@ export default function TrafficPassesPage() {
         .trim()
         .toUpperCase();
 
-      const workflowState = String(v?.workflowState || "")
-        .trim()
-        .toUpperCase();
+      const isAnnualTrailer =
+        ["YEARLY", "ANNUAL"].includes(passType) &&
+        ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(vehicleType);
+
+      if (!isAnnualTrailer || isOilDockArea(v?.accessAreaId || v?.accessArea)) {
+        return false;
+      }
 
       const status = String(v?.status || "")
         .trim()
         .toLowerCase();
+      const workflowState = String(v?.workflowState || "")
+        .trim()
+        .toUpperCase();
 
       return (
-        !isOilDockArea(v?.accessAreaId || v?.accessArea) &&
-        ["YEARLY", "ANNUAL"].includes(passType) &&
-        ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(
-          vehicleType,
-        ) &&
-        workflowState === "PENDING_SAFETY" &&
-        ["pending", "reverted"].includes(status)
+        workflowState === "PENDING_SAFETY" ||
+        (!v?.twistLockCertified &&
+          ["pending", "approved", "reverted"].includes(status))
       );
     });
 
+    const vCount =
+      safetyVehicles.length > 0
+        ? safetyVehicles.length
+        : (pass?.vehicles || []).filter(isNormalAnnualTrailerSafetyVehicle)
+            .length ||
+          pass?.vehicles?.length ||
+          0;
+
     return {
-      persons: 0,
-      vehicles: safetyVehicles.length,
+      persons: pass?.persons?.length || 0,
+      vehicles: vCount,
     };
   };
   const getApprovedByDisplay = (pass) => {
@@ -652,12 +666,21 @@ export default function TrafficPassesPage() {
     const names = [
       ...new Set(
         (pass?.vehicles || [])
-          .map((vehicle) => vehicle?.approvedBy)
+          .map(
+            (vehicle) =>
+              vehicle?.safetyApprovedBy ||
+              vehicle?.marineSafetyApprovedByName ||
+              vehicle?.approvedBy,
+          )
           .filter(Boolean),
       ),
     ];
 
-    return names.length > 0 ? names.join(", ") : "—";
+    if (names.length > 0) {
+      return names.join(", ");
+    }
+
+    return pass?.approvedBy || "—";
   };
 
   // const canUserVerifyPerson = (p) => {
@@ -714,9 +737,7 @@ export default function TrafficPassesPage() {
 
     const role = String(userRole || "").trim();
     const departmentId = Number(userDepartmentId);
-    const pStatus = String(p?.status || "")
-      .trim()
-      .toLowerCase();
+    const pStatus = String(p?.status || "").trim().toLowerCase();
 
     const workflowState = String(p?.workflowState || "")
       .trim()
@@ -861,15 +882,14 @@ export default function TrafficPassesPage() {
   };
 
   const canUserVerifyVehicle = (v) => {
+    if (!v) return false;
+    const vStatus = String(v?.status || "").trim().toLowerCase();
+    const vState = String(v?.essentialWorkflowState || "").trim().toUpperCase();
+
     const vendorVehicleWorkflowState = String(v?.workflowState || "")
       .trim()
       .toUpperCase();
 
-    const vStatus = String(v?.status || "")
-      .trim()
-      .toLowerCase();
-
-    const vState = vendorVehicleWorkflowState;
     if (
       vendorVehicleWorkflowState === "COMPLETED" ||
       vendorVehicleWorkflowState === "REJECTED"
@@ -901,7 +921,10 @@ export default function TrafficPassesPage() {
       );
     }
 
-    if (vendorVehicleWorkflowState === "PENDING_VENDOR_TRAFFIC") {
+    if (
+      vendorVehicleWorkflowState === "PENDING_VENDOR_TRAFFIC" ||
+      vendorVehicleWorkflowState === "PENDING_PASS_SECTION"
+    ) {
       return (
         String(userRole || "").trim() === "Approval" &&
         Number(userDepartmentId) === 9
@@ -923,6 +946,36 @@ export default function TrafficPassesPage() {
       ) {
         return false;
       }
+      if (
+        convState === "PENDING_MARINE_CONVERSION" &&
+        (Number(userDepartmentId) === 7 || ["Fire Safety Officer", "Dy. Conservator"].includes(String(userRole || "").trim()))
+      ) {
+        return true;
+      }
+      if (
+        convState === "PENDING_CIVIL_CONVERSION" &&
+        Number(userDepartmentId) === 3
+      ) {
+        return true;
+      }
+      if (
+        convState === "PENDING_MECHANICAL_CONVERSION" &&
+        Number(userDepartmentId) === 4
+      ) {
+        return true;
+      }
+      if (
+        convState === "PENDING_CISF_CONVERSION" &&
+        Number(userDepartmentId) === 1
+      ) {
+        return true;
+      }
+      if (
+        convState === "PENDING_PASS_SECTION_CONVERSION" &&
+        Number(userDepartmentId) === 9
+      ) {
+        return true;
+      }
       if (essentialWorkflowStage && isEssentialOilDockVehicle) {
         const conversionStageMap = {
           PENDING_MARINE_ESSENTIAL: "PENDING_MARINE_CONVERSION",
@@ -937,7 +990,62 @@ export default function TrafficPassesPage() {
       return false;
     }
 
-    // Base status check — only after conversion is ruled out
+    // ============================================================
+    // SPECIAL DEPARTMENTAL ROLES (Safety Officer & Fire Safety Officer)
+    // Checked BEFORE base status check because annual trailer/container
+    // vehicle passes may already have base status "approved" or "pending"
+    // while awaiting Safety Officer Twist Lock / Fire Safety inspection.
+    // ============================================================
+    if (userRole === "Safety Officer") {
+      const passType = String(v.passType || "").trim().toUpperCase();
+      const vehicleType = String(v.vehicleTypeName || "").trim().toUpperCase();
+      const vehicleStatus = String(v.status || "").trim().toLowerCase();
+      const isAnnualTrailer =
+        ["YEARLY", "ANNUAL"].includes(passType) &&
+        ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(vehicleType);
+
+      if (
+        Number(userDepartmentId) === 9 &&
+        isAnnualTrailer &&
+        !isOilDockArea(v.accessAreaId || v.accessArea)
+      ) {
+        if (vendorVehicleWorkflowState === "PENDING_SAFETY") {
+          return ["approved", "pending", "reverted"].includes(vehicleStatus) && !v.twistLockCertified;
+        }
+        return (vehicleStatus === "approved" || vehicleStatus === "pending") && !v.twistLockCertified;
+      }
+      return false;
+    }
+
+    if (
+      ["Fire Safety Officer", "Dy. Conservator"].includes(userRole) &&
+      isMarineFireSafety
+    ) {
+      if (vState) {
+        return vState === "PENDING_MARINE_ESSENTIAL";
+      }
+
+      const passType = String(v.passType || "")
+        .trim()
+        .toUpperCase();
+      const vehicleType = String(v.vehicleTypeName || "")
+        .trim()
+        .toUpperCase();
+      const vehicleStatus = String(v.status || "")
+        .trim()
+        .toLowerCase();
+      const isAnnualTrailer =
+        ["YEARLY", "ANNUAL"].includes(passType) &&
+        ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(vehicleType);
+
+      return (
+        isAnnualTrailer &&
+        (vehicleStatus === "approved" || vehicleStatus === "pending") &&
+        v.marineSafetyApproved !== true
+      );
+    }
+
+    // Base status check — only after conversion & safety roles are handled
     if (
       vStatus === "approved" ||
       vState === "COMPLETED_ESSENTIAL" ||
@@ -961,56 +1069,6 @@ export default function TrafficPassesPage() {
 
       return false;
     }
-
-    if (userRole === "Safety Officer") {
-      const passType = String(v.passType || "")
-        .trim()
-        .toUpperCase();
-
-      const vehicleType = String(v.vehicleTypeName || "")
-        .trim()
-        .toUpperCase();
-
-      const vehicleStatus = String(v.status || "")
-        .trim()
-        .toLowerCase();
-
-      return (
-        Number(userDepartmentId) === 9 &&
-        vendorVehicleWorkflowState === "PENDING_SAFETY" &&
-        !isOilDockArea(v.accessAreaId || v.accessArea) &&
-        ["YEARLY", "ANNUAL"].includes(passType) &&
-        ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(
-          vehicleType,
-        ) &&
-        ["approved", "pending", "reverted"].includes(vehicleStatus)
-      );
-    }
-
-    if (userRole === "Fire Safety Officer" && isMarineFireSafety) {
-      const passType = String(v.passType || "")
-        .trim()
-        .toUpperCase();
-
-      const vehicleType = String(v.vehicleTypeName || "")
-        .trim()
-        .toUpperCase();
-
-      const isAnnualTrailer =
-        ["YEARLY", "ANNUAL"].includes(passType) &&
-        ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(vehicleType);
-
-      const vehicleStatus = String(v.status || "")
-        .trim()
-        .toLowerCase();
-
-      return (
-        isAnnualTrailer &&
-        (vehicleStatus === "approved" || vehicleStatus === "pending") &&
-        v.marineSafetyApproved !== true
-      );
-    }
-
     if (userRole === "Senior Deputy Traffic Manager") {
       return isOilDockArea(v.accessAreaId || v.accessArea);
     }
@@ -1243,94 +1301,59 @@ export default function TrafficPassesPage() {
           String(userRole || "").trim() === "Approval" &&
           Number(userDepartmentId) === 9;
 
-        if (isVendorOilJettyPortalUser && !isTrafficApprovalUser) {
-          const vendorRequestParams = {
-            ...requestParams,
-            vendorOnly: "true",
-          };
-
-          const vendorResponse = await axios.get(
-            `${AGENT_API}/pass-request/get-agent-pass-requests`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-              params: vendorRequestParams,
-            },
-          );
-
-          if (vendorResponse.data?.success) {
-            const vendorData = vendorResponse.data.data || [];
-            const vendorMeta = vendorResponse.data.pagination || {};
-            const vendorCounts = vendorResponse.data.counts || {
-              total: 0,
-              pending: 0,
-              processed: 0,
-            };
-
-            setRequests((prev) =>
-              JSON.stringify(vendorData) === JSON.stringify(prev)
-                ? prev
-                : vendorData,
-            );
-
-            setPaginationMeta((prev) =>
-              JSON.stringify(vendorMeta) === JSON.stringify(prev)
-                ? prev
-                : vendorMeta,
-            );
-
-            setGlobalCounts((prev) =>
-              JSON.stringify(vendorCounts) === JSON.stringify(prev)
-                ? prev
-                : vendorCounts,
-            );
-          } else {
-            setRequests([]);
-            setGlobalCounts({
-              total: 0,
-              pending: 0,
-              processed: 0,
-            });
-          }
-
-          setLoading(false);
-          return;
-        }
-
         // ------------------------------------------------------------
-        // FIRE SAFETY:
-        // Fetch BOTH workflows.
-        //
-        // 1. Normal vehicle Marine/Safety workflow
-        // 2. Essential Oil Dock workflow
-        //
-        // They must both appear in the same pending/processed screen.
+        // MARINE (Fire Safety Officer & Dy. Conservator, Dept 7):
+        // Fetch ALL 3 workflows:
+        // 1. Normal vehicle Marine/Safety workflow (marine-safety-passes)
+        // 2. Essential Oil Dock workflow (essential-oil-dock-passes)
+        // 3. Vendor Oil Jetty workflow (get-agent-pass-requests with vendorOnly: "true")
+        // They must all appear in the same pending/processed screen.
         // ------------------------------------------------------------
         if (isMarineFireSafety) {
-          const [marineResponse, essentialResponse] = await Promise.all([
-            axios.get(`${AGENT_API}/pass-request/marine-safety-passes`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-              params: requestParams,
-            }),
+          const [marineResult, essentialResult, vendorResult] =
+            await Promise.allSettled([
+              axios.get(`${AGENT_API}/pass-request/marine-safety-passes`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+                params: requestParams,
+              }),
 
-            axios.get(`${AGENT_API}/pass-request/essential-oil-dock-passes`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-              params: requestParams,
-            }),
-          ]);
+              axios.get(`${AGENT_API}/pass-request/essential-oil-dock-passes`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+                params: requestParams,
+              }),
 
-          const marineData = marineResponse.data?.success
-            ? marineResponse.data.data || []
-            : [];
+              axios.get(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+                params: {
+                  ...requestParams,
+                  vendorOnly: "true",
+                },
+              }),
+            ]);
 
-          const essentialData = essentialResponse.data?.success
-            ? essentialResponse.data.data || []
-            : [];
+          const marineData =
+            marineResult.status === "fulfilled" &&
+            marineResult.value.data?.success
+              ? marineResult.value.data.data || []
+              : [];
+
+          const essentialData =
+            essentialResult.status === "fulfilled" &&
+            essentialResult.value.data?.success
+              ? essentialResult.value.data.data || []
+              : [];
+
+          const vendorData =
+            vendorResult.status === "fulfilled" &&
+            vendorResult.value.data?.success
+              ? vendorResult.value.data.data || []
+              : [];
 
           const normalizeRequest = (request) => ({
             ...request,
@@ -1346,37 +1369,68 @@ export default function TrafficPassesPage() {
             panNumber: request.panNumber || request.companyPan || null,
           });
 
+          const getRequestKey = (request) => {
+            const isVendor = String(request?.originType || "").trim().toUpperCase() === "VENDOR";
+            const origin = isVendor ? "VENDOR" : "NORMAL";
+            return `${origin}:${String(request?.id || request?.referenceNo)}`;
+          };
+
           const mergedRequests = [
             ...marineData.map(normalizeRequest),
             ...essentialData.map(normalizeRequest),
+            ...vendorData.map(normalizeRequest),
           ];
 
           // Safety against duplicate pass requests.
           const uniqueRequests = Array.from(
             new Map(
               mergedRequests.map((request) => [
-                request.id || request.referenceNo,
+                getRequestKey(request),
                 request,
               ]),
             ).values(),
           );
 
-          const marineCounts = marineResponse.data?.counts || {
-            total: 0,
-            pending: 0,
-            processed: 0,
-          };
+          const marineCounts =
+            marineResult.status === "fulfilled"
+              ? marineResult.value.data?.counts || {
+                  total: 0,
+                  pending: 0,
+                  processed: 0,
+                }
+              : { total: 0, pending: 0, processed: 0 };
 
-          const essentialCounts = essentialResponse.data?.counts || {
-            total: 0,
-            pending: 0,
-            processed: 0,
-          };
+          const essentialCounts =
+            essentialResult.status === "fulfilled"
+              ? essentialResult.value.data?.counts || {
+                  total: 0,
+                  pending: 0,
+                  processed: 0,
+                }
+              : { total: 0, pending: 0, processed: 0 };
+
+          const vendorCounts =
+            vendorResult.status === "fulfilled"
+              ? vendorResult.value.data?.counts || {
+                  total: 0,
+                  pending: 0,
+                  processed: 0,
+                }
+              : { total: 0, pending: 0, processed: 0 };
 
           const mergedCounts = {
-            total: marineCounts.total + essentialCounts.total,
-            pending: marineCounts.pending + essentialCounts.pending,
-            processed: marineCounts.processed + essentialCounts.processed,
+            total:
+              Number(marineCounts.total || 0) +
+              Number(essentialCounts.total || 0) +
+              Number(vendorCounts.total || 0),
+            pending:
+              Number(marineCounts.pending || 0) +
+              Number(essentialCounts.pending || 0) +
+              Number(vendorCounts.pending || 0),
+            processed:
+              Number(marineCounts.processed || 0) +
+              Number(essentialCounts.processed || 0) +
+              Number(vendorCounts.processed || 0),
           };
 
           const totalRecords = mergedCounts[activeTab] ?? uniqueRequests.length;
@@ -1726,9 +1780,8 @@ export default function TrafficPassesPage() {
           const requestMap = new Map();
 
           for (const request of mergedRequests) {
-            const origin = String(request.originType || "NORMAL")
-              .trim()
-              .toUpperCase();
+            const isVendor = String(request.originType || "").trim().toUpperCase() === "VENDOR";
+            const origin = isVendor ? "VENDOR" : "NORMAL";
 
             const key = `${origin}:${String(
               request.id || request.referenceNo || "",
@@ -1930,57 +1983,284 @@ export default function TrafficPassesPage() {
         // ------------------------------------------------------------
         // OTHER ESSENTIAL-ONLY USERS
         // Civil / Mechanical / CISF
+        // Fetch Essential Vehicle, Vendor Pass, and (for Civil/Mech) Person passes
         // ------------------------------------------------------------
         if (essentialWorkflowStage) {
-          const response = await axios.get(
-            `${AGENT_API}/pass-request/essential-oil-dock-passes`,
-            {
+          const isCivilOrMech = [3, 4].includes(Number(userDepartmentId));
+          const fetchPromises = [
+            axios.get(`${AGENT_API}/pass-request/essential-oil-dock-passes`, {
               headers: {
                 Authorization: `Bearer ${token}`,
               },
               params: requestParams,
-            },
-          );
+            }),
+            axios.get(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              params: {
+                ...requestParams,
+                vendorOnly: "true",
+              },
+            }),
+          ];
 
-          if (response.data?.success) {
-            const newRequests = (response.data.data || []).map((request) => ({
-              ...request,
-
-              entityName: request.entityName || request.companyName || null,
-
-              mobileNo: request.mobileNo || request.companyMobile || null,
-
-              email: request.email || request.companyEmail || null,
-
-              gstinNumber: request.gstinNumber || request.companyGst || null,
-
-              panNumber: request.panNumber || request.companyPan || null,
-            }));
-
-            const newMeta = response.data.pagination || {};
-
-            const newCounts = response.data.counts || {
-              total: 0,
-              pending: 0,
-              processed: 0,
-            };
-
-            setRequests((prev) =>
-              JSON.stringify(newRequests) === JSON.stringify(prev)
-                ? prev
-                : newRequests,
-            );
-
-            setPaginationMeta((prev) =>
-              JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta,
-            );
-
-            setGlobalCounts((prev) =>
-              JSON.stringify(newCounts) === JSON.stringify(prev)
-                ? prev
-                : newCounts,
+          if (isCivilOrMech) {
+            fetchPromises.push(
+              axios.get(
+                `${AGENT_API}/pass-request/essential-oil-dock-person-passes`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                  params: requestParams,
+                },
+              ),
             );
           }
+
+          const [vehResult, vendorResult, personResult] =
+            await Promise.allSettled(fetchPromises);
+
+          const vehData =
+            vehResult.status === "fulfilled" && vehResult.value.data?.success
+              ? vehResult.value.data.data || []
+              : [];
+          const vendorData =
+            vendorResult.status === "fulfilled" &&
+            vendorResult.value.data?.success
+              ? vendorResult.value.data.data || []
+              : [];
+          const personData =
+            personResult &&
+            personResult.status === "fulfilled" &&
+            personResult.value.data?.success
+              ? personResult.value.data.data || []
+              : [];
+
+          const normalizeRequest = (request) => ({
+            ...request,
+            entityName: request.entityName || request.companyName || null,
+            mobileNo: request.mobileNo || request.companyMobile || null,
+            email: request.email || request.companyEmail || null,
+            gstinNumber: request.gstinNumber || request.companyGst || null,
+            panNumber: request.panNumber || request.companyPan || null,
+          });
+
+          const getRequestKey = (request) => {
+            const isVendor = String(request?.originType || "").trim().toUpperCase() === "VENDOR";
+            const origin = isVendor ? "VENDOR" : "NORMAL";
+            return `${origin}:${String(request?.id || request?.referenceNo)}`;
+          };
+
+          const mergedRequests = [
+            ...vehData.map(normalizeRequest),
+            ...personData.map(normalizeRequest),
+            ...vendorData.map(normalizeRequest),
+          ];
+
+          const uniqueRequests = Array.from(
+            new Map(
+              mergedRequests.map((request) => [
+                getRequestKey(request),
+                request,
+              ]),
+            ).values(),
+          );
+
+          const vehCounts =
+            vehResult.status === "fulfilled"
+              ? vehResult.value.data?.counts || {
+                  total: 0,
+                  pending: 0,
+                  processed: 0,
+                }
+              : { total: 0, pending: 0, processed: 0 };
+          const vendorCounts =
+            vendorResult.status === "fulfilled"
+              ? vendorResult.value.data?.counts || {
+                  total: 0,
+                  pending: 0,
+                  processed: 0,
+                }
+              : { total: 0, pending: 0, processed: 0 };
+          const personCounts =
+            personResult && personResult.status === "fulfilled"
+              ? personResult.value.data?.counts || {
+                  total: 0,
+                  pending: 0,
+                  processed: 0,
+                }
+              : { total: 0, pending: 0, processed: 0 };
+
+          const mergedCounts = {
+            total:
+              Number(vehCounts.total || 0) +
+              Number(vendorCounts.total || 0) +
+              Number(personCounts.total || 0),
+            pending:
+              Number(vehCounts.pending || 0) +
+              Number(vendorCounts.pending || 0) +
+              Number(personCounts.pending || 0),
+            processed:
+              Number(vehCounts.processed || 0) +
+              Number(vendorCounts.processed || 0) +
+              Number(personCounts.processed || 0),
+          };
+
+          const totalRecords = mergedCounts[activeTab] ?? uniqueRequests.length;
+
+          const mergedMeta = {
+            page: currentPage,
+            limit: pageSize,
+            totalRecords,
+            totalPages: Math.max(1, Math.ceil(totalRecords / pageSize)),
+            currentPage,
+          };
+
+          setRequests((prev) =>
+            JSON.stringify(uniqueRequests) === JSON.stringify(prev)
+              ? prev
+              : uniqueRequests,
+          );
+
+          setPaginationMeta((prev) =>
+            JSON.stringify(mergedMeta) === JSON.stringify(prev)
+              ? prev
+              : mergedMeta,
+          );
+
+          setGlobalCounts((prev) =>
+            JSON.stringify(mergedCounts) === JSON.stringify(prev)
+              ? prev
+              : mergedCounts,
+          );
+
+          return;
+        }
+
+        // ------------------------------------------------------------
+        // SAFETY OFFICER (Dept 9, Safety Officer)
+        // Fetch BOTH normal trailer passes and vendor trailer passes
+        // ------------------------------------------------------------
+        const isSafetyOfficer =
+          String(userRole || "").trim() === "Safety Officer" &&
+          Number(userDepartmentId) === 9;
+
+        if (isSafetyOfficer) {
+          const [normalResult, vendorResult] = await Promise.allSettled([
+            axios.get(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              params: requestParams,
+            }),
+            axios.get(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              params: {
+                ...requestParams,
+                vendorOnly: "true",
+              },
+            }),
+          ]);
+
+          const normalData =
+            normalResult.status === "fulfilled" &&
+            normalResult.value.data?.success
+              ? normalResult.value.data.data || []
+              : [];
+          const vendorData =
+            vendorResult.status === "fulfilled" &&
+            vendorResult.value.data?.success
+              ? vendorResult.value.data.data || []
+              : [];
+
+          const normalizeRequest = (request) => ({
+            ...request,
+            entityName: request.entityName || request.companyName || null,
+            mobileNo: request.mobileNo || request.companyMobile || null,
+            email: request.email || request.companyEmail || null,
+            gstinNumber: request.gstinNumber || request.companyGst || null,
+            panNumber: request.panNumber || request.companyPan || null,
+          });
+
+          const getRequestKey = (request) => {
+            const isVendor = String(request?.originType || "").trim().toUpperCase() === "VENDOR";
+            const origin = isVendor ? "VENDOR" : "NORMAL";
+            return `${origin}:${String(request?.id || request?.referenceNo)}`;
+          };
+
+          const mergedRequests = [
+            ...normalData.map(normalizeRequest),
+            ...vendorData.map(normalizeRequest),
+          ];
+
+          const uniqueRequests = Array.from(
+            new Map(
+              mergedRequests.map((request) => [
+                getRequestKey(request),
+                request,
+              ]),
+            ).values(),
+          );
+
+          const normalCounts =
+            normalResult.status === "fulfilled"
+              ? normalResult.value.data?.counts || {
+                  total: 0,
+                  pending: 0,
+                  processed: 0,
+                }
+              : { total: 0, pending: 0, processed: 0 };
+          const vendorCounts =
+            vendorResult.status === "fulfilled"
+              ? vendorResult.value.data?.counts || {
+                  total: 0,
+                  pending: 0,
+                  processed: 0,
+                }
+              : { total: 0, pending: 0, processed: 0 };
+
+          const mergedCounts = {
+            total:
+              Number(normalCounts.total || 0) + Number(vendorCounts.total || 0),
+            pending:
+              Number(normalCounts.pending || 0) +
+              Number(vendorCounts.pending || 0),
+            processed:
+              Number(normalCounts.processed || 0) +
+              Number(vendorCounts.processed || 0),
+          };
+
+          const totalRecords = mergedCounts[activeTab] ?? uniqueRequests.length;
+
+          const mergedMeta = {
+            page: currentPage,
+            limit: pageSize,
+            totalRecords,
+            totalPages: Math.max(1, Math.ceil(totalRecords / pageSize)),
+            currentPage,
+          };
+
+          setRequests((prev) =>
+            JSON.stringify(uniqueRequests) === JSON.stringify(prev)
+              ? prev
+              : uniqueRequests,
+          );
+
+          setPaginationMeta((prev) =>
+            JSON.stringify(mergedMeta) === JSON.stringify(prev)
+              ? prev
+              : mergedMeta,
+          );
+
+          setGlobalCounts((prev) =>
+            JSON.stringify(mergedCounts) === JSON.stringify(prev)
+              ? prev
+              : mergedCounts,
+          );
 
           return;
         }
@@ -2032,45 +2312,6 @@ export default function TrafficPassesPage() {
             JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta,
           );
 
-          setGlobalCounts((prev) =>
-            JSON.stringify(newCounts) === JSON.stringify(prev)
-              ? prev
-              : newCounts,
-          );
-        }
-
-        if (response.data && response.data.success) {
-          const newRequests = (response.data.data || []).map((request) => ({
-            ...request,
-
-            // Essential Oil Dock API returns company* fields.
-            // Keep the existing frontend field names so the
-            // existing table/modal continue to work.
-            entityName: request.entityName || request.companyName || null,
-
-            mobileNo: request.mobileNo || request.companyMobile || null,
-
-            email: request.email || request.companyEmail || null,
-
-            gstinNumber: request.gstinNumber || request.companyGst || null,
-
-            panNumber: request.panNumber || request.companyPan || null,
-          }));
-          const newMeta = response.data.pagination || {};
-          const newCounts = response.data.counts || {
-            total: 0,
-            pending: 0,
-            processed: 0,
-          };
-
-          setRequests((prev) =>
-            JSON.stringify(newRequests) === JSON.stringify(prev)
-              ? prev
-              : newRequests,
-          );
-          setPaginationMeta((prev) =>
-            JSON.stringify(newMeta) === JSON.stringify(prev) ? prev : newMeta,
-          );
           setGlobalCounts((prev) =>
             JSON.stringify(newCounts) === JSON.stringify(prev)
               ? prev
@@ -2233,14 +2474,24 @@ export default function TrafficPassesPage() {
       (p) =>
         canUserVerifyPerson(p) &&
         !entityStatuses.persons[p.id] &&
-        (p.status === "pending" || p.status === "reverted"),
+        (p.status === "pending" ||
+          p.status === "reverted" ||
+          (p.conversionWorkflowState &&
+            (!p.conversionStatus ||
+              p.conversionStatus === "PENDING" ||
+              p.conversionStatus === "REVERTED"))),
     );
 
     const unverifiedVehicles = vehicles.filter(
       (v) =>
         canUserVerifyVehicle(v) &&
         !entityStatuses.vehicles[v.id] &&
-        (v.status === "pending" || v.status === "reverted"),
+        (v.status === "pending" ||
+          v.status === "reverted" ||
+          (v.conversionWorkflowState &&
+            (!v.conversionStatus ||
+              v.conversionStatus === "PENDING" ||
+              v.conversionStatus === "REVERTED"))),
     );
 
     if (unverifiedPersons.length > 0 || unverifiedVehicles.length > 0) {
@@ -2336,67 +2587,128 @@ export default function TrafficPassesPage() {
            * ============================================================
            */
           const vehiclePromises = [];
+          const assignedVehicles = vehicles.filter((v) => canUserVerifyVehicle(v));
+          const assignedPersons = persons.filter((p) => canUserVerifyPerson(p));
 
-          const essentialVehicles = vehicles.filter((v) => {
-            const vehicleWorkflowState = String(v?.essentialWorkflowState || "")
-              .trim()
-              .toUpperCase();
-
-            const accessArea = String(v?.accessAreaId || v?.accessArea || "")
-              .trim()
-              .toUpperCase();
-
-            const hasEssentialDepartment =
-              v?.essentialDepartmentId !== null &&
-              v?.essentialDepartmentId !== undefined;
-
-            return (
-              vehicleWorkflowState.endsWith("_ESSENTIAL") ||
-              hasEssentialDepartment
-            );
-          });
-
-          if (essentialVehicles.length === 0) {
-            throw new Error(
-              "No Essential Oil Dock vehicle found in this request.",
-            );
-          }
-
-          essentialVehicles.forEach((v) => {
+          assignedVehicles.forEach((v) => {
             const status = entityStatuses.vehicles[v.id];
+            if (!status) return;
 
-            if (!status) {
-              throw new Error(
-                `No decision recorded for vehicle ${v.registrationNo || v.id}.`,
+            const isEssentialVehicle =
+              String(v?.essentialWorkflowState || "").trim().toUpperCase().endsWith("_ESSENTIAL") ||
+              Boolean(v?.conversionWorkflowState) ||
+              (v?.essentialDepartmentId !== null && v?.essentialDepartmentId !== undefined);
+
+            if (isEssentialVehicle) {
+              const payload = {
+                vehicleId: v.id,
+                decision: String(status).trim().toUpperCase(),
+                remarks: entityRemarks.vehicles[v.id] || null,
+              };
+
+              vehiclePromises.push(
+                axios.put(
+                  `${AGENT_API}/pass-request/essential-oil-dock/vehicle-action`,
+                  payload,
+                  { headers },
+                ),
+              );
+            } else {
+              const remark = entityRemarks.vehicles[v.id];
+              const payload = {
+                vehicleId: v.id,
+                decision:
+                  status === "APPROVED"
+                    ? "approve-vehicle"
+                    : status === "REVERTED"
+                      ? "revert-vehicle"
+                      : "reject-vehicle",
+              };
+              if (status === "REJECTED") payload.rejectedReason = remark;
+              else if (status === "REVERTED") payload.revertReason = remark;
+              vehiclePromises.push(
+                axios.patch(
+                  `${ADMIN_API}/pass-request/agent-pass-request-action`,
+                  payload,
+                  { headers },
+                ),
               );
             }
+          });
 
-            const payload = {
-              vehicleId: v.id,
-              decision: String(status).trim().toUpperCase(),
-              remarks: entityRemarks.vehicles[v.id] || null,
-            };
+          assignedPersons.forEach((p) => {
+            const status = entityStatuses.persons[p.id];
+            if (!status) return;
 
-            vehiclePromises.push(
-              axios.put(
-                `${AGENT_API}/pass-request/essential-oil-dock/vehicle-action`,
-                payload,
-                { headers },
-              ),
-            );
+            const pState = String(p?.essentialWorkflowState || "").trim().toUpperCase();
+            const isEssentialPerson =
+              pState === "PENDING_CIVIL_PERSON_ESSENTIAL" ||
+              pState === "PENDING_MECHANICAL_PERSON_ESSENTIAL" ||
+              pState === "PENDING_TRAFFIC_PERSON_ESSENTIAL" ||
+              pState === "PENDING_PASS_SECTION_ESSENTIAL";
+
+            if (isEssentialPerson) {
+              vehiclePromises.push(
+                axios.put(
+                  `${AGENT_API}/pass-request/essential-oil-dock/person-action`,
+                  {
+                    personId: p.id,
+                    decision: String(status).trim().toUpperCase(),
+                    remarks: entityRemarks.persons[p.id] || null,
+                  },
+                  { headers },
+                ),
+              );
+            } else {
+              const remark = entityRemarks.persons[p.id];
+              const payload = {
+                personId: p.id,
+                decision:
+                  status === "APPROVED"
+                    ? "approve-person"
+                    : status === "REVERTED"
+                      ? "revert-person"
+                      : "reject-person",
+              };
+              if (status === "REJECTED") payload.rejectedReason = remark;
+              else if (status === "REVERTED") payload.revertReason = remark;
+              vehiclePromises.push(
+                axios.patch(
+                  `${ADMIN_API}/pass-request/agent-pass-request-action`,
+                  payload,
+                  { headers },
+                ),
+              );
+            }
           });
 
           if (vehiclePromises.length === 0) {
             throw new Error(
-              "No Essential Oil Dock vehicle action was prepared.",
+              "No actions prepared for entities assigned to your role.",
             );
           }
 
           await Promise.all(vehiclePromises);
 
+          const hasOrdinaryEntities =
+            persons.some((p) => canUserVerifyPerson(p) && !p.essentialWorkflowState) ||
+            vehicles.some((v) => canUserVerifyVehicle(v) && !v.essentialWorkflowState);
+          if (hasOrdinaryEntities) {
+            await axios
+              .patch(
+                `${ADMIN_API}/pass-request/agent-pass-request-action`,
+                {
+                  passRequestId: selectedRequest.id,
+                  decision: "complete-review",
+                },
+                { headers },
+              )
+              .catch(() => {});
+          }
+
           reviewStatus = "PROCESSED";
           responseMessage =
-            "Essential Oil Dock vehicle review processed successfully.";
+            "Pass Request review processed successfully.";
         }
       } else if (isVendorPass && isVendorOilJettyWorkflow) {
         // const vendorPassId = selectedRequest.id;
@@ -2442,16 +2754,23 @@ export default function TrafficPassesPage() {
             .trim()
             .toUpperCase();
 
-          return (
-            !isOilDockArea(area) &&
+          const isPassSectionNormal =
+            workflowState === "PENDING_PASS_SECTION" &&
+            String(userRole || "").trim() === "Approval" &&
+            Number(userDepartmentId) === 9;
+
+          const isSafetyOfficerTrailer =
+            workflowState === "PENDING_SAFETY" &&
+            String(userRole || "").trim() === "Safety Officer" &&
+            Number(userDepartmentId) === 9 &&
             ["YEARLY", "ANNUAL"].includes(passType) &&
             ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(
               vehicleType,
-            ) &&
-            (workflowState === "PENDING_PASS_SECTION" ||
-              (workflowState === "PENDING_SAFETY" &&
-                String(userRole || "").trim() === "Safety Officer" &&
-                Number(userDepartmentId) === 9)) &&
+            );
+
+          return (
+            !isOilDockArea(area) &&
+            (isPassSectionNormal || isSafetyOfficerTrailer) &&
             ["pending", "reverted"].includes(
               String(v?.status || "")
                 .trim()
@@ -2553,6 +2872,58 @@ export default function TrafficPassesPage() {
           })
           .filter(Boolean);
 
+        const normalPersons = persons.filter((p) => {
+          const area = String(p?.accessAreaId || p?.accessArea || "")
+            .trim()
+            .toUpperCase();
+
+          const workflowState = String(p?.workflowState || "")
+            .trim()
+            .toUpperCase();
+
+          return (
+            !isOilDockArea(area) &&
+            workflowState === "PENDING_PASS_SECTION" &&
+            ["pending", "reverted"].includes(
+              String(p?.status || "")
+                .trim()
+                .toLowerCase(),
+            ) &&
+            canUserVerifyPerson(p)
+          );
+        });
+
+        const normalPersonActions = normalPersons
+          .map((p) => {
+            const decision = entityStatuses.persons[p.id];
+
+            if (!decision) {
+              return null;
+            }
+
+            const personIndex = extractEntityIndex(p.id, "person");
+
+            const endpoint =
+              decision === "APPROVED"
+                ? `approve-person/${personIndex}`
+                : decision === "REVERTED"
+                  ? `revert-person/${personIndex}`
+                  : `reject-person/${personIndex}`;
+
+            const payload =
+              decision === "REVERTED"
+                ? { revertReason: entityRemarks.persons[p.id] || null }
+                : decision === "REJECTED"
+                  ? { rejectedReason: entityRemarks.persons[p.id] || null }
+                  : {};
+
+            return {
+              endpoint,
+              payload,
+            };
+          })
+          .filter(Boolean);
+
         const normalAnnualTrailerActions = normalAnnualTrailerVehicles
           .map((v) => {
             const decision = entityStatuses.vehicles[v.id];
@@ -2586,7 +2957,11 @@ export default function TrafficPassesPage() {
 
         const actions = [...assignedPersonActions, ...assignedVehicleActions];
 
-        if (actions.length === 0 && normalAnnualTrailerActions.length === 0) {
+        if (
+          actions.length === 0 &&
+          normalAnnualTrailerActions.length === 0 &&
+          normalPersonActions.length === 0
+        ) {
           throw new Error(
             "No Vendor Oil-Jetty entity action was prepared for your current stage.",
           );
@@ -2607,6 +2982,14 @@ export default function TrafficPassesPage() {
           );
         }
 
+        for (const action of normalPersonActions) {
+          await axios.put(
+            `${AGENT_API}/vendor-pass/${vendorPassId}/${action.endpoint}`,
+            action.payload,
+            { headers },
+          );
+        }
+
         for (const action of normalAnnualTrailerActions) {
           await axios.put(
             `${AGENT_API}/vendor-pass/${vendorPassId}/${action.endpoint}`,
@@ -2615,10 +2998,22 @@ export default function TrafficPassesPage() {
           );
         }
 
+        if (normalPersonActions.length > 0 || normalAnnualTrailerActions.length > 0) {
+          try {
+            await axios.put(
+              `${AGENT_API}/vendor-pass/${vendorPassId}/complete-review`,
+              {},
+              { headers },
+            );
+          } catch (e) {
+            console.warn("Vendor complete-review notice:", e?.message);
+          }
+        }
+
         reviewStatus = "PROCESSED";
 
         responseMessage =
-          "Vendor Oil-Jetty entity workflow processed successfully.";
+          "Vendor entity review processed successfully.";
       } else {
         const actionUrl = `${ADMIN_API}/pass-request/agent-pass-request-action`;
         const allPromises = [];
@@ -2818,12 +3213,23 @@ export default function TrafficPassesPage() {
       });
 
       (pass.vehicles || []).forEach((v) => {
-        if (userRole === "Safety Officer") {
+        if (v.conversionWorkflowState) {
+          if (v.conversionStatus === "APPROVED") {
+            initialVehicleStatuses[v.id] = "APPROVED";
+          } else if (v.conversionStatus === "REJECTED") {
+            initialVehicleStatuses[v.id] = "REJECTED";
+            initialVehicleRemarks[v.id] = v.rejectedReason || "";
+          }
+          // Pending conversion request — leave empty for fresh review!
+        } else if (userRole === "Safety Officer") {
           if (
             v.twistLockCertified === true ||
             v.marineSafetyApproved === true
           ) {
             initialVehicleStatuses[v.id] = "APPROVED";
+          } else if (v.status === "rejected") {
+            initialVehicleStatuses[v.id] = "REJECTED";
+            initialVehicleRemarks[v.id] = v.rejectedReason || "";
           }
         } else if (userRole === "Fire Safety Officer") {
           if (
@@ -2869,12 +3275,14 @@ export default function TrafficPassesPage() {
     selectedRequest?.originType === "VENDOR" &&
     Boolean(selectedRequest?.isOilDock);
 
-  const visiblePersons = selectedRequest
+  const isSafetyOfficerUser =
+    String(userRole || "").trim().toLowerCase() === "safety officer" ||
+    (String(userRole || "").trim().toLowerCase().includes("safety") &&
+      !String(userRole || "").trim().toLowerCase().includes("fire"));
+
+  const visiblePersons = selectedRequest && !isSafetyOfficerUser
     ? isViewMode
-      ? String(userRole || "").trim() === "Safety Officer" &&
-        Number(userDepartmentId) === 9
-        ? []
-        : selectedRequest.persons || []
+      ? selectedRequest.persons || []
       : (selectedRequest.persons || []).filter((p) => {
           const isVendorPass = selectedRequest?.originType === "VENDOR";
 
@@ -2930,8 +3338,7 @@ export default function TrafficPassesPage() {
 
   const visibleVehicles = selectedRequest
     ? isViewMode
-      ? String(userRole || "").trim() === "Safety Officer" &&
-        Number(userDepartmentId) === 9
+      ? isSafetyOfficerUser && Number(userDepartmentId) === 9
         ? (selectedRequest.vehicles || []).filter(
             isNormalAnnualTrailerSafetyVehicle,
           )
@@ -3001,10 +3408,6 @@ export default function TrafficPassesPage() {
               state === "PENDING_PASS_SECTION" &&
               Number(userDepartmentId) === 9 &&
               String(userRole || "").trim() === "Approval" &&
-              ["YEARLY", "ANNUAL"].includes(passType) &&
-              ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(
-                vehicleType,
-              ) &&
               !isOilDockArea(v.accessAreaId || v.accessArea)
             ) {
               return true;
@@ -3614,7 +4017,7 @@ export default function TrafficPassesPage() {
                   </td>
                 </tr>
               ) : (
-                filteredData.map((pass) => {
+                filteredData.map((pass, index) => {
                   const statusColors = {
                     approved:
                       "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
@@ -3645,11 +4048,7 @@ export default function TrafficPassesPage() {
 
                   return (
                     <tr
-                      key={
-                        pass.originType === "VENDOR"
-                          ? `vpr-${pass.id}`
-                          : pass.id
-                      }
+                      key={`pass-${pass.originType === "VENDOR" ? "vendor" : "pass"}-${pass.id || pass.referenceNo || index}-${index}`}
                       onClick={() =>
                         openReviewModal(pass, activeTab === "processed")
                       }
@@ -3837,30 +4236,61 @@ export default function TrafficPassesPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {(selectedRequest.requisitionLetterFilePath ||
-                      selectedRequest.requisitionLetterFileName) && (
-                      <button
-                        onClick={() =>
-                          handleViewDoc(
-                            selectedRequest.id,
-                            "passRequisitionLetter",
-                            selectedRequest.requisitionLetterFilePath ||
-                              selectedRequest.requisitionLetterFileName,
-                          )
-                        }
-                        className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
-                      >
-                        <FileText className="h-4 w-4 text-blue-600" /> View
-                        Requisition Letter
-                      </button>
-                    )}
-                    {selectedRequest.authLetterFilePath && (
+                    {(() => {
+                      const reqPath =
+                        selectedRequest.requisitionLetterFilePath ||
+                        selectedRequest.conversionRequisitionFilePath ||
+                        (selectedRequest.vehicles || []).find(
+                          (v) =>
+                            v.conversionRequisitionFilePath ||
+                            v.requisitionLetterPath,
+                        )?.conversionRequisitionFilePath ||
+                        (selectedRequest.vehicles || []).find(
+                          (v) =>
+                            v.conversionRequisitionFilePath ||
+                            v.requisitionLetterPath,
+                        )?.requisitionLetterPath ||
+                        (selectedRequest.persons || []).find(
+                          (p) =>
+                            p.conversionRequisitionFilePath ||
+                            p.requisitionLetterPath,
+                        )?.conversionRequisitionFilePath ||
+                        (selectedRequest.persons || []).find(
+                          (p) =>
+                            p.conversionRequisitionFilePath ||
+                            p.requisitionLetterPath,
+                        )?.requisitionLetterPath ||
+                        selectedRequest.requisitionLetterFileName;
+
+                      if (!reqPath) return null;
+
+                      return (
+                        <button
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedRequest.id,
+                              "passRequisitionLetter",
+                              reqPath,
+                            )
+                          }
+                          className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
+                        >
+                          <FileText className="h-4 w-4 text-blue-600" /> View
+                          Requisition Letter
+                        </button>
+                      );
+                    })()}
+                    {(selectedRequest.authLetterFilePath ||
+                      selectedRequest.workOrderFilePath ||
+                      selectedRequest.authLetterFileName) && (
                       <button
                         onClick={() =>
                           handleViewDoc(
                             selectedRequest.id,
                             "authLetter",
-                            selectedRequest.authLetterFilePath,
+                            selectedRequest.authLetterFilePath ||
+                              selectedRequest.workOrderFilePath ||
+                              selectedRequest.authLetterFileName,
                           )
                         }
                         className="bg-orange-50 text-orange-700 border border-orange-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-orange-100 transition-colors shadow-sm"
@@ -3965,14 +4395,25 @@ export default function TrafficPassesPage() {
                           </td>
                           <td className="p-3 font-bold text-[#0a1e4d]">
                             <div>{p.name}</div>
-                            {p.conversionWorkflowState && (
+                            {(p.conversionWorkflowState ||
+                              p.isConvertedToEssential ||
+                              Boolean(p.essentialWorkflowState) ||
+                              (p.essentialDepartmentId !== null && p.essentialDepartmentId !== undefined) ||
+                              p.isEssential ||
+                              (p.concernDepartmentId != null && isOilDockArea(p.accessAreaId || p.accessArea)) ||
+                              isOilDockArea(p.accessAreaId || p.accessArea)) && (
                               <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold border bg-amber-50 text-amber-800 border-amber-300">
                                 ⚡ Essential Pass
                               </span>
                             )}
                             <div className="flex flex-wrap gap-1 mt-1">
-                              <span
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              {(() => {
+                                const deptId = Number(p.essentialDepartmentId || p.concernDepartmentId);
+                                const wf = String(p.essentialWorkflowState || p.workflowState || "").toUpperCase();
+                                const isCivil = deptId === 3 || wf.includes("CIVIL");
+                                const isMech = deptId === 4 || wf.includes("MECHANICAL");
+
+                                const isApprovedOrDone =
                                   [
                                     "APPROVED",
                                     "REJECTED",
@@ -3992,36 +4433,87 @@ export default function TrafficPassesPage() {
                                     "REJECTED",
                                     "REVERTED",
                                   ].includes(p.status || p.decision) ||
+                                  wf === "COMPLETED" ||
                                   (userRole === "Approval" &&
-                                    entityStatuses.persons[p.id] === "APPROVED")
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-amber-100 text-amber-700"
-                                }`}
-                              >
-                                {[
-                                  "APPROVED",
-                                  "REJECTED",
-                                  "REVERTED",
-                                  "approved",
-                                  "rejected",
-                                  "reverted",
-                                ].includes(
-                                  selectedRequest?.status ||
-                                    selectedRequest?.decision,
-                                ) ||
-                                [
-                                  "approved",
-                                  "rejected",
-                                  "reverted",
-                                  "APPROVED",
-                                  "REJECTED",
-                                  "REVERTED",
-                                ].includes(p.status || p.decision) ||
-                                (userRole === "Approval" &&
-                                  entityStatuses.persons[p.id] === "APPROVED")
-                                  ? "✓ Pass Section"
-                                  : "⏳ Pending Pass Section"}
-                              </span>
+                                    Number(userDepartmentId) === 9 &&
+                                    entityStatuses.persons[p.id] === "APPROVED");
+
+                                const civilDone =
+                                  isCivil &&
+                                  (isApprovedOrDone ||
+                                    [
+                                      "PENDING_TRAFFIC_PERSON_ESSENTIAL",
+                                      "PENDING_PASS_SECTION_ESSENTIAL",
+                                      "COMPLETED_PERSON_ESSENTIAL",
+                                      "COMPLETED_ESSENTIAL",
+                                      "COMPLETED",
+                                      "APPROVED",
+                                      "PENDING_VENDOR_PERSON_TRAFFIC",
+                                      "PENDING_VENDOR_PERSON_CISF",
+                                    ].includes(wf) ||
+                                    (userRole === "Approval" &&
+                                      Number(userDepartmentId) === 3 &&
+                                      entityStatuses.persons[p.id] === "APPROVED"));
+
+                                const mechDone =
+                                  isMech &&
+                                  (isApprovedOrDone ||
+                                    [
+                                      "PENDING_TRAFFIC_PERSON_ESSENTIAL",
+                                      "PENDING_PASS_SECTION_ESSENTIAL",
+                                      "COMPLETED_PERSON_ESSENTIAL",
+                                      "COMPLETED_ESSENTIAL",
+                                      "COMPLETED",
+                                      "APPROVED",
+                                      "PENDING_VENDOR_PERSON_TRAFFIC",
+                                      "PENDING_VENDOR_PERSON_CISF",
+                                    ].includes(wf) ||
+                                    (userRole === "Approval" &&
+                                      Number(userDepartmentId) === 4 &&
+                                      entityStatuses.persons[p.id] === "APPROVED"));
+
+                                return (
+                                  <>
+                                    {isCivil && (
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                          civilDone
+                                            ? "bg-emerald-100 text-emerald-700"
+                                            : "bg-amber-100 text-amber-700"
+                                        }`}
+                                      >
+                                        {civilDone
+                                          ? "✓ Civil Dept"
+                                          : "⏳ Pending Civil Dept"}
+                                      </span>
+                                    )}
+                                    {isMech && (
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                          mechDone
+                                            ? "bg-emerald-100 text-emerald-700"
+                                            : "bg-amber-100 text-amber-700"
+                                        }`}
+                                      >
+                                        {mechDone
+                                          ? "✓ Mech Dept"
+                                          : "⏳ Pending Mech Dept"}
+                                      </span>
+                                    )}
+                                    <span
+                                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                        isApprovedOrDone
+                                          ? "bg-emerald-100 text-emerald-700"
+                                          : "bg-amber-100 text-amber-700"
+                                      }`}
+                                    >
+                                      {isApprovedOrDone
+                                        ? "✓ Pass Section"
+                                        : "⏳ Pending Pass Section"}
+                                    </span>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </td>
                           <td className="p-3">
@@ -4100,7 +4592,6 @@ export default function TrafficPassesPage() {
                                 );
                               })()}
                               {!isViewMode &&
-                                !isVendorOilJettyWorkflow &&
                                 canUserVerifyPerson(p) && (
                                   <button
                                     onClick={(e) => {
@@ -4200,7 +4691,13 @@ export default function TrafficPassesPage() {
                           </td>
                           <td className="p-3 font-bold text-[#0a1e4d] uppercase">
                             <div>{v.registrationNo}</div>
-                            {v.conversionWorkflowState && (
+                            {(v.conversionWorkflowState ||
+                              v.isConvertedToEssential ||
+                              Boolean(v.essentialWorkflowState) ||
+                              (v.essentialDepartmentId !== null && v.essentialDepartmentId !== undefined) ||
+                              v.isEssential ||
+                              (v.concernDepartmentId != null && isOilDockArea(v.accessAreaId || v.accessArea)) ||
+                              isOilDockArea(v.accessAreaId || v.accessArea)) && (
                               <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold border bg-amber-50 text-amber-800 border-amber-300">
                                 ⚡ Essential Pass
                               </span>
@@ -4231,72 +4728,89 @@ export default function TrafficPassesPage() {
                               ["YEARLY", "ANNUAL"].includes(
                                 String(v.passType || "").toUpperCase(),
                               ) &&
-                              ["TRAILORS", "TRAILER LORRY"].includes(
+                              ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(
                                 String(v.vehicleTypeName || "")
                                   .trim()
                                   .toUpperCase(),
                               ) ? (
-                                <>
-                                  {/* Traffic / Pass Section */}
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                      String(v.status || "").toLowerCase() ===
-                                      "approved"
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : String(
-                                              v.status || "",
-                                            ).toLowerCase() === "rejected"
-                                          ? "bg-red-100 text-red-700"
-                                          : String(
-                                                v.status || "",
-                                              ).toLowerCase() === "reverted"
-                                            ? "bg-amber-100 text-amber-700"
-                                            : "bg-amber-100 text-amber-700"
-                                    }`}
-                                  >
-                                    {String(v.status || "").toLowerCase() ===
-                                    "approved"
-                                      ? "✓ Pass Section"
-                                      : String(v.status || "").toLowerCase() ===
-                                          "rejected"
-                                        ? "✕ Pass Section Rejected"
-                                        : String(
-                                              v.status || "",
-                                            ).toLowerCase() === "reverted"
-                                          ? "↩ Pass Section Reverted"
-                                          : "⏳ Pending Pass Section"}
-                                  </span>
+                                (() => {
+                                  const wf = String(v.workflowState || "").toUpperCase();
+                                  const currentTrailerStatus = String(entityStatuses.vehicles[v.id] || v.status || "").toLowerCase();
+                                  const isPassSectionApprover = userRole === "Approval" && Number(userDepartmentId) === 9;
+                                  const isSafetyApprover = userRole === "Safety Officer";
 
-                                  {/* Safety Check */}
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                      v.marineSafetyApproved === true ||
-                                      v.twistLockCertified === true
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : String(
-                                              v.status || "",
-                                            ).toLowerCase() === "rejected"
-                                          ? "bg-red-100 text-red-700"
-                                          : String(
-                                                v.status || "",
-                                              ).toLowerCase() === "reverted"
-                                            ? "bg-amber-100 text-amber-700"
-                                            : "bg-amber-100 text-amber-700"
-                                    }`}
-                                  >
-                                    {v.marineSafetyApproved === true ||
-                                    v.twistLockCertified === true
-                                      ? "✓ Safety Check"
-                                      : String(v.status || "").toLowerCase() ===
-                                          "rejected"
-                                        ? "✕ Safety Check Rejected"
-                                        : String(
-                                              v.status || "",
-                                            ).toLowerCase() === "reverted"
-                                          ? "↩ Safety Check Reverted"
-                                          : "⏳ Pending Safety Check"}
-                                  </span>
-                                </>
+                                  const passSectionDone =
+                                    wf === "PENDING_SAFETY" ||
+                                    wf === "COMPLETED" ||
+                                    currentTrailerStatus === "approved" ||
+                                    (isPassSectionApprover && entityStatuses.vehicles[v.id] === "APPROVED");
+
+                                  const passSectionRejected =
+                                    currentTrailerStatus === "rejected" ||
+                                    (isPassSectionApprover && entityStatuses.vehicles[v.id] === "REJECTED");
+
+                                  const passSectionReverted =
+                                    currentTrailerStatus === "reverted" ||
+                                    (isPassSectionApprover && entityStatuses.vehicles[v.id] === "REVERTED");
+
+                                  const safetyDone =
+                                    v.marineSafetyApproved === true ||
+                                    v.twistLockCertified === true ||
+                                    (wf === "COMPLETED" && currentTrailerStatus === "approved") ||
+                                    (isSafetyApprover && entityStatuses.vehicles[v.id] === "APPROVED");
+
+                                  const safetyRejected =
+                                    (isSafetyApprover && entityStatuses.vehicles[v.id] === "REJECTED");
+
+                                  const safetyReverted =
+                                    (isSafetyApprover && entityStatuses.vehicles[v.id] === "REVERTED");
+
+                                  return (
+                                    <>
+                                      {/* Traffic / Pass Section */}
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                          passSectionDone
+                                            ? "bg-emerald-100 text-emerald-700"
+                                            : passSectionRejected
+                                              ? "bg-red-100 text-red-700"
+                                              : passSectionReverted
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-amber-100 text-amber-700"
+                                        }`}
+                                      >
+                                        {passSectionDone
+                                          ? "✓ Pass Section"
+                                          : passSectionRejected
+                                            ? "✕ Pass Section Rejected"
+                                            : passSectionReverted
+                                              ? "↩ Pass Section Reverted"
+                                              : "⏳ Pending Pass Section"}
+                                      </span>
+
+                                      {/* Safety Check */}
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                          safetyDone
+                                            ? "bg-emerald-100 text-emerald-700"
+                                            : safetyRejected
+                                              ? "bg-red-100 text-red-700"
+                                              : safetyReverted
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-amber-100 text-amber-700"
+                                        }`}
+                                      >
+                                        {safetyDone
+                                          ? "✓ Safety Check"
+                                          : safetyRejected
+                                            ? "✕ Safety Check Rejected"
+                                            : safetyReverted
+                                              ? "↩ Safety Check Reverted"
+                                              : "⏳ Pending Safety Check"}
+                                      </span>
+                                    </>
+                                  );
+                                })()
                               ) : (
                                 <>
                                   {/* ESSENTIAL WORKFLOW VS NORMAL WORKFLOW STATUS BADGES */}
@@ -4349,7 +4863,10 @@ export default function TrafficPassesPage() {
                                       ].includes(convState);
                                       const passSectionDone =
                                         convState === "APPROVED" ||
-                                        convState === "COMPLETED";
+                                        convState === "COMPLETED" ||
+                                        String(v.status || "").toLowerCase() === "approved" ||
+                                        (userRole === "Approval" && Number(userDepartmentId) === 9 && entityStatuses.vehicles[v.id] === "APPROVED") ||
+                                        entityStatuses.vehicles[v.id] === "APPROVED";
 
                                       return (
                                         <>
@@ -4396,6 +4913,107 @@ export default function TrafficPassesPage() {
                                       );
                                     }
 
+                                    if (selectedRequest?.originType === "VENDOR") {
+                                      const wf = String(v.workflowState || "").toUpperCase();
+                                      const deptId = Number(v.concernDepartmentId);
+                                      const passType = String(v.passType || "").trim().toUpperCase();
+                                      const vehicleType = String(v.vehicleTypeName || "").trim().toUpperCase();
+                                      const isAnnualTrailer =
+                                        ["YEARLY", "ANNUAL"].includes(passType) &&
+                                        ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(vehicleType);
+
+                                      // 1. Vendor Oil Jetty Vehicle Workflow
+                                      if (wf.startsWith("PENDING_VENDOR_") || isOilDockArea(v.accessAreaId || v.accessArea)) {
+                                        const fireDone =
+                                          v.sparkArresterCertified === true ||
+                                          v.marineSafetyApproved === true ||
+                                          ["PENDING_VENDOR_CONCERN_DEPARTMENT", "PENDING_VENDOR_CISF", "PENDING_VENDOR_TRAFFIC", "COMPLETED"].includes(wf) ||
+                                          (["Fire Safety Officer", "Dy. Conservator"].includes(userRole) && entityStatuses.vehicles[v.id] === "APPROVED");
+
+                                        const isCivil = deptId === 3;
+                                        const isMech = deptId === 4;
+                                        const civilDone =
+                                          isCivil &&
+                                          (["PENDING_VENDOR_CISF", "PENDING_VENDOR_TRAFFIC", "COMPLETED"].includes(wf) ||
+                                            (userRole === "Approval" && Number(userDepartmentId) === 3 && entityStatuses.vehicles[v.id] === "APPROVED"));
+                                        const mechDone =
+                                          isMech &&
+                                          (["PENDING_VENDOR_CISF", "PENDING_VENDOR_TRAFFIC", "COMPLETED"].includes(wf) ||
+                                            (userRole === "Approval" && Number(userDepartmentId) === 4 && entityStatuses.vehicles[v.id] === "APPROVED"));
+
+                                        const cisfDone =
+                                          ["PENDING_VENDOR_TRAFFIC", "COMPLETED"].includes(wf) ||
+                                          (["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"].includes(userRole) && entityStatuses.vehicles[v.id] === "APPROVED") ||
+                                          String(v.status || "").toLowerCase() === "approved";
+
+                                        const passSectionDone =
+                                          wf === "COMPLETED" ||
+                                          String(v.status || "").toLowerCase() === "approved" ||
+                                          (userRole === "Approval" && Number(userDepartmentId) === 9 && entityStatuses.vehicles[v.id] === "APPROVED");
+
+                                        return (
+                                          <>
+                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${fireDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                              {fireDone ? "✓ Fire Safety / Dy. Conservator" : "⏳ Pending Fire Safety / Dy. Conservator"}
+                                            </span>
+                                            {isCivil && (
+                                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${civilDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                                {civilDone ? "✓ Civil Dept" : "⏳ Pending Civil Dept"}
+                                              </span>
+                                            )}
+                                            {isMech && (
+                                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${mechDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                                {mechDone ? "✓ Mech Dept" : "⏳ Pending Mech Dept"}
+                                              </span>
+                                            )}
+                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${cisfDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                              {cisfDone ? "✓ CISF Assistant Commandant" : "⏳ Pending CISF"}
+                                            </span>
+                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${passSectionDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                              {passSectionDone ? "✓ Pass Section" : "⏳ Pending Pass Section"}
+                                            </span>
+                                          </>
+                                        );
+                                      }
+
+                                      // 2. Normal Annual Trailer Safety Flow
+                                      if (isAnnualTrailer) {
+                                        const passSectionDone =
+                                          wf === "PENDING_SAFETY" ||
+                                          wf === "COMPLETED" ||
+                                          String(v.status || "").toLowerCase() === "approved" ||
+                                          (userRole === "Approval" && Number(userDepartmentId) === 9 && entityStatuses.vehicles[v.id] === "APPROVED");
+
+                                        const safetyDone =
+                                          v.twistLockCertified === true ||
+                                          wf === "COMPLETED" ||
+                                          (userRole === "Safety Officer" && entityStatuses.vehicles[v.id] === "APPROVED");
+
+                                        return (
+                                          <>
+                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${passSectionDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                              {passSectionDone ? "✓ Pass Section" : "⏳ Pending Pass Section"}
+                                            </span>
+                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${safetyDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                              {safetyDone ? "✓ Safety Officer (Twist Lock & Fitness)" : "⏳ Pending Safety Officer"}
+                                            </span>
+                                          </>
+                                        );
+                                      }
+
+                                      // 3. Regular Vendor Vehicle
+                                      const passSectionDone =
+                                        wf === "COMPLETED" ||
+                                        String(v.status || "").toLowerCase() === "approved" ||
+                                        (userRole === "Approval" && Number(userDepartmentId) === 9 && entityStatuses.vehicles[v.id] === "APPROVED");
+
+                                      return (
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${passSectionDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                          {passSectionDone ? "✓ Pass Section" : "⏳ Pending Pass Section"}
+                                        </span>
+                                      );
+                                    }
+
                                     const isEssential =
                                       Boolean(v.essentialWorkflowState) ||
                                       (v.essentialDepartmentId !== null &&
@@ -4424,10 +5042,15 @@ export default function TrafficPassesPage() {
 
                                       const fireSafetyDone =
                                         sparkApproved ||
-                                        (workflowState !== "" &&
-                                          !workflowState.includes(
-                                            "FIRE_SAFETY",
-                                          ));
+                                        [
+                                          "PENDING_CIVIL_ESSENTIAL",
+                                          "PENDING_MECHANICAL_ESSENTIAL",
+                                          "PENDING_CISF_ESSENTIAL",
+                                          "PENDING_PASS_SECTION_ESSENTIAL",
+                                          "COMPLETED_ESSENTIAL",
+                                          "COMPLETED",
+                                          "APPROVED",
+                                        ].includes(workflowState);
 
                                       const isCivilDept =
                                         deptId === 3 ||
@@ -4438,42 +5061,46 @@ export default function TrafficPassesPage() {
 
                                       const civilDone =
                                         isCivilDept &&
-                                        (!workflowState.includes("CIVIL") ||
-                                          [
-                                            "PENDING_CISF_ESSENTIAL",
-                                            "PENDING_PASS_SECTION_ESSENTIAL",
-                                            "COMPLETED_ESSENTIAL",
-                                            "COMPLETED",
-                                          ].includes(workflowState));
+                                        ([
+                                          "PENDING_CISF_ESSENTIAL",
+                                          "PENDING_PASS_SECTION_ESSENTIAL",
+                                          "COMPLETED_ESSENTIAL",
+                                          "COMPLETED",
+                                          "APPROVED",
+                                        ].includes(workflowState) ||
+                                          (userRole === "Approval" && Number(userDepartmentId) === 3 && entityStatuses.vehicles[v.id] === "APPROVED"));
 
                                       const mechDone =
                                         isMechDept &&
-                                        (!workflowState.includes(
-                                          "MECHANICAL",
-                                        ) ||
-                                          [
-                                            "PENDING_CISF_ESSENTIAL",
-                                            "PENDING_PASS_SECTION_ESSENTIAL",
-                                            "COMPLETED_ESSENTIAL",
-                                            "COMPLETED",
-                                          ].includes(workflowState));
+                                        ([
+                                          "PENDING_CISF_ESSENTIAL",
+                                          "PENDING_PASS_SECTION_ESSENTIAL",
+                                          "COMPLETED_ESSENTIAL",
+                                          "COMPLETED",
+                                          "APPROVED",
+                                        ].includes(workflowState) ||
+                                          (userRole === "Approval" && Number(userDepartmentId) === 4 && entityStatuses.vehicles[v.id] === "APPROVED"));
 
                                       const cisfDone =
                                         [
                                           "PENDING_PASS_SECTION_ESSENTIAL",
                                           "COMPLETED_ESSENTIAL",
                                           "COMPLETED",
+                                          "APPROVED",
                                         ].includes(workflowState) ||
-                                        String(v.status || "").toLowerCase() ===
-                                          "approved";
+                                        String(v.status || "").toLowerCase() === "approved" ||
+                                        (["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"].includes(userRole) && entityStatuses.vehicles[v.id] === "APPROVED");
 
+                                      const currentVehStatus = String(entityStatuses.vehicles[v.id] || v.status || "").toLowerCase();
                                       const passSectionDone =
                                         [
                                           "COMPLETED_ESSENTIAL",
                                           "COMPLETED",
+                                          "APPROVED",
                                         ].includes(workflowState) ||
-                                        String(v.status || "").toLowerCase() ===
-                                          "approved";
+                                        currentVehStatus === "approved" ||
+                                        (userRole === "Approval" && Number(userDepartmentId) === 9 && entityStatuses.vehicles[v.id] === "APPROVED") ||
+                                        entityStatuses.vehicles[v.id] === "APPROVED";
 
                                       return (
                                         <>
@@ -4537,49 +5164,49 @@ export default function TrafficPassesPage() {
                                             className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                               passSectionDone
                                                 ? "bg-emerald-100 text-emerald-700"
-                                                : "bg-amber-100 text-amber-700"
+                                                : currentVehStatus === "rejected"
+                                                  ? "bg-red-100 text-red-700"
+                                                  : currentVehStatus === "reverted"
+                                                    ? "bg-amber-100 text-amber-700"
+                                                    : "bg-amber-100 text-amber-700"
                                             }`}
                                           >
                                             {passSectionDone
                                               ? "✓ Pass Section"
-                                              : "⏳ Pending Pass Section"}
+                                              : currentVehStatus === "rejected"
+                                                ? "✕ Pass Section Rejected"
+                                                : currentVehStatus === "reverted"
+                                                  ? "↩ Pass Section Reverted"
+                                                  : "⏳ Pending Pass Section"}
                                           </span>
                                         </>
                                       );
                                     }
 
                                     // Normal flow
+                                    const currentVehicleStatus = String(entityStatuses.vehicles[v.id] || v.status || "").toLowerCase();
+                                    const isVehicleApproved = currentVehicleStatus === "approved";
+                                    const isVehicleRejected = currentVehicleStatus === "rejected";
+                                    const isVehicleReverted = currentVehicleStatus === "reverted";
+
                                     return (
                                       <>
                                         <span
                                           className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                            String(
-                                              v.status || "",
-                                            ).toLowerCase() === "approved"
+                                            isVehicleApproved
                                               ? "bg-emerald-100 text-emerald-700"
-                                              : String(
-                                                    v.status || "",
-                                                  ).toLowerCase() === "rejected"
+                                              : isVehicleRejected
                                                 ? "bg-red-100 text-red-700"
-                                                : String(
-                                                      v.status || "",
-                                                    ).toLowerCase() ===
-                                                    "reverted"
+                                                : isVehicleReverted
                                                   ? "bg-amber-100 text-amber-700"
                                                   : "bg-amber-100 text-amber-700"
                                           }`}
                                         >
-                                          {String(
-                                            v.status || "",
-                                          ).toLowerCase() === "approved"
+                                          {isVehicleApproved
                                             ? "✓ Pass Section"
-                                            : String(
-                                                  v.status || "",
-                                                ).toLowerCase() === "rejected"
+                                            : isVehicleRejected
                                               ? "✕ Pass Section Rejected"
-                                              : String(
-                                                    v.status || "",
-                                                  ).toLowerCase() === "reverted"
+                                              : isVehicleReverted
                                                 ? "↩ Pass Section Reverted"
                                                 : "⏳ Pending Pass Section"}
                                         </span>
@@ -4713,7 +5340,11 @@ export default function TrafficPassesPage() {
                             Number(userDepartmentId) === 9 &&
                             activeTab === "processed" && (
                               <td className="p-3 text-sm font-semibold text-slate-600">
-                                {v.approvedBy || "—"}
+                                {v.safetyApprovedBy ||
+                                  v.marineSafetyApprovedByName ||
+                                  v.approvedBy ||
+                                  selectedRequest?.approvedBy ||
+                                  "—"}
                               </td>
                             )}
                           <td className="p-3 text-right">
@@ -4728,16 +5359,22 @@ export default function TrafficPassesPage() {
                                       v.conversionStatus || "PENDING";
                                   } else if (userRole === "Safety Officer") {
                                     vehicleStatus =
-                                      v.marineSafetyApproved === true ||
-                                      v.twistLockCertified === true
-                                        ? "APPROVED"
-                                        : "PENDING";
+                                      v.status === "rejected"
+                                        ? "REJECTED"
+                                        : v.marineSafetyApproved === true ||
+                                          v.twistLockCertified === true
+                                          ? "APPROVED"
+                                          : "PENDING";
                                   } else if (
                                     userRole === "Fire Safety Officer"
                                   ) {
+                                    const isMarineEssentialDone =
+                                      v.essentialWorkflowState &&
+                                      v.essentialWorkflowState !== "PENDING_MARINE_ESSENTIAL";
                                     vehicleStatus =
                                       v.marineSafetyApproved === true ||
-                                      v.sparkArresterCertified === true
+                                      v.sparkArresterCertified === true ||
+                                      isMarineEssentialDone
                                         ? "APPROVED"
                                         : "PENDING";
                                   } else if (
@@ -4748,11 +5385,19 @@ export default function TrafficPassesPage() {
                                         ? "APPROVED"
                                         : "PENDING";
                                   } else {
-                                    vehicleStatus = (
-                                      v.status ||
-                                      v.decision ||
-                                      ""
-                                    ).toUpperCase();
+                                    const isVehicleApproved =
+                                      String(v.status || "").toLowerCase() === "approved" ||
+                                      String(v.decision || "").toLowerCase() === "approved" ||
+                                      String(v.essentialWorkflowState || "").toUpperCase() === "COMPLETED_ESSENTIAL" ||
+                                      (isViewMode && ["APPROVED", "COMPLETED", "PROCESSED"].includes(String(selectedRequest?.status || "").toUpperCase()));
+
+                                    vehicleStatus = isVehicleApproved
+                                      ? "APPROVED"
+                                      : (
+                                          v.status ||
+                                          v.decision ||
+                                          ""
+                                        ).toUpperCase();
                                   }
                                 }
 
@@ -4799,7 +5444,6 @@ export default function TrafficPassesPage() {
                               })()}
 
                               {!isViewMode &&
-                                !isVendorOilJettyWorkflow &&
                                 canUserVerifyVehicle(v) && (
                                   <button
                                     onClick={(e) => {
@@ -5437,15 +6081,63 @@ export default function TrafficPassesPage() {
                           </div>
                         </div>
                       )}
-                      <DocumentCard
-                        label="Requisition Letter"
-                        filePath={entityModal.data.requisitionLetterPath}
-                        documentType="requisitionLetter"
-                        passRequestId={selectedRequest.id}
-                        onView={handleViewDoc}
-                        entityIndex={extractEntityIndex(entityModal.data.id)}
-                        isVendorPass={selectedRequest.originType === "VENDOR"}
-                      />
+                      {(entityModal.data.conversionRequisitionFilePath ||
+                        entityModal.data.requisitionLetterPath ||
+                        entityModal.data.conversionWorkflowState ||
+                        entityModal.data.conversionStatus ||
+                        selectedRequest?.requisitionLetterFilePath ||
+                        selectedRequest?.conversionRequisitionFilePath) && (
+                        <DocumentCard
+                          label={
+                            entityModal.data.conversionWorkflowState ||
+                            entityModal.data.conversionRequisitionFilePath
+                              ? "Requisition Letter (Conversion)"
+                              : "Requisition Letter"
+                          }
+                          filePath={
+                            entityModal.data.conversionRequisitionFilePath ||
+                            entityModal.data.requisitionLetterPath ||
+                            selectedRequest?.requisitionLetterFilePath ||
+                            selectedRequest?.conversionRequisitionFilePath ||
+                            "conversion_requisition.pdf"
+                          }
+                          documentType={
+                            entityModal.data.conversionWorkflowState ||
+                            entityModal.data.conversionRequisitionFilePath
+                              ? "conversionRequisition"
+                              : "passRequisitionLetter"
+                          }
+                          passRequestId={
+                            entityModal.data.passRequestId ||
+                            selectedRequest?.id
+                          }
+                          onView={handleViewDoc}
+                          entityIndex={extractEntityIndex(entityModal.data.id)}
+                          isVendorPass={
+                            selectedRequest?.originType === "VENDOR"
+                          }
+                        />
+                      )}
+                      {(selectedRequest?.authLetterFilePath ||
+                        selectedRequest?.workOrderFilePath) && (
+                        <DocumentCard
+                          label="Licence / Work Order / Contract"
+                          filePath={
+                            selectedRequest?.authLetterFilePath ||
+                            selectedRequest?.workOrderFilePath
+                          }
+                          documentType="authLetter"
+                          passRequestId={
+                            entityModal.data.passRequestId ||
+                            selectedRequest?.id
+                          }
+                          onView={handleViewDoc}
+                          entityIndex={extractEntityIndex(entityModal.data.id)}
+                          isVendorPass={
+                            selectedRequest?.originType === "VENDOR"
+                          }
+                        />
+                      )}
                       <DocumentCard
                         label="Aadhar Card Document"
                         filePath={entityModal.data.aadharPDFFilePATH}
@@ -5539,6 +6231,63 @@ export default function TrafficPassesPage() {
                     </>
                   ) : (
                     <>
+                      {(entityModal.data.conversionRequisitionFilePath ||
+                        entityModal.data.requisitionLetterPath ||
+                        entityModal.data.conversionWorkflowState ||
+                        entityModal.data.conversionStatus ||
+                        selectedRequest?.requisitionLetterFilePath ||
+                        selectedRequest?.conversionRequisitionFilePath) && (
+                        <DocumentCard
+                          label={
+                            entityModal.data.conversionWorkflowState ||
+                            entityModal.data.conversionRequisitionFilePath
+                              ? "Requisition Letter (Conversion)"
+                              : "Requisition Letter"
+                          }
+                          filePath={
+                            entityModal.data.conversionRequisitionFilePath ||
+                            entityModal.data.requisitionLetterPath ||
+                            selectedRequest?.requisitionLetterFilePath ||
+                            selectedRequest?.conversionRequisitionFilePath ||
+                            "conversion_requisition.pdf"
+                          }
+                          documentType={
+                            entityModal.data.conversionWorkflowState ||
+                            entityModal.data.conversionRequisitionFilePath
+                              ? "conversionRequisition"
+                              : "passRequisitionLetter"
+                          }
+                          passRequestId={
+                            entityModal.data.passRequestId ||
+                            selectedRequest?.id
+                          }
+                          onView={handleViewDoc}
+                          entityIndex={extractEntityIndex(entityModal.data.id)}
+                          isVendorPass={
+                            selectedRequest?.originType === "VENDOR"
+                          }
+                        />
+                      )}
+                      {(selectedRequest?.authLetterFilePath ||
+                        selectedRequest?.workOrderFilePath) && (
+                        <DocumentCard
+                          label="Licence / Work Order / Contract"
+                          filePath={
+                            selectedRequest?.authLetterFilePath ||
+                            selectedRequest?.workOrderFilePath
+                          }
+                          documentType="authLetter"
+                          passRequestId={
+                            entityModal.data.passRequestId ||
+                            selectedRequest?.id
+                          }
+                          onView={handleViewDoc}
+                          entityIndex={extractEntityIndex(entityModal.data.id)}
+                          isVendorPass={
+                            selectedRequest?.originType === "VENDOR"
+                          }
+                        />
+                      )}
                       <DocumentCard
                         label="RC Document / Book"
                         filePath={entityModal.data.scannedCopyFilePath}

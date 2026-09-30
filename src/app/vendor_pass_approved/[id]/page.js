@@ -675,32 +675,44 @@ export default function VendorPassApprovedPage() {
       setLoading(true);
       setError(null);
 
+      // Fetch all approved and pending vendor passes without filtering out other entities
+      const response = await axios.get(
+        `${AGENT_API}/pass-request/vendor-qr-data/${vendorPassId}`,
+      );
+
+      const apiData = response.data?.data || response.data;
+
+      setPassData(apiData);
+
+      // If a specific entity was requested via URL, auto-select it for immediate QR display
       const effectiveType =
         qrType || sessionStorage.getItem("vendor_pass_qr_type");
 
       const effectiveEntityId =
         qrEntityId || sessionStorage.getItem("vendor_pass_qr_entity_id");
 
-      const params = {};
+      if (effectiveType && effectiveEntityId && apiData) {
+        const source =
+          effectiveType === "person"
+            ? apiData.persons || []
+            : apiData.vehicles || [];
 
-      if (effectiveType) {
-        params.type = effectiveType;
+        const matched = source.find(
+          (item) =>
+            Number(item.id) === Number(effectiveEntityId) &&
+            String(item.status || "").toLowerCase() === "approved",
+        );
+
+        if (matched) {
+          setSelectedEntity(matched);
+          setEntityType(effectiveType);
+        }
+
+        try {
+          sessionStorage.removeItem("vendor_pass_qr_type");
+          sessionStorage.removeItem("vendor_pass_qr_entity_id");
+        } catch (_) {}
       }
-
-      if (effectiveEntityId) {
-        params.entityId = effectiveEntityId;
-      }
-
-      const response = await axios.get(
-        `${AGENT_API}/pass-request/vendor-qr-data/${vendorPassId}`,
-        {
-          params,
-        },
-      );
-
-      const apiData = response.data?.data || response.data;
-
-      setPassData(apiData);
 
       if (response.data) {
         setRevertedPersons(
@@ -1459,7 +1471,7 @@ export default function VendorPassApprovedPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `VendorPass-${vendorPassId}.pdf`;
+      link.download = `VendorPass-${passData?.referenceNo || vendorPassId}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

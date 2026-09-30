@@ -588,6 +588,12 @@ const LoginPage = () => {
         } else if (role === "fire safety officer" && deptId === MARINE_DEPT_ID) {
           // Marine Fire Safety Officer → directly to passes pending tab
           router.push("/traffic_approval/passes?tab=pending");
+        } else if (role === "dy. conservator" && deptId === MARINE_DEPT_ID) {
+          // Dy. Conservator (Marine) → oil-dock essential passes
+          router.push("/traffic_approval/passes?tab=pending");
+        } else if (role === "safety officer" && TRAFFIC_DEPT_IDS.includes(deptId)) {
+          // Safety Officer (Traffic) → directly to passes pending tab
+          router.push("/traffic_approval/passes?tab=pending");
         } else if (
           TRAFFIC_APPROVAL_ROLES.includes(role) &&
           TRAFFIC_DEPT_IDS.includes(deptId)
@@ -625,7 +631,7 @@ const LoginPage = () => {
         } else if (role === "gate operator" || role === "weigh bridge") {
           router.push("/gate_dashboard");
         } else if (role === "safety officer" || role === "fire safety officer") {
-          router.push("/safety_dashboard");
+          router.push("/traffic_approval/passes?tab=pending");
         } else if (role === "finance") {
           router.push("/finance_dashboard");
         } else if (role === "cisf") {

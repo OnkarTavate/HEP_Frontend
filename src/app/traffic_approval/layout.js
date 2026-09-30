@@ -442,8 +442,6 @@ export default function TrafficLayout({ children }) {
           "fire safety officer",
           "dy. conservator",
           "dy conservator",
-          "senior deputy traffic manager",
-          "senior deputy traffic manager",
         ].includes(normalizedRole);
 
       const isCisfWorkflowRoleByName =
@@ -486,7 +484,6 @@ export default function TrafficLayout({ children }) {
         isCisfWorkflowRoleByName,
         isTrafficApprover,
       });
-
       if (!isTrafficApprover) {
         alert("Unauthorized Access: Approval Department Only.");
         setUser(null);
@@ -591,62 +588,44 @@ export default function TrafficLayout({ children }) {
 
   if (!user) return <div className="p-12 text-center">Loading...</div>;
 
-  const isSafetyOfficer =
-    user?.role?.toLowerCase() === "safety officer" ||
-    user?.role?.toLowerCase() === "fire safety officer";
+  const isSpecialApprover =
+    ["safety officer", "fire safety officer", "dy. conservator", "cisf.assistant commandant"].includes(
+      user?.role?.toLowerCase(),
+    );
 
-  const navigationItems = [
-    ...(!isSafetyOfficer
-      ? [
-          {
-            name: "Dashboard",
-            href: "/traffic_approval/dashboard",
-            icon: BarChart3,
-          },
-        ]
-      : []),
-    {
-      name: "Pass Approvals",
-      href: "/traffic_approval/passes",
-      icon: FileText,
-    },
-    ...(!isSafetyOfficer
-      ? [
-          {
-            name: "VVIP Pass",
-            href: "/traffic_approval/vvip-pass",
-            icon: VvipIcon,
-          },
-        ]
-      : []),
-    ...(!isSafetyOfficer
-      ? [
-          {
-            name: "Company Approvals",
-            href: "/traffic_approval/companies",
-            icon: Building2,
-          },
-        ]
-      : []),
-    ...(!isSafetyOfficer
-      ? [
-          {
-            name: "Blacklist Management",
-            href: "/traffic_approval/blacklist",
-            icon: ShieldBan,
-          },
-        ]
-      : []),
-    ...(!isSafetyOfficer
-      ? [
-          {
-            name: "Bulk Pass",
-            href: "/traffic_approval/bulk-pass",
-            icon: Users,
-          },
-        ]
-      : []),
-  ];
+  const navigationItems = isSpecialApprover
+    ? [
+        {
+          name: "Pass Approvals",
+          href: "/traffic_approval/passes",
+          icon: FileText,
+        },
+      ]
+    : [
+        { name: "Dashboard", href: "/traffic_approval/dashboard", icon: BarChart3 },
+        {
+          name: "Pass Approvals",
+          href: "/traffic_approval/passes",
+          icon: FileText,
+        },
+        { name: "VVIP Pass", href: "/traffic_approval/vvip-pass", icon: VvipIcon },
+        {
+          name: "Company Approvals",
+          href: "/traffic_approval/companies",
+          icon: Building2,
+        },
+        {
+          name: "Blacklist Management",
+          href: "/traffic_approval/blacklist",
+          icon: ShieldBan,
+        },
+        {
+          name: "Overstay Exceptions",
+          href: "/traffic_approval/overstay",
+          icon: ShieldCheck,
+        },
+        { name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users },
+      ];
 
   const SidebarContent = ({
     onNavigate,
@@ -664,7 +643,7 @@ export default function TrafficLayout({ children }) {
             )}
           >
             <Link
-              href="/traffic_approval/dashboard"
+              href={isSpecialApprover ? "/traffic_approval/passes?tab=pending" : "/traffic_approval/dashboard"}
               className="flex items-center gap-3 group min-w-0"
               onClick={onNavigate}
             >

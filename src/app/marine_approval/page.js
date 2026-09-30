@@ -721,7 +721,15 @@ export default function TrafficPassesPage() {
       const initialVehicleRemarks = {};
 
       (pass.persons || []).forEach((p) => {
-        if (p.status === 'approved') {
+        if (p.conversionWorkflowState) {
+          if (p.conversionStatus === 'APPROVED') {
+            initialPersonStatuses[p.id] = 'APPROVED';
+          } else if (p.conversionStatus === 'REJECTED') {
+            initialPersonStatuses[p.id] = 'REJECTED';
+            initialPersonRemarks[p.id] = p.rejectedReason || '';
+          }
+          // Pending conversion request — leave empty for fresh review!
+        } else if (p.status === 'approved') {
           // Pre-fill as APPROVED (read-only, approver cannot change)
           initialPersonStatuses[p.id] = 'APPROVED';
         } else if (p.status === 'rejected') {
@@ -1157,32 +1165,67 @@ export default function TrafficPassesPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {(selectedRequest.requisitionLetterFilePath || selectedRequest.requisitionLetterFileName) && (
-                      <button
-                        onClick={() =>
-                          handleViewDoc(
-                            selectedRequest.id,
-                            "passRequisitionLetter",
-                            selectedRequest.requisitionLetterFilePath || selectedRequest.requisitionLetterFileName,
-                          )
-                        }
-                        className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
-                      >
-                        <FileText className="h-4 w-4 text-blue-600" /> View Requisition Letter
-                      </button>
-                    )}
-                    {selectedRequest.authLetterFilePath && (
+                    {(() => {
+                      const reqPath =
+                        selectedRequest.requisitionLetterFilePath ||
+                        selectedRequest.conversionRequisitionFilePath ||
+                        (selectedRequest.vehicles || []).find(
+                          (v) =>
+                            v.conversionRequisitionFilePath ||
+                            v.requisitionLetterPath,
+                        )?.conversionRequisitionFilePath ||
+                        (selectedRequest.vehicles || []).find(
+                          (v) =>
+                            v.conversionRequisitionFilePath ||
+                            v.requisitionLetterPath,
+                        )?.requisitionLetterPath ||
+                        (selectedRequest.persons || []).find(
+                          (p) =>
+                            p.conversionRequisitionFilePath ||
+                            p.requisitionLetterPath,
+                        )?.conversionRequisitionFilePath ||
+                        (selectedRequest.persons || []).find(
+                          (p) =>
+                            p.conversionRequisitionFilePath ||
+                            p.requisitionLetterPath,
+                        )?.requisitionLetterPath ||
+                        selectedRequest.requisitionLetterFileName;
+
+                      if (!reqPath) return null;
+
+                      return (
+                        <button
+                          onClick={() =>
+                            handleViewDoc(
+                              selectedRequest.id,
+                              "passRequisitionLetter",
+                              reqPath,
+                            )
+                          }
+                          className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
+                        >
+                          <FileText className="h-4 w-4 text-blue-600" /> View
+                          Requisition Letter
+                        </button>
+                      );
+                    })()}
+                    {(selectedRequest.authLetterFilePath ||
+                      selectedRequest.workOrderFilePath ||
+                      selectedRequest.authLetterFileName) && (
                       <button
                         onClick={() =>
                           handleViewDoc(
                             selectedRequest.id,
                             "authLetter",
-                            selectedRequest.authLetterFilePath,
+                            selectedRequest.authLetterFilePath ||
+                              selectedRequest.workOrderFilePath ||
+                              selectedRequest.authLetterFileName,
                           )
                         }
                         className="bg-orange-50 text-orange-700 border border-orange-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-orange-100 transition-colors shadow-sm"
                       >
-                        <FileCheck2 className="h-4 w-4 text-orange-600" /> View Licence / Work Order / Contract
+                        <FileCheck2 className="h-4 w-4 text-orange-600" /> View
+                        Licence / Work Order / Contract
                       </button>
                     )}
                   </div>
@@ -1274,7 +1317,18 @@ export default function TrafficPassesPage() {
                               {p.personPassNo || "-"}
                             </td>
                             <td className="p-3 font-bold text-[#0a1e4d]">
-                              {p.name}
+                              <div>{p.name}</div>
+                              {(p.conversionWorkflowState ||
+                                p.isConvertedToEssential ||
+                                Boolean(p.essentialWorkflowState) ||
+                                (p.essentialDepartmentId !== null && p.essentialDepartmentId !== undefined) ||
+                                p.isEssential ||
+                                (p.concernDepartmentId != null && isOilDockArea(p.accessAreaId || p.accessArea)) ||
+                                isOilDockArea(p.accessAreaId || p.accessArea)) && (
+                                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold border bg-amber-50 text-amber-800 border-amber-300">
+                                  ⚡ Essential Pass
+                                </span>
+                              )}
                               <span className="block font-medium text-xs text-slate-500">
                                 {formatHepType(p.hepType || p.hepTypeId)} • {formatPassType(p.passType)}
                               </span>
@@ -1285,10 +1339,19 @@ export default function TrafficPassesPage() {
                             <td className="p-3 text-right">
                               <div className="flex justify-end items-center gap-3">
                                 {(() => {
-                                  const personStatus =
-                                    entityStatuses.persons[p.id] ||
-                                    p.status ||
-                                    p.decision;
+                                  let personStatus =
+                                    entityStatuses.persons[p.id];
+
+                                  if (!personStatus) {
+                                    if (p.conversionWorkflowState) {
+                                      personStatus =
+                                        p.conversionStatus || "PENDING";
+                                    } else {
+                                      personStatus =
+                                        p.status || p.decision || "";
+                                    }
+                                  }
+                                  personStatus = String(personStatus || "").toUpperCase();
 
                                   const personRemark =
                                     entityRemarks.persons[p.id] ||
@@ -1301,7 +1364,7 @@ export default function TrafficPassesPage() {
                                         <span
                                           className={`px-2 py-1 rounded text-[10px] font-bold ${personStatus === "APPROVED"
                                             ? "bg-emerald-100 text-emerald-700"
-                                            : personStatus === "REVERTED"
+                                            : personStatus === "REVERTED" || personStatus === "PENDING"
                                               ? "bg-amber-100 text-amber-700"
                                               : "bg-red-100 text-red-700"
                                             }`}
@@ -1403,7 +1466,13 @@ export default function TrafficPassesPage() {
                             </td>
                             <td className="p-3 font-bold text-[#0a1e4d] uppercase">
                               <div>{v.registrationNo}</div>
-                              {v.conversionWorkflowState && (
+                              {(v.conversionWorkflowState ||
+                                v.isConvertedToEssential ||
+                                Boolean(v.essentialWorkflowState) ||
+                                (v.essentialDepartmentId !== null && v.essentialDepartmentId !== undefined) ||
+                                v.isEssential ||
+                                (v.concernDepartmentId != null && isOilDockArea(v.accessAreaId || v.accessArea)) ||
+                                isOilDockArea(v.accessAreaId || v.accessArea)) && (
                                 <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold border bg-amber-50 text-amber-800 border-amber-300">
                                   ⚡ Essential Pass
                                 </span>
@@ -1415,10 +1484,19 @@ export default function TrafficPassesPage() {
                             <td className="p-3 text-right">
                               <div className="flex justify-end items-center gap-3">
                                 {(() => {
-                                  const vehicleStatus =
-                                    entityStatuses.vehicles[v.id] ||
-                                    v.status ||
-                                    v.decision;
+                                  let vehicleStatus =
+                                    entityStatuses.vehicles[v.id];
+
+                                  if (!vehicleStatus) {
+                                    if (v.conversionWorkflowState) {
+                                      vehicleStatus =
+                                        v.conversionStatus || "PENDING";
+                                    } else {
+                                      vehicleStatus =
+                                        v.status || v.decision || "";
+                                    }
+                                  }
+                                  vehicleStatus = String(vehicleStatus || "").toUpperCase();
 
                                   const vehicleRemark =
                                     entityRemarks.vehicles[v.id] ||
@@ -1431,7 +1509,7 @@ export default function TrafficPassesPage() {
                                         <span
                                           className={`px-2 py-1 rounded text-[10px] font-bold ${vehicleStatus === "APPROVED"
                                             ? "bg-emerald-100 text-emerald-700"
-                                            : vehicleStatus === "REVERTED"
+                                            : vehicleStatus === "REVERTED" || vehicleStatus === "PENDING"
                                               ? "bg-amber-100 text-amber-700"
                                               : "bg-red-100 text-red-700"
                                             }`}
@@ -1578,7 +1656,7 @@ export default function TrafficPassesPage() {
                         <div className="flex items-center gap-2">
                           <Sparkles className="h-5 w-5 text-amber-600 animate-pulse" />
                           <h4 className="text-sm font-black text-amber-900 uppercase tracking-wider">
-                            ⚡ Essential Access Conversion Request Details
+                            Essential Access Conversion Request Details
                           </h4>
                         </div>
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-200 text-amber-800">
@@ -1860,6 +1938,63 @@ export default function TrafficPassesPage() {
                         </div>
                       )}
 
+                      {(entityModal.data.conversionRequisitionFilePath ||
+                        entityModal.data.requisitionLetterPath ||
+                        entityModal.data.conversionWorkflowState ||
+                        entityModal.data.conversionStatus ||
+                        selectedRequest?.requisitionLetterFilePath ||
+                        selectedRequest?.conversionRequisitionFilePath) && (
+                        <DocumentCard
+                          label={
+                            entityModal.data.conversionWorkflowState ||
+                            entityModal.data.conversionRequisitionFilePath
+                              ? "Requisition Letter (Conversion)"
+                              : "Requisition Letter"
+                          }
+                          filePath={
+                            entityModal.data.conversionRequisitionFilePath ||
+                            entityModal.data.requisitionLetterPath ||
+                            selectedRequest?.requisitionLetterFilePath ||
+                            selectedRequest?.conversionRequisitionFilePath ||
+                            "conversion_requisition.pdf"
+                          }
+                          documentType={
+                            entityModal.data.conversionWorkflowState ||
+                            entityModal.data.conversionRequisitionFilePath
+                              ? "conversionRequisition"
+                              : "passRequisitionLetter"
+                          }
+                          passRequestId={
+                            entityModal.data.passRequestId ||
+                            selectedRequest?.id
+                          }
+                          onView={handleViewDoc}
+                          entityIndex={extractEntityIndex(entityModal.data.id)}
+                          isVendorPass={
+                            selectedRequest?.originType === "VENDOR"
+                          }
+                        />
+                      )}
+                      {(selectedRequest?.authLetterFilePath ||
+                        selectedRequest?.workOrderFilePath) && (
+                        <DocumentCard
+                          label="Licence / Work Order / Contract"
+                          filePath={
+                            selectedRequest?.authLetterFilePath ||
+                            selectedRequest?.workOrderFilePath
+                          }
+                          documentType="authLetter"
+                          passRequestId={
+                            entityModal.data.passRequestId ||
+                            selectedRequest?.id
+                          }
+                          onView={handleViewDoc}
+                          entityIndex={extractEntityIndex(entityModal.data.id)}
+                          isVendorPass={
+                            selectedRequest?.originType === "VENDOR"
+                          }
+                        />
+                      )}
                       <DocumentCard
                         label="Aadhar Card Document"
                         filePath={entityModal.data.aadharPDFFilePATH}
@@ -1962,6 +2097,63 @@ export default function TrafficPassesPage() {
                     </>
                   ) : (
                     <>
+                      {(entityModal.data.conversionRequisitionFilePath ||
+                        entityModal.data.requisitionLetterPath ||
+                        entityModal.data.conversionWorkflowState ||
+                        entityModal.data.conversionStatus ||
+                        selectedRequest?.requisitionLetterFilePath ||
+                        selectedRequest?.conversionRequisitionFilePath) && (
+                        <DocumentCard
+                          label={
+                            entityModal.data.conversionWorkflowState ||
+                            entityModal.data.conversionRequisitionFilePath
+                              ? "Requisition Letter (Conversion)"
+                              : "Requisition Letter"
+                          }
+                          filePath={
+                            entityModal.data.conversionRequisitionFilePath ||
+                            entityModal.data.requisitionLetterPath ||
+                            selectedRequest?.requisitionLetterFilePath ||
+                            selectedRequest?.conversionRequisitionFilePath ||
+                            "conversion_requisition.pdf"
+                          }
+                          documentType={
+                            entityModal.data.conversionWorkflowState ||
+                            entityModal.data.conversionRequisitionFilePath
+                              ? "conversionRequisition"
+                              : "passRequisitionLetter"
+                          }
+                          passRequestId={
+                            entityModal.data.passRequestId ||
+                            selectedRequest?.id
+                          }
+                          onView={handleViewDoc}
+                          entityIndex={extractEntityIndex(entityModal.data.id)}
+                          isVendorPass={
+                            selectedRequest?.originType === "VENDOR"
+                          }
+                        />
+                      )}
+                      {(selectedRequest?.authLetterFilePath ||
+                        selectedRequest?.workOrderFilePath) && (
+                        <DocumentCard
+                          label="Licence / Work Order / Contract"
+                          filePath={
+                            selectedRequest?.authLetterFilePath ||
+                            selectedRequest?.workOrderFilePath
+                          }
+                          documentType="authLetter"
+                          passRequestId={
+                            entityModal.data.passRequestId ||
+                            selectedRequest?.id
+                          }
+                          onView={handleViewDoc}
+                          entityIndex={extractEntityIndex(entityModal.data.id)}
+                          isVendorPass={
+                            selectedRequest?.originType === "VENDOR"
+                          }
+                        />
+                      )}
                       <DocumentCard
                         label="RC/NOC Document"
                         filePath={entityModal.data.scannedCopyFilePath}

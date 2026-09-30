@@ -32,11 +32,11 @@ const cn = (...c) => c.filter(Boolean).join(" ");
 
 /** Password strength rules */
 const PWD_RULES = [
-  { label: "8–15 characters",       test: (p) => p.length >= 8 && p.length <= 15 },
-  { label: "One uppercase letter",   test: (p) => /[A-Z]/.test(p) },
-  { label: "One lowercase letter",   test: (p) => /[a-z]/.test(p) },
-  { label: "One number",             test: (p) => /[0-9]/.test(p) },
-  { label: "One special character",  test: (p) => /[^A-Za-z0-9]/.test(p) },
+  { label: "8–15 characters", test: (p) => p.length >= 8 && p.length <= 15 },
+  { label: "One uppercase letter", test: (p) => /[A-Z]/.test(p) },
+  { label: "One lowercase letter", test: (p) => /[a-z]/.test(p) },
+  { label: "One number", test: (p) => /[0-9]/.test(p) },
+  { label: "One special character", test: (p) => /[^A-Za-z0-9]/.test(p) },
 ];
 
 export default function DeptPortalScaffold({
@@ -58,11 +58,11 @@ export default function DeptPortalScaffold({
 
   // Password change modal state
   const [showPwdModal, setShowPwdModal] = useState(false);
-  const [newPwd, setNewPwd]             = useState("");
-  const [confirmPwd, setConfirmPwd]     = useState("");
-  const [showNew, setShowNew]           = useState(false);
-  const [showConfirm, setShowConfirm]   = useState(false);
-  const [pwdLoading, setPwdLoading]     = useState(false);
+  const [newPwd, setNewPwd] = useState("");
+  const [confirmPwd, setConfirmPwd] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pwdLoading, setPwdLoading] = useState(false);
 
   // Dark mode
   const [dark, setDark] = useState(() =>
@@ -137,8 +137,8 @@ export default function DeptPortalScaffold({
   };
 
   const pwdPassed = PWD_RULES.filter((r) => r.test(newPwd)).length;
-  const pwdPct    = (pwdPassed / PWD_RULES.length) * 100;
-  const pwdBar    = pwdPct === 100 ? "bg-emerald-500" : pwdPct >= 60 ? "bg-amber-500" : "bg-slate-300";
+  const pwdPct = (pwdPassed / PWD_RULES.length) * 100;
+  const pwdBar = pwdPct === 100 ? "bg-emerald-500" : pwdPct >= 60 ? "bg-amber-500" : "bg-slate-300";
 
   if (!user) return null;
 

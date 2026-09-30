@@ -65,6 +65,42 @@ const isOilDockArea = (val) => {
   );
 };
 
+const isEntityConversionActive = (item) => {
+  if (!item || item.conversionStatus !== "APPROVED") return false;
+  if (!item.conversionEndDate) return true;
+  const end = new Date(item.conversionEndDate);
+  if (isNaN(end.getTime())) return true;
+  end.setHours(23, 59, 59, 999);
+  return end.getTime() >= Date.now();
+};
+
+const isEntityConversionPending = (item) => {
+  return (
+    item?.conversionStatus === "PENDING" ||
+    Boolean(
+      item?.conversionWorkflowState &&
+        String(item?.conversionWorkflowState).toUpperCase().startsWith("PENDING_")
+    )
+  );
+};
+
+const formatConversionPeriod = (start, end) => {
+  if (!start && !end) return "";
+  const fmt = (d) => {
+    if (!d) return "";
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return String(d);
+    return dt.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+  if (start && end) return `${fmt(start)} - ${fmt(end)}`;
+  if (end) return `Until ${fmt(end)}`;
+  return `From ${fmt(start)}`;
+};
+
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 const ADMIN_API =
   process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
@@ -1183,6 +1219,57 @@ export default function PassRequestPage() {
       getPassStatus(entity) === "ACTIVE" &&
       isCurrentlyActive(entity)
     );
+  };
+
+  const canPrintVehicleQR = (v) => {
+    if (!v) return false;
+    const passType = String(v.passType || "").trim().toUpperCase();
+    const vehicleTypeName = String(v.vehicleTypeName || "").trim().toUpperCase();
+    const vehicleTypeId = Number(v.vehicleTypeId);
+
+    const isAnnualTrailer =
+      (passType === "YEARLY" || passType === "ANNUAL") &&
+      (vehicleTypeId === 34 ||
+        vehicleTypeId === 35 ||
+        ["TRAILORS", "TRAILER LORRY"].includes(vehicleTypeName));
+
+    // Annual container/trailer passes MUST have Safety Officer certification before QR can be generated
+    if (isAnnualTrailer && !v.twistLockCertified && !v.marineSafetyApproved) {
+      return false;
+    }
+
+    // Essential vehicles check
+    const essentialWorkflowState = String(v.essentialWorkflowState || "").trim().toUpperCase();
+    const isEssentialVehicle =
+      essentialWorkflowState.endsWith("_ESSENTIAL") ||
+      (v.essentialDepartmentId !== null && v.essentialDepartmentId !== undefined);
+    if (isEssentialVehicle && essentialWorkflowState !== "COMPLETED_ESSENTIAL") {
+      return false;
+    }
+
+    if (isPassDisabled(v)) return false;
+
+    return String(v.status || "").toLowerCase() === "approved" || isPassApprovedAndActive(v);
+  };
+
+  const canPrintPersonQR = (p) => {
+    if (!p) return false;
+    const essentialWorkflowState = String(p.essentialWorkflowState || "").trim().toUpperCase();
+    const isEssentialPerson =
+      essentialWorkflowState.endsWith("_ESSENTIAL") ||
+      (p.essentialDepartmentId !== null && p.essentialDepartmentId !== undefined);
+    if (
+      isEssentialPerson &&
+      essentialWorkflowState !== "COMPLETED_ESSENTIAL" &&
+      essentialWorkflowState !== "COMPLETED_PERSON_ESSENTIAL" &&
+      essentialWorkflowState !== "COMPLETED"
+    ) {
+      return false;
+    }
+
+    if (isPassDisabled(p)) return false;
+
+    return String(p.status || "").toLowerCase() === "approved" || isPassApprovedAndActive(p);
   };
 
   const handleDisablePass = async () => {
@@ -6146,11 +6233,13 @@ export default function PassRequestPage() {
 
                       const catInfo = getPassRequestCategory(pass);
 
-                      const hasPendingConversion = (pass.persons || []).some(
-                        (p) => Boolean(p.conversionWorkflowState) || p.conversionStatus === "PENDING"
-                      ) || (pass.vehicles || []).some(
-                        (v) => Boolean(v.conversionWorkflowState) || v.conversionStatus === "PENDING"
-                      );
+                      const hasPendingConversion =
+                        (pass.persons || []).some(isEntityConversionPending) ||
+                        (pass.vehicles || []).some(isEntityConversionPending);
+
+                      const hasActiveConversion =
+                        (pass.persons || []).some(isEntityConversionActive) ||
+                        (pass.vehicles || []).some(isEntityConversionActive);
 
                       return (
                         <tr
@@ -6201,6 +6290,11 @@ export default function PassRequestPage() {
                                 {hasPendingConversion && (
                                   <span className="self-start px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
                                     ⚡ CONVERSION PENDING
+                                  </span>
+                                )}
+                                {hasActiveConversion && (
+                                  <span className="self-start px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                    ⚡ ESSENTIAL PASS ACTIVE
                                   </span>
                                 )}
                               </div>
@@ -9412,7 +9506,8 @@ export default function PassRequestPage() {
                               const eligiblePersons = (selectedPassDetails.persons || []).filter(
                                 (p) =>
                                   (isPassApprovedAndActive(p) || String(p.status || "").toLowerCase() === "approved") &&
-                                  !(Boolean(p.conversionWorkflowState) || p.conversionStatus === 'PENDING') &&
+                                  !isEntityConversionPending(p) &&
+                                  !isEntityConversionActive(p) &&
                                   !(Boolean(p.essentialWorkflowState) || (p.essentialDepartmentId !== null && p.essentialDepartmentId !== undefined) || isOilDockArea(p.accessAreaId || p.accessArea))
                               );
                               return (
@@ -9446,19 +9541,19 @@ export default function PassRequestPage() {
                               );
                             })()}
                           </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 whitespace-nowrap">
                             Pass No
                           </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 whitespace-nowrap">
                             Name
                           </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 whitespace-nowrap">
                             Pass Type
                           </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 whitespace-nowrap">
                             Status
                           </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center whitespace-nowrap">
                             Action
                           </th>
                         </tr>
@@ -9467,15 +9562,16 @@ export default function PassRequestPage() {
                         {selectedPassDetails.persons &&
                         selectedPassDetails.persons.length > 0 ? (
                           selectedPassDetails.persons.map((p, i) => {
-                            const isPendingConversion = p.conversionStatus === 'PENDING';
-                            const isApprovedConversion = p.conversionStatus === 'APPROVED';
-                            const isAlreadyEssential = Boolean(p.essentialWorkflowState) || (p.essentialDepartmentId !== null && p.essentialDepartmentId !== undefined) || isOilDockArea(p.accessAreaId || p.accessArea) || isApprovedConversion;
+                            const isPendingConversion = isEntityConversionPending(p);
+                            const isConversionActive = isEntityConversionActive(p);
+                            const isAlreadyEssential = Boolean(p.essentialWorkflowState) || (p.essentialDepartmentId !== null && p.essentialDepartmentId !== undefined) || isOilDockArea(p.accessAreaId || p.accessArea) || isConversionActive;
                             const isEligible = (isPassApprovedAndActive(p) || String(p.status || "").toLowerCase() === "approved") && !isPendingConversion && !isAlreadyEssential;
                             const isChecked = selectedConversionPersons.some((item) => item.id === p.id);
+                            const periodStr = formatConversionPeriod(p.conversionStartDate, p.conversionEndDate);
                             return (
                               <tr
                                 key={i}
-                                className={`hover:bg-blue-50 cursor-pointer transition-colors ${isPendingConversion ? 'bg-amber-50/50' : isApprovedConversion ? 'bg-emerald-50/30' : ''}`}
+                                className={`hover:bg-blue-50 cursor-pointer transition-colors ${isPendingConversion ? 'bg-amber-50/50' : isConversionActive ? 'bg-emerald-50/30' : ''}`}
                                 onClick={() =>
                                   setEntityModal({
                                     isOpen: true,
@@ -9510,22 +9606,42 @@ export default function PassRequestPage() {
                                       }}
                                       className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
                                     />
+                                  ) : isConversionActive ? (
+                                    <input
+                                      type="checkbox"
+                                      disabled
+                                      checked={false}
+                                      title={`Already converted to Essential Pass${periodStr ? ` (${periodStr})` : ''}`}
+                                      className="w-4 h-4 rounded border-slate-300 bg-slate-100 opacity-30 cursor-not-allowed"
+                                    />
+                                  ) : isPendingConversion ? (
+                                    <input
+                                      type="checkbox"
+                                      disabled
+                                      checked={false}
+                                      title="Conversion request pending approval"
+                                      className="w-4 h-4 rounded border-slate-300 bg-slate-100 opacity-30 cursor-not-allowed"
+                                    />
                                   ) : (
                                     <span className="text-slate-300">-</span>
                                   )}
                                 </td>
-                                <td className="p-3 text-xs font-mono font-bold text-[#0a1e4d]">
+                                <td className="p-3 text-xs font-mono font-bold text-[#0a1e4d] whitespace-nowrap">
                                   {p.personPassNo || "-"}
                                 </td>
-                                <td className="p-3 text-sm font-medium text-slate-800">
+                                <td className="p-3 text-sm font-medium text-slate-800 whitespace-nowrap">
                                   {p.name || p.person_name}
                                 </td>
-                                <td className="p-3">
-                                  {(() => {
+                                <td className="p-3 whitespace-nowrap">
+                                  {isConversionActive ? (
+                                    <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border bg-emerald-50 text-emerald-800 border-emerald-300 shadow-sm whitespace-nowrap">
+                                      Essential Pass
+                                    </span>
+                                  ) : (() => {
                                     const pCat = getItemCategoryTag(p, true);
                                     return pCat ? (
                                       <span
-                                        className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${pCat.tagClass}`}
+                                        className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border whitespace-nowrap ${pCat.tagClass}`}
                                       >
                                         {pCat.label}
                                       </span>
@@ -9534,22 +9650,14 @@ export default function PassRequestPage() {
                                     );
                                   })()}
                                 </td>
-                                <td className="p-3">
-                                  {isPendingConversion ? (
-                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                                      ⚡ CONVERSION PENDING
-                                    </span>
-                                  ) : isApprovedConversion ? (
-                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                      ⚡ CONVERTED TO ESSENTIAL
-                                    </span>
-                                  ) : isPassDisabled(p) ? (
-                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                                <td className="p-3 whitespace-nowrap">
+                                  {isPassDisabled(p) ? (
+                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700 whitespace-nowrap">
                                       DISABLED
                                     </span>
                                   ) : (
                                     <span
-                                      className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                                      className={`px-2 py-1 rounded-full text-[10px] font-bold whitespace-nowrap ${
                                         String(p.status || "").toUpperCase() ===
                                         "APPROVED"
                                           ? "bg-emerald-100 text-emerald-700"
@@ -9568,15 +9676,15 @@ export default function PassRequestPage() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="p-3 text-center">
-                                  {(isPassApprovedAndActive(p) || String(p.status || "").toLowerCase() === "approved") ? (
+                                <td className="p-3 text-center whitespace-nowrap">
+                                  {canPrintPersonQR(p) ? (
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handlePrintQR(p, "person");
                                       }}
-                                      className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
+                                      className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap inline-flex items-center justify-center"
                                     >
                                       Print QR
                                     </button>
@@ -9636,7 +9744,8 @@ export default function PassRequestPage() {
                               const eligibleVehicles = (selectedPassDetails.vehicles || []).filter(
                                 (v) =>
                                   (isPassApprovedAndActive(v) || String(v.status || "").toLowerCase() === "approved") &&
-                                  !(Boolean(v.conversionWorkflowState) || v.conversionStatus === 'PENDING') &&
+                                  !isEntityConversionPending(v) &&
+                                  !isEntityConversionActive(v) &&
                                   !(Boolean(v.essentialWorkflowState) || (v.essentialDepartmentId !== null && v.essentialDepartmentId !== undefined) || isOilDockArea(v.accessAreaId || v.accessArea))
                               );
                               return (
@@ -9670,19 +9779,19 @@ export default function PassRequestPage() {
                               );
                             })()}
                           </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 whitespace-nowrap">
                             Pass No
                           </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 whitespace-nowrap">
                             Reg. No
                           </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 whitespace-nowrap">
                             Pass Type
                           </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 whitespace-nowrap">
                             Status
                           </th>
-                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">
+                          <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center whitespace-nowrap">
                             Action
                           </th>
                         </tr>
@@ -9691,15 +9800,16 @@ export default function PassRequestPage() {
                         {selectedPassDetails.vehicles &&
                         selectedPassDetails.vehicles.length > 0 ? (
                           selectedPassDetails.vehicles.map((v, i) => {
-                            const isPendingConversion = v.conversionStatus === 'PENDING';
-                            const isApprovedConversion = v.conversionStatus === 'APPROVED';
-                            const isAlreadyEssential = Boolean(v.essentialWorkflowState) || (v.essentialDepartmentId !== null && v.essentialDepartmentId !== undefined) || isOilDockArea(v.accessAreaId || v.accessArea) || isApprovedConversion;
+                            const isPendingConversion = isEntityConversionPending(v);
+                            const isConversionActive = isEntityConversionActive(v);
+                            const isAlreadyEssential = Boolean(v.essentialWorkflowState) || (v.essentialDepartmentId !== null && v.essentialDepartmentId !== undefined) || isOilDockArea(v.accessAreaId || v.accessArea) || isConversionActive;
                             const isEligible = (isPassApprovedAndActive(v) || String(v.status || "").toLowerCase() === "approved") && !isPendingConversion && !isAlreadyEssential;
                             const isChecked = selectedConversionVehicles.some((item) => item.id === v.id);
+                            const periodStr = formatConversionPeriod(v.conversionStartDate, v.conversionEndDate);
                             return (
                               <tr
                                 key={i}
-                                className={`hover:bg-blue-50 cursor-pointer transition-colors ${isPendingConversion ? 'bg-amber-50/50' : isApprovedConversion ? 'bg-emerald-50/30' : ''}`}
+                                className={`hover:bg-blue-50 cursor-pointer transition-colors ${isPendingConversion ? 'bg-amber-50/50' : isConversionActive ? 'bg-emerald-50/30' : ''}`}
                                 onClick={() =>
                                   setEntityModal({
                                     isOpen: true,
@@ -9734,24 +9844,44 @@ export default function PassRequestPage() {
                                       }}
                                       className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
                                     />
+                                  ) : isConversionActive ? (
+                                    <input
+                                      type="checkbox"
+                                      disabled
+                                      checked={false}
+                                      title={`Already converted to Essential Pass${periodStr ? ` (${periodStr})` : ''}`}
+                                      className="w-4 h-4 rounded border-slate-300 bg-slate-100 opacity-30 cursor-not-allowed"
+                                    />
+                                  ) : isPendingConversion ? (
+                                    <input
+                                      type="checkbox"
+                                      disabled
+                                      checked={false}
+                                      title="Conversion request pending approval"
+                                      className="w-4 h-4 rounded border-slate-300 bg-slate-100 opacity-30 cursor-not-allowed"
+                                    />
                                   ) : (
                                     <span className="text-slate-300">-</span>
                                   )}
                                 </td>
-                                <td className="p-3 text-xs font-mono font-bold text-[#0a1e4d]">
+                                <td className="p-3 text-xs font-mono font-bold text-[#0a1e4d] whitespace-nowrap">
                                   {v.vehiclePassNo || "-"}
                                 </td>
-                                <td className="p-3 text-sm font-bold text-[#0a1e4d] uppercase">
+                                <td className="p-3 text-sm font-bold text-[#0a1e4d] uppercase whitespace-nowrap">
                                   {v.registrationNo ||
                                     v.registration_no ||
                                     v.regNo}
                                 </td>
-                                <td className="p-3">
-                                  {(() => {
+                                <td className="p-3 whitespace-nowrap">
+                                  {isConversionActive ? (
+                                    <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border bg-emerald-50 text-emerald-800 border-emerald-300 shadow-sm whitespace-nowrap">
+                                      Essential Pass
+                                    </span>
+                                  ) : (() => {
                                     const vCat = getItemCategoryTag(v, false);
                                     return vCat ? (
                                       <span
-                                        className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${vCat.tagClass}`}
+                                        className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold border whitespace-nowrap ${vCat.tagClass}`}
                                       >
                                         {vCat.label}
                                       </span>
@@ -9760,17 +9890,9 @@ export default function PassRequestPage() {
                                     );
                                   })()}
                                 </td>
-                                <td className="p-3">
-                                  {isPendingConversion ? (
-                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                                      ⚡ CONVERSION PENDING
-                                    </span>
-                                  ) : isApprovedConversion ? (
-                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                      ⚡ CONVERTED TO ESSENTIAL
-                                    </span>
-                                  ) : isPassDisabled(v) ? (
-                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                                <td className="p-3 whitespace-nowrap">
+                                  {isPassDisabled(v) ? (
+                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700 whitespace-nowrap">
                                       DISABLED
                                     </span>
                                   ) : (
@@ -9811,7 +9933,7 @@ export default function PassRequestPage() {
 
                                       return (
                                         <span
-                                          className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                                          className={`px-2 py-1 rounded-full text-[10px] font-bold whitespace-nowrap ${
                                             rawStatus === "APPROVED"
                                               ? "bg-emerald-100 text-emerald-700"
                                               : rawStatus === "REJECTED"
@@ -9827,15 +9949,15 @@ export default function PassRequestPage() {
                                     })()
                                   )}
                                 </td>
-                                <td className="p-3 text-center">
-                                  {(isPassApprovedAndActive(v) || String(v.status || "").toLowerCase() === "approved") ? (
+                                <td className="p-3 text-center whitespace-nowrap">
+                                  {canPrintVehicleQR(v) ? (
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handlePrintQR(v, "vehicle");
                                       }}
-                                      className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm"
+                                      className="bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap inline-flex items-center justify-center"
                                     >
                                       Print QR
                                     </button>
@@ -10150,6 +10272,25 @@ export default function PassRequestPage() {
                     })()}
                 </div>
                 <div className="p-5 grid grid-cols-2 md:grid-cols-3 gap-y-6 gap-x-4">
+                  {isEntityConversionActive(entityModal.data) && (
+                    <div className="col-span-full p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between shadow-sm">
+                      <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs">
+                        <span className="text-base">⚡</span>
+                        <span>CONVERTED TO ESSENTIAL PASS</span>
+                      </div>
+                      <div className="text-xs font-mono font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-300">
+                        📅 {formatConversionPeriod(entityModal.data.conversionStartDate, entityModal.data.conversionEndDate)}
+                      </div>
+                    </div>
+                  )}
+                  {isEntityConversionPending(entityModal.data) && (
+                    <div className="col-span-full p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between shadow-sm">
+                      <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                        <span className="text-base">⚡</span>
+                        <span>ESSENTIAL CONVERSION REQUEST PENDING APPROVAL</span>
+                      </div>
+                    </div>
+                  )}
                   {entityModal.type === "person" ? (
                     <>
                       <DetailItem

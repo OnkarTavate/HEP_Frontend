@@ -349,7 +349,9 @@ export default function TrafficPassesPage() {
       const vehicleType = String(v.vehicleTypeName || "").toUpperCase();
       return (
         ["YEARLY", "ANNUAL"].includes(passType) &&
-        ["TRAILORS", "TRAILER LORRY"].includes(vehicleType)
+        ["TRAILORS", "TRAILER LORRY"].includes(vehicleType) &&
+        String(v.status || "").toLowerCase() === "approved" &&
+        !v.twistLockCertified
       );
     }
     if (userRole === "Fire Safety Officer") {
@@ -961,7 +963,12 @@ export default function TrafficPassesPage() {
   // Use requests directly as filteredData (already paginated + filtered by server)
   const filteredData = requests;
 
-  const visiblePersons = selectedRequest
+  const isSafetyOfficerUser =
+    String(userRole || "").trim().toLowerCase() === "safety officer" ||
+    (String(userRole || "").trim().toLowerCase().includes("safety") &&
+      !String(userRole || "").trim().toLowerCase().includes("fire"));
+
+  const visiblePersons = selectedRequest && !isSafetyOfficerUser
     ? !isViewMode
       ? (selectedRequest.persons || []).filter(canUserVerifyPerson)
       : selectedRequest.persons || []
@@ -969,7 +976,16 @@ export default function TrafficPassesPage() {
   const visibleVehicles = selectedRequest
     ? !isViewMode
       ? (selectedRequest.vehicles || []).filter(canUserVerifyVehicle)
-      : selectedRequest.vehicles || []
+      : isSafetyOfficerUser
+        ? (selectedRequest.vehicles || []).filter((v) => {
+            const passType = String(v?.passType || "").trim().toUpperCase();
+            const vehicleType = String(v?.vehicleTypeName || "").trim().toUpperCase();
+            return (
+              ["YEARLY", "ANNUAL"].includes(passType) &&
+              ["TRAILORS", "TRAILER LORRY", "TRACTOR TRAILER"].includes(vehicleType)
+            );
+          })
+        : selectedRequest.vehicles || []
     : [];
   const hasVisibleEntities =
     visiblePersons.length > 0 || visibleVehicles.length > 0;
@@ -1793,7 +1809,18 @@ export default function TrafficPassesPage() {
                             {p.personPassNo || "-"}
                           </td>
                           <td className="p-3 font-bold text-[#0a1e4d]">
-                            <span>{p.name}</span>
+                            <div>{p.name}</div>
+                            {(p.conversionWorkflowState ||
+                              p.isConvertedToEssential ||
+                              Boolean(p.essentialWorkflowState) ||
+                              (p.essentialDepartmentId !== null && p.essentialDepartmentId !== undefined) ||
+                              p.isEssential ||
+                              (p.concernDepartmentId != null && isOilDockArea(p.accessAreaId || p.accessArea)) ||
+                              isOilDockArea(p.accessAreaId || p.accessArea)) && (
+                              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold border bg-amber-50 text-amber-800 border-amber-300">
+                                ⚡ Essential Pass
+                              </span>
+                            )}
                             <div className="flex flex-wrap gap-1 mt-1">
                               {isOilDockArea(
                                 p.accessAreaId || p.accessArea,
@@ -2019,7 +2046,18 @@ export default function TrafficPassesPage() {
                             {v.vehiclePassNo || "-"}
                           </td>
                           <td className="p-3 font-bold text-[#0a1e4d] uppercase">
-                            {v.registrationNo}
+                            <div>{v.registrationNo}</div>
+                            {(v.conversionWorkflowState ||
+                              v.isConvertedToEssential ||
+                              Boolean(v.essentialWorkflowState) ||
+                              (v.essentialDepartmentId !== null && v.essentialDepartmentId !== undefined) ||
+                              v.isEssential ||
+                              (v.concernDepartmentId != null && isOilDockArea(v.accessAreaId || v.accessArea)) ||
+                              isOilDockArea(v.accessAreaId || v.accessArea)) && (
+                              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold border bg-amber-50 text-amber-800 border-amber-300">
+                                ⚡ Essential Pass
+                              </span>
+                            )}
                           </td>
                           <td className="p-3">
                             {(() => {
@@ -2064,8 +2102,15 @@ export default function TrafficPassesPage() {
 
                                   const fireSafetyDone =
                                     sparkApproved ||
-                                    (workflowState !== "" &&
-                                      !workflowState.includes("FIRE_SAFETY"));
+                                    [
+                                      "PENDING_CIVIL_ESSENTIAL",
+                                      "PENDING_MECHANICAL_ESSENTIAL",
+                                      "PENDING_CISF_ESSENTIAL",
+                                      "PENDING_PASS_SECTION_ESSENTIAL",
+                                      "COMPLETED_ESSENTIAL",
+                                      "COMPLETED",
+                                      "APPROVED",
+                                    ].includes(workflowState);
 
                                   const isCivilDept =
                                     deptId === 3 ||
@@ -2076,40 +2121,46 @@ export default function TrafficPassesPage() {
 
                                   const civilDone =
                                     isCivilDept &&
-                                    (!workflowState.includes("CIVIL") ||
-                                      [
-                                        "PENDING_CISF_ESSENTIAL",
-                                        "PENDING_PASS_SECTION_ESSENTIAL",
-                                        "COMPLETED_ESSENTIAL",
-                                        "COMPLETED",
-                                      ].includes(workflowState));
+                                    ([
+                                      "PENDING_CISF_ESSENTIAL",
+                                      "PENDING_PASS_SECTION_ESSENTIAL",
+                                      "COMPLETED_ESSENTIAL",
+                                      "COMPLETED",
+                                      "APPROVED",
+                                    ].includes(workflowState) ||
+                                      (userRole === "Approval" && Number(userDepartmentId) === 3 && entityStatuses.vehicles[v.id] === "APPROVED"));
 
                                   const mechDone =
                                     isMechDept &&
-                                    (!workflowState.includes("MECHANICAL") ||
-                                      [
-                                        "PENDING_CISF_ESSENTIAL",
-                                        "PENDING_PASS_SECTION_ESSENTIAL",
-                                        "COMPLETED_ESSENTIAL",
-                                        "COMPLETED",
-                                      ].includes(workflowState));
+                                    ([
+                                      "PENDING_CISF_ESSENTIAL",
+                                      "PENDING_PASS_SECTION_ESSENTIAL",
+                                      "COMPLETED_ESSENTIAL",
+                                      "COMPLETED",
+                                      "APPROVED",
+                                    ].includes(workflowState) ||
+                                      (userRole === "Approval" && Number(userDepartmentId) === 4 && entityStatuses.vehicles[v.id] === "APPROVED"));
 
                                   const cisfDone =
                                     [
                                       "PENDING_PASS_SECTION_ESSENTIAL",
                                       "COMPLETED_ESSENTIAL",
                                       "COMPLETED",
+                                      "APPROVED",
                                     ].includes(workflowState) ||
-                                    String(v.status || "").toLowerCase() ===
-                                      "approved";
+                                    String(v.status || "").toLowerCase() === "approved" ||
+                                    (["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"].includes(userRole) && entityStatuses.vehicles[v.id] === "APPROVED");
 
+                                  const currentVehStatus = String(entityStatuses.vehicles[v.id] || v.status || "").toLowerCase();
                                   const passSectionDone =
                                     [
                                       "COMPLETED_ESSENTIAL",
                                       "COMPLETED",
+                                      "APPROVED",
                                     ].includes(workflowState) ||
-                                    String(v.status || "").toLowerCase() ===
-                                      "approved";
+                                    currentVehStatus === "approved" ||
+                                    (userRole === "Approval" && Number(userDepartmentId) === 9 && entityStatuses.vehicles[v.id] === "APPROVED") ||
+                                    entityStatuses.vehicles[v.id] === "APPROVED";
 
                                   return (
                                     <>
@@ -2185,34 +2236,29 @@ export default function TrafficPassesPage() {
                                 }
 
                                 // Normal flow
+                                const currentVehicleStatus = String(entityStatuses.vehicles[v.id] || v.status || "").toLowerCase();
+                                const isVehicleApproved = currentVehicleStatus === "approved";
+                                const isVehicleRejected = currentVehicleStatus === "rejected";
+                                const isVehicleReverted = currentVehicleStatus === "reverted";
+
                                 return (
                                   <>
                                     <span
                                       className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                        String(v.status || "").toLowerCase() ===
-                                        "approved"
+                                        isVehicleApproved
                                           ? "bg-emerald-100 text-emerald-700"
-                                          : String(
-                                                v.status || "",
-                                              ).toLowerCase() === "rejected"
+                                          : isVehicleRejected
                                             ? "bg-red-100 text-red-700"
-                                            : String(
-                                                  v.status || "",
-                                                ).toLowerCase() === "reverted"
+                                            : isVehicleReverted
                                               ? "bg-amber-100 text-amber-700"
                                               : "bg-amber-100 text-amber-700"
                                       }`}
                                     >
-                                      {String(v.status || "").toLowerCase() ===
-                                      "approved"
+                                      {isVehicleApproved
                                         ? "✓ Pass Section"
-                                        : String(
-                                              v.status || "",
-                                            ).toLowerCase() === "rejected"
+                                        : isVehicleRejected
                                           ? "✕ Pass Section Rejected"
-                                          : String(
-                                                v.status || "",
-                                              ).toLowerCase() === "reverted"
+                                          : isVehicleReverted
                                             ? "↩ Pass Section Reverted"
                                             : "⏳ Pending Pass Section"}
                                     </span>
