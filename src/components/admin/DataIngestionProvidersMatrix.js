@@ -125,7 +125,6 @@ export default function DataIngestionProvidersMatrix() {
   const fetchProviders = useCallback(
     async (isManualRefresh = false, overrideParams = null) => {
       if (isManualRefresh) setRefreshing(true);
-      else setLoading(true);
       setError(null);
 
       try {
@@ -472,15 +471,15 @@ export default function DataIngestionProvidersMatrix() {
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider text-slate-950 dark:text-white">
                   <th className="py-4 px-4 sm:px-5 rounded-l-xl font-black text-slate-950 dark:text-white">Terminal</th>
-                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">Form-13 (Forms / Containers)</th>
-                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">EIR Records</th>
-                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">All-Time Total</th>
+                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">Form-13 Records Received (Forms / Containers)</th>
+                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">EIR Records Received</th>
+                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">All-Time Records Received</th>
                   <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">Last Transmission (IST)</th>
                   <th className="py-4 pr-4 pl-4 sm:pr-5 sm:pl-5 text-right rounded-r-xl font-black text-slate-950 dark:text-white">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                {loading ? (
+                {loading && !data.tos.terminals.length ? (
                   <tr>
                     <td colSpan={6} className="py-10 text-center text-slate-400 text-sm sm:text-base">
                       <div className="flex items-center justify-center gap-2.5">
@@ -642,7 +641,7 @@ export default function DataIngestionProvidersMatrix() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                {loading ? (
+                {loading && !data.weighbridge.operators.length ? (
                   <tr>
                     <td colSpan={7} className="py-10 text-center text-slate-400 text-sm sm:text-base">
                       <div className="flex items-center justify-center gap-2.5">
