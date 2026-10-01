@@ -3669,12 +3669,12 @@ export default function AdminPassApprovalsPage() {
                                         "APPROVED",
                                         "COMPLETED",
                                       ].includes(convState);
+                                      const isPassSectionApprover =
+                                        userRole === "Approval" && Number(currentUser?.departmentId) === 9;
                                       const passSectionDone =
                                         convState === "APPROVED" ||
                                         convState === "COMPLETED" ||
-                                        String(v.status || "").toLowerCase() === "approved" ||
-                                        (userRole === "Approval" && Number(currentUser?.departmentId) === 9 && entityStatuses.vehicles[v.id] === "APPROVED") ||
-                                        entityStatuses.vehicles[v.id] === "APPROVED";
+                                        (isPassSectionApprover && entityStatuses.persons[p.id] === "APPROVED");
 
                                       return (
                                         <>
@@ -3740,9 +3740,16 @@ export default function AdminPassApprovalsPage() {
                                         deptId === 4 ||
                                         workflowState.includes("MECHANICAL");
 
+                                      const isCivilApprover =
+                                        userRole === "Approval" && Number(currentUser?.departmentId) === 3;
+                                      const isMechApprover =
+                                        userRole === "Approval" && Number(currentUser?.departmentId) === 4;
+                                      const isPassSectionApprover =
+                                        userRole === "Approval" && Number(currentUser?.departmentId) === 9;
+
                                       const civilDone =
                                         isCivilDept &&
-                                        [
+                                        ([
                                           "PENDING_CISF_PERSON_ESSENTIAL",
                                           "PENDING_TRAFFIC_PERSON_ESSENTIAL",
                                           "PENDING_PASS_SECTION_ESSENTIAL",
@@ -3750,11 +3757,12 @@ export default function AdminPassApprovalsPage() {
                                           "COMPLETED_ESSENTIAL",
                                           "COMPLETED",
                                           "APPROVED",
-                                        ].includes(workflowState);
+                                        ].includes(workflowState) ||
+                                          (isCivilApprover && entityStatuses.persons[p.id] === "APPROVED"));
 
                                       const mechDone =
                                         isMechDept &&
-                                        [
+                                        ([
                                           "PENDING_CISF_PERSON_ESSENTIAL",
                                           "PENDING_TRAFFIC_PERSON_ESSENTIAL",
                                           "PENDING_PASS_SECTION_ESSENTIAL",
@@ -3762,36 +3770,17 @@ export default function AdminPassApprovalsPage() {
                                           "COMPLETED_ESSENTIAL",
                                           "COMPLETED",
                                           "APPROVED",
-                                        ].includes(workflowState);
-
-                                      const cisfDone =
-                                        [
-                                          "PENDING_PASS_SECTION_ESSENTIAL",
-                                          "COMPLETED_ESSENTIAL",
-                                          "COMPLETED",
                                         ].includes(workflowState) ||
-                                        String(p.status || "").toLowerCase() ===
-                                        "approved" ||
-                                        String(
-                                          selectedRequest?.status || "",
-                                        ).toLowerCase() === "approved" ||
-                                        String(
-                                          selectedRequest?.status || "",
-                                        ).toLowerCase() === "completed";
+                                          (isMechApprover && entityStatuses.persons[p.id] === "APPROVED"));
 
                                       const passSectionDone =
                                         [
+                                          "COMPLETED_PERSON_ESSENTIAL",
                                           "COMPLETED_ESSENTIAL",
                                           "COMPLETED",
+                                          "APPROVED",
                                         ].includes(workflowState) ||
-                                        String(p.status || "").toLowerCase() ===
-                                        "approved" ||
-                                        String(
-                                          selectedRequest?.status || "",
-                                        ).toLowerCase() === "approved" ||
-                                        String(
-                                          selectedRequest?.status || "",
-                                        ).toLowerCase() === "completed";
+                                        (isPassSectionApprover && entityStatuses.persons[p.id] === "APPROVED");
 
                                       return (
                                         <>
@@ -4277,9 +4266,11 @@ export default function AdminPassApprovalsPage() {
                                         "APPROVED",
                                         "COMPLETED",
                                       ].includes(convState);
+                                      const isPassSectionApprover =
+                                        userRole === "Approval" && Number(currentUser?.departmentId) === 9;
                                       const passSectionDone =
-                                        convState === "APPROVED" ||
-                                        convState === "COMPLETED";
+                                        (convState === "APPROVED" || convState === "COMPLETED") ||
+                                        (isPassSectionApprover && entityStatuses.vehicles[v.id] === "APPROVED");
 
                                       return (
                                         <>
@@ -4368,6 +4359,21 @@ export default function AdminPassApprovalsPage() {
                                         deptId === 4 ||
                                         workflowState.includes("MECHANICAL");
 
+                                      const isCivilApprover =
+                                        userRole === "Approval" && Number(currentUser?.departmentId) === 3;
+                                      const isMechApprover =
+                                        userRole === "Approval" && Number(currentUser?.departmentId) === 4;
+                                      const isCisfApprover =
+                                        Number(currentUser?.departmentId) === 1 ||
+                                        [
+                                          "CISF",
+                                          "CISF Asst Commandant",
+                                          "CISF Assistant Commandant",
+                                          "Cisf.Assistant Commandant",
+                                        ].includes(String(userRole || "").trim());
+                                      const isPassSectionApprover =
+                                        userRole === "Approval" && Number(currentUser?.departmentId) === 9;
+
                                       const civilDone =
                                         isCivilDept &&
                                         ([
@@ -4377,7 +4383,7 @@ export default function AdminPassApprovalsPage() {
                                           "COMPLETED",
                                           "APPROVED",
                                         ].includes(workflowState) ||
-                                          (userRole === "Approval" && Number(currentUser?.departmentId) === 3 && entityStatuses.vehicles[v.id] === "APPROVED"));
+                                          (isCivilApprover && entityStatuses.vehicles[v.id] === "APPROVED"));
 
                                       const mechDone =
                                         isMechDept &&
@@ -4388,7 +4394,7 @@ export default function AdminPassApprovalsPage() {
                                           "COMPLETED",
                                           "APPROVED",
                                         ].includes(workflowState) ||
-                                          (userRole === "Approval" && Number(currentUser?.departmentId) === 4 && entityStatuses.vehicles[v.id] === "APPROVED"));
+                                          (isMechApprover && entityStatuses.vehicles[v.id] === "APPROVED"));
 
                                       const cisfDone =
                                         [
@@ -4397,23 +4403,15 @@ export default function AdminPassApprovalsPage() {
                                           "COMPLETED",
                                           "APPROVED",
                                         ].includes(workflowState) ||
-                                        String(v.status || "").toLowerCase() === "approved" ||
-                                        String(selectedRequest?.status || "").toLowerCase() === "approved" ||
-                                        String(selectedRequest?.status || "").toLowerCase() === "completed" ||
-                                        (["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"].includes(userRole) && entityStatuses.vehicles[v.id] === "APPROVED");
+                                        (isCisfApprover && entityStatuses.vehicles[v.id] === "APPROVED");
 
-                                      const currentVehStatus = String(entityStatuses.vehicles[v.id] || v.status || "").toLowerCase();
                                       const passSectionDone =
                                         [
                                           "COMPLETED_ESSENTIAL",
                                           "COMPLETED",
                                           "APPROVED",
                                         ].includes(workflowState) ||
-                                        currentVehStatus === "approved" ||
-                                        String(selectedRequest?.status || "").toLowerCase() === "approved" ||
-                                        String(selectedRequest?.status || "").toLowerCase() === "completed" ||
-                                        (userRole === "Approval" && Number(currentUser?.departmentId) === 9 && entityStatuses.vehicles[v.id] === "APPROVED") ||
-                                        entityStatuses.vehicles[v.id] === "APPROVED";
+                                        (isPassSectionApprover && entityStatuses.vehicles[v.id] === "APPROVED");
 
                                       return (
                                         <>

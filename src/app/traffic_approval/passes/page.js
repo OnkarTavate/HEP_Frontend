@@ -861,8 +861,8 @@ export default function TrafficPassesPage() {
     }
 
     if (
-      essentialPersonStage === "PENDING_CIVIL_PERSON_ESSENTIAL" ||
-      essentialPersonStage === "PENDING_MECHANICAL_PERSON_ESSENTIAL"
+      essentialPersonStage.endsWith("_PERSON_ESSENTIAL") ||
+      essentialPersonStage.endsWith("_ESSENTIAL")
     ) {
       return false;
     }
@@ -2524,38 +2524,79 @@ export default function TrafficPassesPage() {
         isEssentialWorkflowRequest;
 
       if (shouldUseEssentialWorkflow) {
-        const essentialPersons = persons.filter((p) => {
-          const workflowState = String(p?.essentialWorkflowState || "")
-            .trim()
-            .toUpperCase();
-
-          return (
-            workflowState === "PENDING_CIVIL_PERSON_ESSENTIAL" ||
-            workflowState === "PENDING_MECHANICAL_PERSON_ESSENTIAL" ||
-            workflowState === "PENDING_TRAFFIC_PERSON_ESSENTIAL"
-          );
-        });
-
         /*
          * ============================================================
-         * ESSENTIAL OIL DOCK PERSON FLOW
-         * Only handle person-only Essential requests here.
-         * Existing Essential Vehicle flow remains unchanged below.
+         * UNIFIED ESSENTIAL / MIXED / NORMAL ENTITY REVIEW FLOW
+         * Handles both persons and vehicles:
+         * - Essential entities assigned to this stage -> essential oil dock actions
+         * - Ordinary entities assigned to this stage -> pass request actions
+         * - Mixed requests: ordinary entities are reviewed and submitted for
+         *   review completion without blocking on pending departmental entities.
          * ============================================================
          */
-        if (essentialPersons.length > 0 && vehicles.length === 0) {
-          const personPromises = [];
+        const vehiclePromises = [];
+        const assignedVehicles = vehicles.filter((v) => canUserVerifyVehicle(v));
+        const assignedPersons = persons.filter((p) => canUserVerifyPerson(p));
 
-          essentialPersons.forEach((p) => {
-            const status = entityStatuses.persons[p.id];
+        assignedVehicles.forEach((v) => {
+          const status = entityStatuses.vehicles[v.id];
+          if (!status) return;
 
-            if (!status) {
-              throw new Error(
-                `No decision recorded for person ${p.name || p.id}.`,
-              );
-            }
+          const isEssentialVehicle =
+            String(v?.essentialWorkflowState || "").trim().toUpperCase().endsWith("_ESSENTIAL") ||
+            Boolean(v?.conversionWorkflowState) ||
+            (v?.essentialDepartmentId !== null && v?.essentialDepartmentId !== undefined);
 
-            personPromises.push(
+          if (isEssentialVehicle) {
+            const payload = {
+              vehicleId: v.id,
+              decision: String(status).trim().toUpperCase(),
+              remarks: entityRemarks.vehicles[v.id] || null,
+            };
+
+            vehiclePromises.push(
+              axios.put(
+                `${AGENT_API}/pass-request/essential-oil-dock/vehicle-action`,
+                payload,
+                { headers },
+              ),
+            );
+          } else {
+            const remark = entityRemarks.vehicles[v.id];
+            const payload = {
+              vehicleId: v.id,
+              decision:
+                status === "APPROVED"
+                  ? "approve-vehicle"
+                  : status === "REVERTED"
+                    ? "revert-vehicle"
+                    : "reject-vehicle",
+            };
+            if (status === "REJECTED") payload.rejectedReason = remark;
+            else if (status === "REVERTED") payload.revertReason = remark;
+            vehiclePromises.push(
+              axios.patch(
+                `${ADMIN_API}/pass-request/agent-pass-request-action`,
+                payload,
+                { headers },
+              ),
+            );
+          }
+        });
+
+        assignedPersons.forEach((p) => {
+          const status = entityStatuses.persons[p.id];
+          if (!status) return;
+
+          const pState = String(p?.essentialWorkflowState || "").trim().toUpperCase();
+          const isEssentialPerson =
+            pState.endsWith("_PERSON_ESSENTIAL") ||
+            pState.endsWith("_ESSENTIAL") ||
+            Boolean(p?.conversionWorkflowState) ||
+            (p?.essentialDepartmentId !== null && p?.essentialDepartmentId !== undefined);
+
+          if (isEssentialPerson) {
+            vehiclePromises.push(
               axios.put(
                 `${AGENT_API}/pass-request/essential-oil-dock/person-action`,
                 {
@@ -2566,150 +2607,58 @@ export default function TrafficPassesPage() {
                 { headers },
               ),
             );
-          });
-
-          if (personPromises.length === 0) {
-            throw new Error(
-              "No Essential Oil Dock person action was prepared.",
-            );
-          }
-
-          await Promise.all(personPromises);
-
-          reviewStatus = "PROCESSED";
-          responseMessage =
-            "Essential Oil Dock person review processed successfully.";
-        } else {
-          /*
-           * ============================================================
-           * EXISTING ESSENTIAL OIL DOCK VEHICLE FLOW
-           * DO NOT CHANGE THE VEHICLE LOGIC
-           * ============================================================
-           */
-          const vehiclePromises = [];
-          const assignedVehicles = vehicles.filter((v) => canUserVerifyVehicle(v));
-          const assignedPersons = persons.filter((p) => canUserVerifyPerson(p));
-
-          assignedVehicles.forEach((v) => {
-            const status = entityStatuses.vehicles[v.id];
-            if (!status) return;
-
-            const isEssentialVehicle =
-              String(v?.essentialWorkflowState || "").trim().toUpperCase().endsWith("_ESSENTIAL") ||
-              Boolean(v?.conversionWorkflowState) ||
-              (v?.essentialDepartmentId !== null && v?.essentialDepartmentId !== undefined);
-
-            if (isEssentialVehicle) {
-              const payload = {
-                vehicleId: v.id,
-                decision: String(status).trim().toUpperCase(),
-                remarks: entityRemarks.vehicles[v.id] || null,
-              };
-
-              vehiclePromises.push(
-                axios.put(
-                  `${AGENT_API}/pass-request/essential-oil-dock/vehicle-action`,
-                  payload,
-                  { headers },
-                ),
-              );
-            } else {
-              const remark = entityRemarks.vehicles[v.id];
-              const payload = {
-                vehicleId: v.id,
-                decision:
-                  status === "APPROVED"
-                    ? "approve-vehicle"
-                    : status === "REVERTED"
-                      ? "revert-vehicle"
-                      : "reject-vehicle",
-              };
-              if (status === "REJECTED") payload.rejectedReason = remark;
-              else if (status === "REVERTED") payload.revertReason = remark;
-              vehiclePromises.push(
-                axios.patch(
-                  `${ADMIN_API}/pass-request/agent-pass-request-action`,
-                  payload,
-                  { headers },
-                ),
-              );
-            }
-          });
-
-          assignedPersons.forEach((p) => {
-            const status = entityStatuses.persons[p.id];
-            if (!status) return;
-
-            const pState = String(p?.essentialWorkflowState || "").trim().toUpperCase();
-            const isEssentialPerson =
-              pState === "PENDING_CIVIL_PERSON_ESSENTIAL" ||
-              pState === "PENDING_MECHANICAL_PERSON_ESSENTIAL" ||
-              pState === "PENDING_TRAFFIC_PERSON_ESSENTIAL" ||
-              pState === "PENDING_PASS_SECTION_ESSENTIAL";
-
-            if (isEssentialPerson) {
-              vehiclePromises.push(
-                axios.put(
-                  `${AGENT_API}/pass-request/essential-oil-dock/person-action`,
-                  {
-                    personId: p.id,
-                    decision: String(status).trim().toUpperCase(),
-                    remarks: entityRemarks.persons[p.id] || null,
-                  },
-                  { headers },
-                ),
-              );
-            } else {
-              const remark = entityRemarks.persons[p.id];
-              const payload = {
-                personId: p.id,
-                decision:
-                  status === "APPROVED"
-                    ? "approve-person"
-                    : status === "REVERTED"
-                      ? "revert-person"
-                      : "reject-person",
-              };
-              if (status === "REJECTED") payload.rejectedReason = remark;
-              else if (status === "REVERTED") payload.revertReason = remark;
-              vehiclePromises.push(
-                axios.patch(
-                  `${ADMIN_API}/pass-request/agent-pass-request-action`,
-                  payload,
-                  { headers },
-                ),
-              );
-            }
-          });
-
-          if (vehiclePromises.length === 0) {
-            throw new Error(
-              "No actions prepared for entities assigned to your role.",
-            );
-          }
-
-          await Promise.all(vehiclePromises);
-
-          const hasOrdinaryEntities =
-            persons.some((p) => canUserVerifyPerson(p) && !p.essentialWorkflowState) ||
-            vehicles.some((v) => canUserVerifyVehicle(v) && !v.essentialWorkflowState);
-          if (hasOrdinaryEntities) {
-            await axios
-              .patch(
+          } else {
+            const remark = entityRemarks.persons[p.id];
+            const payload = {
+              personId: p.id,
+              decision:
+                status === "APPROVED"
+                  ? "approve-person"
+                  : status === "REVERTED"
+                    ? "revert-person"
+                    : "reject-person",
+            };
+            if (status === "REJECTED") payload.rejectedReason = remark;
+            else if (status === "REVERTED") payload.revertReason = remark;
+            vehiclePromises.push(
+              axios.patch(
                 `${ADMIN_API}/pass-request/agent-pass-request-action`,
-                {
-                  passRequestId: selectedRequest.id,
-                  decision: "complete-review",
-                },
+                payload,
                 { headers },
-              )
-              .catch(() => {});
+              ),
+            );
           }
+        });
 
-          reviewStatus = "PROCESSED";
-          responseMessage =
-            "Pass Request review processed successfully.";
+        if (vehiclePromises.length === 0) {
+          throw new Error(
+            "No actions prepared for entities assigned to your role.",
+          );
         }
+
+        await Promise.all(vehiclePromises);
+
+        const hasOrdinaryEntities =
+          persons.some((p) => canUserVerifyPerson(p) && !p.essentialWorkflowState) ||
+          vehicles.some((v) => canUserVerifyVehicle(v) && !v.essentialWorkflowState);
+        if (hasOrdinaryEntities) {
+          await axios
+            .patch(
+              `${ADMIN_API}/pass-request/agent-pass-request-action`,
+              {
+                passRequestId: selectedRequest.id,
+                decision: "complete-review",
+              },
+              { headers },
+            )
+            .catch((err) => {
+              console.warn("Complete review warning:", err?.response?.data || err?.message);
+            });
+        }
+
+        reviewStatus = "PROCESSED";
+        responseMessage =
+          "Pass Request review processed successfully.";
       } else if (isVendorPass && isVendorOilJettyWorkflow) {
         // const vendorPassId = selectedRequest.id;
 
@@ -4438,39 +4387,56 @@ export default function TrafficPassesPage() {
                                     Number(userDepartmentId) === 9 &&
                                     entityStatuses.persons[p.id] === "APPROVED");
 
+                                const isEssentialPerson =
+                                  isCivil ||
+                                  isMech ||
+                                  wf.includes("ESSENTIAL") ||
+                                  Boolean(p.essentialWorkflowState) ||
+                                  p.essentialDepartmentId != null;
+
                                 const civilDone =
                                   isCivil &&
-                                  (isApprovedOrDone ||
-                                    [
-                                      "PENDING_TRAFFIC_PERSON_ESSENTIAL",
-                                      "PENDING_PASS_SECTION_ESSENTIAL",
-                                      "COMPLETED_PERSON_ESSENTIAL",
-                                      "COMPLETED_ESSENTIAL",
-                                      "COMPLETED",
-                                      "APPROVED",
-                                      "PENDING_VENDOR_PERSON_TRAFFIC",
-                                      "PENDING_VENDOR_PERSON_CISF",
-                                    ].includes(wf) ||
+                                  ([
+                                    "PENDING_TRAFFIC_PERSON_ESSENTIAL",
+                                    "PENDING_PASS_SECTION_ESSENTIAL",
+                                    "COMPLETED_PERSON_ESSENTIAL",
+                                    "COMPLETED_ESSENTIAL",
+                                    "COMPLETED",
+                                    "APPROVED",
+                                    "PENDING_VENDOR_PERSON_TRAFFIC",
+                                    "PENDING_VENDOR_PERSON_CISF",
+                                  ].includes(wf) ||
                                     (userRole === "Approval" &&
                                       Number(userDepartmentId) === 3 &&
                                       entityStatuses.persons[p.id] === "APPROVED"));
 
                                 const mechDone =
                                   isMech &&
-                                  (isApprovedOrDone ||
-                                    [
-                                      "PENDING_TRAFFIC_PERSON_ESSENTIAL",
-                                      "PENDING_PASS_SECTION_ESSENTIAL",
+                                  ([
+                                    "PENDING_TRAFFIC_PERSON_ESSENTIAL",
+                                    "PENDING_PASS_SECTION_ESSENTIAL",
+                                    "COMPLETED_PERSON_ESSENTIAL",
+                                    "COMPLETED_ESSENTIAL",
+                                    "COMPLETED",
+                                    "APPROVED",
+                                    "PENDING_VENDOR_PERSON_TRAFFIC",
+                                    "PENDING_VENDOR_PERSON_CISF",
+                                  ].includes(wf) ||
+                                    (userRole === "Approval" &&
+                                      Number(userDepartmentId) === 4 &&
+                                      entityStatuses.persons[p.id] === "APPROVED"));
+
+                                const passSectionDone = isEssentialPerson
+                                  ? ([
                                       "COMPLETED_PERSON_ESSENTIAL",
                                       "COMPLETED_ESSENTIAL",
                                       "COMPLETED",
                                       "APPROVED",
-                                      "PENDING_VENDOR_PERSON_TRAFFIC",
-                                      "PENDING_VENDOR_PERSON_CISF",
                                     ].includes(wf) ||
                                     (userRole === "Approval" &&
-                                      Number(userDepartmentId) === 4 &&
-                                      entityStatuses.persons[p.id] === "APPROVED"));
+                                      Number(userDepartmentId) === 9 &&
+                                      entityStatuses.persons[p.id] === "APPROVED"))
+                                  : isApprovedOrDone;
 
                                 return (
                                   <>
@@ -4502,12 +4468,12 @@ export default function TrafficPassesPage() {
                                     )}
                                     <span
                                       className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                        isApprovedOrDone
+                                        passSectionDone
                                           ? "bg-emerald-100 text-emerald-700"
                                           : "bg-amber-100 text-amber-700"
                                       }`}
                                     >
-                                      {isApprovedOrDone
+                                      {passSectionDone
                                         ? "✓ Pass Section"
                                         : "⏳ Pending Pass Section"}
                                     </span>
@@ -4861,12 +4827,12 @@ export default function TrafficPassesPage() {
                                         "APPROVED",
                                         "COMPLETED",
                                       ].includes(convState);
+                                      const isPassSectionApprover =
+                                        userRole === "Approval" && Number(userDepartmentId) === 9;
                                       const passSectionDone =
                                         convState === "APPROVED" ||
                                         convState === "COMPLETED" ||
-                                        String(v.status || "").toLowerCase() === "approved" ||
-                                        (userRole === "Approval" && Number(userDepartmentId) === 9 && entityStatuses.vehicles[v.id] === "APPROVED") ||
-                                        entityStatuses.vehicles[v.id] === "APPROVED";
+                                        (isPassSectionApprover && entityStatuses.vehicles[v.id] === "APPROVED");
 
                                       return (
                                         <>
@@ -5081,6 +5047,21 @@ export default function TrafficPassesPage() {
                                         ].includes(workflowState) ||
                                           (userRole === "Approval" && Number(userDepartmentId) === 4 && entityStatuses.vehicles[v.id] === "APPROVED"));
 
+                                      const isCivilApprover =
+                                        userRole === "Approval" && Number(userDepartmentId) === 3;
+                                      const isMechApprover =
+                                        userRole === "Approval" && Number(userDepartmentId) === 4;
+                                      const isCisfApprover =
+                                        Number(userDepartmentId) === 1 ||
+                                        [
+                                          "CISF",
+                                          "CISF Asst Commandant",
+                                          "CISF Assistant Commandant",
+                                          "Cisf.Assistant Commandant",
+                                        ].includes(String(userRole || "").trim());
+                                      const isPassSectionApprover =
+                                        userRole === "Approval" && Number(userDepartmentId) === 9;
+
                                       const cisfDone =
                                         [
                                           "PENDING_PASS_SECTION_ESSENTIAL",
@@ -5088,19 +5069,23 @@ export default function TrafficPassesPage() {
                                           "COMPLETED",
                                           "APPROVED",
                                         ].includes(workflowState) ||
-                                        String(v.status || "").toLowerCase() === "approved" ||
-                                        (["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"].includes(userRole) && entityStatuses.vehicles[v.id] === "APPROVED");
+                                        (isCisfApprover && entityStatuses.vehicles[v.id] === "APPROVED");
 
-                                      const currentVehStatus = String(entityStatuses.vehicles[v.id] || v.status || "").toLowerCase();
                                       const passSectionDone =
                                         [
                                           "COMPLETED_ESSENTIAL",
                                           "COMPLETED",
                                           "APPROVED",
                                         ].includes(workflowState) ||
-                                        currentVehStatus === "approved" ||
-                                        (userRole === "Approval" && Number(userDepartmentId) === 9 && entityStatuses.vehicles[v.id] === "APPROVED") ||
-                                        entityStatuses.vehicles[v.id] === "APPROVED";
+                                        (isPassSectionApprover && entityStatuses.vehicles[v.id] === "APPROVED");
+
+                                      const passSectionRejected =
+                                        (workflowState === "REJECTED_ESSENTIAL" && v.essentialRevertStage === "PENDING_PASS_SECTION_ESSENTIAL") ||
+                                        (isPassSectionApprover && entityStatuses.vehicles[v.id] === "REJECTED");
+
+                                      const passSectionReverted =
+                                        (workflowState === "REVERTED_ESSENTIAL" && v.essentialRevertStage === "PENDING_PASS_SECTION_ESSENTIAL") ||
+                                        (isPassSectionApprover && entityStatuses.vehicles[v.id] === "REVERTED");
 
                                       return (
                                         <>
@@ -5164,18 +5149,18 @@ export default function TrafficPassesPage() {
                                             className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                               passSectionDone
                                                 ? "bg-emerald-100 text-emerald-700"
-                                                : currentVehStatus === "rejected"
+                                                : passSectionRejected
                                                   ? "bg-red-100 text-red-700"
-                                                  : currentVehStatus === "reverted"
+                                                  : passSectionReverted
                                                     ? "bg-amber-100 text-amber-700"
                                                     : "bg-amber-100 text-amber-700"
                                             }`}
                                           >
                                             {passSectionDone
                                               ? "✓ Pass Section"
-                                              : currentVehStatus === "rejected"
+                                              : passSectionRejected
                                                 ? "✕ Pass Section Rejected"
-                                                : currentVehStatus === "reverted"
+                                                : passSectionReverted
                                                   ? "↩ Pass Section Reverted"
                                                   : "⏳ Pending Pass Section"}
                                           </span>

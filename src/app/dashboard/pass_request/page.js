@@ -537,8 +537,8 @@ const getEnumValue = (arr, id, fallback) => {
         ? "OTHER GATES ONLY"
         : id || fallback;
 
-  // 🔧 FIX: convert YEARLY → ANNUAL to match DB enum
-  if (value === "YEARLY") value = "ANNUAL";
+  // 🔧 FIX: convert ANNUAL → YEARLY to match DB enum
+  if (value === "ANNUAL") value = "YEARLY";
 
   return value;
 };
@@ -3740,8 +3740,8 @@ export default function PassRequestPage() {
               ? "OTHER GATES ONLY"
               : id || fallback;
 
-        // 🔧 FIX: convert YEARLY → ANNUAL to match DB enum
-        if (value === "YEARLY") value = "ANNUAL";
+        // 🔧 FIX: convert ANNUAL → YEARLY to match DB enum
+        if (value === "ANNUAL") value = "YEARLY";
 
         return value;
       };
@@ -4969,8 +4969,16 @@ export default function PassRequestPage() {
             1: "DAILY",
             2: "MONTHLY",
             3: "YEARLY",
+            DAILY: "DAILY",
+            MONTHLY: "MONTHLY",
+            YEARLY: "YEARLY",
+            ANNUAL: "YEARLY",
           };
-          const passTypeEnum = passTypeMap[person.passType] || person.passType;
+          const rawPersonPassType = String(person.passType || "").toUpperCase();
+          const passTypeEnum =
+            passTypeMap[person.passType] ||
+            passTypeMap[rawPersonPassType] ||
+            "DAILY";
 
           const formData = new FormData();
 
@@ -5098,10 +5106,17 @@ export default function PassRequestPage() {
           const passTypeMap = {
             1: "DAILY",
             2: "MONTHLY",
-            3: "ANNUAL",
+            3: "YEARLY",
+            DAILY: "DAILY",
+            MONTHLY: "MONTHLY",
+            YEARLY: "YEARLY",
+            ANNUAL: "YEARLY",
           };
+          const rawVehPassType = String(vehicle.passType || "").toUpperCase();
           const passTypeEnum =
-            passTypeMap[vehicle.passType] || vehicle.passType;
+            passTypeMap[vehicle.passType] ||
+            passTypeMap[rawVehPassType] ||
+            "DAILY";
 
           const formData = new FormData();
 
@@ -5111,6 +5126,9 @@ export default function PassRequestPage() {
             vehicle.registrationNo || vehicle.regNo || "",
           );
           formData.append("vehicleTypeId", vehicle.vehicleTypeId || "");
+          if (vehicle.essentialDepartmentId) {
+            formData.append("essentialDepartmentId", vehicle.essentialDepartmentId);
+          }
           formData.append("fuelType", vehicle.fuelType || "");
           formData.append("insuranceExpiry", vehicle.insuranceExpiry || "");
           formData.append("rcValidity", vehicle.rcValidity || "");
@@ -5129,14 +5147,20 @@ export default function PassRequestPage() {
           formData.append("insuranceFileName", vehicle.insuranceFileName || "");
           formData.append("permitFileName", vehicle.permitFileName || "");
           formData.append("fitnessFileName", vehicle.fitnessFileName || "");
-          // formData.append("requestLetterName", vehicle.requestLetterName || "");
+          if (vehicle.requestLetterName) {
+            formData.append("requestLetterName", vehicle.requestLetterName);
+          }
           formData.append("taxDocName", vehicle.taxDocName || "");
           formData.append("emissionCertName", vehicle.emissionCertName || "");
-          // formData.append(
-          //   "sparkArresterFileName",
-          //   vehicle.sparkArresterFileName || "",
-          // );
-          // formData.append("twistLockFileName", vehicle.twistLockFileName || "");
+          if (vehicle.sparkArresterFileName) {
+            formData.append(
+              "sparkArresterFileName",
+              vehicle.sparkArresterFileName,
+            );
+          }
+          if (vehicle.twistLockFileName) {
+            formData.append("twistLockFileName", vehicle.twistLockFileName);
+          }
 
           // Append actual File objects if re-uploaded
           if (vehicle.newRc) formData.append("vehicleRC", vehicle.newRc);
@@ -5146,15 +5170,15 @@ export default function PassRequestPage() {
             formData.append("vehiclePermit", vehicle.newPermit);
           if (vehicle.newFitness)
             formData.append("vehicleFitness", vehicle.newFitness);
-          // if (vehicle.newRequestLetter)
-          //   formData.append("vehicleRequestLetter", vehicle.newRequestLetter);
+          if (vehicle.newRequestLetter)
+            formData.append("vehicleRequestLetter", vehicle.newRequestLetter);
           if (vehicle.newTax) formData.append("vehicleTax", vehicle.newTax);
           if (vehicle.newEmission)
             formData.append("vehicleEmission", vehicle.newEmission);
-          // if (vehicle.newSparkArrester)
-          //   formData.append("sparkArrester", vehicle.newSparkArrester);
-          // if (vehicle.newTwistLock)
-          //   formData.append("twistLock", vehicle.newTwistLock);
+          if (vehicle.newSparkArrester)
+            formData.append("sparkArrester", vehicle.newSparkArrester);
+          if (vehicle.newTwistLock)
+            formData.append("twistLock", vehicle.newTwistLock);
 
           console.log("Updating vehicle:", vehicle.id);
           await axios.put(
