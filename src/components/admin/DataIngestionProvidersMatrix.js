@@ -24,6 +24,15 @@ import {
  * Format timestamp helper strictly in Indian Standard Time (IST - Asia/Kolkata)
  * Exactly mirrors formatIST from api_metrics_dashboard
  */
+function formatToDDMMYYYY(dateStr) {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+}
+
 function formatIST(dateStr) {
   if (!dateStr) return { text: "No records yet", rel: "", raw: null };
   const date = new Date(dateStr);
@@ -45,7 +54,7 @@ function formatIST(dateStr) {
   parts.forEach(({ type, value }) => {
     p[type] = value;
   });
-  const istFormatted = `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+  const istFormatted = `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}:${p.second}`;
 
   const diffMs = Date.now() - date.getTime();
   const diffSecs = Math.floor(diffMs / 1000);
@@ -87,10 +96,18 @@ const TIME_RANGES = [
   { value: "7d", label: "Last 7 Days" },
   { value: "30d", label: "Last 30 Days" },
   { value: "all", label: "All Time" },
+  { value: "custom", label: "Custom Range" },
 ];
 
 export default function DataIngestionProvidersMatrix() {
-  const [timeRange, setTimeRange] = useState("today");
+  const [appliedTimeRange, setAppliedTimeRange] = useState("today");
+  const [appliedStartDate, setAppliedStartDate] = useState("");
+  const [appliedEndDate, setAppliedEndDate] = useState("");
+
+  const [draftStartDate, setDraftStartDate] = useState("");
+  const [draftEndDate, setDraftEndDate] = useState("");
+  const [showCustomPicker, setShowCustomPicker] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [data, setData] = useState({
@@ -106,14 +123,24 @@ export default function DataIngestionProvidersMatrix() {
   const [error, setError] = useState(null);
 
   const fetchProviders = useCallback(
-    async (isManualRefresh = false) => {
+    async (isManualRefresh = false, overrideParams = null) => {
       if (isManualRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
 
       try {
+        const tr = overrideParams ? overrideParams.timeRange : appliedTimeRange;
+        const sDate = overrideParams ? overrideParams.startDate : appliedStartDate;
+        const eDate = overrideParams ? overrideParams.endDate : appliedEndDate;
+
+        const params = { timeRange: tr };
+        if (tr === "custom") {
+          if (sDate) params.startDate = sDate;
+          if (eDate) params.endDate = eDate;
+        }
+
         const res = await axios.get("/api/providers/summary", {
-          params: { timeRange },
+          params,
           validateStatus: (s) => s < 500,
         });
 
@@ -139,16 +166,25 @@ export default function DataIngestionProvidersMatrix() {
         setRefreshing(false);
       }
     },
-    [timeRange]
+    [appliedTimeRange, appliedStartDate, appliedEndDate]
   );
 
   useEffect(() => {
     let ignore = false;
 
     async function load() {
+      if (appliedTimeRange === "custom" && !appliedStartDate && !appliedEndDate) {
+        setLoading(false);
+        return;
+      }
       try {
+        const params = { timeRange: appliedTimeRange };
+        if (appliedTimeRange === "custom") {
+          if (appliedStartDate) params.startDate = appliedStartDate;
+          if (appliedEndDate) params.endDate = appliedEndDate;
+        }
         const res = await axios.get("/api/providers/summary", {
-          params: { timeRange },
+          params,
           validateStatus: (s) => s < 500,
         });
         if (ignore) return;
@@ -182,13 +218,20 @@ export default function DataIngestionProvidersMatrix() {
 
     load();
 
+    const interval = setInterval(() => {
+      if (appliedTimeRange !== "custom") {
+        fetchProviders(false);
+      }
+    }, 15000);
+
     return () => {
       ignore = true;
+      clearInterval(interval);
     };
-  }, [timeRange]);
+  }, [appliedTimeRange, appliedStartDate, appliedEndDate, fetchProviders]);
 
   const activeRangeLabel =
-    TIME_RANGES.find((r) => r.value === timeRange)?.label || "Today";
+    TIME_RANGES.find((r) => r.value === appliedTimeRange)?.label || "Today";
 
   const renderStatusBadge = (status) => {
     const s = String(status || "UNKNOWN").toUpperCase();
@@ -212,9 +255,9 @@ export default function DataIngestionProvidersMatrix() {
 
     return (
       <span
-        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${badgeClass}`}
+        className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-extrabold tracking-wide uppercase border shadow-sm ${badgeClass}`}
       >
-        <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
+        <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${dotClass}`} />
         {s}
       </span>
     );
@@ -243,14 +286,27 @@ export default function DataIngestionProvidersMatrix() {
           </p>
         </div>
 
-        {/* Controls: Range selector + Refresh button */}
-        <div className="flex items-center gap-2.5 self-start sm:self-auto shrink-0 flex-wrap">
-          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 px-3 py-1.5 rounded-xl">
-            <Calendar className="h-3.5 w-3.5 text-slate-400 dark:text-slate-400 shrink-0" />
+        {/* Controls: Preset selector + Custom Date Range Button + Refresh button */}
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
+          {/* Quick preset dropdown */}
+          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 px-3 py-1.5 rounded-xl shadow-sm">
+            <Clock className="h-3.5 w-3.5 text-slate-400 dark:text-slate-400 shrink-0" />
             <select
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none cursor-pointer pr-1"
+              value={appliedTimeRange === "custom" ? "custom" : appliedTimeRange}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "custom") {
+                  setShowCustomPicker(true);
+                } else {
+                  setShowCustomPicker(false);
+                  setDraftStartDate("");
+                  setDraftEndDate("");
+                  setAppliedStartDate("");
+                  setAppliedEndDate("");
+                  setAppliedTimeRange(val);
+                }
+              }}
+              className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer pr-1"
             >
               {TIME_RANGES.map((r) => (
                 <option
@@ -264,6 +320,32 @@ export default function DataIngestionProvidersMatrix() {
             </select>
           </div>
 
+          {/* Dedicated Custom Date Range Button next to Refresh */}
+          <button
+            type="button"
+            id="btn-custom-date-range"
+            onClick={() => {
+              setShowCustomPicker((prev) => !prev);
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-black border transition-all shadow-sm active:scale-95 ${appliedTimeRange === "custom" || showCustomPicker
+              ? "bg-cyan-600 text-white border-cyan-700 ring-2 ring-cyan-500/30"
+              : "bg-cyan-50 hover:bg-cyan-100 dark:bg-cyan-950/60 dark:hover:bg-cyan-900/80 border-cyan-400 dark:border-cyan-700 text-cyan-800 dark:text-cyan-200"
+              }`}
+            title="Pick Custom Date Range"
+          >
+            <Calendar className="h-4 w-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
+            <span className="tracking-wide">
+              {appliedTimeRange === "custom" && appliedStartDate && appliedEndDate
+                ? `${formatToDDMMYYYY(appliedStartDate)} → ${formatToDDMMYYYY(appliedEndDate)}`
+                : "Custom Date Range"}
+            </span>
+            <ChevronDown
+              className={`h-3.5 w-3.5 text-slate-400 transition-transform ${showCustomPicker ? "rotate-180" : ""
+                }`}
+            />
+          </button>
+
+          {/* Refresh button */}
           <button
             onClick={() => fetchProviders(true)}
             disabled={loading || refreshing}
@@ -276,6 +358,62 @@ export default function DataIngestionProvidersMatrix() {
           </button>
         </div>
       </div>
+
+      {/* ── Custom Date Range Selection Bar (Toggled by Custom Date Range button) ── */}
+      {showCustomPicker && (
+        <div className="bg-slate-50 dark:bg-slate-800/90 border border-cyan-500/30 dark:border-cyan-500/40 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-md">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs font-black uppercase tracking-wider text-cyan-700 dark:text-cyan-300 flex items-center gap-1.5">
+              <Calendar className="h-4 w-4" />
+              Filter By Date:
+            </span>
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl shadow-inner">
+              <span className="text-[11px] font-bold text-slate-400 uppercase">From:</span>
+              <input
+                type="date"
+                value={draftStartDate}
+                onChange={(e) => setDraftStartDate(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+              />
+            </div>
+            <span className="text-slate-400 font-bold text-xs">—</span>
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl shadow-inner">
+              <span className="text-[11px] font-bold text-slate-400 uppercase">To:</span>
+              <input
+                type="date"
+                value={draftEndDate}
+                onChange={(e) => setDraftEndDate(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+              />
+            </div>
+            <button
+              onClick={() => {
+                if (!draftStartDate && !draftEndDate) return;
+                setAppliedStartDate(draftStartDate);
+                setAppliedEndDate(draftEndDate);
+                setAppliedTimeRange("custom");
+              }}
+              disabled={loading || refreshing || (!draftStartDate && !draftEndDate)}
+              className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm active:scale-95 disabled:opacity-50"
+            >
+              Apply Filter
+            </button>
+          </div>
+          <button
+            onClick={() => {
+              setDraftStartDate("");
+              setDraftEndDate("");
+              setAppliedStartDate("");
+              setAppliedEndDate("");
+              setAppliedTimeRange("today");
+              setShowCustomPicker(false);
+            }}
+            className="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 underline transition-colors"
+          >
+            Reset to Today
+          </button>
+        </div>
+      )}
 
       {/* ── Error Banner ── */}
       {error && (
@@ -306,10 +444,10 @@ export default function DataIngestionProvidersMatrix() {
                 <Ship className="h-5 w-5" strokeWidth={2.2} />
               </div>
               <div>
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-stone-100 tracking-tight leading-tight">
+                <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-stone-100 tracking-tight leading-tight">
                   TOS Service — Terminal Data Senders
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-stone-400 mt-0.5">
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-stone-400 mt-0.5">
                   Pushing Form-13 & EIR Container Records (CITPL & CCTPL)
                 </p>
               </div>
@@ -317,19 +455,11 @@ export default function DataIngestionProvidersMatrix() {
 
             {/* Quick KPI stats pills */}
             <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
-              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 px-3 py-1 rounded-xl text-xs">
-                <span className="text-slate-400 dark:text-slate-500 font-semibold text-[11px]">
-                  In Range:
-                </span>
-                <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">
-                  {formatNumber(data.tos.totalInRange)}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 px-3 py-1 rounded-xl text-xs">
-                <span className="text-slate-400 dark:text-slate-500 font-semibold text-[11px]">
+              <div className="flex items-center gap-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 px-4 py-1.5 rounded-xl text-sm font-bold shadow-sm">
+                <span className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-wider">
                   All-Time:
                 </span>
-                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400 text-base">
                   {formatNumber(data.tos.totalAllTime)}
                 </span>
               </div>
@@ -338,33 +468,32 @@ export default function DataIngestionProvidersMatrix() {
 
           {/* Table */}
           <div className="overflow-x-auto scrollbar-thin">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-sm sm:text-base">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700/80 bg-slate-100/90 dark:bg-slate-800/70 rounded-xl text-[11px] font-black uppercase tracking-wider text-slate-950 dark:text-white">
-                  <th className="py-3 px-3.5 rounded-l-xl font-black text-slate-950 dark:text-white">Terminal</th>
-                  <th className="py-3 px-4 font-black text-slate-950 dark:text-white">Login ID</th>
-                  <th className="py-3 px-4 font-black text-slate-950 dark:text-white">Form-13 (Forms / Containers)</th>
-                  <th className="py-3 px-4 font-black text-slate-950 dark:text-white">EIR Records</th>
-                  <th className="py-3 px-4 font-black text-slate-950 dark:text-white">All-Time Total</th>
-                  <th className="py-3 px-4 font-black text-slate-950 dark:text-white">Last Transmission (IST)</th>
-                  <th className="py-3 pr-3.5 pl-4 text-right rounded-r-xl font-black text-slate-950 dark:text-white">Status</th>
+                <tr className="border-b border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider text-slate-950 dark:text-white">
+                  <th className="py-4 px-4 sm:px-5 rounded-l-xl font-black text-slate-950 dark:text-white">Terminal</th>
+                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">Form-13 (Forms / Containers)</th>
+                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">EIR Records</th>
+                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">All-Time Total</th>
+                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">Last Transmission (IST)</th>
+                  <th className="py-4 pr-4 pl-4 sm:pr-5 sm:pl-5 text-right rounded-r-xl font-black text-slate-950 dark:text-white">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-400">
-                      <div className="flex items-center justify-center gap-2">
-                        <RefreshCw className="h-4 w-4 animate-spin text-cyan-500" />
-                        <span>Loading TOS terminal providers...</span>
+                    <td colSpan={6} className="py-10 text-center text-slate-400 text-sm sm:text-base">
+                      <div className="flex items-center justify-center gap-2.5">
+                        <RefreshCw className="h-5 w-5 animate-spin text-cyan-500" />
+                        <span className="font-medium">Loading TOS terminal providers...</span>
                       </div>
                     </td>
                   </tr>
                 ) : data.tos.terminals.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
-                      className="py-6 text-center text-slate-400 italic"
+                      colSpan={6}
+                      className="py-8 text-center text-slate-400 italic text-sm sm:text-base"
                     >
                       No TOS terminal providers found.
                     </td>
@@ -380,73 +509,72 @@ export default function DataIngestionProvidersMatrix() {
                         className="hover:bg-slate-50/75 dark:hover:bg-slate-800/30 transition-colors"
                       >
                         {/* Terminal Name Badge */}
-                        <td className="py-3.5 px-3.5">
+                        <td className="py-4 px-4 sm:px-5">
                           <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-bold tracking-tight border ${
-                              isCitpl
-                                ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30"
-                                : "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/30"
-                            }`}
+                            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-sm sm:text-base font-mono font-black tracking-normal border shadow-sm ${isCitpl
+                              ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30"
+                              : "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/30"
+                              }`}
                           >
-                            <Container className="h-3.5 w-3.5" />
+                            <Container className="h-4.5 w-4.5 sm:h-5 sm:w-5 shrink-0" />
                             {term.terminal}
                           </span>
                         </td>
 
-                        {/* Login ID */}
-                        <td className="py-3.5 px-4 font-mono font-bold text-cyan-600 dark:text-cyan-400">
-                          {term.loginId || "—"}
-                        </td>
-
                         {/* Form-13 (Forms / Containers) */}
-                        <td className="py-3.5 px-4 font-mono">
-                          <div className="font-bold text-slate-800 dark:text-stone-200">
+                        <td className="py-4 px-4 sm:px-5 font-mono">
+                          <div className="text-base sm:text-lg font-black text-slate-900 dark:text-stone-100">
                             {formatNumber(term.form13InRange)}{" "}
-                            <span className="text-[10px] text-slate-400 font-medium">
+                            <span className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-semibold">
                               forms
                             </span>
                           </div>
-                          <div className="text-[11px] text-indigo-500 dark:text-indigo-400 font-semibold">
+                          <div className="text-xs sm:text-sm text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
                             ({formatNumber(term.containersInRange)} containers)
                           </div>
                         </td>
 
                         {/* EIR Records */}
-                        <td className="py-3.5 px-4 font-mono font-bold text-purple-600 dark:text-purple-400 text-sm">
+                        <td className="py-4 px-4 sm:px-5 font-mono font-black text-purple-600 dark:text-purple-400 text-base sm:text-lg">
                           {formatNumber(term.eirInRange)}
                         </td>
 
                         {/* All-Time Total */}
-                        <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">
-                          <div className="font-bold text-slate-800 dark:text-stone-200">
+                        <td className="py-4 px-4 sm:px-5 font-mono">
+                          <div className="text-base sm:text-lg font-black text-slate-900 dark:text-stone-100">
                             {formatNumber(term.allTimeTotal)}{" "}
-                            <span className="text-[10px] text-slate-400 font-medium">
+                            <span className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-semibold">
                               records
                             </span>
                           </div>
-                          <div className="text-[10px] text-slate-400">
-                            ({formatNumber(term.allTimeForm13)} forms /{" "}
-                            {formatNumber(term.allTimeContainers)} cont.)
+                          <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                            <span className="text-indigo-600 dark:text-indigo-400 font-bold">
+                              {formatNumber(term.allTimeForm13)} Forms
+                            </span>{" "}
+                            ({formatNumber(term.allTimeContainers)} cont.) •{" "}
+                            <span className="text-purple-600 dark:text-purple-400 font-bold">
+                              {formatNumber(term.allTimeEir)} EIR
+                            </span>
                           </div>
                         </td>
 
                         {/* Last Transmission (IST) */}
-                        <td className="py-3.5 px-4">
-                          <div className="font-mono text-xs text-slate-700 dark:text-stone-300">
-                            {ist.text}{" "}
-                            <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400">
+                        <td className="py-4 px-4 sm:px-5">
+                          <div className="font-mono text-sm sm:text-base font-bold text-slate-900 dark:text-stone-200 flex items-center flex-wrap gap-1.5">
+                            <span>{ist.text}</span>
+                            <span className="text-xs font-black text-cyan-700 dark:text-cyan-400 px-1.5 py-0.5 rounded bg-cyan-50 dark:bg-cyan-950/60 border border-cyan-200 dark:border-cyan-800">
                               IST
                             </span>
                           </div>
                           {ist.rel && (
-                            <div className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+                            <div className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
                               ({ist.rel})
                             </div>
                           )}
                         </td>
 
                         {/* Status */}
-                        <td className="py-3.5 pr-3.5 pl-4 text-right">
+                        <td className="py-4 pr-4 pl-4 sm:pr-5 sm:pl-5 text-right">
                           {renderStatusBadge(term.status)}
                         </td>
                       </tr>
@@ -469,10 +597,10 @@ export default function DataIngestionProvidersMatrix() {
                 <Scale className="h-5 w-5" strokeWidth={2.2} />
               </div>
               <div>
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-stone-100 tracking-tight leading-tight">
+                <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-stone-100 tracking-tight leading-tight">
                   IPortman Service — Weighbridge Operators
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-stone-400 mt-0.5">
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-stone-400 mt-0.5">
                   Vehicle Weighment Tickets (Gross, Tare, Net Weight & Cargo Records)
                 </p>
               </div>
@@ -480,19 +608,19 @@ export default function DataIngestionProvidersMatrix() {
 
             {/* Quick KPI stats pills */}
             <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
-              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 px-3 py-1 rounded-xl text-xs">
-                <span className="text-slate-400 dark:text-slate-500 font-semibold text-[11px]">
-                  In Range:
+              <div className="flex items-center gap-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 px-4 py-1.5 rounded-xl text-sm font-bold shadow-sm">
+                <span className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-wider">
+                  All-Time:
                 </span>
-                <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">
-                  {formatNumber(data.weighbridge.totalInRangeRecords)}
+                <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400 text-base">
+                  {formatNumber(data.weighbridge.totalAllTimeRecords)}
                 </span>
               </div>
-              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 px-3 py-1 rounded-xl text-xs">
-                <span className="text-slate-400 dark:text-slate-500 font-semibold text-[11px]">
+              <div className="flex items-center gap-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 px-4 py-1.5 rounded-xl text-sm font-bold shadow-sm">
+                <span className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-wider">
                   Weight (T):
                 </span>
-                <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                <span className="font-mono font-extrabold text-amber-600 dark:text-amber-400 text-base">
                   {formatWeight(data.weighbridge.totalInRangeWeight)}
                 </span>
               </div>
@@ -501,25 +629,25 @@ export default function DataIngestionProvidersMatrix() {
 
           {/* Table */}
           <div className="overflow-x-auto scrollbar-thin">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-sm sm:text-base">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700/80 bg-slate-100/90 dark:bg-slate-800/70 rounded-xl text-[11px] font-black uppercase tracking-wider text-slate-950 dark:text-white">
-                  <th className="py-3 px-3.5 rounded-l-xl font-black text-slate-950 dark:text-white">Weighbridge / Company Name</th>
-                  <th className="py-3 px-4 font-black text-slate-950 dark:text-white">Records Sent (Date Filter)</th>
-                  <th className="py-3 px-4 font-black text-slate-950 dark:text-white">Movement (Exp / Imp)</th>
-                  <th className="py-3 px-4 font-black text-slate-950 dark:text-white">Cargo Weight (Total / Avg)</th>
-                  <th className="py-3 px-4 font-black text-slate-950 dark:text-white">Total Records (All-Time)</th>
-                  <th className="py-3 px-4 font-black text-slate-950 dark:text-white">Last Weighment (IST)</th>
-                  <th className="py-3 pr-3.5 pl-4 text-right rounded-r-xl font-black text-slate-950 dark:text-white">Status</th>
+                <tr className="border-b border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider text-slate-950 dark:text-white">
+                  <th className="py-4 px-4 sm:px-5 rounded-l-xl font-black text-slate-950 dark:text-white">Weighbridge / Company Name</th>
+                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">Records Sent (Date Filter)</th>
+                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">Movement (Exp / Imp)</th>
+                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">Net Cargo Weight (Total / Avg)</th>
+                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">Total Records (All-Time)</th>
+                  <th className="py-4 px-4 sm:px-5 font-black text-slate-950 dark:text-white">Last Weighment (IST)</th>
+                  <th className="py-4 pr-4 pl-4 sm:pr-5 sm:pl-5 text-right rounded-r-xl font-black text-slate-950 dark:text-white">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-400">
-                      <div className="flex items-center justify-center gap-2">
-                        <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />
-                        <span>Loading Weighbridge operators...</span>
+                    <td colSpan={7} className="py-10 text-center text-slate-400 text-sm sm:text-base">
+                      <div className="flex items-center justify-center gap-2.5">
+                        <RefreshCw className="h-5 w-5 animate-spin text-blue-500" />
+                        <span className="font-medium">Loading Weighbridge operators...</span>
                       </div>
                     </td>
                   </tr>
@@ -527,7 +655,7 @@ export default function DataIngestionProvidersMatrix() {
                   <tr>
                     <td
                       colSpan={7}
-                      className="py-6 text-center text-slate-400 italic"
+                      className="py-8 text-center text-slate-400 italic text-sm sm:text-base"
                     >
                       No Weighbridge operators found.
                     </td>
@@ -542,77 +670,76 @@ export default function DataIngestionProvidersMatrix() {
                         className="hover:bg-slate-50/75 dark:hover:bg-slate-800/30 transition-colors"
                       >
                         {/* Operator / Weighbridge Name */}
-                        <td className="py-3.5 px-3.5">
-                          <div className="font-extrabold text-slate-800 dark:text-stone-100">
+                        <td className="py-4 px-4 sm:px-5">
+                          <div className="font-black text-slate-900 dark:text-stone-100 text-base sm:text-lg tracking-tight">
                             {op.weighBridgeName}
-                          </div>
-                          <div className="text-[11px] font-mono text-slate-400 dark:text-slate-500 mt-0.5">
-                            Operator ID: #{op.id} • {op.loginId}
                           </div>
                         </td>
 
                         {/* Records in range */}
-                        <td className="py-3.5 px-4 font-mono font-bold text-cyan-600 dark:text-cyan-400 text-sm">
+                        <td className="py-4 px-4 sm:px-5 font-mono font-black text-cyan-600 dark:text-cyan-400 text-base sm:text-lg">
                           {formatNumber(op.recordsInRange)}
                         </td>
 
                         {/* Movement (Exp / Imp) */}
-                        <td className="py-3.5 px-4 font-mono text-xs">
-                          <span className="text-slate-500 dark:text-slate-400">
+                        <td className="py-4 px-4 sm:px-5 font-mono text-sm sm:text-base">
+                          <span className="text-slate-600 dark:text-slate-300 font-semibold">
                             Exp:{" "}
-                            <strong className="text-emerald-600 dark:text-emerald-400">
+                            <strong className="text-emerald-600 dark:text-emerald-400 font-black">
                               {formatNumber(op.exportCountInRange)}
                             </strong>{" "}
                             / Imp:{" "}
-                            <strong className="text-cyan-600 dark:text-cyan-400">
+                            <strong className="text-cyan-600 dark:text-cyan-400 font-black">
                               {formatNumber(op.importCountInRange)}
                             </strong>
                           </span>
                         </td>
 
-                        {/* Cargo Weight (Total / Avg) */}
-                        <td className="py-3.5 px-4 font-mono">
-                          <div className="font-bold text-amber-600 dark:text-amber-400">
+                        {/* Net Cargo Weight (Date Filter & All-Time) */}
+                        <td className="py-4 px-4 sm:px-5 font-mono">
+                          <div className="font-black text-amber-600 dark:text-amber-400 text-base sm:text-lg">
                             {formatWeight(op.totalWeightInRange)}{" "}
-                            <span className="text-[10px] text-slate-400 font-medium">
-                              total
+                            <span className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-semibold">
+
                             </span>
                           </div>
-                          <div className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
-                            Avg:{" "}
-                            <strong className="text-cyan-600 dark:text-cyan-400">
-                              {formatWeight(op.avgWeightInRange)}
-                            </strong>{" "}
-                            <span className="text-slate-400 text-[10px]">
-                              / veh
-                            </span>
+                          <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium mt-0.5">
+                            All-Time:{" "}
+                            <strong className="text-amber-500 dark:text-amber-300 font-bold">
+                              {formatWeight(op.allTimeWeight)}
+                            </strong>
+                            {op.avgWeightInRange > 0 && (
+                              <span className="text-slate-400 text-xs ml-1.5">
+                                (Avg: {formatWeight(op.avgWeightInRange)}/Vehicle)
+                              </span>
+                            )}
                           </div>
                         </td>
 
                         {/* Total records all time */}
-                        <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400 font-semibold">
+                        <td className="py-4 px-4 sm:px-5 font-mono text-slate-900 dark:text-stone-100 font-black text-base sm:text-lg">
                           {formatNumber(op.allTimeRecords)}
                         </td>
 
                         {/* Last Weighment (IST) */}
-                        <td className="py-3.5 px-4">
-                          <div className="font-mono text-xs text-slate-700 dark:text-stone-300">
-                            {ist.text}{" "}
+                        <td className="py-4 px-4 sm:px-5">
+                          <div className="font-mono text-sm sm:text-base font-bold text-slate-900 dark:text-stone-200 flex items-center flex-wrap gap-1.5">
+                            <span>{ist.text}</span>
                             {ist.raw && (
-                              <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400">
+                              <span className="text-xs font-black text-cyan-700 dark:text-cyan-400 px-1.5 py-0.5 rounded bg-cyan-50 dark:bg-cyan-950/60 border border-cyan-200 dark:border-cyan-800">
                                 IST
                               </span>
                             )}
                           </div>
                           {ist.rel && (
-                            <div className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+                            <div className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
                               ({ist.rel})
                             </div>
                           )}
                         </td>
 
                         {/* Status */}
-                        <td className="py-3.5 pr-3.5 pl-4 text-right">
+                        <td className="py-4 pr-4 pl-4 sm:pr-5 sm:pl-5 text-right">
                           {renderStatusBadge(op.status)}
                         </td>
                       </tr>

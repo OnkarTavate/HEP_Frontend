@@ -3194,7 +3194,7 @@ export default function AdminPassApprovalsPage() {
                               <span>
                                 {new Date(
                                   pass.submittedAt || pass.createdAt,
-                                ).toLocaleDateString()}
+                                ).toLocaleDateString("en-GB")}
                               </span>
                             </div>
                           </div>
@@ -3216,7 +3216,7 @@ export default function AdminPassApprovalsPage() {
                       <td className="px-4 sm:px-6 py-4 text-sm text-slate-500 dark:text-slate-400 hidden md:table-cell">
                         {new Date(
                           pass.submittedAt || pass.createdAt,
-                        ).toLocaleDateString()}
+                        ).toLocaleDateString("en-GB")}
                       </td>
                       {activeTab === "processed" && (
                         <td className="px-4 sm:px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 hidden lg:table-cell">

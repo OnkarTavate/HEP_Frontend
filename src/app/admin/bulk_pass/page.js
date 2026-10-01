@@ -54,7 +54,7 @@ const BATCH_STATUS_CFG = {
 const fmtDateShort = (v) => {
   if (!v) return "—";
   const d = new Date(v);
-  return isNaN(d) ? v : new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(d);
+  return isNaN(d) ? v : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
 };
 const visitorLabel = (v) => v ? v.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "—";
 
