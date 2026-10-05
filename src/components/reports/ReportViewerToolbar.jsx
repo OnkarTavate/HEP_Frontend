@@ -106,6 +106,7 @@ export default function ReportViewerToolbar({
   lastHref,
   showPagination = true,
   showTools = true,
+  currentSortOrder = "DESC",
 }) {
   const router = useRouter();
   const [draftPageInput, setDraftPageInput] = useState(null);
@@ -159,6 +160,13 @@ export default function ReportViewerToolbar({
     router.push(`?${params.toString()}`);
   };
 
+  const changeSortOrder = (sortOrder) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("sortOrder", sortOrder);
+    params.set("page", "1");
+    router.push(`?${params.toString()}`);
+  };
+
   return (
     <div className="border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
       <div className="flex min-h-12 flex-wrap items-center border-y border-slate-200 dark:border-slate-700 text-sm">
@@ -193,6 +201,19 @@ export default function ReportViewerToolbar({
             <ToolbarButton href={lastHref} disabled={currentPage >= totalPages} title="Last page">
               ⇥
             </ToolbarButton>
+
+            <div className="flex h-10 items-center border-r border-slate-200 px-3 dark:border-slate-700">
+              <select
+                value={currentSortOrder}
+                onChange={(event) => changeSortOrder(event.target.value)}
+                className="h-8 min-w-40 border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-800 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                aria-label="Sort report records"
+                title="Sort report records"
+              >
+                <option value="DESC">Latest to Oldest</option>
+                <option value="ASC">Oldest to Latest</option>
+              </select>
+            </div>
           </>
         )}
 

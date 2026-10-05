@@ -32,12 +32,12 @@ const reportIcons = {
   "material-movement-report": ClipboardCheck,
 };
 
-export default function ReportCard({ report }) {
+export default function ReportCard({ report, basePath = "/admin/reports" }) {
   const Icon = reportIcons[report.slug] || IdCard;
 
   return (
     <Link
-      href={`/admin/reports/${report.slug}`}
+      href={`${basePath}/${report.slug}`}
       className="group block h-full focus:outline-none focus-visible:ring-4 focus-visible:ring-orange-400/30"
     >
       <article

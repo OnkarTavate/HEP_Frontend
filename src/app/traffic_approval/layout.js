@@ -620,6 +620,7 @@ export default function TrafficLayout({ children }) {
           icon: ShieldBan,
         },
         { name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users },
+        { name: "Reports", href: "/traffic_approval/reports", icon: BarChart3 },
       ];
 
   const SidebarContent = ({

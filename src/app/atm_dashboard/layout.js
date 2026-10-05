@@ -84,6 +84,13 @@ const navigationItems = [
     description: "View and export historical blacklist records",
   },
   {
+    name: "Reports",
+    short: "Reports",
+    href: "/atm_dashboard/operational-reports",
+    icon: BarChart2,
+    description: "View ATM operational reports",
+  },
+  {
     name: "Penalty Config",
     short: "Config",
     href: "/atm_dashboard/penalty_config",

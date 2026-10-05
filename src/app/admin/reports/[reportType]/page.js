@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getReport } from "@/lib/reports";
 import ReportSearchForm from "@/components/reports/ReportSearchForm";
 import ReportViewerToolbar from "@/components/reports/ReportViewerToolbar";
+import SelectableReportTable from "@/components/reports/SelectableReportTable";
 
 const AGENT_API =
   process.env.INTERNAL_AGENT_API ||
@@ -129,7 +130,7 @@ function EmptyReportState({ children }) {
 }
 
 async function SimpleFilterReport({ report, children, endpoint, filterKeys, searchParams }) {
-  const effectiveFilterKeys = Array.from(new Set([...(filterKeys || []), "search"]));
+  const effectiveFilterKeys = Array.from(new Set([...(filterKeys || []), "search", "sortOrder"]));
   const searched = hasAnySearch(searchParams, effectiveFilterKeys);
   const query = buildQuery(searchParams, [...effectiveFilterKeys, "page"]);
   const reportData = searched && endpoint
@@ -144,11 +145,12 @@ async function SimpleFilterReport({ report, children, endpoint, filterKeys, sear
     Math.ceil((pagination.totalRecords || rows.length || 0) / pageLimit),
   );
   const columnKeys = rows.length
-    ? Object.keys(rows[0]).filter((key) => !["companySearch", "row_number"].includes(key))
+    ? Object.keys(rows[0]).filter((key) => !["companySearch", "row_number", "rcCopyUrl"].includes(key))
     : [];
   const columns = columnKeys.map((key) => ({
     key,
     label: key.replace(/([A-Z])/g, " $1").replaceAll("_", " ").trim(),
+    ...(key === "rcBookCopy" ? { documentPathKey: "rcCopyUrl" } : {}),
   }));
   const targetId = `${report.slug}-report-content`;
 
@@ -164,29 +166,19 @@ async function SimpleFilterReport({ report, children, endpoint, filterKeys, sear
               defaultValue={getParam(searchParams, "search")}
             />
           </div>
-          {children}
+          <div>
+            {children}
+          </div>
         </ReportSearchForm>
         {searched ? (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {rows.length ? (
-              <div id={targetId} className="min-h-0 min-w-0 max-w-full flex-1 overflow-auto overscroll-contain origin-top-left [scrollbar-gutter:stable]">
-                <table className="min-w-max w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-stone-500 shadow-sm dark:bg-slate-800">
-                    <tr>{columns.map((column) => <th key={column.key} className="whitespace-nowrap px-4 py-3">{column.label}</th>)}</tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {rows.map((row, index) => (
-                      <tr key={`${row.id || row.passId || row.cardNumber || "row"}-${index}`}>
-                        {columns.map((column) => (
-                          <td key={column.key} className="whitespace-nowrap px-4 py-3 text-slate-700 dark:text-slate-200">
-                            {row[column.key] == null || row[column.key] === "" ? "—" : typeof row[column.key] === "boolean" ? (row[column.key] ? "Yes" : "No") : String(row[column.key])}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <SelectableReportTable
+                rows={rows}
+                columns={columns}
+                targetId={targetId}
+                documentBaseUrl={AGENT_API.replace(/\/api\/?$/, "")}
+              />
             ) : <div className="min-h-0 flex-1 overflow-auto"><EmptyReportState>{reportData?.limitation || "No records matched these filters."}</EmptyReportState></div>}
             <div className="shrink-0 border-t border-slate-100 dark:border-slate-800">
               <ReportViewerToolbar
@@ -200,6 +192,7 @@ async function SimpleFilterReport({ report, children, endpoint, filterKeys, sear
                 previousHref={buildPageHref(searchParams, Math.max(1, currentPage - 1))}
                 nextHref={buildPageHref(searchParams, Math.min(totalPages, currentPage + 1))}
                 lastHref={buildPageHref(searchParams, totalPages)}
+                currentSortOrder={getParam(searchParams, "sortOrder") || "DESC"}
               />
             </div>
           </div>
@@ -904,6 +897,7 @@ async function AllPassIssuanceReport({ report, searchParams }) {
     "search", "fromDate", "toDate", "passId", "cardHolder", "idProof",
     "companyCodeOrName", "companyType", "passType", "approvalStatus",
     "passHolderType", "nationality", "department", "paymentType", "aadhaar",
+    "employeeId",
   ];
   const effectiveSearchParams = {
     ...searchParams,
@@ -911,7 +905,7 @@ async function AllPassIssuanceReport({ report, searchParams }) {
     toDate: getParam(searchParams, "toDate") || formatDateTimeLocal(periodEnd),
   };
   const searched = hasAnySearch(searchParams, filterKeys);
-  const query = buildQuery(effectiveSearchParams, [...filterKeys, "page"]);
+  const query = buildQuery(effectiveSearchParams, [...filterKeys, "sortOrder", "page"]);
   const reportData = searched
     ? await getJson(`/reports/all-pass-issuance?${query}`)
     : null;
@@ -932,9 +926,11 @@ async function AllPassIssuanceReport({ report, searchParams }) {
     { key: "aadhaar", label: "AADHAAR" },
     { key: "passType", label: "PASS TYPE" },
     { key: "approvalStatus", label: "STATUS" },
+    { key: "approvedBy", label: "APPROVER NAME" },
+    { key: "approverEmployeeId", label: "APPROVER EMPLOYEE ID" },
     { key: "paymentType", label: "PAYMENT" },
-    { key: "dateFrom", label: "VALID FROM" },
-    { key: "dateTo", label: "VALID TO" },
+    { key: "dateFrom", label: "VALID FROM", format: "datetime" },
+    { key: "dateTo", label: "VALID TO", format: "datetime" },
     { key: "date", label: "DATE" },
     { key: "time", label: "TIME" },
     { key: "amount", label: "AMOUNT" },
@@ -942,6 +938,7 @@ async function AllPassIssuanceReport({ report, searchParams }) {
   const advancedFilterKeys = [
     "cardHolder", "idProof", "companyType", "passType", "approvalStatus",
     "passHolderType", "nationality", "department", "paymentType", "aadhaar",
+    "employeeId",
   ];
   const hasAdvancedFilters = hasAnySearch(searchParams, advancedFilterKeys);
 
@@ -990,6 +987,7 @@ async function AllPassIssuanceReport({ report, searchParams }) {
               <SelectField label="Department" name="department" defaultValue={getParam(searchParams, "department")} options={options.departments} />
               <SelectField label="Payment Type" name="paymentType" defaultValue={getParam(searchParams, "paymentType")} options={options.paymentTypes} />
               <TextField label="Aadhaar" name="aadhaar" placeholder="Aadhaar No" defaultValue={getParam(searchParams, "aadhaar")} />
+              <TextField label="Approver Employee ID" name="employeeId" defaultValue={getParam(searchParams, "employeeId")} />
             </div>
           </details>
         </ReportSearchForm>
@@ -997,37 +995,7 @@ async function AllPassIssuanceReport({ report, searchParams }) {
         {searched ? (
           <div className="flex min-h-0 flex-1 flex-col">
             {rows.length ? (
-              <div id={targetId} className="min-h-0 flex-1 overflow-auto origin-top-left transition-transform">
-                <table className="min-w-max w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-[0.1em] text-stone-500 shadow-sm dark:bg-slate-800 dark:text-stone-300">
-                    <tr>
-                      {[
-                        "Source", "Pass ID", "Holder", "Holder Type", "Company Code", "Company Name", "Aadhaar",
-                        "Pass Type", "Status", "Payment", "Valid From", "Valid To", "Amount",
-                      ].map((label) => <th key={label} className="whitespace-nowrap px-4 py-3">{label}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700 dark:divide-slate-800 dark:text-slate-200">
-                    {rows.map((row, index) => (
-                      <tr key={`${row.source}-${row.passId}-${index}`}>
-                        <td className="px-4 py-3">{row.source}</td>
-                        <td className="whitespace-nowrap px-4 py-3 font-semibold">{row.passId || "—"}</td>
-                        <td className="px-4 py-3">{row.cardHolder || "—"}</td>
-                        <td className="px-4 py-3">{row.passHolderType || "—"}</td>
-                        <td className="whitespace-nowrap px-4 py-3">{row.companyCode || "—"}</td>
-                        <td className="px-4 py-3">{row.companyName || "—"}</td>
-                        <td className="whitespace-nowrap px-4 py-3">{row.aadhaar || "—"}</td>
-                        <td className="px-4 py-3">{row.passType || "—"}</td>
-                        <td className="px-4 py-3">{row.approvalStatus || "—"}</td>
-                        <td className="px-4 py-3">{row.paymentType || "—"}</td>
-                        <td className="whitespace-nowrap px-4 py-3">{formatReportDateTime(row.dateFrom)}</td>
-                        <td className="whitespace-nowrap px-4 py-3">{formatReportDateTime(row.dateTo)}</td>
-                        <td className="px-4 py-3">{row.amount ?? "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <SelectableReportTable rows={rows} columns={columns} targetId={targetId} />
             ) : (
               <EmptyReportState>No pass records matched these filters.</EmptyReportState>
             )}
@@ -1043,6 +1011,7 @@ async function AllPassIssuanceReport({ report, searchParams }) {
                 previousHref={buildPageHref(effectiveSearchParams, Math.max(1, (pagination.page || 1) - 1))}
                 nextHref={buildPageHref(effectiveSearchParams, Math.min(totalPages, (pagination.page || 1) + 1))}
                 lastHref={buildPageHref(effectiveSearchParams, totalPages)}
+                currentSortOrder={getParam(effectiveSearchParams, "sortOrder") || "DESC"}
               />
               </div>
           </div>
@@ -1078,15 +1047,26 @@ async function CardInventoryReport({ report, searchParams }) {
 }
 
 async function CardInventorySummaryReport({ report, searchParams }) {
+  const today = new Date();
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const formatDate = (date) => date.toISOString().slice(0, 10);
+
   return (
     <SimpleFilterReport
       endpoint="/reports/card-inventory-summary"
       searchParams={searchParams}
-      filterKeys={["companyCode"]}
+      filterKeys={["fromDate", "toDate", "fromTime", "toTime", "companyCode", "holderType", "qrStatus"]}
       report={report}
     >
-      <div className="grid max-w-3xl gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <TextField label="Company Code" name="companyCode" defaultValue={getParam(searchParams, "companyCode")} />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <TextField label="From Date" name="fromDate" type="date" defaultValue={getParam(searchParams, "fromDate") || formatDate(thirtyDaysAgo)} />
+            <TextField label="To Date" name="toDate" type="date" defaultValue={getParam(searchParams, "toDate") || formatDate(today)} />
+            <TextField label="From Time" name="fromTime" type="time" defaultValue={getParam(searchParams, "fromTime") || "00:00"} />
+            <TextField label="To Time" name="toTime" type="time" defaultValue={getParam(searchParams, "toTime") || "23:59"} />
+            <TextField label="Company Code / Name" name="companyCode" defaultValue={getParam(searchParams, "companyCode")} />
+            <SelectField label="Holder Type" name="holderType" defaultValue={getParam(searchParams, "holderType")} options={["Person", "Vehicle"]} />
+            <SelectField label="QR Status" name="qrStatus" defaultValue={getParam(searchParams, "qrStatus")} options={["Issued", "Pending", "Revoked"]} />
             <div className="flex items-end">
               <SearchButtonRow />
             </div>
@@ -1212,12 +1192,13 @@ async function RemainingReportPage({ report, searchParams, reportType }) {
         <TextField key="agents" label="Agents" name="agents" defaultValue={getParam(searchParams, "agents")} />],
     },
     "pass-approval-report": {
-      keys: ["fromDate", "toDate", "requestNumber", "vehicleOrPersonName", "transporterNameOrCode", "approvalStatus"],
+      keys: ["fromDate", "toDate", "requestNumber", "vehicleOrPersonName", "transporterNameOrCode", "approvalStatus", "employeeId"],
       fields: [...commonDate(),
         <TextField key="request" label="Request Number" name="requestNumber" defaultValue={getParam(searchParams, "requestNumber")} />,
         <TextField key="holder" label="Vehicle/Person Name" name="vehicleOrPersonName" defaultValue={getParam(searchParams, "vehicleOrPersonName")} />,
         <TextField key="transporter" label="Transporter Name/Code" name="transporterNameOrCode" defaultValue={getParam(searchParams, "transporterNameOrCode")} />,
-        <SelectField key="status" label="Approval Status" name="approvalStatus" defaultValue={getParam(searchParams, "approvalStatus")} options={options?.approvalStatuses || []} />],
+        <SelectField key="status" label="Approval Status" name="approvalStatus" defaultValue={getParam(searchParams, "approvalStatus")} options={options?.approvalStatuses || []} />,
+        <TextField key="employeeId" label="Approver Employee ID" name="employeeId" defaultValue={getParam(searchParams, "employeeId")} />],
     },
     "cargo-summary-report": {
       keys: ["companyNameOrCode", "fromDate", "toDate"],
@@ -1267,19 +1248,26 @@ async function RemainingReportPage({ report, searchParams, reportType }) {
         <SelectField key="cardType" label="QR Pass Type" name="cardType" defaultValue={getParam(searchParams, "cardType")} options={options?.cardTypes || []} />],
     },
     "bulk-pass-report": {
-      keys: ["fromDate", "toDate", "holderType"],
+      keys: ["fromDate", "toDate", "fromTime", "toTime", "holderType"],
       fields: [...commonDate(false),
+        <TextField key="fromTime" label="From Time" name="fromTime" type="time" defaultValue={getParam(searchParams, "fromTime")} />,
+        <TextField key="toTime" label="To Time" name="toTime" type="time" defaultValue={getParam(searchParams, "toTime")} />,
         <SelectField key="holderType" label="Holder Type" name="holderType" defaultValue={getParam(searchParams, "holderType")} options={["Person", "Driver", "Vehicle"]} />],
     },
     "blacklisting-report": {
-      keys: ["fromDate", "toDate", "entityType"],
+      keys: ["fromDate", "toDate", "fromTime", "toTime", "entityType"],
       fields: [...commonDate(false),
+        <TextField key="fromTime" label="From Time" name="fromTime" type="time" defaultValue={getParam(searchParams, "fromTime")} />,
+        <TextField key="toTime" label="To Time" name="toTime" type="time" defaultValue={getParam(searchParams, "toTime")} />,
         <SelectField key="entityType" label="Entity Type" name="entityType" defaultValue={getParam(searchParams, "entityType")} options={["PERSON", "VEHICLE", "DRIVER"]} />],
     },
     "material-movement-report": {
-      keys: ["fromDate", "toDate", "movement"],
+      keys: ["fromDate", "toDate", "fromTime", "toTime", "movement", "status"],
       fields: [...commonDate(false),
-        <SelectField key="movement" label="Movement" name="movement" defaultValue={getParam(searchParams, "movement")} options={["IN", "OUT"]} />],
+        <TextField key="fromTime" label="From Time" name="fromTime" type="time" defaultValue={getParam(searchParams, "fromTime")} />,
+        <TextField key="toTime" label="To Time" name="toTime" type="time" defaultValue={getParam(searchParams, "toTime")} />,
+        <SelectField key="movement" label="Movement" name="movement" defaultValue={getParam(searchParams, "movement")} options={["IN", "OUT"]} />,
+        <SelectField key="status" label="Status" name="status" defaultValue={getParam(searchParams, "status")} options={["Pending", "Approved", "Rejected", "Reverted", "Expired"]} />],
     },
   };
   const config = configurations[reportType];
@@ -1350,7 +1338,7 @@ function RegisteredUsersTable({ rows, startSerial = 1 }) {
   return (
     <div
       id={registeredUsersReportContentId}
-      className="h-full overflow-auto origin-top-left transition-transform"
+      className="report-scroll-area h-full overflow-auto overscroll-contain origin-top-left transition-transform"
     >
       <table className="min-w-full table-fixed text-sm">
         <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800 text-left text-[11px] uppercase tracking-[0.07em] text-stone-400 shadow-sm">
@@ -1398,7 +1386,7 @@ function PassTypeTable({ rows, targetId }) {
   }
 
   return (
-    <div id={targetId} className="h-full overflow-auto origin-top-left transition-transform">
+    <div id={targetId} className="report-scroll-area h-full overflow-auto overscroll-contain origin-top-left transition-transform">
       <table className="min-w-max w-full text-sm">
         <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800 text-left text-xs uppercase tracking-[0.14em] text-stone-400 shadow-sm">
           <tr>
@@ -1407,6 +1395,8 @@ function PassTypeTable({ rows, targetId }) {
             <th className="px-4 py-3">Vehicle/Person</th>
             <th className="px-4 py-3">Pass Type</th>
             <th className="px-4 py-3">Transporter</th>
+            <th className="px-4 py-3">Approver Name</th>
+            <th className="px-4 py-3">Approver Employee ID</th>
             <th className="px-4 py-3">From</th>
             <th className="px-4 py-3">To</th>
             <th className="px-4 py-3">Amount</th>
@@ -1420,6 +1410,8 @@ function PassTypeTable({ rows, targetId }) {
               <td className="px-4 py-3">{row.vehicleOrPersonName || "—"}</td>
               <td className="px-4 py-3">{row.passType || "—"}</td>
               <td className="px-4 py-3">{row.transporterName || row.transporterCode || "—"}</td>
+              <td className="px-4 py-3">{row.approvedBy || "—"}</td>
+              <td className="px-4 py-3">{row.approverEmployeeId || "—"}</td>
               <td className="px-4 py-3 whitespace-nowrap">{formatReportDateTime(row.dateFrom)}</td>
               <td className="px-4 py-3 whitespace-nowrap">{formatReportDateTime(row.dateTo)}</td>
               <td className="px-4 py-3">{row.amount || "0.00"}</td>
@@ -1454,6 +1446,8 @@ async function TypeOfPassIssuedReport({ report, searchParams }) {
     "transporterNameOrCode",
     "passType",
     "passRequestType",
+    "sortOrder",
+    "page",
   ]);
   const reportData = searched
     ? await getJson(`/reports/type-of-pass-issued?${query}`)
@@ -1469,6 +1463,8 @@ async function TypeOfPassIssuedReport({ report, searchParams }) {
     { key: "vehicleOrPersonName", label: "VEHICLE/PERSON" },
     { key: "passType", label: "PASS TYPE" },
     { key: "transporterName", label: "TRANSPORTER" },
+    { key: "approvedBy", label: "APPROVER NAME" },
+    { key: "approverEmployeeId", label: "APPROVER EMPLOYEE ID" },
     { key: "dateFrom", label: "FROM" },
     { key: "dateTo", label: "TO" },
     { key: "date", label: "DATE" },
@@ -1602,6 +1598,7 @@ async function TypeOfPassIssuedReport({ report, searchParams }) {
                 previousHref={buildPageHref(searchParams, Math.max(1, currentPage - 1))}
                 nextHref={buildPageHref(searchParams, Math.min(totalPages, currentPage + 1))}
                 lastHref={buildPageHref(searchParams, totalPages)}
+                currentSortOrder={getParam(searchParams, "sortOrder") || "DESC"}
               />
             </div>
           </div>
@@ -1632,7 +1629,7 @@ function ReportShell({ report, children }) {
         </div>
 
         <Link
-          href="/admin/reports"
+          href={report.backHref || "/admin/reports"}
           className="inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
         >
           ← Back
@@ -1653,11 +1650,13 @@ function ShiftWiseApprovalReport({ report, searchParams }) {
       report={report}
       endpoint="/reports/shift-wise-approval-rejection"
       searchParams={searchParams}
-      filterKeys={["fromDate", "toDate", "employeeName", "employeeId", "shift"]}
+      filterKeys={["fromDate", "toDate", "fromTime", "toTime", "employeeName", "employeeId", "shift"]}
     >
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6 xl:items-end">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5 xl:items-end">
         <TextField label="From Date" name="fromDate" type="date" defaultValue={getParam(searchParams, "fromDate") || from.toISOString().slice(0, 10)} />
         <TextField label="To Date" name="toDate" type="date" defaultValue={getParam(searchParams, "toDate") || now.toISOString().slice(0, 10)} />
+        <TextField label="From Time" name="fromTime" type="time" defaultValue={getParam(searchParams, "fromTime")} />
+        <TextField label="To Time" name="toTime" type="time" defaultValue={getParam(searchParams, "toTime")} />
         <TextField label="Employee Name" name="employeeName" defaultValue={getParam(searchParams, "employeeName")} />
         <TextField label="Employee ID" name="employeeId" defaultValue={getParam(searchParams, "employeeId")} />
         <SelectField label="Shift" name="shift" defaultValue={getParam(searchParams, "shift")} options={["Shift 1", "Shift 2", "Shift 3"]} />
@@ -1668,12 +1667,23 @@ function ShiftWiseApprovalReport({ report, searchParams }) {
 }
 
 function VehicleMasterReport({ report, searchParams }) {
+  const advancedKeys = [
+    "fromTime", "toTime", "vehicleType", "companyNameOrCode",
+    "insuranceExpiryFrom", "insuranceExpiryTo", "rcExpiryFrom", "rcExpiryTo",
+    "hasRcCopy",
+  ];
+  const hasAdvancedFilters = hasAnySearch(searchParams, advancedKeys);
+
   return (
     <SimpleFilterReport
       report={report}
       endpoint="/reports/vehicle-master"
       searchParams={searchParams}
       filterKeys={[
+        "fromDate",
+        "toDate",
+        "fromTime",
+        "toTime",
         "vehicleNo",
         "vehicleType",
         "companyNameOrCode",
@@ -1686,29 +1696,39 @@ function VehicleMasterReport({ report, searchParams }) {
       ]}
     >
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5 xl:items-end">
+        <TextField label="From Date" name="fromDate" type="date" defaultValue={getParam(searchParams, "fromDate")} />
+        <TextField label="To Date" name="toDate" type="date" defaultValue={getParam(searchParams, "toDate")} />
         <TextField label="Vehicle Number" name="vehicleNo" placeholder="Registration number" defaultValue={getParam(searchParams, "vehicleNo")} />
-        <TextField label="Vehicle Type" name="vehicleType" placeholder="Car, truck, trailer..." defaultValue={getParam(searchParams, "vehicleType")} />
-        <TextField label="Company Code / Name" name="companyNameOrCode" defaultValue={getParam(searchParams, "companyNameOrCode")} />
-        <TextField label="Insurance Expiry From" name="insuranceExpiryFrom" type="date" defaultValue={getParam(searchParams, "insuranceExpiryFrom")} />
-        <TextField label="Insurance Expiry To" name="insuranceExpiryTo" type="date" defaultValue={getParam(searchParams, "insuranceExpiryTo")} />
-        <TextField label="RC Expiry From" name="rcExpiryFrom" type="date" defaultValue={getParam(searchParams, "rcExpiryFrom")} />
-        <TextField label="RC Expiry To" name="rcExpiryTo" type="date" defaultValue={getParam(searchParams, "rcExpiryTo")} />
-        <SelectField label="RC Copy" name="hasRcCopy" defaultValue={getParam(searchParams, "hasRcCopy")} options={[{ value: "yes", label: "Available" }, { value: "no", label: "Not Available" }]} />
         <SelectField label="Vehicle Status" name="status" defaultValue={getParam(searchParams, "status")} options={[{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }]} />
         <div className="flex items-end"><SearchButtonRow /></div>
       </div>
+      <details open={hasAdvancedFilters} className="group mt-3">
+        <summary className="w-fit cursor-pointer select-none text-sm font-semibold text-amber-600 hover:text-amber-500 dark:text-amber-400">More filters</summary>
+        <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 md:grid-cols-2 xl:grid-cols-5 dark:border-slate-700">
+          <TextField label="From Time" name="fromTime" type="time" defaultValue={getParam(searchParams, "fromTime")} />
+          <TextField label="To Time" name="toTime" type="time" defaultValue={getParam(searchParams, "toTime")} />
+          <TextField label="Vehicle Type" name="vehicleType" placeholder="Car, truck, trailer..." defaultValue={getParam(searchParams, "vehicleType")} />
+          <TextField label="Company Code / Name" name="companyNameOrCode" defaultValue={getParam(searchParams, "companyNameOrCode")} />
+          <TextField label="Insurance Expiry From" name="insuranceExpiryFrom" type="date" defaultValue={getParam(searchParams, "insuranceExpiryFrom")} />
+          <TextField label="Insurance Expiry To" name="insuranceExpiryTo" type="date" defaultValue={getParam(searchParams, "insuranceExpiryTo")} />
+          <TextField label="RC Expiry From" name="rcExpiryFrom" type="date" defaultValue={getParam(searchParams, "rcExpiryFrom")} />
+          <TextField label="RC Expiry To" name="rcExpiryTo" type="date" defaultValue={getParam(searchParams, "rcExpiryTo")} />
+          <SelectField label="RC Copy" name="hasRcCopy" defaultValue={getParam(searchParams, "hasRcCopy")} options={[{ value: "yes", label: "Available" }, { value: "no", label: "Not Available" }]} />
+        </div>
+      </details>
     </SimpleFilterReport>
   );
 }
 
-export default async function ReportPage({ params, searchParams }) {
+export async function renderReportPage({ params, searchParams }, backHref = "/admin/reports") {
   const { reportType } = await params;
   const resolvedSearchParams = await searchParams;
-  const report = getReport(reportType);
+  const configuredReport = getReport(reportType);
 
-  if (!report) {
+  if (!configuredReport) {
     notFound();
   }
+  const report = { ...configuredReport, backHref };
 
   if (!report.implemented) {
     return <ComingSoonReport report={report} />;
@@ -1813,7 +1833,7 @@ export default async function ReportPage({ params, searchParams }) {
   }
 
   const companyTypes = await getCompanyTypesFromReportOptions();
-  const query = buildQuery(resolvedSearchParams, ["companyCode", "companyType", "find", "page"]);
+  const query = buildQuery(resolvedSearchParams, ["companyCode", "companyType", "find", "sortOrder", "page"]);
   const searched = hasAnySearch(resolvedSearchParams, ["companyCode", "companyType", "find"]);
   const reportData = searched
     ? await getJson(`/reports/registered-users?${query}`)
@@ -1909,6 +1929,7 @@ export default async function ReportPage({ params, searchParams }) {
                   Math.min(totalPages, currentPage + 1),
                 )}
                 lastHref={buildPageHref(resolvedSearchParams, totalPages)}
+                currentSortOrder={getParam(resolvedSearchParams, "sortOrder") || "DESC"}
               />
             </div>
           </div>
@@ -1921,4 +1942,8 @@ export default async function ReportPage({ params, searchParams }) {
       </section>
     </ReportShell>
   );
+}
+
+export default async function ReportPage(props) {
+  return renderReportPage(props);
 }
