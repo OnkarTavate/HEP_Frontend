@@ -289,6 +289,7 @@ export default function MarineLayout({ children }) {
 
   const navigationItems = [
     { name: "Pass Approvals", href: "/marine_approval", icon: FileText },
+    { name: "Material Approvals", href: "/marine_approval/material-pass", icon: FileText},
   ];
 
   const SidebarContent = ({ onNavigate, expanded = sidebarExpanded, showCollapseToggle = true }) => (

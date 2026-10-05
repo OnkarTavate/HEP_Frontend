@@ -22,7 +22,7 @@ import {
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 
-export default function SubmittedPassesSection() {
+export default function SubmittedPassesSection({ isActive }) {
   const [submittedPasses, setSubmittedPasses] = useState([]);
   const [loadingPasses, setLoadingPasses] = useState(true);
   const [selectedPassDetails, setSelectedPassDetails] = useState(null);
@@ -138,6 +138,13 @@ export default function SubmittedPassesSection() {
 		fetchSubmittedPasses(hasMountedRef.current); // false on first run → loader shows
 		hasMountedRef.current = true;                // every run after → silent
 	}, [fetchSubmittedPasses]);
+
+   // Fresh fetch every time this tab is actually switched into.
+  useEffect(() => {
+    if (isActive) {
+      fetchSubmittedPasses(false); // false = show loader, since user just navigated here
+    }
+  }, [isActive]);
 
 
   const returnableMaterials = selectedPassDetails?.returnablePass?.materials || [];
@@ -318,6 +325,7 @@ export default function SubmittedPassesSection() {
                   const createdAtStr = pass.submittedAt || pass.createdAt;
                   const currentStatus = (pass.status || "PENDING").toUpperCase();
                   const isCompleted = currentStatus === "COMPLETED";
+                  const displayStatus = pass.isResubmitted ? "RESUBMITTED" : currentStatus;
 
                   const passList = [pass.returnablePass, pass.nonReturnablePass].filter(Boolean);
 
@@ -366,11 +374,12 @@ export default function SubmittedPassesSection() {
                       </td>
                       <td className="px-6 py-4 text-center border-r border-slate-100">
                         <span className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                           currentStatus === "SUBMITTED" ? "bg-blue-50 text-blue-700 border border-blue-200"
+                           pass.isResubmitted ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                          : currentStatus === "SUBMITTED" ? "bg-blue-50 text-blue-700 border border-blue-200"
                           : isCompleted ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                           : "bg-amber-50 text-amber-700 border border-amber-200"
                         }`}>
-                          {currentStatus}
+                          {displayStatus}
                         </span>
                       </td>                      
                     </tr>

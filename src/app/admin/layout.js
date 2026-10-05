@@ -642,6 +642,11 @@ export default function AdminLayout({ children }) {
       href: "/admin/material-pass",
       icon: FileText,
     }] : []),
+    ...(!isSafetyOfficer ? [{
+      name: "Vendor Material Permit",
+      href: "/admin/vendor-material-pass",
+      icon: FileText,
+    }] : []),
     ...((!isSafetyOfficer && !isDepartmental) || isAdmin ? [{ name: "All Passes", href: "/admin/all-passes", icon: FileText }] : []),
     ...(!isSafetyOfficer ? [{ name: "Bulk Pass", href: "/admin/bulk_pass", icon: Users }] : []),
     ...(isAdmin

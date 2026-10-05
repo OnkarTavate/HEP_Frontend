@@ -47,8 +47,31 @@ const getTodayString = () => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+const validateFile = (file, type = "pdf") => {
+  if (!file) return "No file selected";
 
-export default function MaterialPassApplySection({getLabelById}) {
+  const allowedTypes = { pdf: ["application/pdf"] };
+  const maxSize = 1 * 1024 * 1024; // 1MB
+
+  if (!allowedTypes[type].includes(file.type)) {
+    return "Only PDF files are allowed";
+  }
+  if (file.size > maxSize) {
+    return "File size must be less than 1MB";
+  }
+  return null;
+};
+
+const ALLOWED_DEPARTMENTS = {
+	"Traffic": "Traffic",
+	"Marine": "Marine",
+	"Engineering Civil": "Civil",
+	"Engineering Mechanical": "Mechanical",
+	"Finance": "Finance",
+	"General Administration": "General Administration",
+};
+
+export default function MaterialPassApplySection({ getLabelById, onSubmitSuccess }) {
     const [agreedToTerms, setAgreedToTerms] = useState(false);
 		const [loading, setLoading] = useState(false);
 		const [profileLoading, setProfileLoading] = useState(true);
@@ -60,14 +83,16 @@ export default function MaterialPassApplySection({getLabelById}) {
 			companyName: "",
 			email: "",
 			mobile: "",
-			balance: "7725.00", // Keep mock for now if wallet isn't built
+			balance: "7725.00",
 			utilizedBalance: "0.00",
 			purpose: null,
 			purposeOther: "",
 			concernedDepartment: null,
 			location: null,
 			locationOther: "",
-			entryDate: null
+			entryDate: null,
+			requisitionLetter: null, // NEW
+			workOrder: null,         // NEW
 		});
 
 		const [masterData, setMasterData] = useState({
@@ -165,6 +190,9 @@ export default function MaterialPassApplySection({getLabelById}) {
 
 		const handleSubmitRequest = async () => {
 
+			if (!generalForm.requisitionLetter)
+				return toast.warning("Please upload the Requisition Letter.");
+
 			if (!agreedToTerms)
 				return toast.warning("Please agree to the Terms and Conditions.");
 
@@ -181,64 +209,68 @@ export default function MaterialPassApplySection({getLabelById}) {
 
 			if (!result.success) {
 				console.log(result.error.flatten());
-
 				toast.warning(result.error.issues[0].message);
-
 				console.log(result.error.issues);
-
 				return;
 			}
-			
-			const payload = result.data
+
+			const payload = result.data;
 			console.log(payload);
 
 			try {
 				setLoading(true);
 				const token = localStorage.getItem("accessToken");
-				const config = { 
-					headers: { 
-						Authorization: `Bearer ${token}`,
-						"Content-Type": "application/json",
-					 },
+
+				const formData = new FormData();
+				formData.append("payload", JSON.stringify(payload));
+				formData.append("materialPassRequisitionLetter", generalForm.requisitionLetter);
+				if (generalForm.workOrder) {
+				formData.append("materialPassWorkOrder", generalForm.workOrder);
+				}
+
+				const config = {
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
 				};
 
 				const response = await axios.post(
-					`${AGENT_API}/material-pass/createRegularMaterialPassRequest`,
-					payload,
-					config
-				)
+				`${AGENT_API}/material-pass/createRegularMaterialPassRequest`,
+				formData,
+				config
+				);
 
 				toast.success(response.data.message);
 
 				setGeneralForm((prev) => ({
-						...prev,
-						purpose: null,
-						purposeOther: "",
-						concernedDepartment: null,
-						location: null,
-						locationOther: "",
-						entryDate: null
+				...prev,
+				purpose: null,
+				purposeOther: "",
+				concernedDepartment: null,
+				location: null,
+				locationOther: "",
+				entryDate: null,
+				requisitionLetter: null,
+				workOrder: null,
 				}));
 
 				setReturnables([]);
 				setNonReturnables([]);
 				setAgreedToTerms(false);
-				
+
 				console.log(response.data);
-				
+				onSubmitSuccess?.();
+
 			} catch (error) {
-
 				console.error(error);
-
 				toast.error(
-					error?.response?.data?.message ||
-					"Failed to submit material pass request."
+				error?.response?.data?.message ||
+				"Failed to submit material pass request."
 				);
 			} finally {
 				setLoading(false);
 			}
-
-		}
+			};
 
 		const inputClass =
 			"w-full h-10 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm bg-white outline-none transition-all";
@@ -346,11 +378,13 @@ export default function MaterialPassApplySection({getLabelById}) {
 									className={inputClass}
 								>
 									<option value="">Select Department</option>
-									{masterData.departments.map((d) => (
-										<option key={d.id} value={d.id}>
-											{d.departmentName}
-										</option>
-									))}
+									{masterData.departments
+										.filter((d) => ALLOWED_DEPARTMENTS.hasOwnProperty(d.departmentName))
+										.map((d) => (
+											<option key={d.id} value={d.id}>
+												{ALLOWED_DEPARTMENTS[d.departmentName]}
+											</option>
+										))}
 								</select>
 							</div>
 							<div className="space-y-1.5">
@@ -405,6 +439,63 @@ export default function MaterialPassApplySection({getLabelById}) {
 									min={getTodayString()}
 								/>
 							</div>
+							<div className="space-y-1.5">
+								<label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+									Requisition Letter <span className="text-red-500">*</span>
+								</label>
+								<label className="w-full h-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-lg px-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors group">
+									<Upload className="h-4 w-4 text-slate-400 group-hover:text-orange-500" />
+									<span className="text-sm text-slate-600 font-medium truncate group-hover:text-orange-600">
+									{generalForm.requisitionLetter
+										? generalForm.requisitionLetter.name
+										: "Upload PDF (Max 1MB)"}
+									</span>
+									<input
+									className="hidden"
+									type="file"
+									accept="application/pdf"
+									onChange={(e) => {
+										const file = e.target.files[0];
+										const error = validateFile(file, "pdf");
+										if (error) {
+										toast.error(error);
+										e.target.value = "";
+										return;
+										}
+										setGeneralForm({ ...generalForm, requisitionLetter: file });
+									}}
+									/>
+								</label>
+								</div>
+
+								<div className="space-y-1.5">
+								<label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+									Work Order <span className="text-slate-400 font-medium normal-case">(optional)</span>
+								</label>
+								<label className="w-full h-10 border-2 border-dashed border-slate-300 bg-slate-50 rounded-lg px-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors group">
+									<Upload className="h-4 w-4 text-slate-400 group-hover:text-orange-500" />
+									<span className="text-sm text-slate-600 font-medium truncate group-hover:text-orange-600">
+									{generalForm.workOrder
+										? generalForm.workOrder.name
+										: "Upload PDF (Max 1MB)"}
+									</span>
+									<input
+									className="hidden"
+									type="file"
+									accept="application/pdf"
+									onChange={(e) => {
+										const file = e.target.files[0];
+										const error = validateFile(file, "pdf");
+										if (error) {
+										toast.error(error);
+										e.target.value = "";
+										return;
+										}
+										setGeneralForm({ ...generalForm, workOrder: file });
+									}}
+									/>
+								</label>
+								</div>
 						</div>
 					</div>
 				</section>

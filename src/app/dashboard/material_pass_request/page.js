@@ -60,7 +60,10 @@ export default function MaterialPassRequestPage() {
 			</div>
 
 			<div style={{ display: activeTab === "apply" ? "block" : "none" }}>
-				<MaterialPassApplySection getLabelById={getLabelById} />
+				<MaterialPassApplySection
+					getLabelById={getLabelById}
+					onSubmitSuccess={() => setActiveTab("view")}
+				/>
 			</div>
 
 			{/* <div style={{ display: activeTab === "reverted" ? "block" : "none" }}>
@@ -68,7 +71,7 @@ export default function MaterialPassRequestPage() {
 			</div> */}
 
 			<div style={{ display: activeTab === "view" ? "block" : "none" }}>
-				<SubmittedPassesSection />
+				<SubmittedPassesSection isActive={activeTab === "view"} />
 			</div>
 
 			{/* <div style={{ display: activeTab === "returnableInventory" ? "block" : "none" }}>

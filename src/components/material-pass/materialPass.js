@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import PaginationBar from "@/components/ui/PaginationBar";
 import axios from "axios";
 import { toast } from "sonner";
@@ -24,6 +24,10 @@ import {
   CornerUpLeft,
   Pencil,
   Eye,
+  FileText,
+  FileCheck2,
+  Maximize,
+  Minimize,
 } from "lucide-react";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
@@ -51,6 +55,23 @@ const PASS_TYPE_META = {
     icon: Package,
   },
 };
+
+// --- Request-level status → badge styling (request status is only ever
+// SUBMITTED or COMPLETED; RESUBMITTED overrides both when isResubmitted is true) ---
+const getOverallStatusBadgeClass = (status, isResubmitted) => {
+  if (isResubmitted) {
+    return "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/20";
+  }
+  const key = (status || "").toLowerCase();
+  if (key === "completed") {
+    return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20";
+  }
+  // default / "submitted"
+  return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+};
+
+const getOverallStatusLabel = (status, isResubmitted) =>
+  isResubmitted ? "RESUBMITTED" : (status || "SUBMITTED").toUpperCase();
 
 const STATUS_STYLES = {
   APPROVED: {
@@ -81,88 +102,319 @@ const STATUS_STYLES = {
 
 const REVIEWED_STATUSES = ["APPROVED", "REJECTED", "REVERTED"];
 
-// --- One card per pass type: expanded (needs review) or collapsed (decided) ---
-function MaterialPassCard({
-  meta,
-  pass,
+const MAX_VISIBLE_ITEM_ROWS = 5;
+
+function MaterialItemRow({ item, state, isViewMode, isLocked, onQtyChange, onToggle, onRemarksChange, index, showValidation }) {
+  const safeState = state || { approvedQty: item.quantity, approved: true, remarks: "" };
+  const numericApprovedQty =
+    safeState.approvedQty === "" || safeState.approvedQty === null || safeState.approvedQty === undefined
+      ? 0
+      : Number(safeState.approvedQty);
+
+  // Only block turning it ON when there's no qty; unchecking is always allowed
+  const disabledToggle = isViewMode || isLocked;
+  const [remarksExpanded, setRemarksExpanded] = useState(false);
+
+  const REMARK_TRUNCATE_LEN = 40;
+  const remarkText = safeState.remarks || "";
+  const isRemarkLong = remarkText.length > REMARK_TRUNCATE_LEN;
+
+  // null/undefined approvedQty means "not applicable" — reverted/rejected
+  // passes never had item-level data evaluated in the first place.
+  const qtyApplicable = safeState.approvedQty !== null && safeState.approvedQty !== undefined;
+
+  // Treat "Others" units as not worth displaying, without collapsing the space
+  const isOtherUnit = (unit) => (unit || "").trim().toLowerCase() === "others";
+
+  const requestedQty = safeState.requestedQty ?? item.quantity;
+
+  const itemError = !safeState.approved
+    ? null
+    : safeState.approvedQty === "" || safeState.approvedQty === null || safeState.approvedQty === undefined
+      ? "Invalid approved qty"
+      : numericApprovedQty === 0
+        ? "Approved qty cannot be 0"
+        : numericApprovedQty > requestedQty
+          ? "Approved qty exceeds requested qty"
+          : null;
+
+  return (
+    <tr className={safeState.approved ? "bg-white" : "bg-gray-100/70"}>
+      <td className="p-3 align-top text-xs font-mono font-bold text-slate-500">
+        {String(index + 1).padStart(2, "0")}
+      </td>
+
+      {/* Item name + description — description line always reserves its height */}
+      <td className="p-3 align-top">
+        <p className="text-sm font-bold text-[#0a1e4d] break-words">{item.name}</p>
+        <p className="text-xs text-slate-500 break-words mt-0.5 invisible-if-empty">
+          {item.description || "\u00A0"}
+        </p>
+      </td>
+
+      {/* Requested qty — unit hidden (not removed) when "Others" */}
+      <td className="p-3 align-top whitespace-nowrap">
+        <span className="text-sm font-black text-[#0a1e4d] tabular-nums">{item.quantity}</span>
+        <span className={`text-xs font-semibold text-slate-500 uppercase ml-1 ${isOtherUnit(item.unit) ? "invisible" : ""}`}>
+          {item.unit}
+        </span>
+      </td>
+
+      {/* Approved Qty */}
+      <td className="p-3 align-top">
+        {isViewMode ? (
+          qtyApplicable ? (
+            <>
+              <span
+                className={`text-sm font-black tabular-nums ${
+                  safeState.approved ? "text-emerald-700" : "text-slate-400"
+                }`}
+              >
+                {safeState.approvedQty}
+              </span>
+              {/* <span className={`text-xs font-semibold text-slate-500 uppercase ml-1 ${isOtherUnit(item.unit) ? "invisible" : ""}`}>
+                {item.unit}
+              </span> */}
+            </>
+          ) : (
+            <span className="text-sm font-black text-slate-300">—</span>
+          )
+        ) : (
+          <>
+            <div
+              className={`flex items-center border rounded-lg overflow-hidden w-fit ${
+                safeState.approved
+                  ? "border-slate-200 bg-white"
+                  : "border-slate-200 bg-slate-100"
+              }`}
+            >
+              <button
+                type="button"
+                disabled={isLocked || numericApprovedQty <= 0}
+                onClick={() => onQtyChange(String(Math.max(0, numericApprovedQty - 1)))}
+                className={`h-8 w-7 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed ${
+                  safeState.approved
+                    ? "text-slate-500 hover:bg-slate-50"
+                    : "text-slate-300 hover:bg-slate-200"
+                }`}
+              >
+                −
+              </button>
+
+              <input
+                type="number"
+                min={0}
+                value={safeState.approvedQty}
+                disabled={isLocked}
+                onChange={(e) => onQtyChange(e.target.value)}
+                className={`w-12 h-8 text-center text-sm font-bold outline-none disabled:bg-slate-50 disabled:text-slate-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                  safeState.approved
+                    ? "text-slate-800 bg-white"
+                    : "text-slate-300 bg-slate-100"
+                }`}
+              />
+
+              <button
+                type="button"
+                disabled={isLocked}
+                onClick={() => onQtyChange(String(numericApprovedQty + 1))}
+                className={`h-8 w-7 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed ${
+                  safeState.approved
+                    ? "text-slate-500 hover:bg-slate-50"
+                    : "text-slate-300 hover:bg-slate-200"
+                }`}
+              >
+                +
+              </button>
+            </div>
+            {itemError && (
+              <p className="text-[10px] font-semibold text-red-500 mt-1">{itemError}</p>
+            )}
+          </>
+        )}
+      </td>
+
+      {/* Remarks — plain yellow text, no background, subtle show more */}
+      <td className="p-3 align-top">
+        {isViewMode ? (
+          remarkText ? (
+            remarksExpanded ? (
+              <div className="text-xs text-amber-600 font-medium leading-snug">
+                <span className="whitespace-normal break-words">{remarkText}</span>
+                {isRemarkLong && (
+                  <button
+                    onClick={() => setRemarksExpanded(false)}
+                    className="ml-1.5 text-[10px] text-slate-400 hover:text-slate-600 font-normal align-baseline"
+                  >
+                    show less
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-baseline gap-1.5 min-w-0">
+                <span className="text-xs text-amber-600 font-medium truncate">{remarkText}</span>
+                {isRemarkLong && (
+                  <button
+                    onClick={() => setRemarksExpanded(true)}
+                    className="shrink-0 text-[10px] text-slate-400 hover:text-slate-600 font-normal"
+                  >
+                    show more
+                  </button>
+                )}
+              </div>
+            )
+          ) : (
+            <span className="text-xs text-slate-400 italic">—</span>
+          )
+        ) : (
+          <input
+            type="text"
+            value={safeState.remarks}
+            disabled={isLocked}
+            onChange={(e) => onRemarksChange(e.target.value)}
+            placeholder="Optional remarks (rejection reason / reduced qty note)..."
+            className="w-full h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 outline-none disabled:bg-slate-50"
+          />
+        )}
+      </td>
+
+      {/* Approve — dash when not applicable, colored icon otherwise */}
+      <td className="p-3 align-top text-center">
+        {isViewMode ? (
+          !qtyApplicable ? (
+            <span className="text-sm font-black text-slate-300">—</span>
+          ) : safeState.approved ? (
+            <span className="inline-flex items-center gap-1 text-emerald-600 font-bold text-[11px]">
+              <CheckCircle2 className="h-4 w-4" />
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-red-500 font-bold text-[11px]">
+              <XCircle className="h-4 w-4" />
+            </span>
+          )
+        ) : (
+          <input
+            type="checkbox"
+            checked={safeState.approved}
+            disabled={disabledToggle}
+            onChange={onToggle}
+            title={
+              safeState.approvedQty === 0
+                ? "Approved qty is 0 — cannot approve this item"
+                : safeState.approved
+                  ? "Approved"
+                  : "Not approved"
+            }
+            className="h-5 w-5 rounded border-2 border-slate-300 text-emerald-600 accent-emerald-600 focus:ring-2 focus:ring-emerald-500/30 cursor-pointer disabled:cursor-not-allowed"
+          />
+        )}
+      </td>
+    </tr>
+  );
+}
+
+// --- Table shell: fixed columns so nothing shifts regardless of state ---
+function MaterialItemsTable({
+  materials,
   decision,
   isViewMode,
-  onDecision,
-  onRemarksChange,
-  onReopen,
-  cardRef,
+  isLocked,
+  passKey,
+  onItemQtyChange,
+  onItemToggle,
+  onItemRemarksChange,
+  showValidation,
 }) {
+  const isScrollable = materials.length > MAX_VISIBLE_ITEM_ROWS;
+
+  return (
+    <div className={`overflow-x-auto ${isScrollable ? "max-h-[340px] overflow-y-auto" : ""}`}>
+      <table className="w-full table-fixed text-left text-sm min-w-[760px]">
+        <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+          <tr>
+            <th className="w-12 p-3 font-semibold text-slate-600 uppercase text-xs">S.No.</th>
+            <th className="w-[30%] p-3 font-semibold text-slate-600 uppercase text-xs">Item</th>
+            <th className="w-24 p-3 font-semibold text-slate-600 uppercase text-xs">Requested</th>
+            <th className="w-32 p-3 font-semibold text-slate-600 uppercase text-xs">Approved Qty</th>
+            <th className="w-[28%] p-3 font-semibold text-slate-600 uppercase text-xs">Remarks</th>
+            <th className="w-20 p-3 font-semibold text-slate-600 uppercase text-xs text-center">Action</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {materials.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="p-4 text-center text-sm text-slate-400 italic">
+                No materials listed.
+              </td>
+            </tr>
+          ) : (
+            materials.map((item, index) => (
+              <MaterialItemRow
+                key={item.id}
+                index={index}
+                item={item}
+                state={decision.items[item.id]}
+                isViewMode={isViewMode}
+                isLocked={isLocked}
+                onQtyChange={(v) => onItemQtyChange(passKey, item.id, v)}
+                onToggle={() => onItemToggle(passKey, item.id)}
+                onRemarksChange={(v) => onItemRemarksChange(passKey, item.id, v)}
+                showValidation={showValidation}
+              />
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// --- Compact, always-visible row for a pass type inside the request modal.
+// Clicking it (or its action button) opens the full material review in a
+// separate modal stacked on top — it never expands inline. ---
+function MaterialPassRow({ meta, pass, decision, isViewMode, onOpen }) {
   const Icon = meta.icon;
   const materials = pass?.materials || [];
-  const isDecided = REVIEWED_STATUSES.includes(
-    (decision.status || "").toUpperCase()
-  );
+  const isDecided = REVIEWED_STATUSES.includes((decision.status || "").toUpperCase());
   const style = isDecided ? STATUS_STYLES[decision.status] : null;
+  const StatusIcon = style?.icon;
 
-  // --- Collapsed summary strip (decided pass, or view mode default) ---
-  if (decision.collapsed) {
-    const StatusIcon = style.icon;
-    return (
-      <div
-        ref={cardRef}
-        className={`bg-white rounded-xl border ${style.border} border-l-4 ${style.bar.replace(
-          "bg-",
-          "border-l-",
-        )} shadow-sm flex items-center justify-between px-5 py-4 mb-3 transition-all duration-200`}
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <Icon className="h-5 w-5 text-slate-400 shrink-0" />
-          <div className="min-w-0">
-            <div className="text-sm font-bold text-[#0a1e4d] truncate">
-              {meta.label}
-            </div>
-            <div className="text-xs text-slate-500">
-              {materials.length} item{materials.length === 1 ? "" : "s"}
-              {decision.remarks ? " · has remarks" : ""}
-            </div>
+  const actionLabel = isViewMode ? "View details" : isDecided ? "Re-verify" : "Review";
+  const ActionIcon = isViewMode ? Eye : Pencil;
+
+  return (
+    <div
+      onClick={() => onOpen(meta.key)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(meta.key);
+        }
+      }}
+      className={`bg-white rounded-xl border ${
+        style ? `${style.border} border-l-4 ${style.bar.replace("bg-", "border-l-")}` : "border-slate-200 border-l-4 border-l-slate-300"
+      } shadow-sm flex items-center justify-between px-5 py-4 mb-3 transition-all duration-200 cursor-pointer hover:bg-slate-50 hover:shadow-md`}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <Icon className="h-5 w-5 text-slate-400 shrink-0" />
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-[#0a1e4d] truncate">
+            {meta.label}
+          </div>
+          <div className="text-xs text-slate-500">
+            {materials.length} item{materials.length === 1 ? "" : "s"}
+            {decision.remarks ? " · has remarks" : ""}
           </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        {isDecided ? (
           <span
             className={`px-3 py-1 rounded-full text-[11px] font-bold border flex items-center gap-1 ${style.badge}`}
           >
             <StatusIcon className="h-3.5 w-3.5" />
-            {decision.status}
-          </span>
-          <button
-            onClick={() => onReopen(meta.key)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            {isViewMode ? (
-              <>
-                <Eye className="h-3.5 w-3.5" /> View details
-              </>
-            ) : (
-              <>
-                <Pencil className="h-3.5 w-3.5" /> Re-verify
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // --- Expanded card: full materials table + remarks + decision buttons ---
-  return (
-    <div
-      ref={cardRef}
-      className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-3"
-    >
-      <div className="px-5 py-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
-        <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest flex items-center gap-2">
-          <Icon className="h-4 w-4" />
-          {meta.label}
-        </h4>
-        {isDecided ? (
-          <span
-            className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${style.badge}`}
-          >
             {decision.status}
           </span>
         ) : (
@@ -170,72 +422,156 @@ function MaterialPassCard({
             Not reviewed
           </span>
         )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(meta.key);
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+          <ActionIcon className="h-3.5 w-3.5" /> {actionLabel}
+        </button>
       </div>
+    </div>
+  );
+}
 
-      <table className="w-full text-left text-sm">
-        <thead className="bg-slate-50 border-b border-slate-200">
-          <tr>
-            <th className="p-3 font-semibold text-slate-600 uppercase text-xs">S.No.</th>
-            <th className="p-3 font-semibold text-slate-600 uppercase text-xs">Item Name</th>
-            <th className="p-3 font-semibold text-slate-600 uppercase text-xs">Quantity</th>
-            <th className="p-3 font-semibold text-slate-600 uppercase text-xs">Unit</th>
-            <th className="p-3 font-semibold text-slate-600 uppercase text-xs">Description</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {materials.map((item, index) => (
-            <tr key={index}>
-              <td className="p-3 text-slate-800 font-mono font-bold text-xs">{index + 1}</td>
-              <td className="p-3 font-bold text-[#0a1e4d]">{item.name}</td>
-              <td className="p-3 text-slate-600 font-mono text-xs">{item.quantity}</td>
-              <td className="p-3 text-slate-800 font-mono font-bold text-xs">{item.unit}</td>
-              <td className="p-3 text-slate-600">{item.description || "-"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+// --- Secondary modal: opened on top of the request modal when a pass row is
+// clicked. Contains the full materials table, remarks, and decision actions. ---
+function MaterialPassDetailModal({
+  meta,
+  pass,
+  decision,
+  isViewMode,
+  onClose,
+  onDecision,
+  onRemarksChange,
+  onItemQtyChange,
+  onItemToggle,
+  onItemRemarksChange,
+}) {
+  if (!meta) return null;
 
-      {(!isViewMode || ["Rejected", "Reverted"].includes(pass?.status)) && (
-        <div className="bg-orange-50 p-5 border-t border-orange-100">
-          <label className="block text-xs font-bold text-orange-900 uppercase tracking-wider mb-2">
-            {isViewMode
-              ? "Authority remarks"
-              : "Authority remarks (required for reject or revert)"}
-          </label>
+  const Icon = meta.icon;
+  const materials = pass?.materials || [];
+  const isDecided = REVIEWED_STATUSES.includes((decision.status || "").toUpperCase());
+  const style = isDecided ? STATUS_STYLES[decision.status] : null;
 
-          <textarea
-            value={decision.remarks || ""}
-            onChange={(e) => onRemarksChange(meta.key, e.target.value)}
-            disabled={isViewMode}
-            rows={3}
-            className="w-full border border-orange-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
-            placeholder="Enter authority remarks..."
+  // Live validity check for the Approve action: every checked item must have
+  // a real, non-zero, not-over-requested qty, and at least one must be checked.
+  const approvedEntries = Object.values(decision.items || {}).filter((it) => it.approved);
+  const hasInvalidApprovedItem = approvedEntries.some((it) => {
+    if (it.approvedQty === "" || it.approvedQty === null || it.approvedQty === undefined) return true;
+    const q = Number(it.approvedQty);
+    if (q === 0) return true;
+    if (q > it.requestedQty) return true;
+    return false;
+  });
+  const approveDisabled = approvedEntries.length === 0 || hasInvalidApprovedItem;
+
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[88vh] overflow-hidden border border-slate-200">
+        {/* Header */}
+        <div className="flex justify-between items-center gap-2 px-4 sm:px-6 py-4 bg-[#0a1e4d] text-white shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-orange-500 shrink-0" />
+            <h2 className="text-base sm:text-xl font-bold tracking-wide truncate">
+              {isViewMode ? "View" : "Review"}: {meta.label}
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-white/70 hover:text-white p-2 shrink-0"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Sub-header: item count + status */}
+        <div className="px-5 py-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between shrink-0">
+          <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest flex items-center gap-2">
+            <Icon className="h-4 w-4" />
+            {materials.length} item{materials.length === 1 ? "" : "s"}
+          </h4>
+          {isDecided ? (
+            <span
+              className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${style.badge}`}
+            >
+              {decision.status}
+            </span>
+          ) : (
+            <span className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+              Not reviewed
+            </span>
+          )}
+        </div>
+
+        {/* Scrollable body: table + remarks */}
+        <div className="overflow-y-auto flex-1">
+          <MaterialItemsTable
+            materials={materials}
+            decision={decision}
+            isViewMode={isViewMode}
+            isLocked={isDecided}
+            passKey={meta.key}
+            onItemQtyChange={onItemQtyChange}
+            onItemToggle={onItemToggle}
+            onItemRemarksChange={onItemRemarksChange}
+            showValidation={decision.validationAttempted}
           />
-        </div>
-      )}
 
-      {!isViewMode && (
-        <div className="flex justify-end gap-3 p-5 border-t border-slate-200 bg-white">
-          <button
-            onClick={() => onDecision(meta.key, "REJECTED")}
-            className="px-6 py-3 rounded-xl font-bold flex items-center gap-2 border bg-red-50 text-red-600 border-red-200 hover:bg-red-100 transition-colors"
-          >
-            <XCircle className="h-5 w-5" /> Reject
-          </button>
-          <button
-            onClick={() => onDecision(meta.key, "REVERTED")}
-            className="px-6 py-3 rounded-xl font-bold flex items-center gap-2 border bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200 transition-colors"
-          >
-            <CornerUpLeft className="h-5 w-5" /> Revert
-          </button>
-          <button
-            onClick={() => onDecision(meta.key, "APPROVED")}
-            className="px-6 py-3 rounded-xl font-bold flex items-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
-          >
-            <CheckCircle2 className="h-5 w-5" /> Approve
-          </button>
+          {(!isViewMode || ["Rejected", "Reverted"].includes(pass?.status)) && (
+            <div className="bg-orange-50 p-5 border-t border-orange-100">
+              <label className="block text-xs font-bold text-orange-900 uppercase tracking-wider mb-2">
+                {isViewMode
+                  ? "Authority remarks"
+                  : "Authority remarks (required for reject or revert)"}
+              </label>
+
+              <textarea
+                value={decision.remarks || ""}
+                onChange={(e) => onRemarksChange(meta.key, e.target.value)}
+                disabled={isViewMode}
+                rows={3}
+                className="w-full border border-orange-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
+                placeholder="Enter authority remarks..."
+              />
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Footer actions */}
+        {!isViewMode && (
+          <div className="flex justify-end gap-3 p-5 border-t border-slate-200 bg-white shrink-0">
+            <button
+              onClick={() => onDecision(meta.key, "REJECTED")}
+              className="px-6 py-3 rounded-xl font-bold flex items-center gap-2 border bg-red-50 text-red-600 border-red-200 hover:bg-red-100 transition-colors"
+            >
+              <XCircle className="h-5 w-5" /> Reject
+            </button>
+            <button
+              onClick={() => onDecision(meta.key, "REVERTED")}
+              className="px-6 py-3 rounded-xl font-bold flex items-center gap-2 border bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200 transition-colors"
+            >
+              <CornerUpLeft className="h-5 w-5" /> Revert
+            </button>
+            <button
+              onClick={() => onDecision(meta.key, "APPROVED")}
+              disabled={approveDisabled}
+              title={approveDisabled ? "Fix approved quantities before approving" : undefined}
+              className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-colors ${
+                approveDisabled
+                  ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                  : "bg-emerald-600 text-white hover:bg-emerald-700"
+              }`}
+            >
+              <CheckCircle2 className="h-5 w-5" /> Approve
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -265,13 +601,49 @@ export default function MaterialPassPage() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Which pass type (returnable / nonReturnable) is currently open in the
+  // secondary "detail" modal. Null means no detail modal is showing.
+  const [activePassKey, setActivePassKey] = useState(null);
+
+  // PDF/Image Viewer States
+  const [viewingDocUrl, setViewingDocUrl] = useState(null);
+  const [isImage, setIsImage] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [iframeLoading, setIframeLoading] = useState(true);
+
   const [passDecision, setPassDecision] = useState({
-    returnable: { status: "", remarks: "", collapsed: false },
-    nonReturnable: { status: "", remarks: "", collapsed: false },
+    returnable: { status: "", remarks: "", collapsed: false, validationAttempted: false },
+    nonReturnable: { status: "", remarks: "", collapsed: false, validationAttempted: false },
   });
   const [justCompleted, setJustCompleted] = useState(false);
-  const wasAllReviewedRef = useRef(false);
-  const cardRefs = useRef({});
+  const wasAllReviewedRef = React.useRef(false);
+
+  const [companyDetails, setCompanyDetails] = useState(null);
+  const [companyLoading, setCompanyLoading] = useState(false);
+
+  const fetchAgentDetails = useCallback(async (agentId) => {
+    if (!agentId) {
+      setCompanyDetails(null);
+      return;
+    }
+    setCompanyLoading(true);
+    try {
+      const token = localStorage.getItem("accessToken");
+      const response = await axios.get(`${AGENT_API}/agents/getAgentById/${agentId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data?.success) {
+        setCompanyDetails(response.data.data);
+      } else {
+        setCompanyDetails(null);
+      }
+    } catch (error) {
+      console.error("Failed to fetch agent details", error);
+      setCompanyDetails(null);
+    } finally {
+      setCompanyLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -280,6 +652,23 @@ export default function MaterialPassPage() {
     }, 500);
     return () => clearTimeout(timer);
   }, [searchInput]);
+
+  useEffect(() => {
+    if (viewingDocUrl) {
+      setIframeLoading(true);
+    }
+  }, [viewingDocUrl]);
+
+  const handleViewDoc = (passRequestId, documentType, staticPath) => {
+    // Check if the file is an image based on its extension
+    const isImg = staticPath && /\.(jpe?g|png|gif|webp)$/i.test(staticPath);
+    setIsImage(!!isImg);
+
+    // NOTE: backend endpoint TBD — mirrors the pattern used for regular passes
+    setViewingDocUrl(
+      `${AGENT_API}/material-pass/viewMaterialPassDocument?passRequestId=${passRequestId}&documentType=${documentType}`,
+    );
+  };
 
   const fetchPassRequests = useCallback(
     async (isPoll = false) => {
@@ -354,6 +743,10 @@ export default function MaterialPassPage() {
       )
     );
 
+  const reviewedCount = applicablePassKeys.filter((key) =>
+    REVIEWED_STATUSES.includes((passDecision[key]?.status || "").toUpperCase()),
+  ).length;
+
   // Trigger a brief "just completed" pulse on the submit button the moment
   // the last remaining pass type gets decided.
   useEffect(() => {
@@ -373,8 +766,83 @@ export default function MaterialPassPage() {
     }));
   };
 
+  const handleItemQtyChange = (passKey, itemId, rawValue) => {
+    setPassDecision((prev) => {
+      const item = prev[passKey].items[itemId];
+
+      // Allow the field to be fully cleared while typing
+      if (rawValue === "") {
+        return {
+          ...prev,
+          [passKey]: {
+            ...prev[passKey],
+            items: { ...prev[passKey].items, [itemId]: { ...item, approvedQty: "" } },
+          },
+        };
+      }
+
+      // Only non-negative integers allowed — blocks '-', '.', 'e', letters, etc.
+      if (!/^\d+$/.test(String(rawValue))) {
+        return prev; // ignore the keystroke, keep previous value
+      }
+
+      return {
+        ...prev,
+        [passKey]: {
+          ...prev[passKey],
+          items: {
+            ...prev[passKey].items,
+            // NOTE: no more forcing `approved: false` when qty hits 0
+            [itemId]: { ...item, approvedQty: Number(rawValue) },
+          },
+        },
+      };
+    });
+  };
+
+  const handleItemToggle = (passKey, itemId) => {
+    setPassDecision((prev) => {
+      const item = prev[passKey].items[itemId];
+      const nextApproved = !item.approved;
+      return {
+        ...prev,
+        [passKey]: {
+          ...prev[passKey],
+          items: {
+            ...prev[passKey].items,
+            [itemId]: {
+              ...item,
+              approved: nextApproved,
+              // Manually unchecking zeroes the qty; checking is always allowed
+              // regardless of current qty — the live itemError message (and
+              // the disabled Approve button) handle a checked-but-zero item,
+              // not this toggle.
+              approvedQty: nextApproved ? item.approvedQty : 0,
+            },
+          },
+        },
+      };
+    });
+  };
+
+  const handleItemRemarksChange = (passKey, itemId, value) => {
+    setPassDecision((prev) => ({
+      ...prev,
+      [passKey]: {
+        ...prev[passKey],
+        items: {
+          ...prev[passKey].items,
+          [itemId]: { ...prev[passKey].items[itemId], remarks: value },
+        },
+      },
+    }));
+  };
+
+  // Returns true when the decision was applied, false when validation
+  // blocked it (so the caller knows whether it's safe to close the modal).
   const handlePassDecision = (key, decision) => {
     const current = passDecision[key];
+
     if ((decision === "REJECTED" || decision === "REVERTED") && !current.remarks?.trim()) {
       toast.error("Remarks are mandatory.", {
         description:
@@ -382,32 +850,68 @@ export default function MaterialPassPage() {
             ? "Explain what needs to be corrected before reverting."
             : "Explain why this pass is being rejected.",
       });
-      return;
+      return false;
+    }
+
+    if (decision === "APPROVED") {
+      const items = current.items || {};
+      const approvedIds = Object.keys(items).filter((id) => items[id].approved);
+
+      if (approvedIds.length === 0) {
+        toast.error("No items approved", {
+          description: "Approve at least one item before approving this pass.",
+        });
+        return false;
+      }
+
+      const hasBadQty = approvedIds.some((id) => {
+        const q = items[id].approvedQty;
+        if (q === "" || q === null || q === undefined) return true;
+        const numQ = Number(q);
+        return numQ === 0 || numQ > items[id].requestedQty;
+      });
+
+      if (hasBadQty) {
+        toast.error("Fix approved quantities", {
+          description: "One or more approved items have an invalid or zero quantity.",
+        });
+        setPassDecision((prev) => ({
+          ...prev,
+          [key]: { ...prev[key], validationAttempted: true },
+        }));
+        return false;
+      }
     }
 
     setPassDecision((prev) => ({
       ...prev,
-      [key]: { ...prev[key], status: decision, collapsed: true },
+      [key]: { ...prev[key], status: decision, collapsed: true, validationAttempted: false },
     }));
-
-    // // Scroll the next pending card into view once this one collapses.
-    // setTimeout(() => {
-    //   const remaining = applicablePassKeys.filter(
-    //     (k) => k !== key && !passDecision[k]?.collapsed,
-    //   );
-    //   const nextKey = remaining[0];
-    //   if (nextKey && cardRefs.current[nextKey]) {
-    //     cardRefs.current[nextKey].scrollIntoView({ behavior: "smooth", block: "nearest" });
-    //   }
-    // }, 220);
+    return true;
   };
 
   const handleReopen = (key) => {
     setPassDecision((prev) => ({
       ...prev,
-      [key]: { ...prev[key], collapsed: false },
+      [key]: {
+        ...prev[key],
+        status: isViewMode ? prev[key].status : "",
+        collapsed: false,
+        validationAttempted: false,
+      },
     }));
   };
+
+  // Opens the secondary detail modal for a given pass type. Mirrors the
+  // previous "Re-verify" / "View details" behavior: in edit mode it clears
+  // any prior decision so it can be redone; in view mode it just displays
+  // the existing decision read-only.
+  const openPassDetail = (key) => {
+    handleReopen(key);
+    setActivePassKey(key);
+  };
+
+  const closePassDetail = () => setActivePassKey(null);
 
   const handleSubmitReview = async () => {
     if (!allReviewed) {
@@ -426,11 +930,22 @@ export default function MaterialPassPage() {
       const passesPayload = applicablePassKeys.map((key) => {
         const meta = PASS_TYPE_META[key];
         const decision = passDecision[key];
-        return {
+
+        const base = {
           passType: meta.apiValue,
           decision: decision.status,
           remarks: decision.remarks || undefined,
         };
+
+        if (decision.status === "APPROVED") {
+          base.items = Object.entries(decision.items || {}).map(([materialId, item]) => ({
+            materialId: Number(materialId),
+            approvedQty: item.approved ? item.approvedQty : 0,
+            approverRemarks: item.remarks?.trim() || null,
+          }));
+        }
+
+        return base;
       });
 
       const response = await axios.patch(
@@ -451,6 +966,8 @@ export default function MaterialPassPage() {
       });
 
       setIsModalOpen(false);
+      setActivePassKey(null);
+      setCompanyDetails(null);
       fetchPassRequests();
     } catch (error) {
       console.error("Submission error:", error);
@@ -464,16 +981,44 @@ export default function MaterialPassPage() {
 
   const openReviewModal = (pass, viewOnly = false) => {
     setSelectedRequest(pass);
+    fetchAgentDetails(pass.agentId);
 
     const buildDecision = (passData) => {
       const status = (passData?.status || "").toUpperCase();
+      const materials = passData?.materials || [];
+      const isDecided = REVIEWED_STATUSES.includes(status);
+      const isApprovedStatus = status === "APPROVED";
 
-      const reviewedStatuses = ["APPROVED", "REJECTED", "REVERTED"];
+      const items = {};
+      materials.forEach((m) => {
+        const requestedQty = Number(m.quantity) || 0;
+
+        // Item-level approvedQty is only meaningful when the pass itself was
+        // APPROVED. For REVERTED/REJECTED, no item was ever individually
+        // evaluated, so approvedQty is genuinely "not applicable" — null,
+        // not a silent fallback to the requested qty.
+        const approvedQty = isDecided
+          ? (isApprovedStatus ? (m.approvedQty ?? requestedQty) : null)
+          : requestedQty;
+
+        const approved = isDecided
+          ? (isApprovedStatus && Number(m.approvedQty) > 0)
+          : true;
+
+        items[m.id] = {
+          requestedQty,
+          approvedQty,
+          approved,
+          remarks: m.approverRemarks || "",
+        };
+      });
 
       return {
         status,
         remarks: passData?.remarks || passData?.rejectedReason || "",
-        collapsed: reviewedStatuses.includes(status),
+        collapsed: isDecided,
+        validationAttempted: false,
+        items,
       };
     };
 
@@ -482,6 +1027,7 @@ export default function MaterialPassPage() {
       nonReturnable: buildDecision(pass.nonReturnablePass),
     });
 
+    setActivePassKey(null);
     setIsViewMode(viewOnly);
     setIsModalOpen(true);
   };
@@ -494,6 +1040,10 @@ export default function MaterialPassPage() {
     setSearchInput("");
     setCurrentPage(1);
   };
+
+  const activeMeta = activePassKey ? PASS_TYPE_META[activePassKey] : null;
+  const activePass = activeMeta && selectedRequest ? selectedRequest[activeMeta.dataKey] : null;
+  const activeDecision = activePassKey ? passDecision[activePassKey] : null;
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 font-sans relative">
@@ -723,21 +1273,7 @@ export default function MaterialPassPage() {
                 </tr>
               ) : (
                 filteredData.map((pass) => {
-                  const statusColors = {
-                    approved:
-                      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
-                    processed:
-                      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
-                    reverted:
-                      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
-                    rejected:
-                      "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20",
-                  };
-                  const statusKey = (pass.status || "").toLowerCase();
-                  const statusClass =
-                    statusColors[statusKey] ||
-                    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
-
+                  const statusClass = getOverallStatusBadgeClass(pass.status, pass.isResubmitted);
                   const passTypeLabel = pass.surplusPass
                     ? "Surplus"
                     : pass.debrisPass
@@ -784,7 +1320,13 @@ export default function MaterialPassPage() {
                         </span>
                       </td>
                       <td className="px-4 sm:px-6 py-4 text-sm text-slate-500 dark:text-slate-400 hidden md:table-cell">
-                        {new Date(pass.createdAt).toLocaleDateString()}
+                        {new Date(pass.createdAt).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </td>
                       {activeTab === "processed" && (
                         <td className="px-4 sm:px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 hidden lg:table-cell">
@@ -793,7 +1335,7 @@ export default function MaterialPassPage() {
                       )}
                       <td className="px-4 sm:px-6 py-4 text-center">
                         <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}>
-                          {(pass.status || "PENDING").toUpperCase()}
+                          {getOverallStatusLabel(pass.status, pass.isResubmitted)}
                         </span>
                       </td>
                     </tr>
@@ -835,7 +1377,11 @@ export default function MaterialPassPage() {
                 </h2>
               </div>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setActivePassKey(null);
+                  setCompanyDetails(null);
+                }}
                 className="text-white/70 hover:text-white p-2 shrink-0"
               >
                 <X className="h-5 w-5" />
@@ -852,35 +1398,44 @@ export default function MaterialPassPage() {
                       Company Details
                     </h3>
                   </div>
-                  <h2 className="text-lg font-bold text-[#0a1e4d] break-words mb-5">
-                    {selectedRequest.companyName || "N/A"}
-                  </h2>
-                  <div className="space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                      <span className="text-xs font-semibold text-slate-500">Email</span>
-                      <span className="text-sm font-medium text-slate-800 break-all sm:text-right">
-                        {selectedRequest.email || "N/A"}
-                      </span>
+
+                  {companyLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-400 py-6">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Loading company details...
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                      <span className="text-xs font-semibold text-slate-500">Phone</span>
-                      <span className="text-sm font-medium text-slate-800">
-                        {selectedRequest.mobileNo || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                      <span className="text-xs font-semibold text-slate-500">GST</span>
-                      <span className="text-sm font-medium text-slate-800 break-all sm:text-right">
-                        {selectedRequest.gstinNumber || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                      <span className="text-xs font-semibold text-slate-500">PAN</span>
-                      <span className="text-sm font-medium text-slate-800">
-                        {selectedRequest.panNumber || "N/A"}
-                      </span>
-                    </div>
-                  </div>
+                  ) : (
+                    <>
+                      <h2 className="text-lg font-bold text-[#0a1e4d] break-words mb-5">
+                        {companyDetails?.entityName || "N/A"}
+                      </h2>
+                      <div className="space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                          <span className="text-xs font-semibold text-slate-500">Email</span>
+                          <span className="text-sm font-medium text-slate-800 break-all sm:text-right">
+                            {companyDetails?.email || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                          <span className="text-xs font-semibold text-slate-500">Phone</span>
+                          <span className="text-sm font-medium text-slate-800">
+                            {companyDetails?.mobileNo || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                          <span className="text-xs font-semibold text-slate-500">GST</span>
+                          <span className="text-sm font-medium text-slate-800 break-all sm:text-right">
+                            {companyDetails?.gstinNumber || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                          <span className="text-xs font-semibold text-slate-500">PAN</span>
+                          <span className="text-sm font-medium text-slate-800">
+                            {companyDetails?.panNumber || "N/A"}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
@@ -929,37 +1484,90 @@ export default function MaterialPassPage() {
 
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                   <div className="flex items-center gap-2 mb-5">
-                    <Package className="h-5 w-5 text-orange-600 shrink-0" />
+                    <FileText className="h-5 w-5 text-orange-600 shrink-0" />
                     <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
-                      Pass Type
+                      Application Info
                     </h3>
                   </div>
-                  <div className="space-y-5">
-                    <div className="text-lg font-bold text-[#0a1e4d]">
-                      {selectedRequest.surplusPass ? "SURPLUS" : "REGULAR"}
+                  <div className="space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                      <span className="text-xs font-semibold text-slate-500">Pass Type</span>
+                      <span className="text-sm font-bold text-[#0a1e4d] sm:text-right">
+                        {selectedRequest.surplusPass ? "SURPLUS" : "REGULAR"}
+                      </span>
                     </div>
-                    {!selectedRequest.surplusPass && (
-                      <div className="flex flex-wrap gap-2">
-                        {selectedRequest.returnablePass && (
-                          <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold">
-                            Returnable
-                          </span>
-                        )}
-                        {selectedRequest.nonReturnablePass && (
-                          <span className="px-3 py-1 rounded-full bg-green-50 text-green-700 border border-green-200 text-xs font-semibold">
-                            Non-Returnable
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {selectedRequest.surplusPass && (
-                      <div className="text-sm text-slate-500">Surplus Pass</div>
-                    )}
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                      <span className="text-xs font-semibold text-slate-500">Application Date</span>
+                      <span className="text-sm font-medium text-slate-800 sm:text-right">
+                        {selectedRequest.createdAt
+                          ? new Date(selectedRequest.createdAt).toLocaleString("en-IN", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "-"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1 items-start sm:items-center">
+                      <span className="text-xs font-semibold text-slate-500">Status</span>
+                      <span
+                        className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${getOverallStatusBadgeClass(
+                          selectedRequest.status,
+                          selectedRequest.isResubmitted,
+                        )}`}
+                      >
+                        {getOverallStatusLabel(selectedRequest.status, selectedRequest.isResubmitted)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* ── Material review: stacked, collapse-on-decide cards ── */}
+              {/* DOCUMENTS: Requisition Letter & Work Order */}
+              {(selectedRequest.requisitionLetterFilePath || selectedRequest.workOrderFilePath) && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText className="h-5 w-5 text-blue-600 shrink-0" />
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                      Attached Documents
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {selectedRequest.requisitionLetterFilePath && (
+                      <button
+                        onClick={() =>
+                          handleViewDoc(
+                            selectedRequest.id,
+                            "requisitionLetter",
+                            selectedRequest.requisitionLetterFilePath,
+                          )
+                        }
+                        className="bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-blue-100 transition-colors shadow-sm"
+                      >
+                        <FileText className="h-4 w-4 text-blue-600" /> View Requisition Letter
+                      </button>
+                    )}
+                    {selectedRequest.workOrderFilePath && (
+                      <button
+                        onClick={() =>
+                          handleViewDoc(
+                            selectedRequest.id,
+                            "workOrder",
+                            selectedRequest.workOrderFilePath,
+                          )
+                        }
+                        className="bg-orange-50 text-orange-700 border border-orange-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-orange-100 transition-colors shadow-sm"
+                      >
+                        <FileCheck2 className="h-4 w-4 text-orange-600" /> View Work Order
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Material review: compact clickable rows, each opens its own modal ── */}
               {applicablePassKeys.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-3 px-1">
@@ -978,22 +1586,18 @@ export default function MaterialPassPage() {
                       ) : (
                         <Clock className="h-3.5 w-3.5" />
                       )}
-                      {applicablePassKeys.filter((k) => passDecision[k]?.collapsed).length} of{" "}
-                      {applicablePassKeys.length} reviewed
+                      {reviewedCount} of {applicablePassKeys.length} reviewed
                     </span>
                   </div>
 
                   {applicablePassKeys.map((key) => (
-                    <MaterialPassCard
+                    <MaterialPassRow
                       key={key}
                       meta={PASS_TYPE_META[key]}
                       pass={selectedRequest[PASS_TYPE_META[key].dataKey]}
                       decision={passDecision[key]}
                       isViewMode={isViewMode}
-                      onDecision={handlePassDecision}
-                      onRemarksChange={handleRemarksChange}
-                      onReopen={handleReopen}
-                      cardRef={(el) => (cardRefs.current[key] = el)}
+                      onOpen={openPassDetail}
                     />
                   ))}
                 </div>
@@ -1023,6 +1627,91 @@ export default function MaterialPassPage() {
                 >
                   Submit Complete Review
                 </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MATERIAL PASS DETAIL MODAL — opened on top of the request modal */}
+      {/* ============================================================== */}
+      {activeMeta && activeDecision && (
+        <MaterialPassDetailModal
+          meta={activeMeta}
+          pass={activePass}
+          decision={activeDecision}
+          isViewMode={isViewMode}
+          onClose={closePassDetail}
+          onDecision={(key, decision) => {
+            const applied = handlePassDecision(key, decision);
+            if (applied) setActivePassKey(null);
+          }}
+          onRemarksChange={handleRemarksChange}
+          onItemQtyChange={handleItemQtyChange}
+          onItemToggle={handleItemToggle}
+          onItemRemarksChange={handleItemRemarksChange}
+        />
+      )}
+
+      {/* ============================================================== */}
+      {/* DOCUMENT VIEWER OVERLAY */}
+      {/* ============================================================== */}
+      {viewingDocUrl && (
+        <div
+          className={`fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-all duration-300 ${isFullscreen ? "p-0" : "p-4 md:p-8"}`}
+        >
+          <div
+            className={`bg-white w-full h-full flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${isFullscreen ? "max-w-full rounded-none border-none" : "max-w-6xl rounded-xl border border-slate-700"}`}
+          >
+            <div className="flex justify-between items-center px-4 py-3 bg-slate-800 text-white">
+              <h3 className="font-bold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-400" />
+                Document Viewer
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg transition-colors"
+                  title={isFullscreen ? "Exit Fullscreen" : "Maximize"}
+                >
+                  {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+                </button>
+                <button
+                  onClick={() => {
+                    setViewingDocUrl(null);
+                    setIsFullscreen(false);
+                  }}
+                  className="bg-slate-700 hover:bg-red-500 p-2 rounded-lg transition-colors"
+                  title="Close Viewer"
+                >
+                  <XCircle className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 w-full bg-slate-100 relative flex items-center justify-center p-4">
+              {iframeLoading && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50">
+                  <Loader2 className="h-10 w-10 text-[#ff6b00] animate-spin mb-4" />
+                  <p className="text-slate-500 font-bold animate-pulse">Loading document...</p>
+                </div>
+              )}
+
+              {isImage ? (
+                <img
+                  src={viewingDocUrl}
+                  alt="Document Viewer"
+                  className="max-w-full max-h-full object-contain relative z-0 drop-shadow-lg rounded-md"
+                  onLoad={() => setIframeLoading(false)}
+                />
+              ) : (
+                <iframe
+                  src={viewingDocUrl}
+                  className="w-full h-full border-none relative z-0 bg-white"
+                  title="Document Viewer"
+                  onLoad={() => setIframeLoading(false)}
+                />
               )}
             </div>
           </div>
