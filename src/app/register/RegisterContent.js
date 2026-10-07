@@ -1805,7 +1805,27 @@ export default function RegisterPage() {
                               className="text-sm text-slate-600 cursor-pointer leading-relaxed"
                             >
                               <span className="font-bold text-slate-900">
-                                I Read and Accept Terms & Conditions.
+                                I Read and Accept the{" "}
+                                <Link
+                                  href="/terms-and-conditions"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-orange-600 underline underline-offset-2 hover:text-orange-700 transition-colors duration-150"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Terms &amp; Conditions
+                                </Link>
+                                {" "}and{" "}
+                                <Link
+                                  href="/privacy-policy"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 underline underline-offset-2 hover:text-blue-700 transition-colors duration-150"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Privacy Policy
+                                </Link>
+                                .
                               </span>
                               <span className="block mt-1">
                                 I/We hereby certify that the above permits are
