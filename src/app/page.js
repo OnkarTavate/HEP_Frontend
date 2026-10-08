@@ -982,9 +982,8 @@ const LoginPage = () => {
                                 className="shrink-0 bg-white border border-orange-200 rounded-md p-1.5 hover:bg-orange-100 active:scale-95 transition-all disabled:opacity-50"
                               >
                                 <RefreshCw
-                                  className={`h-4 w-4 text-orange-600 ${
-                                    isCaptchaLoading ? "animate-spin" : ""
-                                  }`}
+                                  className={`h-4 w-4 text-orange-600 ${isCaptchaLoading ? "animate-spin" : ""
+                                    }`}
                                 />
                               </button>
                             </div>
@@ -1498,15 +1497,14 @@ const LoginPage = () => {
                     {/* Dynamic Status Badge */}
                     <div
                       className={`px-4 py-2 rounded-lg text-sm font-bold border flex items-center gap-1.5 shadow-sm
-                      ${
-                        trackResult.status === "approved"
+                      ${trackResult.status === "approved"
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                           : trackResult.status === "rejected"
                             ? "bg-red-50 text-red-700 border-red-200"
                             : trackResult.status === "reverted"
                               ? "bg-amber-50 text-amber-700 border-amber-200"
                               : "bg-yellow-50 text-yellow-700 border-yellow-200"
-                      }`}
+                        }`}
                     >
                       {trackResult.status === "approved" && (
                         <CheckCircle className="h-4 w-4" />
@@ -1519,8 +1517,8 @@ const LoginPage = () => {
                       )}
                       {(!trackResult.status ||
                         trackResult.status === "pending") && (
-                        <Clock className="h-4 w-4" />
-                      )}
+                          <Clock className="h-4 w-4" />
+                        )}
                       {(trackResult.status || "PENDING").toUpperCase()}
                     </div>
                   </div>

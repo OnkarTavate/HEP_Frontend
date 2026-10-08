@@ -1,53 +1,123 @@
-/* @import "tailwindcss";
+/* ─────────────────────────────────────────────────────────────────────────
+   APACS  |  Global Design System
+   Calibrated for 1280 x 800 laptops (13-inch class, 96 dpi)
+   Font stack : Plus Jakarta Sans (body) . Montserrat (headings)
+   Colour tokens: saffron/orange port theme, neutral slate
+   ───────────────────────────────────────────────────────────────────────── */
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Montserrat:ital,wght@0,400..900;1,400..900&family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-} */
-
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300..900;1,300..900&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap');
-
+/* Tailwind v4 + Plugins */
 @import "tailwindcss";
-
 @import "tw-animate-css";
-
 @import "shadcn/tailwind.css";
 
+/* Dark-mode variant (class strategy) */
 @custom-variant dark (&:is(.dark *));
 
-/* Define precise Saffron/Orange variables for the Port Theme */
+/* ============================================================
+   1. DESIGN TOKENS
+   ============================================================ */
 :root {
-  /* Very light saffron tint background */
-  --card: oklch(1 0 0);
-  --border: oklch(0.922 0 0);
+  /* Saffron / Orange brand */
+  --brand-50: #fff8f1;
+  --brand-100: #feead9;
+  --brand-200: #fdccaf;
+  --brand-300: #fcac81;
+  --brand-400: #fa834d;
+  --brand-500: #ff7300;
+  --brand-600: #e65c00;
+  --brand-700: #bf4600;
+  --brand-800: #983400;
+  --brand-900: #7d2a00;
 
-  /* Primary Saffron - The Rich Orange from Image 1 */
   --saffron-primary: #ff7300;
   --saffron-dark: #e65c00;
   --saffron-light: #ffac66;
-  --saffron-glow: rgba(255, 115, 0, 0.3);
+  --saffron-glow: rgba(255, 115, 0, 0.28);
 
-  /* Mapping for shadcn-style components, if used */
+  /* Surface system */
+  --surface-page: #f5f6f8;
+  --surface-card: #ffffff;
+  --surface-raised: #ffffff;
+
+  /* Text hierarchy */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --text-disabled: #cbd5e1;
+
+  /* Borders */
+  --border-soft: rgba(226, 232, 240, 0.80);
+  --border-medium: rgba(203, 213, 225, 1.00);
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.07), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.10), 0 4px 8px rgba(15, 23, 42, 0.05);
+  --shadow-xl: 0 16px 40px rgba(15, 23, 42, 0.12), 0 8px 16px rgba(15, 23, 42, 0.06);
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 24px;
+  --radius-3xl: 32px;
+  --radius-full: 9999px;
+
+  /*
+   * Typography scale — root = 13px
+   * Fits 1280x800 beautifully: compact but readable, like macOS system UIs
+   */
+  --text-2xs: 0.692rem;
+  /* ~9px  */
+  --text-xs: 0.769rem;
+  /* ~10px */
+  --text-sm: 0.846rem;
+  /* ~11px */
+  --text-base: 1rem;
+  /* =13px */
+  --text-md: 1.077rem;
+  /* ~14px */
+  --text-lg: 1.231rem;
+  /* ~16px */
+  --text-xl: 1.462rem;
+  /* ~19px */
+  --text-2xl: 1.692rem;
+  /* ~22px */
+  --text-3xl: 2rem;
+  /* ~26px */
+
+  /* Spacing rhythm (8-pt grid at 13px root) */
+  --sp-1: 0.308rem;
+  /* ~4px  */
+  --sp-2: 0.615rem;
+  /* ~8px  */
+  --sp-3: 0.923rem;
+  /* ~12px */
+  --sp-4: 1.231rem;
+  /* ~16px */
+  --sp-5: 1.538rem;
+  /* ~20px */
+  --sp-6: 1.846rem;
+  /* ~24px */
+  --sp-8: 2.462rem;
+  /* ~32px */
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 350ms;
+
+  /* ShadCN / Tailwind token map */
+  --card: oklch(1 0 0);
+  --border: oklch(0.922 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --ring: oklch(0.708 0 0);
@@ -80,13 +150,25 @@ body {
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+/* Dark mode overrides */
 .dark {
+  --surface-page: #0d1117;
+  --surface-card: #161b22;
+  --surface-raised: #1c2128;
+
+  --text-primary: #f0f6fc;
+  --text-secondary: #8d96a0;
+  --text-tertiary: #57606a;
+
+  --border-soft: rgba(255, 255, 255, 0.07);
+  --border-medium: rgba(255, 255, 255, 0.12);
+
+  --saffron-primary: #ff8533;
+
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --border: oklch(1 0 0 / 10%);
-
-  --saffron-primary: #ff8533; /* Slightly brighter for dark mode */
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
@@ -101,11 +183,6 @@ body {
   --destructive: oklch(0.704 0.191 22.216);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -116,191 +193,534 @@ body {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* ============================================================
+   2. TAILWIND THEME EXTENSION
+   ============================================================ */
 @theme inline {
-  /* Font configs - Set Plus Jakarta Sans as default */
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: 'Courier New', monospace;
+  /* Fonts */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-heading: 'Montserrat', 'Plus Jakarta Sans', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
 
-  /* Map Standard Tailwind colors to our Saffron variables */
-  /* This forces `bg-orange-600` etc. to use saffron */
+  /* Orange / Saffron palette */
   --color-orange-50: #fff8f1;
   --color-orange-100: #feead9;
   --color-orange-200: #fdccaf;
   --color-orange-300: #fcac81;
   --color-orange-400: #fa834d;
-  --color-orange-500: var(--saffron-primary); /* #ff7300 */
-  --color-orange-600: var(--saffron-dark); /* #e65c00 */
+  --color-orange-500: var(--saffron-primary);
+  --color-orange-600: var(--saffron-dark);
   --color-orange-700: #bf4600;
   --color-orange-800: #983400;
   --color-orange-900: #7d2a00;
   --color-orange-950: #461400;
 
-  /* Force mapping for generic utility names used in page.js */
+  /* ShadCN semantic tokens */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-border: var(--border);
-  --color-primary: var(--primary);
-
-  /* Required by shadow-glow used in page.js */
-  --color-saffron-glow: var(--saffron-glow);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-saffron-glow: var(--saffron-glow);
+
+  /* Radii */
+  --radius-sm: calc(var(--radius) * 0.55);
+  --radius-md: calc(var(--radius) * 0.80);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) * 1.40);
+  --radius-2xl: calc(var(--radius) * 1.90);
+  --radius-3xl: calc(var(--radius) * 2.50);
+  --radius-4xl: calc(var(--radius) * 3.20);
 }
 
+/* ============================================================
+   3. BASE LAYER — Apple-grade typography & element defaults
+      Primary target: 1280 x 800 (13-inch laptop, 96 dpi)
+   ============================================================ */
 @layer base {
-  * {
+
+  *,
+  *::before,
+  *::after {
     @apply border-border outline-ring/50;
-    font-family: var(--font-sans);
+    box-sizing: border-box;
   }
+
+  /* HTML root */
+  html {
+    font-family: var(--font-sans);
+    /*
+     * 13px root — the optimal density for 1280x800.
+     * Everything feels tight yet readable, like macOS.
+     */
+    font-size: 13px;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+    -webkit-text-size-adjust: 100%;
+    height: 100%;
+  }
+
+  /* Body */
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
-    font-size: 1rem; /* inherits root size — scales globally with html */
-  }
-  html {
-    font-family: var(--font-sans);
-    /* Normal browser default — every rem-based size in the app
-       (Tailwind text-*, headings, etc.) is calibrated against this. */
-    font-size: 16px;
+    font-size: var(--text-base);
+    /* 13px */
+    font-weight: 400;
+    line-height: 1.6;
+    letter-spacing: -0.005em;
+    overflow-x: hidden;
+    height: 100%;
+    /* color handled by @apply text-foreground above */
   }
 
-  /* Form controls use rem so they track the html root size. */
-  input, textarea, select, button {
+  /* Heading scale — Apple-style tight tracking, Montserrat for premium feel */
+  h1 {
+    font-family: var(--font-heading);
+    font-size: var(--text-2xl);
+    /* ~22px */
+    font-weight: 800;
+    letter-spacing: -0.030em;
+    line-height: 1.18;
+    /* No color — let Tailwind utilities / inheritance control it */
+  }
+
+  h2 {
+    font-family: var(--font-heading);
+    font-size: var(--text-xl);
+    /* ~19px */
+    font-weight: 700;
+    letter-spacing: -0.024em;
+    line-height: 1.22;
+    /* No color — let Tailwind utilities / inheritance control it */
+  }
+
+  h3 {
+    font-family: var(--font-heading);
+    font-size: var(--text-lg);
+    /* ~16px */
+    font-weight: 700;
+    letter-spacing: -0.018em;
+    line-height: 1.28;
+    /* No color — let Tailwind utilities / inheritance control it */
+  }
+
+  h4 {
     font-family: var(--font-sans);
-    font-size: 1rem;
+    font-size: var(--text-md);
+    /* ~14px */
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    line-height: 1.35;
+    /* No color — let Tailwind utilities / inheritance control it */
+  }
+
+  h5 {
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    /* 13px */
+    font-weight: 600;
+    letter-spacing: -0.006em;
+    line-height: 1.4;
+    /* No color — let Tailwind utilities / inheritance control it */
+  }
+
+  h6 {
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    /* ~11px */
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1.45;
+    text-transform: uppercase;
+    /* No color — let Tailwind utilities / inheritance control it */
+  }
+
+  p {
+    font-size: var(--text-base);
+    line-height: 1.65;
+    /* No color — let Tailwind utilities / inheritance control it */
+  }
+
+  a {
+    color: var(--saffron-primary);
+    text-decoration: none;
+    transition: color var(--duration-fast) ease;
+  }
+
+  a:hover {
+    color: var(--saffron-dark);
+  }
+
+  /* Form controls */
+  input,
+  textarea,
+  select {
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text-primary);
+  }
+
+  button {
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--duration-base) var(--ease-out);
   }
 
   label {
     font-family: var(--font-sans);
-    font-size: 1rem;
-  }
-  
-  h1 {
-    font-family: var(--font-sans);
-    font-size: 2.5rem;
-    font-weight: bold;
-  }
-  
-  h2 {
-    font-family: var(--font-sans);
-    font-size: 2rem;
-    font-weight: bold;
-  }
-  
-  h3 {
-    font-family: var(--font-sans);
-    font-size: 1.75rem;
-    font-weight: bold;
-  }
-  
-  h4 {
-    font-family: var(--font-sans);
-    font-size: 1.5rem;
-    font-weight: bold;
-  }
-  
-  h5 {
-    font-family: var(--font-sans);
-    font-size: 1.25rem;
-    font-weight: bold;
-  }
-  
-  h6 {
-    font-family: var(--font-sans);
-    font-size: 1.125rem;
-    font-weight: bold;
-  }
-  
-  p {
-    font-family: var(--font-sans);
-    font-size: 1rem;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    color: var(--text-secondary);
   }
 
-  span, div {
-    font-family: var(--font-sans);
-  }
-
+  /* Tables — compact 11px body, 10px uppercase headers */
   table {
     font-family: var(--font-sans);
-    font-size: 1.2rem;
+    font-size: var(--text-sm);
+    /* ~11px */
+    border-collapse: collapse;
+    width: 100%;
   }
 
-  th, td {
+  th {
     font-family: var(--font-sans);
-    font-size: 1rem;
+    font-size: var(--text-xs);
+    /* ~10px */
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+  }
+
+  td {
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--text-secondary);
+  }
+
+  /* Scrollbar — Apple-thin style */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.28);
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.50);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+  }
+
+  /* Text selection */
+  ::selection {
+    background: rgba(245, 158, 11, 0.18);
+    color: inherit;
+  }
+
+  /* Focus ring — orange accent */
+  :focus-visible {
+    outline: 2px solid rgba(245, 158, 11, 0.55);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  img,
+  svg {
+    display: block;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
   }
 }
 
-/* -----------------------------------------------------------
-   Helper Classes required by the page.js code from Emergent
-   ----------------------------------------------------------- */
+/* ============================================================
+   4. ADMIN UTILITY CLASSES
+   ============================================================ */
 
-/* Fixed Gradient to match Saffron theme (was too red) */
+/* Page wrapper */
+.admin-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding-top: var(--sp-5);
+  padding-bottom: var(--sp-8);
+  min-height: 100%;
+}
+
+/* Admin card */
+.admin-card {
+  background: var(--surface-card);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-out);
+  will-change: transform, box-shadow;
+}
+
+.admin-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+/* Page title */
+.admin-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  letter-spacing: -0.030em;
+  line-height: 1.18;
+  color: var(--text-primary);
+}
+
+.admin-subtitle {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.admin-section-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* Admin table */
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.admin-table th {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--text-tertiary);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border-soft);
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table tbody tr {
+  transition: background-color var(--duration-fast) ease;
+}
+
+.admin-table tbody tr:hover {
+  background-color: rgba(245, 158, 11, 0.03);
+}
+
+/* Status badge */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+/* Button base */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: -0.004em;
+  padding: 0.462rem 0.923rem;
+  border: 1px solid transparent;
+  transition: all var(--duration-base) var(--ease-out);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background: var(--saffron-primary);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(255, 115, 0, 0.30);
+}
+
+.btn-primary:hover {
+  background: var(--saffron-dark);
+  box-shadow: 0 4px 16px rgba(255, 115, 0, 0.36);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--surface-card);
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+  box-shadow: var(--shadow-xs);
+}
+
+.btn-secondary:hover {
+  border-color: var(--saffron-primary);
+  color: var(--saffron-primary);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+/* Input base */
+.input-base {
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  padding: 0.538rem 0.769rem;
+  outline: none;
+  transition: border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease;
+}
+
+.input-base::placeholder {
+  color: var(--text-disabled);
+}
+
+.input-base:focus {
+  border-color: var(--saffron-primary);
+  box-shadow: 0 0 0 3px rgba(255, 115, 0, 0.12);
+}
+
+/* Smooth transitions */
+.admin-transition {
+  transition: all var(--duration-base) var(--ease-out);
+}
+
+.admin-page-bg {
+  background-color: var(--surface-page);
+}
+
+/* ============================================================
+   5. BRAND HELPERS
+   ============================================================ */
 .gradient-orange {
   background: linear-gradient(135deg, #ff8c00 0%, #ff7300 100%);
+}
+
+.gradient-orange-dark {
+  background: linear-gradient(135deg, #e65c00 0%, #bf4600 100%);
 }
 
 .text-gradient {
   background: linear-gradient(135deg, #ff7300 0%, #ffac66 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text; /* Standard version */
+  background-clip: text;
 }
 
-/* Enhanced Glassmorphism for better visibility on light background */
 .glass {
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 115, 0, 0.1); /* Subtle saffron tint border */
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(14px) saturate(1.6);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  border: 1px solid rgba(255, 115, 0, 0.09);
 }
 
-/* Subtle glow using our defined variable */
+.glass-dark {
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .shadow-glow {
-  box-shadow: 0 0 25px var(--saffron-glow);
+  box-shadow: 0 0 24px var(--saffron-glow), 0 0 48px rgba(255, 115, 0, 0.10);
 }
 
-/* Animations for port scene (as used in page.js) */
+/* ============================================================
+   6. KEYFRAME ANIMATIONS
+   ============================================================ */
 @keyframes float {
+
   0%,
   100% {
     transform: translateY(0) rotate(0deg);
   }
+
   50% {
-    transform: translateY(-15px) rotate(1deg);
+    transform: translateY(-14px) rotate(0.8deg);
   }
 }
 
@@ -310,9 +730,10 @@ body {
 
 @keyframes slide-up {
   from {
-    transform: translateY(20px);
+    transform: translateY(18px);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
@@ -320,94 +741,264 @@ body {
 }
 
 .animate-slide-up {
-  animation: slide-up 0.5s ease-out forwards;
+  animation: slide-up 0.45s var(--ease-out) forwards;
 }
 
 @keyframes fade-in {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
 }
 
 .animate-fade-in {
-  animation: fade-in 1s ease-out forwards;
+  animation: fade-in 0.6s ease-out forwards;
 }
 
-/* ── Bulk Pass motion system ──────────────────────────────────────────────
-   Small, consistent transitions shared by every Bulk Pass surface: sections
-   settle in from below, success states pop, skeletons shimmer while data
-   loads, buttons press. Everything is disabled for users who ask for reduced
-   motion. */
+@keyframes reveal-up {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-reveal {
+  animation: reveal-up 0.4s var(--ease-out) both;
+}
+
+/* Bulk Pass motion system */
 @keyframes bp-fade-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes bp-pop {
-  0%   { opacity: 0; transform: scale(0.86); }
-  60%  { opacity: 1; transform: scale(1.04); }
-  100% { opacity: 1; transform: scale(1); }
-}
-@keyframes bp-shimmer {
-  from { background-position: -600px 0; }
-  to   { background-position: 600px 0; }
-}
-@keyframes bp-check {
-  from { stroke-dashoffset: 48; }
-  to   { stroke-dashoffset: 0; }
-}
-@keyframes bp-ring {
-  0%   { transform: scale(0.7); opacity: 0.8; }
-  100% { transform: scale(1.7); opacity: 0; }
-}
-@keyframes glowing-border-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
+@keyframes bp-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes bp-shimmer {
+  from {
+    background-position: -600px 0;
+  }
+
+  to {
+    background-position: 600px 0;
+  }
+}
+
+@keyframes bp-check {
+  from {
+    stroke-dashoffset: 48;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes bp-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+@keyframes glowing-border-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 .bp-reveal {
-  animation: bp-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: bp-fade-up 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: var(--bp-delay, 0ms);
 }
-.bp-pop { animation: bp-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+.bp-pop {
+  animation: bp-pop 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
 
 .bp-skeleton {
   position: relative;
   overflow: hidden;
-  background: #efedea;
+  background: #edecea;
   border-radius: 0.75rem;
 }
-.dark .bp-skeleton { background: rgba(255, 255, 255, 0.06); }
+
+.dark .bp-skeleton {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .bp-skeleton::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.72), transparent);
   background-size: 600px 100%;
   animation: bp-shimmer 1.4s ease-in-out infinite;
 }
+
 .dark .bp-skeleton::after {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
   background-size: 600px 100%;
 }
 
-.bp-press { transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease, opacity 0.2s ease; }
-.bp-press:active:not(:disabled) { transform: scale(0.97); }
+.bp-press {
+  transition: transform 0.14s ease, box-shadow 0.18s ease, background-color 0.18s ease, opacity 0.18s ease;
+}
 
-.bp-lift { transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease; }
-.bp-lift:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -16px rgba(15, 23, 42, 0.35); }
+.bp-press:active:not(:disabled) {
+  transform: scale(0.97);
+}
 
-.bp-row { transition: background-color 0.2s ease, box-shadow 0.2s ease; }
-.bp-bar { transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1); }
+.bp-lift {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
 
-.bp-check path { stroke-dasharray: 48; animation: bp-check 0.5s 0.15s ease-out both; }
-.bp-ring { animation: bp-ring 0.9s 0.1s ease-out both; pointer-events: none; }
+.bp-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px -16px rgba(15, 23, 42, 0.32);
+}
 
+.bp-row {
+  transition: background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.bp-bar {
+  transition: width 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.bp-check path {
+  stroke-dasharray: 48;
+  animation: bp-check 0.48s 0.14s ease-out both;
+}
+
+.bp-ring {
+  animation: bp-ring 0.85s 0.1s ease-out both;
+  pointer-events: none;
+}
+
+/* Accessibility */
 @media (prefers-reduced-motion: reduce) {
-  .bp-reveal, .bp-pop, .bp-skeleton::after, .bp-check path, .bp-ring { animation: none !important; }
-  .bp-lift:hover, .bp-press:active:not(:disabled) { transform: none; }
-  .bp-bar { transition: none; }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .bp-reveal,
+  .bp-pop,
+  .bp-skeleton::after,
+  .bp-check path,
+  .bp-ring {
+    animation: none !important;
+  }
+
+  .bp-lift:hover,
+  .bp-press:active:not(:disabled) {
+    transform: none;
+  }
+
+  .bp-bar {
+    transition: none;
+  }
+
+  .animate-float,
+  .animate-slide-up,
+  .animate-fade-in,
+  .animate-reveal {
+    animation: none !important;
+  }
+}
+
+/* ============================================================
+   7. RESPONSIVE BREAKPOINTS
+   Primary target: 1280 x 800 (your laptop)
+   ============================================================ */
+
+/* Phone portrait */
+@media (max-width: 479px) {
+  html {
+    font-size: 12px;
+  }
+
+  .admin-title {
+    font-size: var(--text-xl);
+  }
+}
+
+/* Phone landscape / small tablet */
+@media (min-width: 480px) and (max-width: 767px) {
+  html {
+    font-size: 12.5px;
+  }
+}
+
+/* Tablet portrait */
+@media (min-width: 768px) and (max-width: 1023px) {
+  html {
+    font-size: 13px;
+  }
+}
+
+/* PRIMARY: 1280x800 laptop (1024-1440px) */
+@media (min-width: 1024px) and (max-width: 1440px) {
+  html {
+    font-size: 13px;
+  }
+}
+
+/* Large monitors (1440+) */
+@media (min-width: 1441px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+/* Ultra-wide / 4K */
+@media (min-width: 2560px) {
+  html {
+    font-size: 16px;
+  }
 }

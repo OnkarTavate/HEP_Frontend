@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import axios from "axios";
 import {
   Search,
@@ -33,7 +34,7 @@ export default function UserAccountsPage() {
   const [users, setUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  
+
   // Pagination State
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -194,66 +195,77 @@ export default function UserAccountsPage() {
   }
 
   return (
-    <div className="w-full h-full flex flex-col gap-4 overflow-y-auto p-2 sm:p-3 lg:p-4">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-        <div className="min-w-0">
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-[#1f1f1f] dark:text-stone-100 tracking-tight flex items-center gap-3">
-            <span className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shadow-amber-500/20 shrink-0">
-              <Users className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.5} />
-            </span>
-            User Account Management
-          </h2>
-          <p className="text-stone-500 dark:text-stone-400 text-sm sm:text-base mt-1 ml-[52px] sm:ml-[60px]">
-            Manage departmental user access and permissions
-          </p>
+    <div className="w-full h-full flex flex-col gap-5 overflow-y-auto p-4 lg:p-6 bg-[#f8f9fb]">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shadow-amber-400/25 flex-shrink-0">
+            <Users className="h-5 w-5 text-white" strokeWidth={2.2} />
+          </div>
+          <div>
+            <h1 className="text-[22px] font-extrabold text-slate-900 tracking-tight leading-tight">
+              User Account Management
+            </h1>
+            <p className="text-[13px] text-slate-400 font-medium mt-0.5">
+              Manage departmental user access and permissions
+            </p>
+          </div>
         </div>
-        <button
-          onClick={() => fetchUsers(page, pageSize, debouncedSearch)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-semibold transition-all active:scale-[0.97] shrink-0"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Link
+            href="/admin/account-deletion-requests"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-[13px] font-semibold transition-all active:scale-[0.97]"
+          >
+            <UserX className="h-3.5 w-3.5" />
+            Deletion Requests
+          </Link>
+          <button
+            onClick={() => fetchUsers(page, pageSize, debouncedSearch)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 text-[13px] font-semibold transition-all shadow-sm active:scale-[0.97]"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
+      {/* ── KPI Cards ── */}
+      <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Total Users", value: stats.totalCount, icon: Users, bg: "bg-slate-900 dark:bg-slate-800", text: "text-white", ring: "ring-slate-200 dark:ring-slate-700" },
-          { label: "Active", value: stats.activeCount, icon: UserCheck, bg: "bg-emerald-500", text: "text-white", ring: "ring-emerald-100 dark:ring-emerald-500/20" },
-          { label: "Inactive", value: stats.inactiveCount, icon: UserX, bg: "bg-red-500", text: "text-white", ring: "ring-red-100 dark:ring-red-500/20" },
+          { label: "Total Users", value: stats.totalCount, icon: Users, accent: "bg-slate-900 text-white" },
+          { label: "Active Users", value: stats.activeCount, icon: UserCheck, accent: "bg-emerald-500 text-white" },
+          { label: "Inactive Users", value: stats.inactiveCount, icon: UserX, accent: "bg-red-500 text-white" },
         ].map((card) => (
-          <div key={card.label} className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-100 dark:border-slate-800/80 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-2xl ${card.bg} ${card.text} flex items-center justify-center ring-[3px] ${card.ring} shadow-md shrink-0`}>
-              <card.icon className="h-6 w-6" strokeWidth={2.2} />
+          <div key={card.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-200 p-5 flex items-center gap-4">
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${card.accent}`}>
+              <card.icon className="h-5 w-5" strokeWidth={2} />
             </div>
             <div>
-              <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-stone-100 tabular-nums leading-none">{card.value}</p>
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">{card.label}</p>
+              <p className="text-[26px] font-black text-slate-900 tabular-nums leading-none tracking-tight">{card.value}</p>
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mt-1">{card.label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Search + Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[28px] border border-slate-100 dark:border-slate-800/80 shadow-xl flex-1 flex flex-col min-h-0 overflow-hidden">
-        {/* Search Bar */}
-        <div className="px-4 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/40 px-4 py-2.5 rounded-xl border border-slate-200/60 dark:border-slate-700 focus-within:ring-4 focus-within:ring-amber-500/10 focus-within:border-amber-400 transition-all w-full max-w-md">
-            <Search className="h-4 w-4 text-slate-400 dark:text-slate-500 shrink-0" />
+      {/* ── Main Table Card ── */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+        {/* Toolbar */}
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-100">
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg focus-within:border-slate-400 focus-within:ring-4 focus-within:ring-slate-900/5 transition-all w-72">
+            <Search className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
             <input
               type="text"
-              placeholder="Search by name, email, department..."
+              placeholder="Search by name, email, department…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="outline-none bg-transparent w-full text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              className="outline-none bg-transparent w-full text-[13px] text-slate-700 placeholder:text-slate-400"
             />
           </div>
           {loading && (
-            <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 font-semibold animate-pulse">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Updating list...
+            <div className="flex items-center gap-1.5 text-[12px] text-slate-400 font-medium">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Updating…
             </div>
           )}
         </div>
@@ -271,19 +283,24 @@ export default function UserAccountsPage() {
               </p>
             </div>
           ) : (
-            <table className="w-full text-left">
-              <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
+            <table className="w-full text-left border-collapse">
+              <colgroup>
+                <col style={{ width: "48px" }} />
+                <col style={{ width: "220px" }} />
+                <col />
+                <col style={{ width: "200px" }} />
+                <col style={{ width: "130px" }} />
+                <col style={{ width: "110px" }} />
+                <col style={{ width: "150px" }} />
+              </colgroup>
+              <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-100">
                 <tr>
-                  <th className="px-4 sm:px-6 py-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">#</th>
-                  <th className="px-4 sm:px-6 py-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">User</th>
-                  <th className="px-4 sm:px-6 py-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden md:table-cell">Contact</th>
-                  <th className="px-4 sm:px-6 py-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden lg:table-cell">Department</th>
-                  <th className="px-4 sm:px-6 py-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden lg:table-cell">Created</th>
-                  <th className="px-4 sm:px-6 py-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
-                  <th className="px-4 sm:px-6 py-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Action</th>
+                  {["#", "User", "Contact", "Department", "Created", "Status", "Action"].map((col, i) => (
+                    <th key={col} className={`px-5 py-3 text-[11px] font-bold uppercase tracking-widest text-slate-400 ${i === 6 ? "text-center" : ""} ${i === 2 ? "hidden md:table-cell" : ""} ${i >= 3 && i <= 4 ? "hidden lg:table-cell" : ""}`}>{col}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              <tbody>
                 {users.map((u, idx) => {
                   const isActive = u.status === "active";
                   const initial = (u.userName || "?").charAt(0).toUpperCase();
@@ -295,67 +312,65 @@ export default function UserAccountsPage() {
                   const displayIndex = (page - 1) * pageSize + idx + 1;
 
                   return (
-                    <tr key={u.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="px-4 sm:px-6 py-3.5 text-sm text-slate-500 dark:text-slate-400 font-medium tabular-nums">{displayIndex}</td>
-                      <td className="px-4 sm:px-6 py-3.5">
+                    <tr key={u.id} className={`border-b border-slate-50 hover:bg-slate-50/70 transition-colors ${idx % 2 !== 0 ? "bg-slate-50/30" : ""}`}>
+                      <td className="px-5 py-3.5 text-[13px] text-slate-400 font-medium tabular-nums">{displayIndex}</td>
+                      <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-300 to-orange-400 dark:from-amber-500 dark:to-orange-500 flex items-center justify-center font-bold text-sm text-[#1f1f1f] shadow-sm shrink-0">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-300 to-orange-400 flex items-center justify-center font-bold text-[13px] text-white shadow-sm flex-shrink-0">
                             {initial}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-800 dark:text-stone-100 truncate text-sm">{u.userName}</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate md:hidden">{u.email}</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate lg:hidden md:hidden">{u.departmentName}</p>
+                            <p className="text-[13px] font-semibold text-slate-800 truncate">{u.userName}</p>
+                            <p className="text-[12px] text-slate-400 truncate md:hidden">{u.email}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 sm:px-6 py-3.5 hidden md:table-cell">
+                      <td className="px-5 py-3.5 hidden md:table-cell">
                         <div className="space-y-0.5">
-                          <p className="text-sm text-slate-700 dark:text-slate-300 flex items-center gap-1.5 truncate">
-                            <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <p className="text-[13px] text-slate-700 flex items-center gap-1.5 truncate">
+                            <Mail className="h-3.5 w-3.5 text-slate-300 flex-shrink-0" />
                             {u.email}
                           </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                            <Phone className="h-3 w-3 text-slate-400 shrink-0" />
+                          <p className="text-[12px] text-slate-400 flex items-center gap-1.5">
+                            <Phone className="h-3 w-3 text-slate-300 flex-shrink-0" />
                             {u.phoneNumber}
                           </p>
                         </div>
                       </td>
-                      <td className="px-4 sm:px-6 py-3.5 hidden lg:table-cell">
+                      <td className="px-5 py-3.5 hidden lg:table-cell">
                         <div className="space-y-0.5">
-                          <p className="text-sm text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                            <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <p className="text-[13px] text-slate-700 flex items-center gap-1.5">
+                            <Building2 className="h-3.5 w-3.5 text-slate-300 flex-shrink-0" />
                             {u.departmentName}
                           </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                            <Briefcase className="h-3 w-3 text-slate-400 shrink-0" />
+                          <p className="text-[12px] text-slate-400 flex items-center gap-1.5">
+                            <Briefcase className="h-3 w-3 text-slate-300 flex-shrink-0" />
                             {u.roleName}
                           </p>
                         </div>
                       </td>
-                      <td className="px-4 sm:px-6 py-3.5 hidden lg:table-cell">
-                        <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                          <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                      <td className="px-5 py-3.5 hidden lg:table-cell">
+                        <p className="text-[12px] text-slate-400 flex items-center gap-1.5">
+                          <Calendar className="h-3 w-3 text-slate-300 flex-shrink-0" />
                           {createdDate}
                         </p>
                       </td>
-                      <td className="px-4 sm:px-6 py-3.5">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wider ${
-                          isActive
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
-                            : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
-                        }`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${isActive ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+                      <td className="px-5 py-3.5">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border tracking-wide ${isActive
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-red-50 text-red-700 border-red-200"
+                          }`}>
+                          <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${isActive ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
                           {isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="px-4 sm:px-6 py-3.5 text-center">
+                      <td className="px-5 py-3.5 text-center">
                         {actionLoading === u.id ? (
-                          <Loader2 className="h-5 w-5 animate-spin text-amber-500 mx-auto" />
+                          <Loader2 className="h-4 w-4 animate-spin text-amber-500 mx-auto" />
                         ) : isActive ? (
                           <button
                             onClick={() => setConfirmModal({ user: u, action: "deactivate" })}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/20 active:scale-[0.96] transition-all"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 active:scale-[0.96] transition-all"
                           >
                             <UserX className="h-3.5 w-3.5" />
                             Deactivate
@@ -363,7 +378,7 @@ export default function UserAccountsPage() {
                         ) : (
                           <button
                             onClick={() => handleStatusChange(u, true)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 active:scale-[0.96] transition-all"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 active:scale-[0.96] transition-all"
                           >
                             <UserCheck className="h-3.5 w-3.5" />
                             Activate
@@ -378,8 +393,8 @@ export default function UserAccountsPage() {
           )}
         </div>
 
-        {/* Pagination Bar Footer */}
-        <div className="px-4 sm:px-6 py-3 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 shrink-0">
+        {/* Pagination */}
+        <div className="px-5 py-3 border-t border-slate-100 flex-shrink-0">
           <PaginationBar
             currentPage={paginationMeta.currentPage}
             totalPages={paginationMeta.totalPages}
@@ -392,46 +407,50 @@ export default function UserAccountsPage() {
         </div>
       </div>
 
-      {/* Confirmation Modal — only for Deactivation */}
+      {/* ── Confirmation Modal ── */}
       {confirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-md">
-          <div className="bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl border border-slate-200 dark:border-slate-800/80 w-full max-w-md p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-200">
-            <div className="text-center mb-6">
-              <span className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 mb-4 shadow-inner">
-                <AlertTriangle className="h-8 w-8" strokeWidth={2} />
-              </span>
-              <h3 className="text-xl font-extrabold text-[#1f1f1f] dark:text-white tracking-tight">
-                Deactivate User Account?
-              </h3>
-              <p className="text-sm text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
-                Are you sure you want to deactivate <strong className="text-slate-800 dark:text-slate-200">{confirmModal.user.userName}</strong>?
-                They will be <strong>unable to login</strong> until reactivated.
-              </p>
-            </div>
-
-            <div className="bg-stone-50 dark:bg-[#1a1d27] border border-stone-200 dark:border-white/5 rounded-2xl px-4 py-3 mb-5 space-y-1.5">
-              <div className="flex items-center gap-2 text-sm">
-                <Mail className="h-3.5 w-3.5 text-stone-400" />
-                <span className="text-stone-500 dark:text-stone-400">Email:</span>
-                <span className="text-stone-800 dark:text-white font-medium truncate">{confirmModal.user.email}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Building2 className="h-3.5 w-3.5 text-stone-400" />
-                <span className="text-stone-500 dark:text-stone-400">Dept:</span>
-                <span className="text-stone-800 dark:text-white font-medium">{confirmModal.user.departmentName}</span>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]"
+          onClick={(e) => e.target === e.currentTarget && setConfirmModal(null)}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-[420px] overflow-hidden">
+            <div className="bg-red-50 border-b border-red-100 px-6 py-5">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="h-5 w-5" strokeWidth={2} />
+                </div>
+                <div>
+                  <h3 className="text-[15px] font-bold text-slate-900">Deactivate Account?</h3>
+                  <p className="text-[12px] text-slate-500 mt-1 leading-relaxed">
+                    <strong className="text-slate-800">{confirmModal.user.userName}</strong> will be unable to login until reactivated.
+                  </p>
+                </div>
               </div>
             </div>
-
-            <div className="flex gap-3">
+            <div className="px-6 py-4">
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1.5">
+                <div className="flex items-center gap-2 text-[13px]">
+                  <Mail className="h-3.5 w-3.5 text-slate-300" />
+                  <span className="text-slate-500">Email:</span>
+                  <span className="text-slate-800 font-medium truncate">{confirmModal.user.email}</span>
+                </div>
+                <div className="flex items-center gap-2 text-[13px]">
+                  <Building2 className="h-3.5 w-3.5 text-slate-300" />
+                  <span className="text-slate-500">Dept:</span>
+                  <span className="text-slate-800 font-medium">{confirmModal.user.departmentName}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2.5 px-6 py-4 border-t border-slate-100 bg-slate-50">
               <button
                 onClick={() => setConfirmModal(null)}
-                className="flex-1 py-3 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:scale-[0.98] transition-all"
+                className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-semibold hover:bg-slate-100 transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleStatusChange(confirmModal.user, false)}
-                className="flex-1 py-3 rounded-2xl text-sm font-bold bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20 hover:shadow-red-500/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[13px] font-bold shadow-md shadow-red-600/20 active:scale-95 transition-all"
               >
                 <UserX className="h-4 w-4" />
                 Deactivate

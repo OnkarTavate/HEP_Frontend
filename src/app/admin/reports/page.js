@@ -101,17 +101,17 @@ export default function ReportsPage() {
   };
 
   return (
-    <main className="h-full min-h-0 overflow-hidden p-4 lg:p-5">
+    <main className="h-full min-h-0 overflow-hidden p-4 lg:p-6 bg-[#f8f9fb]">
       <section className="mx-auto flex h-full min-h-0 max-w-7xl flex-col">
-        <div className="mb-3 flex shrink-0 items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10">
-            <FileBarChart className="h-5 w-5 text-orange-500" />
-          </span>
+        <div className="mb-4 flex shrink-0 items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-400 to-orange-500 flex items-center justify-center shadow-md shadow-orange-400/25 flex-shrink-0">
+            <FileBarChart className="h-5 w-5 text-white" />
+          </div>
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+            <h1 className="text-[22px] font-extrabold text-slate-900 tracking-tight leading-tight">
               Reports
-            </h2>
-            <p className="text-xs text-muted-foreground">
+            </h1>
+            <p className="text-[13px] text-slate-400 font-medium mt-0.5">
               Access operational reports for Chennai Port Authority.
             </p>
           </div>
@@ -128,7 +128,7 @@ export default function ReportsPage() {
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search reports by name or purpose..."
             aria-label="Search reports"
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-400/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-[13px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-900/5 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
           />
           {searchQuery && (
             <button

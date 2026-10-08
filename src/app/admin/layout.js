@@ -60,6 +60,7 @@ import {
   Phone,
   CheckCircle,
   BarChart3,
+  UserX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -633,7 +634,14 @@ export default function AdminLayout({ children }) {
       icon: ShieldCheck,
     }] : []),
     ...(isAdmin
-      ? [{ name: "User Accounts", href: "/admin/user-accounts", icon: Users }]
+      ? [
+        { name: "User Accounts", href: "/admin/user-accounts", icon: Users },
+        {
+          name: "Deletion Requests",
+          href: "/admin/account-deletion-requests",
+          icon: UserX,
+        },
+      ]
       : []),
     ...((!isOtherDepartmental || isAdmin) ? [{ name: "Pass Approvals", href: "/admin/pass-approvals", icon: FileText }] : []),
     ...((!isSafetyOfficer && !isDepartmental) || isAdmin ? [{ name: "Company Approvals", href: "/admin/companies", icon: Building2 }] : []),
@@ -748,14 +756,14 @@ export default function AdminLayout({ children }) {
   }) => (
     <div
       className={cn(
-        "h-full flex flex-col justify-between py-8 bg-slate-900 dark:bg-slate-950 border-r border-slate-850 dark:border-white/5 transition-all duration-300",
-        expanded ? "items-stretch px-4 w-full" : "items-center w-full",
+        "h-full flex flex-col justify-between bg-slate-900 dark:bg-[#0d1117] border-r border-white/[0.06] transition-all duration-300",
+        expanded ? "items-stretch px-4 pt-7 pb-6 w-full" : "items-center pt-7 pb-6 w-full px-2",
       )}
     >
       <div
         className={cn(
-          "space-y-6 flex flex-col",
-          expanded ? "items-stretch" : "items-center",
+          "flex flex-col",
+          expanded ? "items-stretch gap-6" : "items-center gap-5",
         )}
       >
         {/* Brand row */}
@@ -767,55 +775,52 @@ export default function AdminLayout({ children }) {
         >
           <Link
             href={consoleHref}
-            className="flex items-center gap-3 group"
+            className="flex items-center gap-3 group min-w-0"
             onClick={onNavigate}
           >
-            <span className="flex items-center justify-center w-12 h-12 rounded-2xl bg-slate-800 dark:bg-amber-400 text-amber-400 dark:text-[#1f1f1f] shadow-lg shrink-0 group-hover:scale-105 transition-transform duration-200">
-              <Ship className="h-6 w-6" />
+            {/* Ship icon — always visible & same size */}
+            <span className="flex items-center justify-center w-11 h-11 rounded-xl bg-amber-500 text-slate-950 shadow-lg shrink-0 group-hover:scale-105 transition-transform duration-200">
+              <Ship className="h-6 w-6" strokeWidth={2.5} />
             </span>
             {expanded && (
-              <span className="flex flex-col leading-tight">
-                <span className="font-extrabold text-white text-xl tracking-tight">
+              <span className="flex flex-col leading-snug min-w-0">
+                <span
+                  className="font-extrabold text-white text-[17px] tracking-tight truncate"
+                  style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.024em" }}
+                >
                   APACS
                 </span>
-                <span className="text-xs uppercase tracking-wider text-amber-400 font-bold">
+                <span className="text-[10px] uppercase tracking-[0.14em] text-amber-400 font-bold mt-0.5">
                   Admin System
                 </span>
               </span>
             )}
           </Link>
 
-          {/* Collapse / expand toggle (desktop only) */}
-          {showCollapseToggle && (
+          {/* Collapse toggle — visible pill when expanded */}
+          {showCollapseToggle && expanded && (
             <button
               onClick={toggleSidebar}
-              title={expanded ? "Collapse sidebar" : "Expand sidebar"}
-              className={cn(
-                "hidden lg:flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 text-white hover:bg-amber-500 hover:text-slate-950 active:scale-95 transition-all duration-200 font-bold",
-                !expanded && "absolute -right-3 top-10 z-10",
-              )}
+              title="Collapse sidebar"
+              className="hidden lg:flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 text-slate-300 hover:bg-amber-500 hover:text-slate-950 active:scale-95 transition-all duration-200 shrink-0 ml-1"
             >
-              {expanded ? (
-                <ChevronLeft className="h-5 w-5" />
-              ) : (
-                <ChevronRight className="h-5 w-5" />
-              )}
+              <ChevronLeft className="h-4 w-4" />
             </button>
           )}
         </div>
 
         {/* Section label (only when expanded) */}
         {expanded && (
-          <p className="px-2 text-xs font-bold text-slate-500 uppercase tracking-widest">
-            Global Menu
+          <p className="px-1 text-[10px] font-bold text-slate-500 uppercase tracking-[0.14em]">
+            Navigation
           </p>
         )}
 
         {/* Nav items */}
         <div
           className={cn(
-            "flex flex-col gap-2",
-            expanded ? "items-stretch" : "items-center",
+            "flex flex-col",
+            expanded ? "items-stretch gap-1.5" : "items-center gap-2.5",
           )}
         >
           {navigationItems.map((item) => {
@@ -829,21 +834,23 @@ export default function AdminLayout({ children }) {
                 title={item.name}
                 onClick={onNavigate}
                 className={cn(
-                  "flex items-center rounded-2xl transition-all duration-200 active:scale-[0.98]",
+                  "flex items-center rounded-xl transition-all duration-200 active:scale-[0.97]",
                   expanded
-                    ? "gap-3 px-4 py-3.5 text-base font-bold"
-                    : "justify-center w-12 h-12",
+                    ? "gap-3 px-3.5 py-3 text-[15px] font-semibold w-full"
+                    : "justify-center w-11 h-12",
                   isActive
-                    ? "bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20"
-                    : "text-slate-300 hover:text-amber-400 hover:bg-white/5",
+                    ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/30"
+                    : expanded
+                      ? "text-slate-300 hover:text-white hover:bg-white/8"
+                      : "text-slate-300 hover:text-amber-400 hover:bg-white/10",
                 )}
               >
                 <item.icon
-                  className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")}
-                  strokeWidth={2.5}
+                  className="shrink-0 h-5 w-5"
+                  strokeWidth={isActive ? 2.5 : 2}
                 />
                 {expanded && (
-                  <span className="flex-1 truncate">{item.name}</span>
+                  <span className="flex-1 truncate" style={{ letterSpacing: "-0.01em" }}>{item.name}</span>
                 )}
               </Link>
             );
@@ -851,24 +858,38 @@ export default function AdminLayout({ children }) {
         </div>
       </div>
 
+      {/* Bottom: Help + Expand trigger (when collapsed) */}
       <div
         className={cn(
-          "flex flex-col gap-4",
-          expanded ? "items-stretch" : "items-center",
+          "flex flex-col",
+          expanded ? "items-stretch gap-2" : "items-center gap-3.5",
         )}
       >
+        {/* Expand button — only shown in collapsed mode as a clear affordance */}
+        {showCollapseToggle && !expanded && (
+          <button
+            onClick={toggleSidebar}
+            title="Expand sidebar"
+            className="hidden lg:flex items-center justify-center w-11 h-11 rounded-xl bg-white/10 text-slate-200 hover:bg-amber-500 hover:text-slate-950 active:scale-95 transition-all duration-200 shadow-sm"
+          >
+            <ChevronRight className="h-5 w-5" strokeWidth={2.5} />
+          </button>
+        )}
+
         <button
           title="Help / Logs"
           className={cn(
-            "flex items-center rounded-2xl bg-white/10 text-white hover:bg-amber-500 hover:text-slate-950 active:scale-[0.98] transition-all duration-200 font-bold",
-            expanded ? "gap-3 px-4 py-3 text-base" : "justify-center w-12 h-12",
+            "flex items-center rounded-xl text-slate-400 hover:bg-amber-500 hover:text-slate-950 active:scale-[0.97] transition-all duration-200 font-semibold",
+            expanded
+              ? "gap-3 px-3.5 py-3 text-[15px] w-full bg-white/6"
+              : "justify-center w-11 h-12 bg-white/6",
           )}
         >
           <HelpCircle
-            className={cn("shrink-0", expanded ? "h-6 w-6" : "h-5 w-5")}
-            strokeWidth={2.5}
+            className="shrink-0 h-5 w-5"
+            strokeWidth={2}
           />
-          {expanded && <span className="flex-1 text-left">Help / Logs</span>}
+          {expanded && <span className="flex-1 text-left tracking-tight">Help / Logs</span>}
         </button>
       </div>
     </div>
@@ -881,16 +902,16 @@ export default function AdminLayout({ children }) {
         "bg-slate-100 dark:bg-slate-950",
         darkMode && "dark",
       )}
-      style={{ fontFamily: "'Montserrat', 'Inter', Arial, sans-serif" }}
+      style={{ fontFamily: "var(--font-sans, 'Plus Jakarta Sans', system-ui, sans-serif)" }}
     >
       {/* Full-viewport shell — no outer padding, no max-width cap, no rounded
           corners on edges. Contains the sidebar + main column. */}
       <div className="w-full h-full bg-slate-50 dark:bg-[#11131e] flex overflow-hidden transition-colors duration-300">
-        {/* Desktop icon sidebar (collapsible) */}
+        {/* Desktop icon sidebar — 240px expanded, 60px collapsed */}
         <aside
           className={cn(
             "hidden lg:flex flex-shrink-0 relative transition-[width] duration-300 ease-in-out",
-            sidebarExpanded ? "w-64" : "w-24",
+            sidebarExpanded ? "w-[240px]" : "w-[60px]",
           )}
         >
           {renderIconSidebar({})}
@@ -919,7 +940,7 @@ export default function AdminLayout({ children }) {
         {/* Main content area — fills remaining viewport, never overflows */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           {/* Top header */}
-          <header className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-3 shrink-0 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 transition-all duration-300 relative z-40">
+          <header className="px-4 sm:px-5 lg:px-6 py-3 flex items-center justify-between gap-3 shrink-0 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border-b border-slate-200/60 dark:border-white/[0.06] transition-all duration-300 relative z-40" style={{boxShadow:'0 1px 0 rgba(15,23,42,0.04)'}}>
             <div className="flex items-center gap-3 min-w-0">
               {/* Mobile menu trigger */}
               <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
@@ -935,12 +956,12 @@ export default function AdminLayout({ children }) {
               </Sheet>
 
               <div className="min-w-0">
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#1f1f1f] dark:text-stone-100 truncate">
+                <h1 className="text-lg font-bold text-[#0f172a] dark:text-stone-100 truncate tracking-tight" style={{fontFamily:"var(--font-heading)", letterSpacing:'-0.024em'}}>
                   Hi, {user?.username ? user.username.split("@")[0] : "Admin"}!
                 </h1>
-                <p className="text-stone-500 dark:text-stone-400 text-sm mt-1 hidden sm:block">
+                <p className="text-stone-400 dark:text-stone-500 text-[11px] mt-0.5 hidden sm:block font-medium tracking-wide uppercase">
                   {navigationItems.find((item) => item.href === pathname)
-                    ?.name || ""}
+                    ?.name || "Admin Console"}
                 </p>
               </div>
             </div>
@@ -1010,7 +1031,7 @@ export default function AdminLayout({ children }) {
 
           {/* Page content — fills remaining vertical space and scrolls
               vertically while the sidebar and header stay fixed. */}
-          <main className="flex-1 px-4 sm:px-6 lg:px-8 pb-6 min-h-0 overflow-y-auto scroll-smooth [scrollbar-width:thin] [scrollbar-color:theme(colors.stone.300)_transparent] dark:[scrollbar-color:theme(colors.stone.700)_transparent]">
+          <main className="flex-1 px-4 sm:px-5 lg:px-6 pb-5 pt-5 min-h-0 overflow-y-auto scroll-smooth [scrollbar-width:thin] [scrollbar-color:theme(colors.stone.300)_transparent] dark:[scrollbar-color:theme(colors.stone.700)_transparent]">
             {children}
           </main>
         </div>
