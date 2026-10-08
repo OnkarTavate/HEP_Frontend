@@ -1090,9 +1090,46 @@ export default function TrafficPassesPage() {
                       )}
                       <td className="px-6 py-4 text-center">
                         <div className="flex flex-col items-center gap-1">
-                          <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}>
-                            {(pass.status || "PENDING").toUpperCase()}
-                          </span>
+                          {(() => {
+                            const rawStatus = String(pass.status || "").toLowerCase();
+                            let displayStatus = "PENDING";
+                            let displayClass = "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+
+                            if (activeTab === "processed") {
+                              if (rawStatus === "rejected") {
+                                displayStatus = "REJECTED";
+                                displayClass = "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20";
+                              } else if (rawStatus === "reverted") {
+                                displayStatus = "REVERTED";
+                                displayClass = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20";
+                              } else if (["approved", "completed", "issued"].includes(rawStatus)) {
+                                displayStatus = "COMPLETED";
+                                displayClass = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20";
+                              } else {
+                                displayStatus = "PROCESSED";
+                                displayClass = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20";
+                              }
+                            } else {
+                              if (rawStatus === "reverted") {
+                                displayStatus = "REVERTED";
+                                displayClass = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20";
+                              } else if (rawStatus === "rejected") {
+                                displayStatus = "REJECTED";
+                                displayClass = "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20";
+                              } else {
+                                displayStatus = "PENDING";
+                                displayClass = "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+                              }
+                            }
+
+                            return (
+                              <span
+                                className={`px-3 py-1 rounded-full text-[11px] font-bold border ${displayClass}`}
+                              >
+                                {displayStatus}
+                              </span>
+                            );
+                          })()}
                           {isLocked && (
                             <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900 animate-pulse">
                               IN-USE BY {lock.userName.toUpperCase()}

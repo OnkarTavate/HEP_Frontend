@@ -666,8 +666,35 @@ export default function TrafficPassesPage() {
     setEntityModal({ isOpen: false, data: null, type: null });
   };
 
+  const unverifiedPersonsList = (selectedRequest?.persons || []).filter(
+    (p) =>
+      canUserVerifyPerson(p) &&
+      !entityStatuses.persons[p.id] &&
+      (p.status === "pending" ||
+        p.status === "reverted" ||
+        (p.conversionWorkflowState &&
+          (!p.conversionStatus ||
+            p.conversionStatus === "PENDING" ||
+            p.conversionStatus === "REVERTED"))),
+  );
+
+  const unverifiedVehiclesList = (selectedRequest?.vehicles || []).filter(
+    (v) =>
+      canUserVerifyVehicle(v) &&
+      !entityStatuses.vehicles[v.id] &&
+      (v.status === "pending" ||
+        v.status === "reverted" ||
+        (v.conversionWorkflowState &&
+          (!v.conversionStatus ||
+            v.conversionStatus === "PENDING" ||
+            v.conversionStatus === "REVERTED"))),
+  );
+
+  const hasUnverifiedEntities =
+    unverifiedPersonsList.length > 0 || unverifiedVehiclesList.length > 0;
+
   const handleSubmitReview = async () => {
-    const persons = selectedRequest.persons || [];
+    const persons = selectedRequest?.persons || [];
     const vehicles = selectedRequest.vehicles || [];
     let reviewStatus = null;
     let responseMessage = null;
@@ -1611,11 +1638,46 @@ export default function TrafficPassesPage() {
                       )}
                       <td className="px-6 py-4 text-center">
                         <div className="flex flex-col items-center gap-1">
-                          <span
-                            className={`px-3 py-1 rounded-full text-[11px] font-bold border ${statusClass}`}
-                          >
-                            {(pass.status || "PENDING").toUpperCase()}
-                          </span>
+                          {(() => {
+                            const rawStatus = String(pass.status || "").toLowerCase();
+                            let displayStatus = "PENDING";
+                            let displayClass = "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+
+                            if (activeTab === "processed") {
+                              if (rawStatus === "rejected") {
+                                displayStatus = "REJECTED";
+                                displayClass = "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20";
+                              } else if (rawStatus === "reverted") {
+                                displayStatus = "REVERTED";
+                                displayClass = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20";
+                              } else if (["approved", "completed", "issued"].includes(rawStatus)) {
+                                displayStatus = "COMPLETED";
+                                displayClass = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20";
+                              } else {
+                                displayStatus = "PROCESSED";
+                                displayClass = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20";
+                              }
+                            } else {
+                              if (rawStatus === "reverted") {
+                                displayStatus = "REVERTED";
+                                displayClass = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20";
+                              } else if (rawStatus === "rejected") {
+                                displayStatus = "REJECTED";
+                                displayClass = "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20";
+                              } else {
+                                displayStatus = "PENDING";
+                                displayClass = "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+                              }
+                            }
+
+                            return (
+                              <span
+                                className={`px-3 py-1 rounded-full text-[11px] font-bold border ${displayClass}`}
+                              >
+                                {displayStatus}
+                              </span>
+                            );
+                          })()}
                           {isLocked && (
                             <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900 animate-pulse">
                               IN-USE BY {lock.userName.toUpperCase()}
@@ -2093,10 +2155,51 @@ export default function TrafficPassesPage() {
                                   const deptId = Number(
                                     v.essentialDepartmentId,
                                   );
+                                  const roleNorm = String(userRole || "").trim().toLowerCase();
+                                  const deptNum = Number(
+                                    userDepartmentId ||
+                                    (typeof window !== "undefined" && (() => {
+                                      try {
+                                        const u = JSON.parse(localStorage.getItem("user") || "{}");
+                                        return u.departmentId || u.deptId || 0;
+                                      } catch { return 0; }
+                                    })()) ||
+                                    0
+                                  );
+
+                                  const isMarineApprover =
+                                    deptNum === 7 ||
+                                    [
+                                      "fire safety officer",
+                                      "dy. conservator",
+                                      "marine department",
+                                    ].includes(roleNorm);
+
+                                  const isCivilApprover =
+                                    deptNum === 3 &&
+                                    (roleNorm === "approval" || !userRole);
+
+                                  const isMechApprover =
+                                    deptNum === 4 &&
+                                    (roleNorm === "approval" || !userRole);
+
+                                  const isCisfApprover =
+                                    deptNum === 1 ||
+                                    [
+                                      "cisf",
+                                      "cisf asst commandant",
+                                      "cisf assistant commandant",
+                                      "cisf.assistant commandant",
+                                    ].includes(roleNorm);
+
+                                  const isPassSectionApprover =
+                                    deptNum === 9 &&
+                                    (roleNorm === "approval" || !userRole);
+
                                   const sparkApproved =
                                     v.sparkArresterCertified === true ||
                                     v.marineSafetyApproved === true ||
-                                    (userRole === "Fire Safety Officer" &&
+                                    (isMarineApprover &&
                                       entityStatuses.vehicles[v.id] ===
                                         "APPROVED");
 
@@ -2111,6 +2214,16 @@ export default function TrafficPassesPage() {
                                       "COMPLETED",
                                       "APPROVED",
                                     ].includes(workflowState);
+
+                                  const fireSafetyRejected =
+                                    (isMarineApprover && entityStatuses.vehicles[v.id] === "REJECTED") ||
+                                    (workflowState === "REJECTED_ESSENTIAL" &&
+                                      (v.essentialRevertStage === "PENDING_MARINE_ESSENTIAL" || !v.essentialRevertStage));
+
+                                  const fireSafetyReverted =
+                                    (isMarineApprover && entityStatuses.vehicles[v.id] === "REVERTED") ||
+                                    (workflowState === "REVERTED_ESSENTIAL" &&
+                                      (v.essentialRevertStage === "PENDING_MARINE_ESSENTIAL" || !v.essentialRevertStage));
 
                                   const isCivilDept =
                                     deptId === 3 ||
@@ -2128,7 +2241,19 @@ export default function TrafficPassesPage() {
                                       "COMPLETED",
                                       "APPROVED",
                                     ].includes(workflowState) ||
-                                      (userRole === "Approval" && Number(userDepartmentId) === 3 && entityStatuses.vehicles[v.id] === "APPROVED"));
+                                      (isCivilApprover && entityStatuses.vehicles[v.id] === "APPROVED"));
+
+                                  const civilRejected =
+                                    isCivilDept &&
+                                    ((isCivilApprover && entityStatuses.vehicles[v.id] === "REJECTED") ||
+                                      (workflowState === "REJECTED_ESSENTIAL" &&
+                                        v.essentialRevertStage === "PENDING_CIVIL_ESSENTIAL"));
+
+                                  const civilReverted =
+                                    isCivilDept &&
+                                    ((isCivilApprover && entityStatuses.vehicles[v.id] === "REVERTED") ||
+                                      (workflowState === "REVERTED_ESSENTIAL" &&
+                                        v.essentialRevertStage === "PENDING_CIVIL_ESSENTIAL"));
 
                                   const mechDone =
                                     isMechDept &&
@@ -2139,22 +2264,19 @@ export default function TrafficPassesPage() {
                                       "COMPLETED",
                                       "APPROVED",
                                     ].includes(workflowState) ||
-                                      (userRole === "Approval" && Number(userDepartmentId) === 4 && entityStatuses.vehicles[v.id] === "APPROVED"));
+                                      (isMechApprover && entityStatuses.vehicles[v.id] === "APPROVED"));
 
-                                  const isCivilApprover =
-                                    userRole === "Approval" && Number(userDepartmentId) === 3;
-                                  const isMechApprover =
-                                    userRole === "Approval" && Number(userDepartmentId) === 4;
-                                  const isCisfApprover =
-                                    Number(userDepartmentId) === 1 ||
-                                    [
-                                      "CISF",
-                                      "CISF Asst Commandant",
-                                      "CISF Assistant Commandant",
-                                      "Cisf.Assistant Commandant",
-                                    ].includes(String(userRole || "").trim());
-                                  const isPassSectionApprover =
-                                    userRole === "Approval" && Number(userDepartmentId) === 9;
+                                  const mechRejected =
+                                    isMechDept &&
+                                    ((isMechApprover && entityStatuses.vehicles[v.id] === "REJECTED") ||
+                                      (workflowState === "REJECTED_ESSENTIAL" &&
+                                        v.essentialRevertStage === "PENDING_MECHANICAL_ESSENTIAL"));
+
+                                  const mechReverted =
+                                    isMechDept &&
+                                    ((isMechApprover && entityStatuses.vehicles[v.id] === "REVERTED") ||
+                                      (workflowState === "REVERTED_ESSENTIAL" &&
+                                        v.essentialRevertStage === "PENDING_MECHANICAL_ESSENTIAL"));
 
                                   const cisfDone =
                                     [
@@ -2165,6 +2287,16 @@ export default function TrafficPassesPage() {
                                     ].includes(workflowState) ||
                                     (isCisfApprover && entityStatuses.vehicles[v.id] === "APPROVED");
 
+                                  const cisfRejected =
+                                    (isCisfApprover && entityStatuses.vehicles[v.id] === "REJECTED") ||
+                                    (workflowState === "REJECTED_ESSENTIAL" &&
+                                      v.essentialRevertStage === "PENDING_CISF_ESSENTIAL");
+
+                                  const cisfReverted =
+                                    (isCisfApprover && entityStatuses.vehicles[v.id] === "REVERTED") ||
+                                    (workflowState === "REVERTED_ESSENTIAL" &&
+                                      v.essentialRevertStage === "PENDING_CISF_ESSENTIAL");
+
                                   const passSectionDone =
                                     [
                                       "COMPLETED_ESSENTIAL",
@@ -2173,6 +2305,14 @@ export default function TrafficPassesPage() {
                                     ].includes(workflowState) ||
                                     (isPassSectionApprover && entityStatuses.vehicles[v.id] === "APPROVED");
 
+                                  const passSectionRejected =
+                                    (workflowState === "REJECTED_ESSENTIAL" && v.essentialRevertStage === "PENDING_PASS_SECTION_ESSENTIAL") ||
+                                    (isPassSectionApprover && entityStatuses.vehicles[v.id] === "REJECTED");
+
+                                  const passSectionReverted =
+                                    (workflowState === "REVERTED_ESSENTIAL" && v.essentialRevertStage === "PENDING_PASS_SECTION_ESSENTIAL") ||
+                                    (isPassSectionApprover && entityStatuses.vehicles[v.id] === "REVERTED");
+
                                   return (
                                     <>
                                       {/* 1. Dy. Conservator / Fire Safety */}
@@ -2180,12 +2320,20 @@ export default function TrafficPassesPage() {
                                         className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                           fireSafetyDone
                                             ? "bg-emerald-100 text-emerald-700"
-                                            : "bg-amber-100 text-amber-700"
+                                            : fireSafetyRejected
+                                              ? "bg-red-100 text-red-700"
+                                              : fireSafetyReverted
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-amber-100 text-amber-700"
                                         }`}
                                       >
                                         {fireSafetyDone
                                           ? "✓ Fire Safety / Dy. Conservator"
-                                          : "⏳ Pending Fire Safety / Dy. Conservator"}
+                                          : fireSafetyRejected
+                                            ? "✕ Fire Safety Rejected"
+                                            : fireSafetyReverted
+                                              ? "↩ Fire Safety Reverted"
+                                              : "⏳ Pending Fire Safety / Dy. Conservator"}
                                       </span>
 
                                       {/* 2. Department Approval (if Civil or Mech selected) */}
@@ -2194,12 +2342,20 @@ export default function TrafficPassesPage() {
                                           className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                             civilDone
                                               ? "bg-emerald-100 text-emerald-700"
-                                              : "bg-amber-100 text-amber-700"
+                                              : civilRejected
+                                                ? "bg-red-100 text-red-700"
+                                                : civilReverted
+                                                  ? "bg-amber-100 text-amber-700"
+                                                  : "bg-amber-100 text-amber-700"
                                           }`}
                                         >
                                           {civilDone
                                             ? "✓ Civil Dept"
-                                            : "⏳ Pending Civil Dept"}
+                                            : civilRejected
+                                              ? "✕ Civil Dept Rejected"
+                                              : civilReverted
+                                                ? "↩ Civil Dept Reverted"
+                                                : "⏳ Pending Civil Dept"}
                                         </span>
                                       )}
 
@@ -2208,12 +2364,20 @@ export default function TrafficPassesPage() {
                                           className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                             mechDone
                                               ? "bg-emerald-100 text-emerald-700"
-                                              : "bg-amber-100 text-amber-700"
+                                              : mechRejected
+                                                ? "bg-red-100 text-red-700"
+                                                : mechReverted
+                                                  ? "bg-amber-100 text-amber-700"
+                                                  : "bg-amber-100 text-amber-700"
                                           }`}
                                         >
                                           {mechDone
                                             ? "✓ Mech Dept"
-                                            : "⏳ Pending Mech Dept"}
+                                            : mechRejected
+                                              ? "✕ Mech Dept Rejected"
+                                              : mechReverted
+                                                ? "↩ Mech Dept Reverted"
+                                                : "⏳ Pending Mech Dept"}
                                         </span>
                                       )}
 
@@ -2222,12 +2386,20 @@ export default function TrafficPassesPage() {
                                         className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                           cisfDone
                                             ? "bg-emerald-100 text-emerald-700"
-                                            : "bg-amber-100 text-amber-700"
+                                            : cisfRejected
+                                              ? "bg-red-100 text-red-700"
+                                              : cisfReverted
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-amber-100 text-amber-700"
                                         }`}
                                       >
                                         {cisfDone
                                           ? "✓ CISF Assistant Commandant"
-                                          : "⏳ Pending CISF"}
+                                          : cisfRejected
+                                            ? "✕ CISF Rejected"
+                                            : cisfReverted
+                                              ? "↩ CISF Reverted"
+                                              : "⏳ Pending CISF"}
                                       </span>
 
                                       {/* 4. Pass Section Final Approval */}
@@ -2235,12 +2407,20 @@ export default function TrafficPassesPage() {
                                         className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                           passSectionDone
                                             ? "bg-emerald-100 text-emerald-700"
-                                            : "bg-amber-100 text-amber-700"
+                                            : passSectionRejected
+                                              ? "bg-red-100 text-red-700"
+                                              : passSectionReverted
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-amber-100 text-amber-700"
                                         }`}
                                       >
                                         {passSectionDone
                                           ? "✓ Pass Section"
-                                          : "⏳ Pending Pass Section"}
+                                          : passSectionRejected
+                                            ? "✕ Pass Section Rejected"
+                                            : passSectionReverted
+                                              ? "↩ Pass Section Reverted"
+                                              : "⏳ Pending Pass Section"}
                                       </span>
                                     </>
                                   );
@@ -2386,14 +2566,43 @@ export default function TrafficPassesPage() {
             </div>
 
             <div className="flex justify-between items-center p-5 border-t border-slate-200 bg-white rounded-b-2xl">
-              <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                <AlertCircle className="h-4 w-4 text-orange-500" /> Ensure all
-                entities are thoroughly verified before submission.
+              <span className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
+                {!hasVisibleEntities ? (
+                  <span className="text-slate-400 font-medium flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4 text-slate-400" />
+                    No actions required for your role.
+                  </span>
+                ) : hasUnverifiedEntities ? (
+                  <>
+                    <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                    <span className="text-amber-700 font-medium">
+                      {unverifiedPersonsList.length + unverifiedVehiclesList.length}{" "}
+                      assigned entity(ies) pending review. Please verify all entities before submitting.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="text-emerald-700 font-medium">
+                      All assigned entities verified. Ready to submit review.
+                    </span>
+                  </>
+                )}
               </span>
-              {!isViewMode && (
+              {!isViewMode && hasVisibleEntities && (
                 <button
                   onClick={handleSubmitReview}
-                  className="bg-orange-600 text-white px-8 py-2.5 rounded-xl font-bold"
+                  disabled={hasUnverifiedEntities}
+                  title={
+                    hasUnverifiedEntities
+                      ? "Please verify all assigned entities before submitting."
+                      : ""
+                  }
+                  className={`px-8 py-2.5 rounded-xl font-bold transition-all ${
+                    hasUnverifiedEntities
+                      ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none border border-slate-300"
+                      : "bg-orange-600 hover:bg-orange-700 text-white cursor-pointer shadow-md hover:shadow-lg active:scale-95"
+                  }`}
                 >
                   Submit Complete Review
                 </button>

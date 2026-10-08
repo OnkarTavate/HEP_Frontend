@@ -1,7 +1,23 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { X, Upload, Building2, FileText, CheckCircle2, AlertCircle, Sparkles, User, Truck, Calendar } from "lucide-react";
+import {
+  X,
+  Upload,
+  Building2,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  User,
+  Truck,
+  Calendar,
+  Eye,
+  ExternalLink,
+  Maximize,
+  Minimize,
+  Loader2,
+} from "lucide-react";
 import axios from "axios";
 
 // Helper: format YYYY-MM-DD to DD/MM/YYYY for display
@@ -58,6 +74,8 @@ export default function ConversionRequestModal({
   const [departmentId, setDepartmentId] = useState("3");
   const [purpose, setPurpose] = useState("");
   const [requisitionFile, setRequisitionFile] = useState(null);
+  const [existingRequisitionPath, setExistingRequisitionPath] = useState(null);
+  const [revertReason, setRevertReason] = useState(null);
   const [itemsData, setItemsData] = useState([]);
 
   // Batch default date helpers
@@ -68,15 +86,33 @@ export default function ConversionRequestModal({
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  // Requisition Letter Document Viewer Modal
+  const [docViewerUrl, setDocViewerUrl] = useState(null);
+  const [docViewerTitle, setDocViewerTitle] = useState("Requisition Letter");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [docLoading, setDocLoading] = useState(false);
+  const [isDocImage, setIsDocImage] = useState(false);
+  const docBlobUrlRef = useRef(null);
+
   useEffect(() => {
     if (!isOpen) {
       setPurpose("");
       setRequisitionFile(null);
+      setExistingRequisitionPath(null);
+      setRevertReason(null);
       setErrorMessage("");
       setSuccessMessage("");
       setBatchStartDate("");
       setBatchEndDate("");
       setItemsData([]);
+      if (docBlobUrlRef.current) {
+        URL.revokeObjectURL(docBlobUrlRef.current);
+        docBlobUrlRef.current = null;
+      }
+      setDocViewerUrl(null);
+      setIsFullscreen(false);
+      setDocLoading(false);
+      setIsDocImage(false);
       return;
     }
 
@@ -87,32 +123,131 @@ export default function ConversionRequestModal({
       itemsToProcess = [
         {
           id: entityData.id,
-          type: entityType || "person",
-          name: entityData.name || entityData.person_name || entityData.registrationNo || entityData.regNo || `ID: ${entityData.id}`,
+          type: entityType || entityData.type || "person",
+          name:
+            entityData.name ||
+            entityData.person_name ||
+            entityData.registrationNo ||
+            entityData.regNo ||
+            `ID: ${entityData.id}`,
           passNo: entityData.personPassNo || entityData.vehiclePassNo,
           dateFrom: entityData.dateFrom || entityData.fromDate,
           dateTo: entityData.dateTo || entityData.toDate,
+          conversionStartDate: entityData.conversionStartDate,
+          conversionEndDate: entityData.conversionEndDate,
+          conversionDepartmentId: entityData.conversionDepartmentId,
+          conversionPurpose: entityData.conversionPurpose,
+          conversionRequisitionFilePath:
+            entityData.conversionRequisitionFilePath,
+          conversionRevertReason: entityData.conversionRevertReason,
         },
       ];
     }
 
+    // Prefill old conversion data from items or entityData
+    const reqPath =
+      itemsToProcess
+        .map(
+          (it) =>
+            it.conversionRequisitionFilePath ||
+            it.requisitionLetterPath ||
+            it.requisitionLetterFilePath ||
+            it.existingRequisitionPath ||
+            it.passRequisitionLetter
+        )
+        .find(Boolean) ||
+      entityData?.conversionRequisitionFilePath ||
+      entityData?.requisitionLetterPath ||
+      entityData?.requisitionLetterFilePath ||
+      entityData?.existingRequisitionPath ||
+      entityData?.passRequisitionLetter ||
+      null;
+
+    if (reqPath) {
+      setExistingRequisitionPath(reqPath);
+    } else {
+      setExistingRequisitionPath(null);
+    }
+
+    const dept =
+      itemsToProcess
+        .map((it) => it.conversionDepartmentId || it.departmentId)
+        .find(Boolean) ||
+      entityData?.conversionDepartmentId ||
+      entityData?.departmentId;
+    if (dept) {
+      setDepartmentId(String(dept));
+    } else {
+      setDepartmentId("3");
+    }
+
+    const purp =
+      itemsToProcess
+        .map((it) => it.conversionPurpose || it.purpose)
+        .find(Boolean) ||
+      entityData?.conversionPurpose ||
+      entityData?.purpose;
+    if (purp) {
+      setPurpose(purp);
+    } else {
+      setPurpose("");
+    }
+
+    const revReason =
+      itemsToProcess
+        .map(
+          (it) =>
+            it.conversionRevertReason ||
+            it.revertReason ||
+            it.rejectedReason
+        )
+        .find(Boolean) ||
+      entityData?.conversionRevertReason ||
+      entityData?.revertReason ||
+      entityData?.rejectedReason;
+    if (revReason) {
+      setRevertReason(revReason);
+    } else {
+      setRevertReason(null);
+    }
+
     const today = getTodayStr();
     const initialized = itemsToProcess.map((item) => {
-      const fromStr = (item.dateFrom || item.fromDate) ? String(item.dateFrom || item.fromDate).split("T")[0] : "";
-      const toStr = (item.dateTo || item.toDate) ? String(item.dateTo || item.toDate).split("T")[0] : "";
+      const fromStr = item.dateFrom || item.fromDate
+        ? String(item.dateFrom || item.fromDate).split("T")[0]
+        : "";
+      const toStr = item.dateTo || item.toDate
+        ? String(item.dateTo || item.toDate).split("T")[0]
+        : "";
+
       // Default start date: today if it falls within validity, otherwise pass start
       let defaultStart = today;
       if (fromStr && defaultStart < fromStr) defaultStart = fromStr;
       if (toStr && defaultStart > toStr) defaultStart = toStr;
+
+      const convStart = item.conversionStartDate
+        ? String(item.conversionStartDate).split("T")[0]
+        : defaultStart;
+      const convEnd = item.conversionEndDate
+        ? String(item.conversionEndDate).split("T")[0]
+        : toStr;
+
       return {
         ...item,
         type: item.type || entityType || "person",
-        name: item.name || item.person_name || item.registrationNo || item.regNo || item.registration_no || `ID: ${item.id}`,
-        passNo: item.passNo || item.personPassNo || item.vehiclePassNo || "N/A",
+        name:
+          item.name ||
+          item.person_name ||
+          item.registrationNo ||
+          item.regNo ||
+          item.registration_no ||
+          `ID: ${item.id}`,
+        passNo:
+          item.passNo || item.personPassNo || item.vehiclePassNo || "N/A",
         fromStr,
         toStr,
-        conversionStartDate: item.conversionStartDate || defaultStart,
-        conversionEndDate: item.conversionEndDate || toStr,
+        conversionStartDate: convStart,
+        conversionEndDate: convEnd,
       };
     });
     setItemsData(initialized);
@@ -166,12 +301,96 @@ export default function ConversionRequestModal({
     }
   };
 
+  const handleViewExistingLetter = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!existingRequisitionPath) return;
+    const cleanPath = String(existingRequisitionPath).replace(/\\/g, "/");
+    const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5001";
+    const url = cleanPath.startsWith("http")
+      ? cleanPath
+      : `${backendBase.replace(/\/$/, "")}/${cleanPath.replace(/^\//, "")}`;
+    const fileName = existingRequisitionPath.split(/[\/\\]/).pop() || "Requisition Letter";
+    setDocViewerTitle(fileName);
+    setDocLoading(true);
+
+    if (docBlobUrlRef.current) {
+      URL.revokeObjectURL(docBlobUrlRef.current);
+      docBlobUrlRef.current = null;
+    }
+
+    try {
+      // Fetch file to inspect magic bytes (in case an image was uploaded and saved with a .pdf extension)
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error("Failed to load document");
+      const blob = await resp.blob();
+      const headerBuf = await blob.slice(0, 4).arrayBuffer();
+      const bytes = new Uint8Array(headerBuf);
+
+      // JPEG: FF D8 FF | PNG: 89 50 4E 47 | GIF: 47 49 46
+      const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+      const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+      const isGif = bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46;
+
+      if (isJpeg || isPng || isGif) {
+        const mime = isJpeg ? "image/jpeg" : isPng ? "image/png" : "image/gif";
+        const imgBlob = new Blob([blob], { type: mime });
+        const blobUrl = URL.createObjectURL(imgBlob);
+        docBlobUrlRef.current = blobUrl;
+        setIsDocImage(true);
+        setDocViewerUrl(blobUrl);
+      } else {
+        const pdfBlob = new Blob([blob], { type: "application/pdf" });
+        const blobUrl = URL.createObjectURL(pdfBlob);
+        docBlobUrlRef.current = blobUrl;
+        setIsDocImage(false);
+        setDocViewerUrl(blobUrl);
+      }
+    } catch (err) {
+      console.error("Error inspecting document format:", err);
+      setIsDocImage(false);
+      setDocViewerUrl(url);
+    }
+  };
+
+  const handleViewNewFile = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!requisitionFile) return;
+    if (docBlobUrlRef.current) {
+      URL.revokeObjectURL(docBlobUrlRef.current);
+      docBlobUrlRef.current = null;
+    }
+    const isImg = requisitionFile.type.startsWith("image/");
+    setIsDocImage(isImg);
+    const url = URL.createObjectURL(requisitionFile);
+    docBlobUrlRef.current = url;
+    setDocViewerTitle(requisitionFile.name || "Uploaded Requisition Letter");
+    setDocLoading(true);
+    setDocViewerUrl(url);
+  };
+
+  const closeDocViewer = () => {
+    if (docBlobUrlRef.current) {
+      URL.revokeObjectURL(docBlobUrlRef.current);
+      docBlobUrlRef.current = null;
+    }
+    setDocViewerUrl(null);
+    setIsFullscreen(false);
+    setDocLoading(false);
+    setIsDocImage(false);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage("");
     setSuccessMessage("");
 
-    if (!requisitionFile) {
+    if (!requisitionFile && !existingRequisitionPath) {
       setErrorMessage("Requisition Letter PDF upload is mandatory for essential conversion.");
       return;
     }
@@ -211,10 +430,16 @@ export default function ConversionRequestModal({
       formData.append("items", JSON.stringify(payloadItems));
       formData.append("departmentId", departmentId);
       formData.append("purpose", purpose);
-      formData.append("passRequisitionLetter", requisitionFile);
+      if (existingRequisitionPath) {
+        formData.append("existingRequisitionPath", existingRequisitionPath);
+      }
+      if (requisitionFile) {
+        formData.append("passRequisitionLetter", requisitionFile);
+      }
 
+      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5001";
       const response = await axios.post(
-        "http://localhost:5001/api/pass-request/request-bulk-pass-conversion",
+        `${backendBase.replace(/\/$/, "")}/api/pass-request/request-bulk-pass-conversion`,
         formData,
         {
           headers: {
@@ -226,9 +451,11 @@ export default function ConversionRequestModal({
 
       if (response.data?.success) {
         setSuccessMessage(
-          itemsData.length === 1
-            ? "Essential conversion request submitted successfully!"
-            : `Essential conversion requested for ${itemsData.length} passes successfully!`
+          revertReason
+            ? "Essential conversion request updated and resubmitted successfully!"
+            : itemsData.length === 1
+              ? "Essential conversion request submitted successfully!"
+              : `Essential conversion requested for ${itemsData.length} passes successfully!`
         );
         setTimeout(() => {
           if (onSuccess) onSuccess();
@@ -258,12 +485,16 @@ export default function ConversionRequestModal({
             </div>
             <div>
               <h3 className="font-bold text-lg leading-tight">
-                {isBulk ? "Request Bulk Essential Access" : "Request Essential Pass (Oil Dock)"}
+                {revertReason
+                  ? (isBulk ? "Edit & Resubmit Bulk Essential Access" : "Edit & Resubmit Essential Conversion")
+                  : (isBulk ? "Request Bulk Essential Access" : "Request Essential Pass (Oil Dock)")}
               </h3>
               <p className="text-xs text-indigo-200">
-                {isBulk
-                  ? `Convert ${itemsData.length} Ordinary Passes to Essential Pass`
-                  : `Convert Pass for ${itemsData[0]?.name || "Entity"}`}
+                {revertReason
+                  ? `Update requisition details and resubmit for approval`
+                  : (isBulk
+                    ? `Convert ${itemsData.length} Ordinary Passes to Essential Pass`
+                    : `Convert Pass for ${itemsData[0]?.name || "Entity"}`)}
               </p>
             </div>
           </div>
@@ -277,6 +508,24 @@ export default function ConversionRequestModal({
 
         {/* Content Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 flex-1">
+          {/* Revert Reason Warning Banner */}
+          {revertReason && (
+            <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3 text-xs text-amber-900 shadow-sm animate-in fade-in duration-200">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-amber-950 uppercase tracking-wider text-[11px]">
+                  Approver Revert Reason:
+                </p>
+                <p className="text-amber-900 font-semibold mt-0.5 text-sm">
+                  {revertReason}
+                </p>
+                <p className="text-[11px] text-amber-700 mt-1">
+                  Please review the remarks and update requisition dates, department, or upload a revised letter below before resubmitting.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Alerts */}
           {errorMessage && (() => {
             const parts = errorMessage.split(" | ").filter(Boolean);
@@ -339,28 +588,49 @@ export default function ConversionRequestModal({
               />
             </div>
 
-            {/* Requisition Letter Upload */}
+            {/* Requisition Letter Upload & View */}
             <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
-                <Upload className="w-3.5 h-3.5 text-indigo-600" />
-                Requisition Letter (PDF) *
-              </label>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <Upload className="w-3.5 h-3.5 text-indigo-600" />
+                  Requisition Letter (PDF) {existingRequisitionPath ? "(Optional to Replace)" : "*"}
+                </label>
+                <div className="flex items-center gap-2">
+                  {existingRequisitionPath && (
+                      <button
+                        type="button"
+                        onClick={handleViewExistingLetter}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-md shadow-xs transition-colors cursor-pointer"
+                        title="Click to view existing requisition letter PDF"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        View Document
+                      </button>
+                  )}
+                </div>
+              </div>
               <div className="relative border-2 border-dashed border-slate-300 rounded-xl p-3 text-center hover:border-indigo-500 transition-colors bg-white">
                 <input
                   type="file"
                   accept=".pdf,application/pdf"
                   onChange={handleFileChange}
                   className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                  required
+                  required={!existingRequisitionPath}
                 />
                 <div className="flex flex-col items-center justify-center gap-1">
                   <Upload className="w-5 h-5 text-indigo-500" />
                   <span className="text-xs font-semibold text-slate-700">
                     {requisitionFile
                       ? requisitionFile.name
-                      : `Click or drag to upload Requisition Letter PDF ${isBulk ? "(Applies to all selected passes)" : ""}`}
+                      : existingRequisitionPath
+                        ? `Click or drag to upload a replacement Requisition Letter PDF`
+                        : `Click or drag to upload Requisition Letter PDF ${isBulk ? "(Applies to all selected passes)" : ""}`}
                   </span>
-                  <span className="text-[10px] text-slate-400">PDF format required</span>
+                  <span className="text-[10px] text-slate-400">
+                    {existingRequisitionPath && !requisitionFile
+                      ? "Leave empty to retain existing requisition letter"
+                      : "PDF format required"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -490,6 +760,8 @@ export default function ConversionRequestModal({
                   <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Submitting Request...
                 </>
+              ) : revertReason ? (
+                "Resubmit Conversion Request"
               ) : (
                 `Submit ${isBulk ? `Bulk Conversion (${itemsData.length} Passes)` : "Essential Request"}`
               )}
@@ -497,6 +769,86 @@ export default function ConversionRequestModal({
           </div>
         </form>
       </div>
+
+      {/* Embedded Document Viewer Modal */}
+      {docViewerUrl && (
+        <div className="fixed inset-0 z-[10001] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 md:p-6 lg:p-8 animate-in fade-in duration-200">
+          <div
+            className={`bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 border border-slate-200 ${
+              isFullscreen ? "w-full h-full" : "w-full max-w-4xl h-[85vh]"
+            }`}
+          >
+            {/* Header */}
+            <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-indigo-400" />
+                <h3 className="font-bold text-sm tracking-wide truncate max-w-md">
+                  {docViewerTitle}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={docViewerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 p-1.5 rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold px-2.5"
+                  title="Open in new window"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>Open New Tab</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 p-1.5 rounded-lg transition-colors"
+                  title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                >
+                  {isFullscreen ? (
+                    <Minimize className="h-4 w-4" />
+                  ) : (
+                    <Maximize className="h-4 w-4" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeDocViewer}
+                  className="bg-slate-800 hover:bg-red-600 text-slate-200 hover:text-white p-1.5 rounded-lg transition-colors"
+                  title="Close Viewer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Document View Container (PDF or Image) */}
+            <div className="flex-1 w-full bg-slate-100 relative flex items-center justify-center overflow-auto p-2">
+              {docLoading && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50/90 gap-2">
+                  <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
+                  <p className="text-xs font-semibold text-slate-600">Loading document...</p>
+                </div>
+              )}
+              {isDocImage ? (
+                <div className="w-full h-full flex items-center justify-center bg-slate-900/90 p-4 rounded-lg overflow-auto">
+                  <img
+                    src={docViewerUrl}
+                    alt="Document"
+                    className="max-w-full max-h-[75vh] object-contain rounded-md shadow-2xl bg-white"
+                    onLoad={() => setDocLoading(false)}
+                  />
+                </div>
+              ) : (
+                <iframe
+                  src={docViewerUrl}
+                  className="w-full h-full border-none bg-white"
+                  title="Document Viewer"
+                  onLoad={() => setDocLoading(false)}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

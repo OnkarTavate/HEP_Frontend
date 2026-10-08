@@ -260,10 +260,16 @@ export default function AdminPassApprovalsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [permitShare, setPermitShare] = useState(null);
 
+  const userRole = currentUser?.role || "";
+
   const isDepartmental = Boolean(
     currentUser?.role?.toLowerCase() === "approval" ||
     currentUser?.role?.toLowerCase() === "safety officer" ||
-    currentUser?.role?.toLowerCase() === "fire safety officer",
+    currentUser?.role?.toLowerCase() === "fire safety officer" ||
+    currentUser?.role?.toLowerCase() === "dy. conservator" ||
+    currentUser?.role?.toLowerCase() === "marine safety officer" ||
+    [1, 3, 4, 7, 9, 10].includes(Number(currentUser?.departmentId)) ||
+    String(currentUser?.role || "").toLowerCase().includes("cisf"),
   );
 
   const canUserVerifyVehicle = useCallback(
@@ -1820,10 +1826,45 @@ export default function AdminPassApprovalsPage() {
     setEntityModal({ isOpen: false, data: null, type: null });
   };
 
+  const assignedPersonsList = (selectedRequest?.persons || []).filter((p) =>
+    canUserVerifyPerson(p),
+  );
+  const assignedVehiclesList = (selectedRequest?.vehicles || []).filter((v) =>
+    canUserVerifyVehicle(v),
+  );
+
+  const unverifiedPersonsList = assignedPersonsList.filter(
+    (p) =>
+      !entityStatuses.persons[p.id] &&
+      (p.status === "pending" ||
+        p.status === "reverted" ||
+        (p.conversionWorkflowState &&
+          (!p.conversionStatus ||
+            p.conversionStatus === "PENDING" ||
+            p.conversionStatus === "REVERTED"))),
+  );
+
+  const unverifiedVehiclesList = assignedVehiclesList.filter(
+    (v) =>
+      !entityStatuses.vehicles[v.id] &&
+      (v.status === "pending" ||
+        v.status === "reverted" ||
+        v.status === "approved" ||
+        (v.conversionWorkflowState &&
+          (!v.conversionStatus ||
+            v.conversionStatus === "PENDING" ||
+            v.conversionStatus === "REVERTED"))),
+  );
+
+  const hasAssignedEntities =
+    assignedPersonsList.length > 0 || assignedVehiclesList.length > 0;
+
+  const hasUnverifiedEntities =
+    unverifiedPersonsList.length > 0 || unverifiedVehiclesList.length > 0;
+
   const handleSubmitReview = async () => {
     if (isSubmitting) return;
 
-    setIsSubmitting(true);
     const persons = selectedRequest.persons || [];
     const vehicles = selectedRequest.vehicles || [];
     const isVendorPass = selectedRequest?.originType === "VENDOR";
@@ -1835,29 +1876,8 @@ export default function AdminPassApprovalsPage() {
 
     // 1. VALIDATION: Only pending/reverted entities need a decision
     // Already approved/rejected entities are pre-populated in entityStatuses
-    const unverifiedPersons = persons.filter(
-      (p) =>
-        canUserVerifyPerson(p) &&
-        !entityStatuses.persons[p.id] &&
-        (p.status === "pending" ||
-          p.status === "reverted" ||
-          (p.conversionWorkflowState &&
-            (!p.conversionStatus ||
-              p.conversionStatus === "PENDING" ||
-              p.conversionStatus === "REVERTED"))),
-    );
-
-    const unverifiedVehicles = vehicles.filter(
-      (v) =>
-        canUserVerifyVehicle(v) &&
-        !entityStatuses.vehicles[v.id] &&
-        (v.status === "pending" ||
-          v.status === "reverted" ||
-          (v.conversionWorkflowState &&
-            (!v.conversionStatus ||
-              v.conversionStatus === "PENDING" ||
-              v.conversionStatus === "REVERTED"))),
-    );
+    const unverifiedPersons = unverifiedPersonsList;
+    const unverifiedVehicles = unverifiedVehiclesList;
 
     if (unverifiedPersons.length > 0 || unverifiedVehicles.length > 0) {
       toast.warning("Incomplete Verification", {
@@ -1865,10 +1885,11 @@ export default function AdminPassApprovalsPage() {
           ? "You must approve, reject, or revert all entities assigned to your current workflow stage."
           : "You must approve, reject, or revert all pending/reverted entities assigned to your role.",
       });
-
+      setIsSubmitting(false);
       return;
     }
 
+    setIsSubmitting(true);
     const loadingToastId = toast.loading("Submitting review to backend...");
 
     try {
@@ -2315,226 +2336,132 @@ export default function AdminPassApprovalsPage() {
           {},
           { headers },
         );
-      } else if (hasEssentialPerson) {
-        const personPromises = [];
-
-        const essentialPersons = persons.filter((p) => {
-          const workflowState = String(p?.essentialWorkflowState || "")
-            .trim()
-            .toUpperCase();
-
-          return (
-            workflowState === "PENDING_CIVIL_PERSON_ESSENTIAL" ||
-            workflowState === "PENDING_MECHANICAL_PERSON_ESSENTIAL" ||
-            workflowState === "PENDING_TRAFFIC_PERSON_ESSENTIAL" ||
-            workflowState === "REVERTED_PERSON_ESSENTIAL" ||
-            Boolean(p?.conversionWorkflowState)
-          );
-        });
-
-        const unverifiedPersons = essentialPersons.filter(
-          (p) => !entityStatuses.persons[p.id],
-        );
-
-        if (unverifiedPersons.length > 0) {
-          toast.warning("Incomplete Verification", {
-            description: `Please click 'Verify' and record a decision (Approve/Reject/Revert) for person ${unverifiedPersons[0].name || unverifiedPersons[0].id} before submitting.`,
-          });
-          return;
-        }
-
-        essentialPersons.forEach((p) => {
-          const status = entityStatuses.persons[p.id];
-
-          const payload = {
-            personId: p.id,
-            decision: String(status).trim().toUpperCase(),
-            remarks: entityRemarks.persons[p.id] || null,
-          };
-
-          personPromises.push(
-            axios.put(
-              `${AGENT_API}/pass-request/essential-oil-dock/person-action`,
-              payload,
-              { headers },
-            ),
-          );
-        });
-
-        await Promise.all(personPromises);
-
-        reviewStatus = "PROCESSED";
-        responseMessage =
-          "Essential Oil Dock person review processed successfully.";
-      }
-
-      // ------------------------------------------------------------
-      // 3. ESSENTIAL OIL DOCK FLOW
-      //
-      // IMPORTANT:
-      // NEVER call ADMIN_API/agent-pass-request-action here.
-      //
-      // The Essential backend route is responsible for updating:
-      // - vehicle status
-      // - essentialWorkflowState
-      // - workflow history
-      // - actor user
-      // - actor role
-      // - actor department
-      // ------------------------------------------------------------
-      else if (
-        isCisfAssistantCommandant ||
-        (isEssentialWorkflowUser && hasEssentialVehicle)
+      } else if (
+        !isVendorPass &&
+        !isNewVendorOilJettyWorkflow &&
+        (hasEssentialPerson ||
+          hasEssentialVehicle ||
+          Boolean(selectedRequest?.conversionWorkflowState) ||
+          String(selectedRequest?.workflowState || "").toUpperCase().endsWith("_ESSENTIAL") ||
+          isDepartmental)
       ) {
-        const vehiclePromises = [];
+        /*
+         * UNIFIED DEPARTMENTAL / ESSENTIAL / CONVERSION REVIEW FLOW
+         * Handles both persons and vehicles consistently across all departments:
+         * Civil, Mechanical, CISF, Pass Section, Marine.
+         */
+        const assignedPersons = persons.filter((p) => canUserVerifyPerson(p));
+        const assignedVehicles = vehicles.filter((v) => canUserVerifyVehicle(v));
 
-        const essentialVehicles = vehicles.filter((v) => {
-          const workflowState = String(v?.essentialWorkflowState || "")
-            .trim()
-            .toUpperCase();
+        const unverifiedP = assignedPersons.filter((p) => !entityStatuses.persons[p.id]);
+        const unverifiedV = assignedVehicles.filter((v) => !entityStatuses.vehicles[v.id]);
 
-          const essentialDepartmentId = v?.essentialDepartmentId;
-
-          const accessArea = String(v?.accessAreaId || v?.accessArea || "")
-            .trim()
-            .toUpperCase();
-
-          return (
-            workflowState.endsWith("_ESSENTIAL") ||
-            Boolean(v?.conversionWorkflowState) ||
-            (essentialDepartmentId !== null &&
-              essentialDepartmentId !== undefined) ||
-            accessArea.includes("OIL JETTY") ||
-            accessArea.includes("OIL_JETTY")
-          );
-        });
-
-        if (essentialVehicles.length === 0) {
-          throw new Error(
-            "No Essential Oil Dock vehicle found in this request.",
-          );
-        }
-
-        const unverifiedVehicles = essentialVehicles.filter(
-          (v) => !entityStatuses.vehicles[v.id],
-        );
-
-        if (unverifiedVehicles.length > 0) {
+        if (unverifiedP.length > 0 || unverifiedV.length > 0) {
           toast.warning("Incomplete Verification", {
-            description: `Please click 'Verify' and record a decision (Approve/Reject/Revert) for vehicle ${unverifiedVehicles[0].registrationNo || unverifiedVehicles[0].id} before submitting.`,
+            description: "Please record a decision (Approve/Reject/Revert) for all assigned entities before submitting.",
           });
+          setIsSubmitting(false);
           return;
         }
 
-        essentialVehicles.forEach((v) => {
+        const reviewPromises = [];
+
+        assignedPersons.forEach((p) => {
+          const status = entityStatuses.persons[p.id];
+          if (!status) return;
+
+          const pState = String(p?.essentialWorkflowState || "").trim().toUpperCase();
+          const isEssentialPerson =
+            pState.endsWith("_PERSON_ESSENTIAL") ||
+            pState.endsWith("_ESSENTIAL") ||
+            Boolean(p?.conversionWorkflowState) ||
+            (p?.essentialDepartmentId !== null && p?.essentialDepartmentId !== undefined);
+
+          if (isEssentialPerson) {
+            reviewPromises.push(
+              axios.put(
+                `${AGENT_API}/pass-request/essential-oil-dock/person-action`,
+                {
+                  personId: p.id,
+                  decision: String(status).trim().toUpperCase(),
+                  remarks: entityRemarks.persons[p.id] || null,
+                },
+                { headers },
+              ),
+            );
+          } else {
+            const remark = entityRemarks.persons[p.id];
+            const payload = {
+              personId: p.id,
+              decision:
+                status === "APPROVED"
+                  ? "approve-person"
+                  : status === "REVERTED"
+                    ? "revert-person"
+                    : "reject-person",
+            };
+            if (status === "REJECTED") payload.rejectedReason = remark;
+            else if (status === "REVERTED") payload.revertReason = remark;
+            reviewPromises.push(
+              axios.patch(
+                `${ADMIN_API}/pass-request/agent-pass-request-action`,
+                payload,
+                { headers },
+              ),
+            );
+          }
+        });
+
+        assignedVehicles.forEach((v) => {
           const status = entityStatuses.vehicles[v.id];
+          if (!status) return;
 
-          const payload = {
-            vehicleId: v.id,
-            decision: String(status).trim().toUpperCase(),
-            remarks: entityRemarks.vehicles[v.id] || null,
-          };
+          const vState = String(v?.essentialWorkflowState || "").trim().toUpperCase();
+          const isEssentialVehicle =
+            vState.endsWith("_ESSENTIAL") ||
+            Boolean(v?.conversionWorkflowState) ||
+            (v?.essentialDepartmentId !== null && v?.essentialDepartmentId !== undefined);
 
-          vehiclePromises.push(
-            axios.put(
-              `${AGENT_API}/pass-request/essential-oil-dock/vehicle-action`,
-              payload,
-              { headers },
-            ),
-          );
+          if (isEssentialVehicle) {
+            reviewPromises.push(
+              axios.put(
+                `${AGENT_API}/pass-request/essential-oil-dock/vehicle-action`,
+                {
+                  vehicleId: v.id,
+                  decision: String(status).trim().toUpperCase(),
+                  remarks: entityRemarks.vehicles[v.id] || null,
+                },
+                { headers },
+              ),
+            );
+          } else {
+            const remark = entityRemarks.vehicles[v.id];
+            const payload = {
+              vehicleId: v.id,
+              decision:
+                status === "APPROVED"
+                  ? "approve-vehicle"
+                  : status === "REVERTED"
+                    ? "revert-vehicle"
+                    : "reject-vehicle",
+            };
+            if (status === "REJECTED") payload.rejectedReason = remark;
+            else if (status === "REVERTED") payload.revertReason = remark;
+            reviewPromises.push(
+              axios.patch(
+                `${ADMIN_API}/pass-request/agent-pass-request-action`,
+                payload,
+                { headers },
+              ),
+            );
+          }
         });
 
-        if (vehiclePromises.length === 0) {
-          throw new Error("No Essential Oil Dock vehicle action was prepared.");
+        if (reviewPromises.length === 0) {
+          throw new Error("No actions prepared for entities assigned to your role.");
         }
 
-        await Promise.all(vehiclePromises);
-
-        reviewStatus = "PROCESSED";
-        responseMessage =
-          "Essential Oil Dock vehicle review processed successfully.";
-      }
-
-      // ------------------------------------------------------------
-      // 4. EXISTING NORMAL PASS FLOW
-      //
-      // DO NOT CHANGE THIS FLOW.
-      // It remains exactly the same for normal non-essential passes.
-      // ------------------------------------------------------------
-      // ------------------------------------------------------------
-      // 5. ESSENTIAL DEPARTMENT REVIEW
-      // ------------------------------------------------------------
-      else if (isDepartmental) {
-        // Find entities that are pending/reverted and belong to this user's role
-        const unverifiedPersons = persons.filter(
-          (p) =>
-            canUserVerifyPerson(p) &&
-            !entityStatuses.persons[p.id] &&
-            (p.status === "pending" ||
-              p.status === "reverted" ||
-              (p.conversionWorkflowState &&
-                (!p.conversionStatus ||
-                  p.conversionStatus === "PENDING" ||
-                  p.conversionStatus === "REVERTED"))),
-        );
-
-        const unverifiedVehicles = vehicles.filter(
-          (v) =>
-            canUserVerifyVehicle(v) &&
-            !entityStatuses.vehicles[v.id] &&
-            (v.status === "pending" ||
-              v.status === "reverted" ||
-              (v.conversionWorkflowState &&
-                (!v.conversionStatus ||
-                  v.conversionStatus === "PENDING" ||
-                  v.conversionStatus === "REVERTED"))),
-        );
-
-        if (unverifiedPersons.length > 0 || unverifiedVehicles.length > 0) {
-          toast.warning("Incomplete Verification", {
-            description:
-              "You must approve, reject, or revert all pending/reverted entities assigned to your role before submitting.",
-          });
-          return;
-        }
-
-        // Only submit the ones we actually verified
-        const personsToSubmit = persons.filter(
-          (p) => canUserVerifyPerson(p) && entityStatuses.persons[p.id],
-        );
-        const vehiclesToSubmit = vehicles.filter(
-          (v) => canUserVerifyVehicle(v) && entityStatuses.vehicles[v.id],
-        );
-
-        const personPromises = personsToSubmit.map((p) => {
-          const payload = {
-            personId: p.id,
-            decision: String(entityStatuses.persons[p.id]).trim().toUpperCase(),
-            remarks: entityRemarks.persons[p.id] || null,
-          };
-          return axios.put(
-            `${AGENT_API}/pass-request/essential-oil-dock/person-action`,
-            payload,
-            { headers },
-          );
-        });
-
-        const vehiclePromises = vehiclesToSubmit.map((v) => {
-          const payload = {
-            vehicleId: v.id,
-            decision: String(entityStatuses.vehicles[v.id])
-              .trim()
-              .toUpperCase(),
-            remarks: entityRemarks.vehicles[v.id] || null,
-          };
-          return axios.put(
-            `${AGENT_API}/pass-request/essential-oil-dock/vehicle-action`,
-            payload,
-            { headers },
-          );
-        });
-
-        await Promise.all([...personPromises, ...vehiclePromises]);
+        await Promise.all(reviewPromises);
 
         reviewStatus = "PROCESSED";
         responseMessage = "Departmental review processed successfully.";
@@ -2723,6 +2650,16 @@ export default function AdminPassApprovalsPage() {
             initialVehicleRemarks[v.id] = v.rejectedReason || "";
           }
           // Pending conversion request — leave empty for review!
+        } else if (
+          currentUser?.role === "Safety Officer" ||
+          (currentUser?.role || "").toLowerCase() === "safety officer"
+        ) {
+          if (v.twistLockCertified === true) {
+            initialVehicleStatuses[v.id] = "APPROVED";
+          } else if (v.status === "rejected") {
+            initialVehicleStatuses[v.id] = "REJECTED";
+            initialVehicleRemarks[v.id] = v.rejectedReason || "";
+          }
         } else if (v.status === "approved") {
           initialVehicleStatuses[v.id] = "APPROVED";
         } else if (v.status === "rejected") {
@@ -3225,21 +3162,46 @@ export default function AdminPassApprovalsPage() {
                       )}
                       <td className="px-4 sm:px-6 py-4 text-center">
                         <div className="flex flex-col items-center gap-1">
-                          <span
-                            className={`px-3 py-1 rounded-full text-[11px] font-bold border ${["approved", "completed"].includes(
-                              String(pass.status || "").toLowerCase(),
-                            )
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20"
-                                : statusClass
-                              }`}
-                          >
-                            {(["APPROVED", "COMPLETED", "ISSUED"].includes(
-                              String(pass.status || "").toUpperCase(),
-                            ) || activeTab === "processed"
-                              ? "COMPLETED"
-                              : pass.status || "PENDING"
-                            ).toUpperCase()}
-                          </span>
+                          {(() => {
+                            const rawStatus = String(pass.status || "").toLowerCase();
+                            let label = "PENDING";
+                            let badgeStyle = "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+
+                            if (activeTab === "processed") {
+                              if (rawStatus === "rejected") {
+                                label = "REJECTED";
+                                badgeStyle = "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20";
+                              } else if (rawStatus === "reverted") {
+                                label = "REVERTED";
+                                badgeStyle = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20";
+                              } else if (["approved", "completed", "issued"].includes(rawStatus)) {
+                                label = "COMPLETED";
+                                badgeStyle = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20";
+                              } else {
+                                label = "PROCESSED";
+                                badgeStyle = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20";
+                              }
+                            } else {
+                              if (rawStatus === "reverted") {
+                                label = "REVERTED";
+                                badgeStyle = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20";
+                              } else if (rawStatus === "rejected") {
+                                label = "REJECTED";
+                                badgeStyle = "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20";
+                              } else {
+                                label = "PENDING";
+                                badgeStyle = "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20";
+                              }
+                            }
+
+                            return (
+                              <span
+                                className={`px-3 py-1 rounded-full text-[11px] font-bold border ${badgeStyle}`}
+                              >
+                                {label}
+                              </span>
+                            );
+                          })()}
                           {isLocked && (
                             <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900 animate-pulse">
                               IN-USE BY {lock.userName.toUpperCase()}
@@ -3541,37 +3503,107 @@ export default function AdminPassApprovalsPage() {
                                         p?.concernDepartmentId,
                                       );
 
-                                      const concernDepartmentApproved =
-                                        workflowState ===
-                                        "PENDING_VENDOR_PERSON_TRAFFIC" ||
-                                        workflowState === "COMPLETED";
+                                      const roleNorm = String(userRole || currentUser?.role || "").trim().toLowerCase();
+                                      const deptNum = Number(currentUser?.departmentId || currentUser?.deptId || 0);
 
-                                      const trafficApproved =
-                                        workflowState === "COMPLETED";
+                                      const isCivilApprover = deptNum === 3 && (roleNorm === "approval" || !roleNorm);
+                                      const isMechApprover = deptNum === 4 && (roleNorm === "approval" || !roleNorm);
+                                      const isPassSectionApprover = deptNum === 9 && (roleNorm === "approval" || !roleNorm);
+
+                                      const civilDone =
+                                        personDepartmentId === 3 &&
+                                        ([
+                                          "PENDING_VENDOR_PERSON_TRAFFIC",
+                                          "COMPLETED",
+                                          "APPROVED",
+                                        ].includes(workflowState) ||
+                                          (isCivilApprover && entityStatuses.persons[p.id] === "APPROVED") ||
+                                          String(p?.status || "").toLowerCase() === "approved");
+
+                                      const civilRejected =
+                                        personDepartmentId === 3 &&
+                                        ((isCivilApprover && entityStatuses.persons[p.id] === "REJECTED") ||
+                                          (workflowState.includes("REJECTED") && (p?.revertStage?.includes("CIVIL") || p?.revertStage?.includes("CONCERN"))));
+
+                                      const civilReverted =
+                                        personDepartmentId === 3 &&
+                                        ((isCivilApprover && entityStatuses.persons[p.id] === "REVERTED") ||
+                                          (workflowState.includes("REVERTED") && (p?.revertStage?.includes("CIVIL") || p?.revertStage?.includes("CONCERN"))));
+
+                                      const mechDone =
+                                        personDepartmentId === 4 &&
+                                        ([
+                                          "PENDING_VENDOR_PERSON_TRAFFIC",
+                                          "COMPLETED",
+                                          "APPROVED",
+                                        ].includes(workflowState) ||
+                                          (isMechApprover && entityStatuses.persons[p.id] === "APPROVED") ||
+                                          String(p?.status || "").toLowerCase() === "approved");
+
+                                      const mechRejected =
+                                        personDepartmentId === 4 &&
+                                        ((isMechApprover && entityStatuses.persons[p.id] === "REJECTED") ||
+                                          (workflowState.includes("REJECTED") && (p?.revertStage?.includes("MECHANICAL") || p?.revertStage?.includes("CONCERN"))));
+
+                                      const mechReverted =
+                                        personDepartmentId === 4 &&
+                                        ((isMechApprover && entityStatuses.persons[p.id] === "REVERTED") ||
+                                          (workflowState.includes("REVERTED") && (p?.revertStage?.includes("MECHANICAL") || p?.revertStage?.includes("CONCERN"))));
+
+                                      const passSectionDone =
+                                        workflowState === "COMPLETED" ||
+                                        String(p?.status || "").toLowerCase() === "approved" ||
+                                        (isPassSectionApprover && entityStatuses.persons[p.id] === "APPROVED");
+
+                                      const passSectionRejected =
+                                        (isPassSectionApprover && entityStatuses.persons[p.id] === "REJECTED") ||
+                                        (workflowState.includes("REJECTED") && p?.revertStage?.includes("TRAFFIC"));
+
+                                      const passSectionReverted =
+                                        (isPassSectionApprover && entityStatuses.persons[p.id] === "REVERTED") ||
+                                        (workflowState.includes("REVERTED") && p?.revertStage?.includes("TRAFFIC"));
 
                                       if (personDepartmentId === 3) {
                                         return (
                                           <>
                                             <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${concernDepartmentApproved
+                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                civilDone
                                                   ? "bg-emerald-100 text-emerald-700"
-                                                  : "bg-amber-100 text-amber-700"
-                                                }`}
+                                                  : civilRejected
+                                                    ? "bg-red-100 text-red-700"
+                                                    : civilReverted
+                                                      ? "bg-amber-100 text-amber-700"
+                                                      : "bg-amber-100 text-amber-700"
+                                              }`}
                                             >
-                                              {concernDepartmentApproved
+                                              {civilDone
                                                 ? "✓ Civil Dept"
-                                                : "⏳ Pending Civil Dept"}
+                                                : civilRejected
+                                                  ? "✕ Civil Dept Rejected"
+                                                  : civilReverted
+                                                    ? "↩ Civil Dept Reverted"
+                                                    : "⏳ Pending Civil Dept"}
                                             </span>
 
                                             <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${trafficApproved
+                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                passSectionDone
                                                   ? "bg-emerald-100 text-emerald-700"
-                                                  : "bg-amber-100 text-amber-700"
-                                                }`}
+                                                  : passSectionRejected
+                                                    ? "bg-red-100 text-red-700"
+                                                    : passSectionReverted
+                                                      ? "bg-amber-100 text-amber-700"
+                                                      : "bg-amber-100 text-amber-700"
+                                              }`}
                                             >
-                                              {trafficApproved
+                                              {passSectionDone
                                                 ? "✓ Pass Section"
-                                                : "⏳ Pending Pass Section"}
+                                                : passSectionRejected
+                                                  ? "✕ Pass Section Rejected"
+                                                  : passSectionReverted
+                                                    ? "↩ Pass Section Reverted"
+                                                    : "⏳ Pending Pass Section"}
                                             </span>
                                           </>
                                         );
@@ -3581,25 +3613,43 @@ export default function AdminPassApprovalsPage() {
                                         return (
                                           <>
                                             <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${concernDepartmentApproved
+                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                mechDone
                                                   ? "bg-emerald-100 text-emerald-700"
-                                                  : "bg-amber-100 text-amber-700"
-                                                }`}
+                                                  : mechRejected
+                                                    ? "bg-red-100 text-red-700"
+                                                    : mechReverted
+                                                      ? "bg-amber-100 text-amber-700"
+                                                      : "bg-amber-100 text-amber-700"
+                                              }`}
                                             >
-                                              {concernDepartmentApproved
-                                                ? "✓ Mechanical Dept"
-                                                : "⏳ Pending Mechanical Dept"}
+                                              {mechDone
+                                                ? "✓ Mech Dept"
+                                                : mechRejected
+                                                  ? "✕ Mech Dept Rejected"
+                                                  : mechReverted
+                                                    ? "↩ Mech Dept Reverted"
+                                                    : "⏳ Pending Mech Dept"}
                                             </span>
 
                                             <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${trafficApproved
+                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                passSectionDone
                                                   ? "bg-emerald-100 text-emerald-700"
-                                                  : "bg-amber-100 text-amber-700"
-                                                }`}
+                                                  : passSectionRejected
+                                                    ? "bg-red-100 text-red-700"
+                                                    : passSectionReverted
+                                                      ? "bg-amber-100 text-amber-700"
+                                                      : "bg-amber-100 text-amber-700"
+                                              }`}
                                             >
-                                              {trafficApproved
+                                              {passSectionDone
                                                 ? "✓ Pass Section"
-                                                : "⏳ Pending Pass Section"}
+                                                : passSectionRejected
+                                                  ? "✕ Pass Section Rejected"
+                                                  : passSectionReverted
+                                                    ? "↩ Pass Section Reverted"
+                                                    : "⏳ Pending Pass Section"}
                                             </span>
                                           </>
                                         );
@@ -3608,14 +3658,23 @@ export default function AdminPassApprovalsPage() {
                                       if (personDepartmentId === 9) {
                                         return (
                                           <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${trafficApproved
+                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                              passSectionDone
                                                 ? "bg-emerald-100 text-emerald-700"
-                                                : "bg-amber-100 text-amber-700"
-                                              }`}
+                                                : passSectionRejected
+                                                  ? "bg-red-100 text-red-700"
+                                                  : passSectionReverted
+                                                    ? "bg-amber-100 text-amber-700"
+                                                    : "bg-amber-100 text-amber-700"
+                                            }`}
                                           >
-                                            {trafficApproved
+                                            {passSectionDone
                                               ? "✓ Pass Section"
-                                              : "⏳ Pending Pass Section"}
+                                              : passSectionRejected
+                                                ? "✕ Pass Section Rejected"
+                                                : passSectionReverted
+                                                  ? "↩ Pass Section Reverted"
+                                                  : "⏳ Pending Pass Section"}
                                           </span>
                                         );
                                       }
@@ -3648,27 +3707,37 @@ export default function AdminPassApprovalsPage() {
                                       const isMech =
                                         convState.includes("MECHANICAL") ||
                                         deptId === 4;
+                                      const userDeptNum = Number(currentUser?.departmentId || currentUser?.deptId || 0);
+                                      const userRoleNorm = String(userRole || currentUser?.role || "").trim().toLowerCase();
+                                      const isCivilApprover = userDeptNum === 3 && (userRoleNorm === "approval" || !userRoleNorm);
+                                      const isMechApprover = userDeptNum === 4 && (userRoleNorm === "approval" || !userRoleNorm);
+                                      const isCisfApprover = userDeptNum === 1 || ["cisf", "cisf asst commandant", "cisf assistant commandant", "cisf.assistant commandant"].includes(userRoleNorm);
+
                                       const civilDone =
                                         isCivil &&
-                                        [
+                                        ([
                                           "PENDING_CISF_CONVERSION",
                                           "PENDING_PASS_SECTION_CONVERSION",
                                           "APPROVED",
                                           "COMPLETED",
-                                        ].includes(convState);
+                                        ].includes(convState) ||
+                                          (isCivilApprover && entityStatuses.persons[p.id] === "APPROVED"));
                                       const mechDone =
                                         isMech &&
-                                        [
+                                        ([
                                           "PENDING_CISF_CONVERSION",
                                           "PENDING_PASS_SECTION_CONVERSION",
                                           "APPROVED",
                                           "COMPLETED",
-                                        ].includes(convState);
-                                      const cisfDone = [
-                                        "PENDING_PASS_SECTION_CONVERSION",
-                                        "APPROVED",
-                                        "COMPLETED",
-                                      ].includes(convState);
+                                        ].includes(convState) ||
+                                          (isMechApprover && entityStatuses.persons[p.id] === "APPROVED"));
+                                      const cisfDone =
+                                        [
+                                          "PENDING_PASS_SECTION_CONVERSION",
+                                          "APPROVED",
+                                          "COMPLETED",
+                                        ].includes(convState) ||
+                                        (isCisfApprover && entityStatuses.persons[p.id] === "APPROVED");
                                       const isPassSectionApprover =
                                         userRole === "Approval" && Number(currentUser?.departmentId) === 9;
                                       const passSectionDone =
@@ -3740,91 +3809,146 @@ export default function AdminPassApprovalsPage() {
                                         deptId === 4 ||
                                         workflowState.includes("MECHANICAL");
 
-                                      const isCivilApprover =
-                                        userRole === "Approval" && Number(currentUser?.departmentId) === 3;
-                                      const isMechApprover =
-                                        userRole === "Approval" && Number(currentUser?.departmentId) === 4;
-                                      const isPassSectionApprover =
-                                        userRole === "Approval" && Number(currentUser?.departmentId) === 9;
+                                      const roleNorm = String(userRole || currentUser?.role || "").trim().toLowerCase();
+                                       const deptNum = Number(currentUser?.departmentId || currentUser?.deptId || 0);
 
-                                      const civilDone =
-                                        isCivilDept &&
-                                        ([
-                                          "PENDING_CISF_PERSON_ESSENTIAL",
-                                          "PENDING_TRAFFIC_PERSON_ESSENTIAL",
-                                          "PENDING_PASS_SECTION_ESSENTIAL",
-                                          "COMPLETED_PERSON_ESSENTIAL",
-                                          "COMPLETED_ESSENTIAL",
-                                          "COMPLETED",
-                                          "APPROVED",
-                                        ].includes(workflowState) ||
-                                          (isCivilApprover && entityStatuses.persons[p.id] === "APPROVED"));
+                                       const isCivilApprover = deptNum === 3 && (roleNorm === "approval" || !roleNorm);
+                                       const isMechApprover = deptNum === 4 && (roleNorm === "approval" || !roleNorm);
+                                       const isPassSectionApprover = deptNum === 9 && (roleNorm === "approval" || !roleNorm);
 
-                                      const mechDone =
-                                        isMechDept &&
-                                        ([
-                                          "PENDING_CISF_PERSON_ESSENTIAL",
-                                          "PENDING_TRAFFIC_PERSON_ESSENTIAL",
-                                          "PENDING_PASS_SECTION_ESSENTIAL",
-                                          "COMPLETED_PERSON_ESSENTIAL",
-                                          "COMPLETED_ESSENTIAL",
-                                          "COMPLETED",
-                                          "APPROVED",
-                                        ].includes(workflowState) ||
-                                          (isMechApprover && entityStatuses.persons[p.id] === "APPROVED"));
+                                       const civilDone =
+                                         isCivilDept &&
+                                         ([
+                                           "PENDING_CISF_PERSON_ESSENTIAL",
+                                           "PENDING_TRAFFIC_PERSON_ESSENTIAL",
+                                           "PENDING_PASS_SECTION_ESSENTIAL",
+                                           "COMPLETED_PERSON_ESSENTIAL",
+                                           "COMPLETED_ESSENTIAL",
+                                           "COMPLETED",
+                                           "APPROVED",
+                                         ].includes(workflowState) ||
+                                           (isCivilApprover && entityStatuses.persons[p.id] === "APPROVED"));
 
-                                      const passSectionDone =
-                                        [
-                                          "COMPLETED_PERSON_ESSENTIAL",
-                                          "COMPLETED_ESSENTIAL",
-                                          "COMPLETED",
-                                          "APPROVED",
-                                        ].includes(workflowState) ||
-                                        (isPassSectionApprover && entityStatuses.persons[p.id] === "APPROVED");
+                                       const civilRejected =
+                                         isCivilDept &&
+                                         ((isCivilApprover && entityStatuses.persons[p.id] === "REJECTED") ||
+                                           (workflowState.includes("REJECTED") && p.essentialRevertStage === "PENDING_CIVIL_ESSENTIAL"));
 
-                                      return (
-                                        <>
-                                          {isCivilDept && (
-                                            <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${civilDone
-                                                  ? "bg-emerald-100 text-emerald-700"
-                                                  : "bg-amber-100 text-amber-700"
-                                                }`}
-                                            >
-                                              {civilDone
-                                                ? "✓ Civil Dept"
-                                                : "⏳ Pending Civil Dept"}
-                                            </span>
-                                          )}
+                                       const civilReverted =
+                                         isCivilDept &&
+                                         ((isCivilApprover && entityStatuses.persons[p.id] === "REVERTED") ||
+                                           (workflowState.includes("REVERTED") && p.essentialRevertStage === "PENDING_CIVIL_ESSENTIAL"));
 
-                                          {isMechDept && (
-                                            <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${mechDone
-                                                  ? "bg-emerald-100 text-emerald-700"
-                                                  : "bg-amber-100 text-amber-700"
-                                                }`}
-                                            >
-                                              {mechDone
-                                                ? "✓ Mech Dept"
-                                                : "⏳ Pending Mech Dept"}
-                                            </span>
-                                          )}
+                                       const mechDone =
+                                         isMechDept &&
+                                         ([
+                                           "PENDING_CISF_PERSON_ESSENTIAL",
+                                           "PENDING_TRAFFIC_PERSON_ESSENTIAL",
+                                           "PENDING_PASS_SECTION_ESSENTIAL",
+                                           "COMPLETED_PERSON_ESSENTIAL",
+                                           "COMPLETED_ESSENTIAL",
+                                           "COMPLETED",
+                                           "APPROVED",
+                                         ].includes(workflowState) ||
+                                           (isMechApprover && entityStatuses.persons[p.id] === "APPROVED"));
 
-                                          <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${passSectionDone
-                                                ? "bg-emerald-100 text-emerald-700"
-                                                : "bg-amber-100 text-amber-700"
-                                              }`}
-                                          >
-                                            {passSectionDone
-                                              ? "✓ Pass Section"
-                                              : "⏳ Pending Pass Section"}
-                                          </span>
-                                        </>
-                                      );
-                                    }
+                                       const mechRejected =
+                                         isMechDept &&
+                                         ((isMechApprover && entityStatuses.persons[p.id] === "REJECTED") ||
+                                           (workflowState.includes("REJECTED") && p.essentialRevertStage === "PENDING_MECHANICAL_ESSENTIAL"));
 
-                                    return null;
+                                       const mechReverted =
+                                         isMechDept &&
+                                         ((isMechApprover && entityStatuses.persons[p.id] === "REVERTED") ||
+                                           (workflowState.includes("REVERTED") && p.essentialRevertStage === "PENDING_MECHANICAL_ESSENTIAL"));
+
+                                       const passSectionDone =
+                                         [
+                                           "COMPLETED_PERSON_ESSENTIAL",
+                                           "COMPLETED_ESSENTIAL",
+                                           "COMPLETED",
+                                           "APPROVED",
+                                         ].includes(workflowState) ||
+                                         (isPassSectionApprover && entityStatuses.persons[p.id] === "APPROVED");
+
+                                       const passSectionRejected =
+                                         (isPassSectionApprover && entityStatuses.persons[p.id] === "REJECTED") ||
+                                         (workflowState.includes("REJECTED") && p.essentialRevertStage === "PENDING_PASS_SECTION_ESSENTIAL");
+
+                                       const passSectionReverted =
+                                         (isPassSectionApprover && entityStatuses.persons[p.id] === "REVERTED") ||
+                                         (workflowState.includes("REVERTED") && p.essentialRevertStage === "PENDING_PASS_SECTION_ESSENTIAL");
+
+                                       return (
+                                         <>
+                                           {isCivilDept && (
+                                             <span
+                                               className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                 civilDone
+                                                   ? "bg-emerald-100 text-emerald-700"
+                                                   : civilRejected
+                                                     ? "bg-red-100 text-red-700"
+                                                     : civilReverted
+                                                       ? "bg-amber-100 text-amber-700"
+                                                       : "bg-amber-100 text-amber-700"
+                                               }`}
+                                             >
+                                               {civilDone
+                                                 ? "✓ Civil Dept"
+                                                 : civilRejected
+                                                   ? "✕ Civil Dept Rejected"
+                                                   : civilReverted
+                                                     ? "↩ Civil Dept Reverted"
+                                                     : "⏳ Pending Civil Dept"}
+                                             </span>
+                                           )}
+
+                                           {isMechDept && (
+                                             <span
+                                               className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                 mechDone
+                                                   ? "bg-emerald-100 text-emerald-700"
+                                                   : mechRejected
+                                                     ? "bg-red-100 text-red-700"
+                                                     : mechReverted
+                                                       ? "bg-amber-100 text-amber-700"
+                                                       : "bg-amber-100 text-amber-700"
+                                               }`}
+                                             >
+                                               {mechDone
+                                                 ? "✓ Mech Dept"
+                                                 : mechRejected
+                                                   ? "✕ Mech Dept Rejected"
+                                                   : mechReverted
+                                                     ? "↩ Mech Dept Reverted"
+                                                     : "⏳ Pending Mech Dept"}
+                                             </span>
+                                           )}
+
+                                           <span
+                                             className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                               passSectionDone
+                                                 ? "bg-emerald-100 text-emerald-700"
+                                                 : passSectionRejected
+                                                   ? "bg-red-100 text-red-700"
+                                                   : passSectionReverted
+                                                     ? "bg-amber-100 text-amber-700"
+                                                     : "bg-amber-100 text-amber-700"
+                                             }`}
+                                           >
+                                             {passSectionDone
+                                               ? "✓ Pass Section"
+                                               : passSectionRejected
+                                                 ? "✕ Pass Section Rejected"
+                                                 : passSectionReverted
+                                                   ? "↩ Pass Section Reverted"
+                                                   : "⏳ Pending Pass Section"}
+                                           </span>
+                                         </>
+                                       );
+                                     }
+
+                                     return null;
                                   })()}
                                 </div>
                               </td>
@@ -4083,53 +4207,153 @@ export default function AdminPassApprovalsPage() {
 
                                       // 1. Vendor Oil Jetty Vehicle Workflow
                                       if (wf.startsWith("PENDING_VENDOR_") || isOilDockArea(v.accessAreaId || v.accessArea)) {
+                                        const roleNorm = String(userRole || currentUser?.role || "").trim().toLowerCase();
+                                        const deptNum = Number(
+                                          currentUser?.departmentId ||
+                                          currentUser?.deptId ||
+                                          (typeof window !== "undefined" && (() => {
+                                            try {
+                                              const u = JSON.parse(localStorage.getItem("user") || "{}");
+                                              return u.departmentId || u.deptId || 0;
+                                            } catch { return 0; }
+                                          })()) ||
+                                          0
+                                        );
+
+                                        const isMarineApprover =
+                                          deptNum === 7 ||
+                                          [
+                                            "fire safety officer",
+                                            "dy. conservator",
+                                            "marine department",
+                                          ].includes(roleNorm);
+                                        const isCivilApprover =
+                                          deptNum === 3 &&
+                                          (roleNorm === "approval" || !roleNorm);
+                                        const isMechApprover =
+                                          deptNum === 4 &&
+                                          (roleNorm === "approval" || !roleNorm);
+                                        const isCisfApprover =
+                                          deptNum === 1 ||
+                                          [
+                                            "cisf",
+                                            "cisf asst commandant",
+                                            "cisf assistant commandant",
+                                            "cisf.assistant commandant",
+                                          ].includes(roleNorm) ||
+                                          roleNorm.includes("cisf");
+                                        const isPassSectionApprover =
+                                          deptNum === 9 &&
+                                          (roleNorm === "approval" || !roleNorm);
+
                                         const fireDone =
                                           v.sparkArresterCertified === true ||
                                           v.marineSafetyApproved === true ||
                                           ["PENDING_VENDOR_CONCERN_DEPARTMENT", "PENDING_VENDOR_CISF", "PENDING_VENDOR_TRAFFIC", "COMPLETED"].includes(wf) ||
-                                          (["Fire Safety Officer", "Dy. Conservator"].includes(userRole) && entityStatuses.vehicles[v.id] === "APPROVED");
+                                          (isMarineApprover && entityStatuses.vehicles[v.id] === "APPROVED");
+                                        const fireRejected =
+                                          (isMarineApprover && entityStatuses.vehicles[v.id] === "REJECTED");
+                                        const fireReverted =
+                                          (isMarineApprover && entityStatuses.vehicles[v.id] === "REVERTED");
 
                                         const isCivil = deptId === 3;
                                         const isMech = deptId === 4;
                                         const civilDone =
                                           isCivil &&
                                           (["PENDING_VENDOR_CISF", "PENDING_VENDOR_TRAFFIC", "COMPLETED"].includes(wf) ||
-                                            (userRole === "Approval" && Number(currentUser?.departmentId) === 3 && entityStatuses.vehicles[v.id] === "APPROVED"));
+                                            (isCivilApprover && entityStatuses.vehicles[v.id] === "APPROVED"));
+                                        const civilRejected =
+                                          isCivil && (isCivilApprover && entityStatuses.vehicles[v.id] === "REJECTED");
+                                        const civilReverted =
+                                          isCivil && (isCivilApprover && entityStatuses.vehicles[v.id] === "REVERTED");
+
                                         const mechDone =
                                           isMech &&
                                           (["PENDING_VENDOR_CISF", "PENDING_VENDOR_TRAFFIC", "COMPLETED"].includes(wf) ||
-                                            (userRole === "Approval" && Number(currentUser?.departmentId) === 4 && entityStatuses.vehicles[v.id] === "APPROVED"));
+                                            (isMechApprover && entityStatuses.vehicles[v.id] === "APPROVED"));
+                                        const mechRejected =
+                                          isMech && (isMechApprover && entityStatuses.vehicles[v.id] === "REJECTED");
+                                        const mechReverted =
+                                          isMech && (isMechApprover && entityStatuses.vehicles[v.id] === "REVERTED");
 
                                         const cisfDone =
                                           ["PENDING_VENDOR_TRAFFIC", "COMPLETED"].includes(wf) ||
-                                          (["CISF", "CISF Asst Commandant", "CISF Assistant Commandant"].includes(userRole) && entityStatuses.vehicles[v.id] === "APPROVED") ||
+                                          (isCisfApprover && entityStatuses.vehicles[v.id] === "APPROVED") ||
                                           String(v.status || "").toLowerCase() === "approved";
+                                        const cisfRejected =
+                                          (isCisfApprover && entityStatuses.vehicles[v.id] === "REJECTED");
+                                        const cisfReverted =
+                                          (isCisfApprover && entityStatuses.vehicles[v.id] === "REVERTED");
 
                                         const passSectionDone =
                                           wf === "COMPLETED" ||
                                           String(v.status || "").toLowerCase() === "approved" ||
-                                          (userRole === "Approval" && Number(currentUser?.departmentId) === 9 && entityStatuses.vehicles[v.id] === "APPROVED");
+                                          (isPassSectionApprover && entityStatuses.vehicles[v.id] === "APPROVED");
+                                        const passSectionRejected =
+                                          (isPassSectionApprover && entityStatuses.vehicles[v.id] === "REJECTED");
+                                        const passSectionReverted =
+                                          (isPassSectionApprover && entityStatuses.vehicles[v.id] === "REVERTED");
 
                                         return (
                                           <>
-                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${fireDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                                              {fireDone ? "✓ Fire Safety / Dy. Conservator" : "⏳ Pending Fire Safety / Dy. Conservator"}
+                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                              fireDone ? "bg-emerald-100 text-emerald-700" :
+                                              fireRejected ? "bg-red-100 text-red-700" :
+                                              fireReverted ? "bg-amber-100 text-amber-700" :
+                                              "bg-amber-100 text-amber-700"
+                                            }`}>
+                                              {fireDone ? "✓ Fire Safety / Dy. Conservator" :
+                                               fireRejected ? "✕ Fire Safety Rejected" :
+                                               fireReverted ? "↩ Fire Safety Reverted" :
+                                               "⏳ Pending Fire Safety / Dy. Conservator"}
                                             </span>
                                             {isCivil && (
-                                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${civilDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                                                {civilDone ? "✓ Civil Dept" : "⏳ Pending Civil Dept"}
+                                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                civilDone ? "bg-emerald-100 text-emerald-700" :
+                                                civilRejected ? "bg-red-100 text-red-700" :
+                                                civilReverted ? "bg-amber-100 text-amber-700" :
+                                                "bg-amber-100 text-amber-700"
+                                              }`}>
+                                                {civilDone ? "✓ Civil Dept" :
+                                                 civilRejected ? "✕ Civil Dept Rejected" :
+                                                 civilReverted ? "↩ Civil Dept Reverted" :
+                                                 "⏳ Pending Civil Dept"}
                                               </span>
                                             )}
                                             {isMech && (
-                                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${mechDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                                                {mechDone ? "✓ Mech Dept" : "⏳ Pending Mech Dept"}
+                                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                mechDone ? "bg-emerald-100 text-emerald-700" :
+                                                mechRejected ? "bg-red-100 text-red-700" :
+                                                mechReverted ? "bg-amber-100 text-amber-700" :
+                                                "bg-amber-100 text-amber-700"
+                                              }`}>
+                                                {mechDone ? "✓ Mech Dept" :
+                                                 mechRejected ? "✕ Mech Dept Rejected" :
+                                                 mechReverted ? "↩ Mech Dept Reverted" :
+                                                 "⏳ Pending Mech Dept"}
                                               </span>
                                             )}
-                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${cisfDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                                              {cisfDone ? "✓ CISF Assistant Commandant" : "⏳ Pending CISF"}
+                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                              cisfDone ? "bg-emerald-100 text-emerald-700" :
+                                              cisfRejected ? "bg-red-100 text-red-700" :
+                                              cisfReverted ? "bg-amber-100 text-amber-700" :
+                                              "bg-amber-100 text-amber-700"
+                                            }`}>
+                                              {cisfDone ? "✓ CISF Assistant Commandant" :
+                                               cisfRejected ? "✕ CISF Rejected" :
+                                               cisfReverted ? "↩ CISF Reverted" :
+                                               "⏳ Pending CISF"}
                                             </span>
-                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${passSectionDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                                              {passSectionDone ? "✓ Pass Section" : "⏳ Pending Pass Section"}
+                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                              passSectionDone ? "bg-emerald-100 text-emerald-700" :
+                                              passSectionRejected ? "bg-red-100 text-red-700" :
+                                              passSectionReverted ? "bg-amber-100 text-amber-700" :
+                                              "bg-amber-100 text-amber-700"
+                                            }`}>
+                                              {passSectionDone ? "✓ Pass Section" :
+                                               passSectionRejected ? "✕ Pass Section Rejected" :
+                                               passSectionReverted ? "↩ Pass Section Reverted" :
+                                               "⏳ Pending Pass Section"}
                                             </span>
                                           </>
                                         );
@@ -4137,35 +4361,48 @@ export default function AdminPassApprovalsPage() {
 
                                       // 2. Normal Annual Trailer Safety Flow
                                       if (isAnnualTrailer) {
+                                        const parentWf = String(
+                                          v.workflowState ||
+                                          selectedRequest?.workflowState ||
+                                          ""
+                                        ).toUpperCase();
                                         const currentTrailerStatus = String(entityStatuses.vehicles[v.id] || v.status || "").toLowerCase();
                                         const isPassSectionApprover = userRole === "Approval" && Number(currentUser?.departmentId) === 9;
                                         const isSafetyApprover = userRole === "Safety Officer";
 
-                                        const passSectionDone =
-                                          wf === "PENDING_SAFETY" ||
-                                          wf === "COMPLETED" ||
-                                          currentTrailerStatus === "approved" ||
+                                        const passSectionApprovedPrior =
+                                          parentWf === "PENDING_SAFETY" ||
+                                          parentWf === "COMPLETED" ||
+                                          v.status === "approved" ||
                                           (isPassSectionApprover && entityStatuses.vehicles[v.id] === "APPROVED") ||
                                           entityStatuses.vehicles[v.id] === "APPROVED";
 
+                                        const passSectionDone =
+                                          passSectionApprovedPrior &&
+                                          !(isPassSectionApprover && (entityStatuses.vehicles[v.id] === "REJECTED" || entityStatuses.vehicles[v.id] === "REVERTED"));
+
                                         const passSectionRejected =
-                                          currentTrailerStatus === "rejected" ||
-                                          (isPassSectionApprover && entityStatuses.vehicles[v.id] === "REJECTED");
+                                          isPassSectionApprover
+                                            ? entityStatuses.vehicles[v.id] === "REJECTED"
+                                            : (!passSectionApprovedPrior && currentTrailerStatus === "rejected");
 
                                         const passSectionReverted =
-                                          currentTrailerStatus === "reverted" ||
-                                          (isPassSectionApprover && entityStatuses.vehicles[v.id] === "REVERTED");
+                                          isPassSectionApprover
+                                            ? entityStatuses.vehicles[v.id] === "REVERTED"
+                                            : (!passSectionApprovedPrior && currentTrailerStatus === "reverted");
 
                                         const safetyDone =
                                           v.twistLockCertified === true ||
-                                          wf === "COMPLETED" ||
+                                          parentWf === "COMPLETED" ||
                                           (isSafetyApprover && entityStatuses.vehicles[v.id] === "APPROVED");
 
                                         const safetyRejected =
-                                          isSafetyApprover && entityStatuses.vehicles[v.id] === "REJECTED";
+                                          (isSafetyApprover && entityStatuses.vehicles[v.id] === "REJECTED") ||
+                                          (passSectionApprovedPrior && currentTrailerStatus === "rejected" && !isPassSectionApprover);
 
                                         const safetyReverted =
-                                          isSafetyApprover && entityStatuses.vehicles[v.id] === "REVERTED";
+                                          (isSafetyApprover && entityStatuses.vehicles[v.id] === "REVERTED") ||
+                                          (passSectionApprovedPrior && currentTrailerStatus === "reverted" && !isPassSectionApprover);
 
                                         return (
                                           <>
@@ -4224,14 +4461,23 @@ export default function AdminPassApprovalsPage() {
                                       const convState = String(
                                         v.conversionWorkflowState || "",
                                       ).toUpperCase();
-                                      const fireDone = [
-                                        "PENDING_CIVIL_CONVERSION",
-                                        "PENDING_MECHANICAL_CONVERSION",
-                                        "PENDING_CISF_CONVERSION",
-                                        "PENDING_PASS_SECTION_CONVERSION",
-                                        "APPROVED",
-                                        "COMPLETED",
-                                      ].includes(convState);
+                                      const userDeptNum = Number(currentUser?.departmentId || currentUser?.deptId || 0);
+                                      const userRoleNorm = String(userRole || currentUser?.role || "").trim().toLowerCase();
+                                      const isMarineApprover = userDeptNum === 7 || ["fire safety officer", "dy. conservator", "marine department"].includes(userRoleNorm);
+                                      const isCivilApprover = userDeptNum === 3 && (userRoleNorm === "approval" || !userRoleNorm);
+                                      const isMechApprover = userDeptNum === 4 && (userRoleNorm === "approval" || !userRoleNorm);
+                                      const isCisfApprover = userDeptNum === 1 || ["cisf", "cisf asst commandant", "cisf assistant commandant", "cisf.assistant commandant"].includes(userRoleNorm);
+
+                                      const fireDone =
+                                        [
+                                          "PENDING_CIVIL_CONVERSION",
+                                          "PENDING_MECHANICAL_CONVERSION",
+                                          "PENDING_CISF_CONVERSION",
+                                          "PENDING_PASS_SECTION_CONVERSION",
+                                          "APPROVED",
+                                          "COMPLETED",
+                                        ].includes(convState) ||
+                                        (isMarineApprover && entityStatuses.vehicles[v.id] === "APPROVED");
                                       const deptId = Number(
                                         v.conversionDepartmentId ||
                                           v.essentialDepartmentId ||
@@ -4247,25 +4493,29 @@ export default function AdminPassApprovalsPage() {
                                         deptId === 4;
                                       const civilDone =
                                         isCivil &&
-                                        [
+                                        ([
                                           "PENDING_CISF_CONVERSION",
                                           "PENDING_PASS_SECTION_CONVERSION",
                                           "APPROVED",
                                           "COMPLETED",
-                                        ].includes(convState);
+                                        ].includes(convState) ||
+                                          (isCivilApprover && entityStatuses.vehicles[v.id] === "APPROVED"));
                                       const mechDone =
                                         isMech &&
-                                        [
+                                        ([
                                           "PENDING_CISF_CONVERSION",
                                           "PENDING_PASS_SECTION_CONVERSION",
                                           "APPROVED",
                                           "COMPLETED",
-                                        ].includes(convState);
-                                      const cisfDone = [
-                                        "PENDING_PASS_SECTION_CONVERSION",
-                                        "APPROVED",
-                                        "COMPLETED",
-                                      ].includes(convState);
+                                        ].includes(convState) ||
+                                          (isMechApprover && entityStatuses.vehicles[v.id] === "APPROVED"));
+                                      const cisfDone =
+                                        [
+                                          "PENDING_PASS_SECTION_CONVERSION",
+                                          "APPROVED",
+                                          "COMPLETED",
+                                        ].includes(convState) ||
+                                        (isCisfApprover && entityStatuses.vehicles[v.id] === "APPROVED");
                                       const isPassSectionApprover =
                                         userRole === "Approval" && Number(currentUser?.departmentId) === 9;
                                       const passSectionDone =
@@ -4333,136 +4583,269 @@ export default function AdminPassApprovalsPage() {
                                       const deptId = Number(
                                         v.essentialDepartmentId,
                                       );
-                                      const sparkApproved =
-                                        v.sparkArresterCertified === true ||
-                                        v.marineSafetyApproved === true ||
-                                        (userRole === "Fire Safety Officer" &&
-                                          entityStatuses.vehicles[v.id] ===
-                                          "APPROVED");
+                                      const roleNorm = String(userRole || currentUser?.role || "").trim().toLowerCase();
+                                       const deptNum = Number(currentUser?.departmentId || currentUser?.deptId || 0);
 
-                                      const fireSafetyDone =
-                                        sparkApproved ||
-                                        [
-                                          "PENDING_CIVIL_ESSENTIAL",
-                                          "PENDING_MECHANICAL_ESSENTIAL",
-                                          "PENDING_CISF_ESSENTIAL",
-                                          "PENDING_PASS_SECTION_ESSENTIAL",
-                                          "COMPLETED_ESSENTIAL",
-                                          "COMPLETED",
-                                          "APPROVED",
-                                        ].includes(workflowState);
+                                       const isMarineApprover =
+                                         deptNum === 7 ||
+                                         [
+                                           "fire safety officer",
+                                           "dy. conservator",
+                                           "marine department",
+                                         ].includes(roleNorm);
 
-                                      const isCivilDept =
-                                        deptId === 3 ||
-                                        workflowState.includes("CIVIL");
-                                      const isMechDept =
-                                        deptId === 4 ||
-                                        workflowState.includes("MECHANICAL");
+                                       const isCivilApprover =
+                                         deptNum === 3 &&
+                                         (roleNorm === "approval" || !roleNorm);
 
-                                      const isCivilApprover =
-                                        userRole === "Approval" && Number(currentUser?.departmentId) === 3;
-                                      const isMechApprover =
-                                        userRole === "Approval" && Number(currentUser?.departmentId) === 4;
-                                      const isCisfApprover =
-                                        Number(currentUser?.departmentId) === 1 ||
-                                        [
-                                          "CISF",
-                                          "CISF Asst Commandant",
-                                          "CISF Assistant Commandant",
-                                          "Cisf.Assistant Commandant",
-                                        ].includes(String(userRole || "").trim());
-                                      const isPassSectionApprover =
-                                        userRole === "Approval" && Number(currentUser?.departmentId) === 9;
+                                       const isMechApprover =
+                                         deptNum === 4 &&
+                                         (roleNorm === "approval" || !roleNorm);
 
-                                      const civilDone =
-                                        isCivilDept &&
-                                        ([
-                                          "PENDING_CISF_ESSENTIAL",
-                                          "PENDING_PASS_SECTION_ESSENTIAL",
-                                          "COMPLETED_ESSENTIAL",
-                                          "COMPLETED",
-                                          "APPROVED",
-                                        ].includes(workflowState) ||
-                                          (isCivilApprover && entityStatuses.vehicles[v.id] === "APPROVED"));
+                                       const isCisfApprover =
+                                         deptNum === 1 ||
+                                         [
+                                           "cisf",
+                                           "cisf asst commandant",
+                                           "cisf assistant commandant",
+                                           "cisf.assistant commandant",
+                                         ].includes(roleNorm);
 
-                                      const mechDone =
-                                        isMechDept &&
-                                        ([
-                                          "PENDING_CISF_ESSENTIAL",
-                                          "PENDING_PASS_SECTION_ESSENTIAL",
-                                          "COMPLETED_ESSENTIAL",
-                                          "COMPLETED",
-                                          "APPROVED",
-                                        ].includes(workflowState) ||
-                                          (isMechApprover && entityStatuses.vehicles[v.id] === "APPROVED"));
+                                       const isPassSectionApprover =
+                                         deptNum === 9 &&
+                                         (roleNorm === "approval" || !roleNorm);
 
-                                      const cisfDone =
-                                        [
-                                          "PENDING_PASS_SECTION_ESSENTIAL",
-                                          "COMPLETED_ESSENTIAL",
-                                          "COMPLETED",
-                                          "APPROVED",
-                                        ].includes(workflowState) ||
-                                        (isCisfApprover && entityStatuses.vehicles[v.id] === "APPROVED");
+                                       const sparkApproved =
+                                         v.sparkArresterCertified === true ||
+                                         v.marineSafetyApproved === true ||
+                                         (isMarineApprover &&
+                                           entityStatuses.vehicles[v.id] ===
+                                             "APPROVED");
 
-                                      const passSectionDone =
-                                        [
-                                          "COMPLETED_ESSENTIAL",
-                                          "COMPLETED",
-                                          "APPROVED",
-                                        ].includes(workflowState) ||
-                                        (isPassSectionApprover && entityStatuses.vehicles[v.id] === "APPROVED");
+                                       const fireSafetyDone =
+                                         sparkApproved ||
+                                         [
+                                           "PENDING_CIVIL_ESSENTIAL",
+                                           "PENDING_MECHANICAL_ESSENTIAL",
+                                           "PENDING_CISF_ESSENTIAL",
+                                           "PENDING_PASS_SECTION_ESSENTIAL",
+                                           "COMPLETED_ESSENTIAL",
+                                           "COMPLETED",
+                                           "APPROVED",
+                                         ].includes(workflowState);
 
-                                      return (
-                                        <>
-                                          <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${fireSafetyDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-                                          >
-                                            {fireSafetyDone
-                                              ? "✓ Fire Safety / Dy. Conservator"
-                                              : "⏳ Pending Fire Safety / Dy. Conservator"}
-                                          </span>
+                                       const fireSafetyRejected =
+                                         (isMarineApprover && entityStatuses.vehicles[v.id] === "REJECTED") ||
+                                         (workflowState === "REJECTED_ESSENTIAL" &&
+                                           (v.essentialRevertStage === "PENDING_MARINE_ESSENTIAL" || !v.essentialRevertStage));
 
-                                          {isCivilDept && (
-                                            <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${civilDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-                                            >
-                                              {civilDone
-                                                ? "✓ Civil Dept"
-                                                : "⏳ Pending Civil Dept"}
-                                            </span>
-                                          )}
+                                       const fireSafetyReverted =
+                                         (isMarineApprover && entityStatuses.vehicles[v.id] === "REVERTED") ||
+                                         (workflowState === "REVERTED_ESSENTIAL" &&
+                                           (v.essentialRevertStage === "PENDING_MARINE_ESSENTIAL" || !v.essentialRevertStage));
 
-                                          {isMechDept && (
-                                            <span
-                                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${mechDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-                                            >
-                                              {mechDone
-                                                ? "✓ Mech Dept"
-                                                : "⏳ Pending Mech Dept"}
-                                            </span>
-                                          )}
+                                       const isCivilDept =
+                                         deptId === 3 ||
+                                         workflowState.includes("CIVIL");
+                                       const isMechDept =
+                                         deptId === 4 ||
+                                         workflowState.includes("MECHANICAL");
 
-                                          <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${cisfDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-                                          >
-                                            {cisfDone
-                                              ? "✓ CISF"
-                                              : "⏳ Pending CISF"}
-                                          </span>
+                                       const civilDone =
+                                         isCivilDept &&
+                                         ([
+                                           "PENDING_CISF_ESSENTIAL",
+                                           "PENDING_PASS_SECTION_ESSENTIAL",
+                                           "COMPLETED_ESSENTIAL",
+                                           "COMPLETED",
+                                           "APPROVED",
+                                         ].includes(workflowState) ||
+                                           (isCivilApprover && entityStatuses.vehicles[v.id] === "APPROVED"));
 
-                                          <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${passSectionDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-                                          >
-                                            {passSectionDone
-                                              ? "✓ Pass Section"
-                                              : "⏳ Pending Pass Section"}
-                                          </span>
-                                        </>
-                                      );
-                                    }
+                                       const civilRejected =
+                                         isCivilDept &&
+                                         ((isCivilApprover && entityStatuses.vehicles[v.id] === "REJECTED") ||
+                                           (workflowState === "REJECTED_ESSENTIAL" &&
+                                             v.essentialRevertStage === "PENDING_CIVIL_ESSENTIAL"));
 
-                                    // Normal flow ordinary vehicle
+                                       const civilReverted =
+                                         isCivilDept &&
+                                         ((isCivilApprover && entityStatuses.vehicles[v.id] === "REVERTED") ||
+                                           (workflowState === "REVERTED_ESSENTIAL" &&
+                                             v.essentialRevertStage === "PENDING_CIVIL_ESSENTIAL"));
+
+                                       const mechDone =
+                                         isMechDept &&
+                                         ([
+                                           "PENDING_CISF_ESSENTIAL",
+                                           "PENDING_PASS_SECTION_ESSENTIAL",
+                                           "COMPLETED_ESSENTIAL",
+                                           "COMPLETED",
+                                           "APPROVED",
+                                         ].includes(workflowState) ||
+                                           (isMechApprover && entityStatuses.vehicles[v.id] === "APPROVED"));
+
+                                       const mechRejected =
+                                         isMechDept &&
+                                         ((isMechApprover && entityStatuses.vehicles[v.id] === "REJECTED") ||
+                                           (workflowState === "REJECTED_ESSENTIAL" &&
+                                             v.essentialRevertStage === "PENDING_MECHANICAL_ESSENTIAL"));
+
+                                       const mechReverted =
+                                         isMechDept &&
+                                         ((isMechApprover && entityStatuses.vehicles[v.id] === "REVERTED") ||
+                                           (workflowState === "REVERTED_ESSENTIAL" &&
+                                             v.essentialRevertStage === "PENDING_MECHANICAL_ESSENTIAL"));
+
+                                       const cisfDone =
+                                         [
+                                           "PENDING_PASS_SECTION_ESSENTIAL",
+                                           "COMPLETED_ESSENTIAL",
+                                           "COMPLETED",
+                                           "APPROVED",
+                                         ].includes(workflowState) ||
+                                         (isCisfApprover && entityStatuses.vehicles[v.id] === "APPROVED");
+
+                                       const cisfRejected =
+                                         (isCisfApprover && entityStatuses.vehicles[v.id] === "REJECTED") ||
+                                         (workflowState === "REJECTED_ESSENTIAL" &&
+                                           v.essentialRevertStage === "PENDING_CISF_ESSENTIAL");
+
+                                       const cisfReverted =
+                                         (isCisfApprover && entityStatuses.vehicles[v.id] === "REVERTED") ||
+                                         (workflowState === "REVERTED_ESSENTIAL" &&
+                                           v.essentialRevertStage === "PENDING_CISF_ESSENTIAL");
+
+                                       const passSectionDone =
+                                         [
+                                           "COMPLETED_ESSENTIAL",
+                                           "COMPLETED",
+                                           "APPROVED",
+                                         ].includes(workflowState) ||
+                                         (isPassSectionApprover && entityStatuses.vehicles[v.id] === "APPROVED");
+
+                                       const passSectionRejected =
+                                         (workflowState === "REJECTED_ESSENTIAL" && v.essentialRevertStage === "PENDING_PASS_SECTION_ESSENTIAL") ||
+                                         (isPassSectionApprover && entityStatuses.vehicles[v.id] === "REJECTED");
+
+                                       const passSectionReverted =
+                                         (workflowState === "REVERTED_ESSENTIAL" && v.essentialRevertStage === "PENDING_PASS_SECTION_ESSENTIAL") ||
+                                         (isPassSectionApprover && entityStatuses.vehicles[v.id] === "REVERTED");
+
+                                       return (
+                                         <>
+                                           {/* 1. Dy. Conservator / Fire Safety */}
+                                           <span
+                                             className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                               fireSafetyDone
+                                                 ? "bg-emerald-100 text-emerald-700"
+                                                 : fireSafetyRejected
+                                                   ? "bg-red-100 text-red-700"
+                                                   : fireSafetyReverted
+                                                     ? "bg-amber-100 text-amber-700"
+                                                     : "bg-amber-100 text-amber-700"
+                                             }`}
+                                           >
+                                             {fireSafetyDone
+                                               ? "✓ Fire Safety / Dy. Conservator"
+                                               : fireSafetyRejected
+                                                 ? "✕ Fire Safety Rejected"
+                                                 : fireSafetyReverted
+                                                   ? "↩ Fire Safety Reverted"
+                                                   : "⏳ Pending Fire Safety / Dy. Conservator"}
+                                           </span>
+
+                                           {/* 2. Department Approval (if Civil or Mech selected) */}
+                                           {isCivilDept && (
+                                             <span
+                                               className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                 civilDone
+                                                   ? "bg-emerald-100 text-emerald-700"
+                                                   : civilRejected
+                                                     ? "bg-red-100 text-red-700"
+                                                     : civilReverted
+                                                       ? "bg-amber-100 text-amber-700"
+                                                       : "bg-amber-100 text-amber-700"
+                                               }`}
+                                             >
+                                               {civilDone
+                                                 ? "✓ Civil Dept"
+                                                 : civilRejected
+                                                   ? "✕ Civil Dept Rejected"
+                                                   : civilReverted
+                                                     ? "↩ Civil Dept Reverted"
+                                                     : "⏳ Pending Civil Dept"}
+                                             </span>
+                                           )}
+
+                                           {isMechDept && (
+                                             <span
+                                               className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                 mechDone
+                                                   ? "bg-emerald-100 text-emerald-700"
+                                                   : mechRejected
+                                                     ? "bg-red-100 text-red-700"
+                                                     : mechReverted
+                                                       ? "bg-amber-100 text-amber-700"
+                                                       : "bg-amber-100 text-amber-700"
+                                               }`}
+                                             >
+                                               {mechDone
+                                                 ? "✓ Mech Dept"
+                                                 : mechRejected
+                                                   ? "✕ Mech Dept Rejected"
+                                                   : mechReverted
+                                                     ? "↩ Mech Dept Reverted"
+                                                     : "⏳ Pending Mech Dept"}
+                                             </span>
+                                           )}
+
+                                           {/* 3. CISF Approval */}
+                                           <span
+                                             className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                               cisfDone
+                                                 ? "bg-emerald-100 text-emerald-700"
+                                                 : cisfRejected
+                                                   ? "bg-red-100 text-red-700"
+                                                   : cisfReverted
+                                                     ? "bg-amber-100 text-amber-700"
+                                                     : "bg-amber-100 text-amber-700"
+                                             }`}
+                                           >
+                                             {cisfDone
+                                               ? "✓ CISF Assistant Commandant"
+                                               : cisfRejected
+                                                 ? "✕ CISF Rejected"
+                                                 : cisfReverted
+                                                   ? "↩ CISF Reverted"
+                                                   : "⏳ Pending CISF"}
+                                           </span>
+
+                                           {/* 4. Pass Section Final Approval */}
+                                           <span
+                                             className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                               passSectionDone
+                                                 ? "bg-emerald-100 text-emerald-700"
+                                                 : passSectionRejected
+                                                   ? "bg-red-100 text-red-700"
+                                                   : passSectionReverted
+                                                     ? "bg-amber-100 text-amber-700"
+                                                     : "bg-amber-100 text-amber-700"
+                                             }`}
+                                           >
+                                             {passSectionDone
+                                               ? "✓ Pass Section"
+                                               : passSectionRejected
+                                                 ? "✕ Pass Section Rejected"
+                                                 : passSectionReverted
+                                                   ? "↩ Pass Section Reverted"
+                                                   : "⏳ Pending Pass Section"}
+                                           </span>
+                                         </>
+                                       );
+                                     }
+
+                                     // Normal flow ordinary vehicle
                                     const currentVehicleStatus = String(entityStatuses.vehicles[v.id] || v.status || "").toLowerCase();
                                     const isVehicleApproved = currentVehicleStatus === "approved";
                                     const isVehicleRejected = currentVehicleStatus === "rejected";
@@ -4597,21 +4980,55 @@ export default function AdminPassApprovalsPage() {
                     </table>
                   </div>
                 )}
+
+              {!isViewMode && selectedRequest && !hasAssignedEntities && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                  <span>
+                    This pass request contains no personnel or vehicles that require your approval at this stage.
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-between items-center p-5 border-t border-slate-200 bg-white rounded-b-2xl">
-              <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                <AlertCircle className="h-4 w-4 text-orange-500" /> Ensure all
-                entities are thoroughly verified before submission.
+              <span className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
+                {!hasAssignedEntities ? (
+                  <span className="text-slate-400 font-medium flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4 text-slate-400" />
+                    No actions required for your role.
+                  </span>
+                ) : hasUnverifiedEntities ? (
+                  <>
+                    <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                    <span className="text-amber-700 font-medium">
+                      {unverifiedPersonsList.length + unverifiedVehiclesList.length}{" "}
+                      assigned entity(ies) pending review. Please verify all entities before submitting.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="text-emerald-700 font-medium">
+                      All assigned entities verified. Ready to submit review.
+                    </span>
+                  </>
+                )}
               </span>
-              {!isViewMode && (
+              {!isViewMode && hasAssignedEntities && (
                 <button
                   onClick={handleSubmitReview}
-                  disabled={isSubmitting}
-                  className={`bg-orange-600 text-white px-8 py-2.5 rounded-xl font-bold ${isSubmitting
-                      ? "opacity-60 cursor-not-allowed"
-                      : "hover:bg-orange-700"
-                    }`}
+                  disabled={isSubmitting || hasUnverifiedEntities}
+                  title={
+                    hasUnverifiedEntities
+                      ? "Please verify all assigned entities before submitting."
+                      : ""
+                  }
+                  className={`px-8 py-2.5 rounded-xl font-bold transition-all ${
+                    isSubmitting || hasUnverifiedEntities
+                      ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none border border-slate-300"
+                      : "bg-orange-600 hover:bg-orange-700 text-white cursor-pointer shadow-md hover:shadow-lg active:scale-95"
+                  }`}
                 >
                   {isSubmitting ? "Submitting..." : "Submit Complete Review"}
                 </button>

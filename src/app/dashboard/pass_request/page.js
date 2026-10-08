@@ -46,6 +46,7 @@ import {
   Edit,
   Link2,
   Check,
+  Zap,
 } from "lucide-react";
 
 import {
@@ -79,7 +80,7 @@ const isEntityConversionPending = (item) => {
     item?.conversionStatus === "PENDING" ||
     Boolean(
       item?.conversionWorkflowState &&
-        String(item?.conversionWorkflowState).toUpperCase().startsWith("PENDING_")
+      String(item?.conversionWorkflowState).toUpperCase().startsWith("PENDING_")
     )
   );
 };
@@ -722,7 +723,7 @@ export default function PassRequestPage() {
       console.error("Two-wheeler update request failed:", err);
       toast.error(
         err?.response?.data?.message ||
-          "Failed to submit two-wheeler update request.",
+        "Failed to submit two-wheeler update request.",
       );
       setTwoWheelerModal((prev) => ({ ...prev, loading: false }));
     }
@@ -1099,9 +1100,9 @@ export default function PassRequestPage() {
   const getPassStatus = (entity) => {
     return String(
       entity?.passStatus ??
-        entity?.pass_status ??
-        entity?.passstatus ??
-        "ACTIVE",
+      entity?.pass_status ??
+      entity?.passstatus ??
+      "ACTIVE",
     )
       .trim()
       .toUpperCase();
@@ -1301,13 +1302,13 @@ export default function PassRequestPage() {
       const payload =
         entityModal.type === "person"
           ? {
-              passPersonId: entityModal.data.id,
-              reason: disableReason.trim(),
-            }
+            passPersonId: entityModal.data.id,
+            reason: disableReason.trim(),
+          }
           : {
-              passVehicleId: entityModal.data.id,
-              reason: disableReason.trim(),
-            };
+            passVehicleId: entityModal.data.id,
+            reason: disableReason.trim(),
+          };
 
       const res = await axios.put(url, payload, {
         headers: {
@@ -1329,11 +1330,11 @@ export default function PassRequestPage() {
             [key]: (prev[key] || []).map((item) =>
               String(item.id) === String(entityModal.data.id)
                 ? {
-                    ...item,
-                    passStatus: "DISABLED",
-                    disabledReason: disableReason.trim(),
-                    disabledAt: new Date().toISOString(),
-                  }
+                  ...item,
+                  passStatus: "DISABLED",
+                  disabledReason: disableReason.trim(),
+                  disabledAt: new Date().toISOString(),
+                }
                 : item,
             ),
           };
@@ -2001,7 +2002,7 @@ export default function PassRequestPage() {
         (n) =>
           String(n.id || n.value) === String(natValue) ||
           (n.label || n.name || "").toUpperCase() ===
-            String(natValue).toUpperCase(),
+          String(natValue).toUpperCase(),
       );
       const label = (natObj?.label || natObj?.name || "").toUpperCase();
       return (
@@ -2401,9 +2402,9 @@ export default function PassRequestPage() {
       const natObj = (masterData.nationalities || []).find(
         (n) =>
           (n.label || n.name || "").toUpperCase() ===
-            String(data.nationality).toUpperCase() ||
+          String(data.nationality).toUpperCase() ||
           (n.value || "").toUpperCase() ===
-            String(data.nationality).toUpperCase() ||
+          String(data.nationality).toUpperCase() ||
           String(n.id) === String(data.nationality),
       );
       const natVal = natObj ? String(natObj.id || natObj.value) : "1"; // Default Indian
@@ -2469,9 +2470,9 @@ export default function PassRequestPage() {
       const areaObj = (masterData.accessAreas || []).find(
         (a) =>
           (a.label || a.name || "").toUpperCase() ===
-            String(data.accessAreaId).toUpperCase() ||
+          String(data.accessAreaId).toUpperCase() ||
           (a.value || "").toUpperCase() ===
-            String(data.accessAreaId).toUpperCase() ||
+          String(data.accessAreaId).toUpperCase() ||
           String(a.id) === String(data.accessAreaId),
       );
       const areaVal = areaObj ? String(areaObj.id || areaObj.value) : "";
@@ -2978,7 +2979,7 @@ export default function PassRequestPage() {
       errors.policeVerification =
         "Police Verification is mandatory for Monthly/Yearly passes";
     }
- 
+
 
     if (Object.keys(errors).length > 0) {
       setPersonErrors(errors);
@@ -3609,11 +3610,11 @@ export default function PassRequestPage() {
       const payload =
         entityModal.type === "person"
           ? {
-              passPersonId: entityModal.data.id,
-            }
+            passPersonId: entityModal.data.id,
+          }
           : {
-              passVehicleId: entityModal.data.id,
-            };
+            passVehicleId: entityModal.data.id,
+          };
 
       const response = await axios.put(url, payload, {
         headers: {
@@ -3649,11 +3650,11 @@ export default function PassRequestPage() {
           [key]: (prev[key] || []).map((item) =>
             String(item.id) === String(entityModal.data.id)
               ? {
-                  ...item,
-                  passStatus: "ACTIVE",
-                  disabledReason: null,
-                  disabledAt: null,
-                }
+                ...item,
+                passStatus: "ACTIVE",
+                disabledReason: null,
+                disabledAt: null,
+              }
               : item,
           ),
         };
@@ -3666,8 +3667,8 @@ export default function PassRequestPage() {
 
       toast.error(
         error.response?.data?.message ||
-          error.message ||
-          "Unable to enable pass.",
+        error.message ||
+        "Unable to enable pass.",
       );
     } finally {
       setEnableLoading(false);
@@ -4118,9 +4119,8 @@ export default function PassRequestPage() {
           type="file"
           disabled={disabled}
           accept={fileType === "image" ? "image/*" : "application/pdf"}
-          className={`absolute inset-0 w-full h-full opacity-0 z-10 ${
-            disabled ? "cursor-not-allowed" : "cursor-pointer"
-          }`}
+          className={`absolute inset-0 w-full h-full opacity-0 z-10 ${disabled ? "cursor-not-allowed" : "cursor-pointer"
+            }`}
           required={isRequired && !existingFileName && !file}
           onChange={(e) => {
             const file = e.target.files[0];
@@ -4137,13 +4137,12 @@ export default function PassRequestPage() {
           }}
         />
         <div
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
-            disabled
-              ? "bg-slate-100 border-slate-300 opacity-60"
-              : file
-                ? "border-orange-300 bg-orange-50"
-                : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
-          } transition-colors`}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${disabled
+            ? "bg-slate-100 border-slate-300 opacity-60"
+            : file
+              ? "border-orange-300 bg-orange-50"
+              : "border-dashed border-slate-300 bg-slate-50 group-hover:bg-slate-100"
+            } transition-colors`}
         >
           <Upload
             className={`w-4 h-4 flex-shrink-0 ${file ? "text-orange-600" : "text-slate-400"}`}
@@ -4201,11 +4200,71 @@ export default function PassRequestPage() {
   const handleEditRevertedPass = (pass) => {
     setEditingRevertedPass(pass);
 
-    // Extract only reverted entities
+    // Extract only reverted entities (including reverted essential pass conversions)
     const revertedPersonsList =
-      pass.persons?.filter((p) => p.status === "reverted") || [];
+      pass.persons?.filter(
+        (p) => p.status === "reverted" || p.conversionStatus === "REVERTED",
+      ) || [];
     const revertedVehiclesList =
-      pass.vehicles?.filter((v) => v.status === "reverted") || [];
+      pass.vehicles?.filter(
+        (v) => v.status === "reverted" || v.conversionStatus === "REVERTED",
+      ) || [];
+
+    const hasNormalReverted =
+      revertedPersonsList.some((p) => p.status === "reverted") ||
+      revertedVehiclesList.some((v) => v.status === "reverted");
+
+    const conversionRevertedItems = [
+      ...revertedPersonsList
+        .filter((p) => p.conversionStatus === "REVERTED")
+        .map((p) => {
+          const reqPath =
+            p.conversionRequisitionFilePath ||
+            p.requisitionLetterPath ||
+            p.requisitionLetterFilePath ||
+            pass.requisitionLetterFilePath ||
+            null;
+          return {
+            ...p,
+            type: "person",
+            conversionRequisitionFilePath: reqPath,
+            requisitionLetterPath: reqPath,
+            requisitionLetterFilePath: reqPath,
+          };
+        }),
+      ...revertedVehiclesList
+        .filter((v) => v.conversionStatus === "REVERTED")
+        .map((v) => {
+          const reqPath =
+            v.conversionRequisitionFilePath ||
+            v.requisitionLetterPath ||
+            v.requisitionLetterFilePath ||
+            pass.requisitionLetterFilePath ||
+            null;
+          return {
+            ...v,
+            type: "vehicle",
+            conversionRequisitionFilePath: reqPath,
+            requisitionLetterPath: reqPath,
+            requisitionLetterFilePath: reqPath,
+          };
+        }),
+    ];
+
+    // If this pass was reverted SOLELY due to essential conversion requests
+    // (the base ordinary pass remains completed/approved),
+    // bypass the entire pass application edit form and immediately open
+    // the Conversion Request modal with all the old conversion data pre-filled!
+    if (!hasNormalReverted && conversionRevertedItems.length > 0) {
+      const primary = conversionRevertedItems[0];
+      setConversionModalState({
+        isOpen: true,
+        entityData: primary,
+        entityType: primary.type,
+        selectedItems: conversionRevertedItems,
+      });
+      return;
+    }
 
     setRevertedPersons(revertedPersonsList);
     setRevertedVehicles(revertedVehiclesList);
@@ -4218,6 +4277,34 @@ export default function PassRequestPage() {
     setRevertedPersons([]);
     setRevertedVehicles([]);
     setEditingRevertedEntity(null);
+  };
+
+  const handleEditRevertedConversion = (type, entity) => {
+    setRevertedEditModal(false);
+    const reqPath =
+      entity.conversionRequisitionFilePath ||
+      entity.requisitionLetterPath ||
+      entity.requisitionLetterFilePath ||
+      editingRevertedPass?.requisitionLetterFilePath ||
+      null;
+    const enrichedEntity = {
+      ...entity,
+      type,
+      conversionDepartmentId: entity.conversionDepartmentId,
+      conversionPurpose: entity.conversionPurpose,
+      conversionStartDate: entity.conversionStartDate,
+      conversionEndDate: entity.conversionEndDate,
+      conversionRequisitionFilePath: reqPath,
+      requisitionLetterPath: reqPath,
+      requisitionLetterFilePath: reqPath,
+      conversionRevertReason: entity.conversionRevertReason,
+    };
+    setConversionModalState({
+      isOpen: true,
+      entityData: enrichedEntity,
+      entityType: type,
+      selectedItems: [enrichedEntity],
+    });
   };
 
   const handleEditRevertedEntity = (type, index, entity) => {
@@ -4333,9 +4420,9 @@ export default function PassRequestPage() {
       // Resolve Designation
       const rawDesig = String(
         entity.designationId ||
-          entity.designation ||
-          entity.designationOther ||
-          "",
+        entity.designation ||
+        entity.designationOther ||
+        "",
       );
       let resolvedDesignation = rawDesig;
       const desigMatch = masterData.designations.find(
@@ -4368,9 +4455,9 @@ export default function PassRequestPage() {
           String(c.name || "")
             .trim()
             .toUpperCase() ===
-            String(rawCountry || "")
-              .trim()
-              .toUpperCase(),
+          String(rawCountry || "")
+            .trim()
+            .toUpperCase(),
       );
       const indiaObj = masterData.countries.find(
         (c) =>
@@ -4413,13 +4500,13 @@ export default function PassRequestPage() {
         passPeriod: entity.passPeriod || "1",
         dateFrom: entity.dateFrom
           ? (entity.dateFrom.includes("T")
-              ? entity.dateFrom.split("T")[0]
-              : entity.dateFrom) + "T00:00"
+            ? entity.dateFrom.split("T")[0]
+            : entity.dateFrom) + "T00:00"
           : "",
         dateTo: entity.dateTo
           ? (entity.dateTo.includes("T")
-              ? entity.dateTo.split("T")[0]
-              : entity.dateTo) + "T00:00"
+            ? entity.dateTo.split("T")[0]
+            : entity.dateTo) + "T00:00"
           : "",
         amount: entity.amount || "",
         nationality: nationalityId,
@@ -4543,13 +4630,13 @@ export default function PassRequestPage() {
         passPeriod: entity.passPeriod || "",
         dateFrom: entity.dateFrom
           ? (entity.dateFrom.includes("T")
-              ? entity.dateFrom.split("T")[0]
-              : entity.dateFrom) + "T00:00"
+            ? entity.dateFrom.split("T")[0]
+            : entity.dateFrom) + "T00:00"
           : "",
         dateTo: entity.dateTo
           ? (entity.dateTo.includes("T")
-              ? entity.dateTo.split("T")[0]
-              : entity.dateTo) + "T00:00"
+            ? entity.dateTo.split("T")[0]
+            : entity.dateTo) + "T00:00"
           : "",
         amount: entity.amount || "",
 
@@ -4608,7 +4695,7 @@ export default function PassRequestPage() {
           : parseInt(personForm.designation, 10) || null;
         const desigOtherVal =
           personForm.designation === "Crew" ||
-          personForm.designation === "Supernumerary"
+            personForm.designation === "Supernumerary"
             ? personForm.designation
             : personForm.designation === "Others"
               ? personForm.designationOther
@@ -5615,9 +5702,9 @@ export default function PassRequestPage() {
                                   {p.designation === "Others"
                                     ? p.designationOther
                                     : getLabelById(
-                                        masterData.designations,
-                                        p.designation,
-                                      )}
+                                      masterData.designations,
+                                      p.designation,
+                                    )}
                                 </p>
                               </div>
                             </div>
@@ -6117,19 +6204,19 @@ export default function PassRequestPage() {
               {(viewDateFilter !== "all" ||
                 viewStatusFilter !== "ALL" ||
                 debouncedSearch) && (
-                <button
-                  onClick={() => {
-                    setViewDateFilter("all");
-                    setViewStatusFilter("ALL");
-                    setViewCustomFrom("");
-                    setViewCustomTo("");
-                    setSearchInput("");
-                  }}
-                  className="lg:ml-auto inline-flex items-center gap-1 text-xs font-bold text-red-500 hover:text-red-600"
-                >
-                  <X className="h-3.5 w-3.5" /> Clear Filters
-                </button>
-              )}
+                  <button
+                    onClick={() => {
+                      setViewDateFilter("all");
+                      setViewStatusFilter("ALL");
+                      setViewCustomFrom("");
+                      setViewCustomTo("");
+                      setSearchInput("");
+                    }}
+                    className="lg:ml-auto inline-flex items-center gap-1 text-xs font-bold text-red-500 hover:text-red-600"
+                  >
+                    <X className="h-3.5 w-3.5" /> Clear Filters
+                  </button>
+                )}
             </div>
 
             <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -6327,12 +6414,12 @@ export default function PassRequestPage() {
                           <td className="px-6 py-4 text-sm text-slate-600 font-medium border-r border-slate-100">
                             {createdAtStr
                               ? new Date(createdAtStr).toLocaleString("en-IN", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
                               : "-"}
                           </td>
                           <td className="px-6 py-4 text-sm font-bold text-slate-600 border-r border-slate-100">
@@ -6343,15 +6430,14 @@ export default function PassRequestPage() {
                           </td>
                           <td className="px-6 py-4 text-center border-r border-slate-100">
                             <span
-                              className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                                currentStatus === "SUBMITTED"
-                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                  : isApproved
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                    : currentStatus === "REJECTED"
-                                      ? "bg-red-50 text-red-700 border border-red-200"
-                                      : "bg-amber-50 text-amber-700 border border-amber-200"
-                              }`}
+                              className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${currentStatus === "SUBMITTED"
+                                ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                : isApproved
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : currentStatus === "REJECTED"
+                                    ? "bg-red-50 text-red-700 border border-red-200"
+                                    : "bg-amber-50 text-amber-700 border border-amber-200"
+                                }`}
                             >
                               {currentStatus}
                             </span>
@@ -6409,7 +6495,7 @@ export default function PassRequestPage() {
                 Showing{" "}
                 {paginationMeta.totalRecords > 0
                   ? (paginationMeta.currentPage - 1) * paginationMeta.pageSize +
-                    1
+                  1
                   : 0}
                 –
                 {Math.min(
@@ -6471,8 +6557,8 @@ export default function PassRequestPage() {
                       </td>
                     </tr>
                   ) : submittedPasses.filter(
-                      (p) => p.status === "REVERTED" || p.hasRevertedEntities,
-                    ).length === 0 ? (
+                    (p) => p.status === "REVERTED" || p.hasRevertedEntities,
+                  ).length === 0 ? (
                     <tr>
                       <td
                         colSpan="5"
@@ -6499,12 +6585,19 @@ export default function PassRequestPage() {
                           (pass.vehicles?.length || 0);
                         const revertedEntities = [
                           ...(pass.persons || []).filter(
-                            (p) => p.status === "reverted",
+                            (p) =>
+                              p.status === "reverted" ||
+                              p.conversionStatus === "REVERTED",
                           ),
                           ...(pass.vehicles || []).filter(
-                            (v) => v.status === "reverted",
+                            (v) =>
+                              v.status === "reverted" ||
+                              v.conversionStatus === "REVERTED",
                           ),
                         ];
+                        const isOnlyConversionReverted =
+                          revertedEntities.length > 0 &&
+                          revertedEntities.every((e) => e.conversionStatus === "REVERTED");
 
                         return (
                           <tr
@@ -6528,8 +6621,9 @@ export default function PassRequestPage() {
                             <td className="px-6 py-4 text-sm text-slate-600 border-r border-slate-100">
                               <div className="flex flex-col gap-1">
                                 <span>{totalEntities} Total</span>
-                                <span className="text-amber-600 font-bold">
-                                  {revertedEntities.length} Reverted
+                                <span className="text-amber-600 font-bold flex items-center gap-1">
+                                  {isOnlyConversionReverted && <Zap className="w-3.5 h-3.5 text-amber-500" />}
+                                  {revertedEntities.length} {isOnlyConversionReverted ? "Essential Pass" : ""} Reverted
                                 </span>
                               </div>
                             </td>
@@ -6541,10 +6635,22 @@ export default function PassRequestPage() {
                             <td className="px-6 py-4 text-center">
                               <button
                                 onClick={() => handleEditRevertedPass(pass)}
-                                className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 mx-auto"
+                                className={`${isOnlyConversionReverted
+                                  ? "bg-amber-600 hover:bg-amber-700 shadow-sm"
+                                  : "bg-amber-500 hover:bg-amber-600"
+                                  } text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 mx-auto`}
                               >
-                                <Edit3 className="h-4 w-4" />
-                                Edit & Resubmit
+                                {isOnlyConversionReverted ? (
+                                  <>
+                                    <Zap className="h-4 w-4" />
+                                    Edit Essential Pass Request
+                                  </>
+                                ) : (
+                                  <>
+                                    <Edit3 className="h-4 w-4" />
+                                    Edit & Resubmit
+                                  </>
+                                )}
                               </button>
                             </td>
                           </tr>
@@ -6691,11 +6797,10 @@ export default function PassRequestPage() {
                       <input
                         type="tel"
                         value={personForm.mobile}
-                        className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${
-                          personErrors.mobile
-                            ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
-                            : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
-                        }`}
+                        className={`w-full pl-[5.5rem] pr-3 h-10 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${personErrors.mobile
+                          ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
+                          : "border-slate-300 focus:ring-orange-500/30 focus:border-orange-500"
+                          }`}
                         placeholder="00000 00000"
                         maxLength={10}
                         inputMode="numeric"
@@ -7008,10 +7113,10 @@ export default function PassRequestPage() {
                       )}
                     {!personErrors.vehicleNo &&
                       blacklistWarnings[
-                        "VEHICLE_" +
-                          personForm.vehicleNo
-                            .replace(/[\s-]/g, "")
-                            .toUpperCase()
+                      "VEHICLE_" +
+                      personForm.vehicleNo
+                        .replace(/[\s-]/g, "")
+                        .toUpperCase()
                       ] && (
                         <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
                           <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
@@ -7019,9 +7124,9 @@ export default function PassRequestPage() {
                             PORT BLACKLISTED —{" "}
                             {blacklistWarnings[
                               "VEHICLE_" +
-                                personForm.vehicleNo
-                                  .replace(/[\s-]/g, "")
-                                  .toUpperCase()
+                              personForm.vehicleNo
+                                .replace(/[\s-]/g, "")
+                                .toUpperCase()
                             ]?.replace("⚠️ BLACKLISTED ", "")}
                           </span>
                         </div>
@@ -7057,11 +7162,10 @@ export default function PassRequestPage() {
                             }));
                           }
                         }}
-                        className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${
-                          personErrors.seafarerIdType
-                            ? "border-red-400 bg-red-50"
-                            : "border-slate-300 bg-white"
-                        }`}
+                        className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 outline-none shadow-sm transition-all ${personErrors.seafarerIdType
+                          ? "border-red-400 bg-red-50"
+                          : "border-slate-300 bg-white"
+                          }`}
                       >
                         <option value="">-- Select ID Type --</option>
                         <option value="aadhaar">Aadhaar</option>
@@ -7239,7 +7343,7 @@ export default function PassRequestPage() {
                                     "PERSON_" + personForm.aadharNo
                                   ] ||
                                     blacklistWarnings[
-                                      "DRIVER_" + personForm.aadharNo
+                                    "DRIVER_" + personForm.aadharNo
                                     ]) && (
                                     <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
                                       <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
@@ -7247,10 +7351,10 @@ export default function PassRequestPage() {
                                         PORT BLACKLISTED —{" "}
                                         {(
                                           blacklistWarnings[
-                                            "PERSON_" + personForm.aadharNo
+                                          "PERSON_" + personForm.aadharNo
                                           ] ||
                                           blacklistWarnings[
-                                            "DRIVER_" + personForm.aadharNo
+                                          "DRIVER_" + personForm.aadharNo
                                           ]
                                         )?.replace("⚠️ BLACKLISTED ", "")}
                                       </span>
@@ -7286,11 +7390,10 @@ export default function PassRequestPage() {
                                 }));
                               }
                             }}
-                            className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${
-                              personErrors.passportNo
-                                ? "border-red-400 bg-red-50"
-                                : "border-slate-300 bg-white"
-                            }`}
+                            className={`w-full h-10 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm outline-none uppercase transition-all ${personErrors.passportNo
+                              ? "border-red-400 bg-red-50"
+                              : "border-slate-300 bg-white"
+                              }`}
                             placeholder="Passport Number"
                             maxLength={15}
                           />
@@ -7382,38 +7485,38 @@ export default function PassRequestPage() {
                     .toUpperCase()
                     .includes("OIL JETTY") ||
                     String(personForm.accessArea) === "1") && (
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 uppercase">
-                        Select Department{" "}
-                        <span className="text-red-500">*</span>
-                      </label>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          Select Department{" "}
+                          <span className="text-red-500">*</span>
+                        </label>
 
-                      <select
-                        value={personForm.departmentId}
-                        onChange={(e) =>
-                          setPersonForm((prev) => ({
-                            ...prev,
-                            departmentId: e.target.value,
-                          }))
-                        }
-                        className={inputClass}
-                      >
-                        <option value="">Select Department</option>
+                        <select
+                          value={personForm.departmentId}
+                          onChange={(e) =>
+                            setPersonForm((prev) => ({
+                              ...prev,
+                              departmentId: e.target.value,
+                            }))
+                          }
+                          className={inputClass}
+                        >
+                          <option value="">Select Department</option>
 
-                        {masterData.departments
-                          .filter(
-                            (d) =>
-                              [3, 4, 9].includes(Number(d.id)) &&
-                              d.isActive !== false,
-                          )
-                          .map((d) => (
-                            <option key={d.id} value={d.id}>
-                              {d.departmentName}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                  )}
+                          {masterData.departments
+                            .filter(
+                              (d) =>
+                                [3, 4, 9].includes(Number(d.id)) &&
+                                d.isActive !== false,
+                            )
+                            .map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.departmentName}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Date of Birth (DOB){" "}
@@ -7758,11 +7861,10 @@ export default function PassRequestPage() {
                         )}
                         {dlVerification.message && (
                           <p
-                            className={`text-xs mt-1 font-medium ${
-                              dlVerification.verified
-                                ? "text-green-600"
-                                : "text-red-600"
-                            }`}
+                            className={`text-xs mt-1 font-medium ${dlVerification.verified
+                              ? "text-green-600"
+                              : "text-red-600"
+                              }`}
                           >
                             {dlVerification.message}
                           </p>
@@ -7771,15 +7873,15 @@ export default function PassRequestPage() {
                           personForm.idProofNumber &&
                           (blacklistWarnings[
                             "DRIVER_" +
-                              personForm.idProofNumber
-                                .replace(/[\s-]/g, "")
-                                .toUpperCase()
+                            personForm.idProofNumber
+                              .replace(/[\s-]/g, "")
+                              .toUpperCase()
                           ] ||
                             blacklistWarnings[
-                              "PERSON_" +
-                                personForm.idProofNumber
-                                  .replace(/[\s-]/g, "")
-                                  .toUpperCase()
+                            "PERSON_" +
+                            personForm.idProofNumber
+                              .replace(/[\s-]/g, "")
+                              .toUpperCase()
                             ]) && (
                             <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
                               <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
@@ -7787,16 +7889,16 @@ export default function PassRequestPage() {
                                 PORT BLACKLISTED —{" "}
                                 {(
                                   blacklistWarnings[
-                                    "DRIVER_" +
-                                      personForm.idProofNumber
-                                        .replace(/[\s-]/g, "")
-                                        .toUpperCase()
+                                  "DRIVER_" +
+                                  personForm.idProofNumber
+                                    .replace(/[\s-]/g, "")
+                                    .toUpperCase()
                                   ] ||
                                   blacklistWarnings[
-                                    "PERSON_" +
-                                      personForm.idProofNumber
-                                        .replace(/[\s-]/g, "")
-                                        .toUpperCase()
+                                  "PERSON_" +
+                                  personForm.idProofNumber
+                                    .replace(/[\s-]/g, "")
+                                    .toUpperCase()
                                   ]
                                 )?.replace("⚠️ BLACKLISTED ", "")}
                               </span>
@@ -7897,31 +7999,30 @@ export default function PassRequestPage() {
                           </div>
                         </div>
                       )}
-                    {(personForm.photo || personForm.existingPhotoName) && (
-                      <div className="pt-1 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setFaceCaptureOpen(true)}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-[#0a1e4d] bg-white px-3 text-xs font-bold text-[#0a1e4d] transition-colors hover:bg-[#0a1e4d] hover:text-white"
-                        >
-                          Capture Photo
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShareLinkOpen(true)}
-                          className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-3 text-xs font-bold text-slate-600 transition-colors hover:border-[#0a1e4d] hover:text-[#0a1e4d]"
-                        >
-                          <Link2 className="h-3 w-3" />
-                          Share Link
-                        </button>
-                      </div>
-                    )}
-                    {personErrors.photo && (
-                      <p className="text-xs text-red-500 mt-1 font-medium">
-                        {personErrors.photo}
-                      </p>
-                    )}
-=======
+                      {(personForm.photo || personForm.existingPhotoName) && (
+                        <div className="pt-1 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setFaceCaptureOpen(true)}
+                            className="inline-flex h-8 items-center justify-center rounded-md border border-[#0a1e4d] bg-white px-3 text-xs font-bold text-[#0a1e4d] transition-colors hover:bg-[#0a1e4d] hover:text-white"
+                          >
+                            Capture Photo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShareLinkOpen(true)}
+                            className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-3 text-xs font-bold text-slate-600 transition-colors hover:border-[#0a1e4d] hover:text-[#0a1e4d]"
+                          >
+                            <Link2 className="h-3 w-3" />
+                            Share Link
+                          </button>
+                        </div>
+                      )}
+                      {personErrors.photo && (
+                        <p className="text-xs text-red-500 mt-1 font-medium">
+                          {personErrors.photo}
+                        </p>
+                      )}
                       {livePhotoUrl && (
                         <div className="space-y-1">
                           <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">
@@ -8178,8 +8279,8 @@ export default function PassRequestPage() {
                                   generalForm.remainingDays !== undefined &&
                                   generalForm.remainingDays < 7
                                   ? String(
-                                      Math.max(1, generalForm.remainingDays),
-                                    )
+                                    Math.max(1, generalForm.remainingDays),
+                                  )
                                   : "7"
                                 : "1"
                             }
@@ -8291,88 +8392,88 @@ export default function PassRequestPage() {
                 String(personForm.passType).toUpperCase() === "YEARLY" ||
                 String(personForm.passType).toUpperCase() === "ANNUAL" ||
                 personForm.hepType === "3") && (
-                <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
-                    <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
-                    Mandatory Documents
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    {personForm.hepType === "1" && ( // 1 = Driver ID
-                      <FileUploadBox
-                        label="Driver Licence"
-                        isRequired
-                        file={personForm.driverLicence}
-                        existingFileName={personForm.existingDlName}
-                        onView={() =>
-                          handleViewDoc(
-                            personForm.existingPassRequestId,
-                            "driverLicense",
-                            personForm.existingDlName,
-                            personForm.editIndex,
-                          )
-                        }
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            driverLicence: e.target.files[0],
-                          })
-                        }
-                        error={personErrors.driverLicence}
-                      />
-                    )}
-                    {(String(personForm.passType) === "2" ||
-                      String(personForm.passType) === "3" ||
-                      ["MONTHLY", "YEARLY", "ANNUAL"].includes(
-                        String(personForm.passType || "").toUpperCase(),
-                      )) && (
-                      <FileUploadBox
-                        label="Police Verification"
-                        isRequired
-                        file={personForm.policeVerification}
-                        existingFileName={personForm.existingPoliceName}
-                        onView={() =>
-                          handleViewDoc(
-                            personForm.existingPassRequestId,
-                            "policeVerification",
-                            personForm.existingPoliceName,
-                            personForm.editIndex,
-                          )
-                        }
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            policeVerification: e.target.files[0],
-                          })
-                        }
-                        error={personErrors.policeVerification}
-                      />
-                    )}
-                    {personForm.hepType === "3" && (
-                      <FileUploadBox
-                        label="Passport"
-                        isRequired
-                        file={personForm.passportDoc}
-                        existingFileName={personForm.existingPassportName}
-                        onView={() =>
-                          handleViewDoc(
-                            personForm.existingPassRequestId,
-                            "passportDoc",
-                            personForm.existingPassportName,
-                            personForm.editIndex,
-                          )
-                        }
-                        onChange={(e) =>
-                          setPersonForm({
-                            ...personForm,
-                            passportDoc: e.target.files[0],
-                          })
-                        }
-                        error={personErrors.passportDoc}
-                      />
-                    )}
+                  <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 flex items-center gap-2">
+                      <FileCheck2 className="h-5 w-5 text-orange-500" /> 2.
+                      Mandatory Documents
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                      {personForm.hepType === "1" && ( // 1 = Driver ID
+                        <FileUploadBox
+                          label="Driver Licence"
+                          isRequired
+                          file={personForm.driverLicence}
+                          existingFileName={personForm.existingDlName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "driverLicense",
+                              personForm.existingDlName,
+                              personForm.editIndex,
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              driverLicence: e.target.files[0],
+                            })
+                          }
+                          error={personErrors.driverLicence}
+                        />
+                      )}
+                      {(String(personForm.passType) === "2" ||
+                        String(personForm.passType) === "3" ||
+                        ["MONTHLY", "YEARLY", "ANNUAL"].includes(
+                          String(personForm.passType || "").toUpperCase(),
+                        )) && (
+                          <FileUploadBox
+                            label="Police Verification"
+                            isRequired
+                            file={personForm.policeVerification}
+                            existingFileName={personForm.existingPoliceName}
+                            onView={() =>
+                              handleViewDoc(
+                                personForm.existingPassRequestId,
+                                "policeVerification",
+                                personForm.existingPoliceName,
+                                personForm.editIndex,
+                              )
+                            }
+                            onChange={(e) =>
+                              setPersonForm({
+                                ...personForm,
+                                policeVerification: e.target.files[0],
+                              })
+                            }
+                            error={personErrors.policeVerification}
+                          />
+                        )}
+                      {personForm.hepType === "3" && (
+                        <FileUploadBox
+                          label="Passport"
+                          isRequired
+                          file={personForm.passportDoc}
+                          existingFileName={personForm.existingPassportName}
+                          onView={() =>
+                            handleViewDoc(
+                              personForm.existingPassRequestId,
+                              "passportDoc",
+                              personForm.existingPassportName,
+                              personForm.editIndex,
+                            )
+                          }
+                          onChange={(e) =>
+                            setPersonForm({
+                              ...personForm,
+                              passportDoc: e.target.files[0],
+                            })
+                          }
+                          error={personErrors.passportDoc}
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-5 border-t border-slate-200 bg-white rounded-b-2xl">
@@ -8515,8 +8616,8 @@ export default function PassRequestPage() {
                           )}
                           {!hasError &&
                             blacklistWarnings[
-                              "VEHICLE_" +
-                                vehicleForm.regNo.replace(/[\s-]/g, "")
+                            "VEHICLE_" +
+                            vehicleForm.regNo.replace(/[\s-]/g, "")
                             ] && (
                               <div className="mt-1.5 flex items-start gap-1.5 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-red-700 animate-in fade-in duration-200">
                                 <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
@@ -8524,7 +8625,7 @@ export default function PassRequestPage() {
                                   PORT BLACKLISTED —{" "}
                                   {blacklistWarnings[
                                     "VEHICLE_" +
-                                      vehicleForm.regNo.replace(/[\s-]/g, "")
+                                    vehicleForm.regNo.replace(/[\s-]/g, "")
                                   ]?.replace("⚠️ BLACKLISTED ", "")}
                                 </span>
                               </div>
@@ -8614,38 +8715,38 @@ export default function PassRequestPage() {
                     .toUpperCase()
                     .includes("OIL JETTY") ||
                     String(vehicleForm.accessArea) === "1") && (
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 uppercase">
-                        Select Department{" "}
-                        <span className="text-red-500">*</span>
-                      </label>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase">
+                          Select Department{" "}
+                          <span className="text-red-500">*</span>
+                        </label>
 
-                      <select
-                        value={vehicleForm.departmentId}
-                        onChange={(e) =>
-                          setVehicleForm((prev) => ({
-                            ...prev,
-                            departmentId: e.target.value,
-                          }))
-                        }
-                        className={inputClass}
-                      >
-                        <option value="">Select Department</option>
+                        <select
+                          value={vehicleForm.departmentId}
+                          onChange={(e) =>
+                            setVehicleForm((prev) => ({
+                              ...prev,
+                              departmentId: e.target.value,
+                            }))
+                          }
+                          className={inputClass}
+                        >
+                          <option value="">Select Department</option>
 
-                        {masterData.departments
-                          .filter(
-                            (d) =>
-                              [3, 4, 9].includes(Number(d.id)) &&
-                              d.isActive !== false,
-                          )
-                          .map((d) => (
-                            <option key={d.id} value={d.id}>
-                              {d.departmentName}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                  )}
+                          {masterData.departments
+                            .filter(
+                              (d) =>
+                                [3, 4, 9].includes(Number(d.id)) &&
+                                d.isActive !== false,
+                            )
+                            .map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.departmentName}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase">
                       Insurance Expiry Date
@@ -8693,13 +8794,11 @@ export default function PassRequestPage() {
 
                           validateVehicleField("insuranceExpiry", val);
                         }}
-                        className={`${inputClass} pr-10 ${
-                          vehicleErrors.insuranceExpiry ? "border-red-400" : ""
-                        } ${
-                          ulipVehicleFetched
+                        className={`${inputClass} pr-10 ${vehicleErrors.insuranceExpiry ? "border-red-400" : ""
+                          } ${ulipVehicleFetched
                             ? "bg-slate-50 cursor-not-allowed"
                             : ""
-                        }`}
+                          }`}
                       />
 
                       {/* =========================================
@@ -8728,11 +8827,11 @@ export default function PassRequestPage() {
                               tabIndex={-1}
                               value={
                                 vehicleForm.insuranceExpiry &&
-                                vehicleForm.insuranceExpiry.includes("-")
+                                  vehicleForm.insuranceExpiry.includes("-")
                                   ? vehicleForm.insuranceExpiry
                                   : formatDDMMYYYYToISO(
-                                      vehicleForm.insuranceExpiry,
-                                    )
+                                    vehicleForm.insuranceExpiry,
+                                  )
                               }
                               onChange={(e) => {
                                 if (ulipVehicleFetched) return;
@@ -8832,13 +8931,11 @@ export default function PassRequestPage() {
 
                           validateVehicleField("rcValidity", val);
                         }}
-                        className={`${inputClass} pr-10 ${
-                          vehicleErrors.rcValidity ? "border-red-400" : ""
-                        } ${
-                          ulipVehicleFetched
+                        className={`${inputClass} pr-10 ${vehicleErrors.rcValidity ? "border-red-400" : ""
+                          } ${ulipVehicleFetched
                             ? "bg-slate-50 cursor-not-allowed"
                             : ""
-                        }`}
+                          }`}
                       />
 
                       {/* =========================================
@@ -8867,7 +8964,7 @@ export default function PassRequestPage() {
                               tabIndex={-1}
                               value={
                                 vehicleForm.rcValidity &&
-                                vehicleForm.rcValidity.includes("-")
+                                  vehicleForm.rcValidity.includes("-")
                                   ? vehicleForm.rcValidity
                                   : formatDDMMYYYYToISO(vehicleForm.rcValidity)
                               }
@@ -9007,8 +9104,8 @@ export default function PassRequestPage() {
                                   generalForm.remainingDays !== undefined &&
                                   generalForm.remainingDays < 7
                                   ? String(
-                                      Math.max(1, generalForm.remainingDays),
-                                    )
+                                    Math.max(1, generalForm.remainingDays),
+                                  )
                                   : "7"
                                 : "1"
                             }
@@ -9280,51 +9377,51 @@ export default function PassRequestPage() {
                   {["2", "3", "MONTHLY", "ANNUAL", "YEARLY"].includes(
                     String(vehicleForm.passType),
                   ) && (
-                    <>
-                      <FileUploadBox
-                        label="Tax Document"
-                        isRequired
-                        file={vehicleForm.taxDoc}
-                        existingFileName={vehicleForm.existingTaxName}
-                        onView={() =>
-                          handleViewDoc(
-                            vehicleForm.existingPassRequestId,
-                            "vehicleTax",
-                            vehicleForm.existingTaxName,
-                            vehicleForm.editIndex,
-                          )
-                        }
-                        onChange={(e) =>
-                          setVehicleForm({
-                            ...vehicleForm,
-                            taxDoc: e.target.files[0],
-                          })
-                        }
-                        error={vehicleErrors.taxDoc}
-                      />
-                      <FileUploadBox
-                        label="Emission Certificate"
-                        isRequired
-                        file={vehicleForm.emissionCert}
-                        existingFileName={vehicleForm.existingEmissionName}
-                        onView={() =>
-                          handleViewDoc(
-                            vehicleForm.existingPassRequestId,
-                            "vehicleEmission",
-                            vehicleForm.existingEmissionName,
-                            vehicleForm.editIndex,
-                          )
-                        }
-                        onChange={(e) =>
-                          setVehicleForm({
-                            ...vehicleForm,
-                            emissionCert: e.target.files[0],
-                          })
-                        }
-                        error={vehicleErrors.emissionCert}
-                      />
-                    </>
-                  )}
+                      <>
+                        <FileUploadBox
+                          label="Tax Document"
+                          isRequired
+                          file={vehicleForm.taxDoc}
+                          existingFileName={vehicleForm.existingTaxName}
+                          onView={() =>
+                            handleViewDoc(
+                              vehicleForm.existingPassRequestId,
+                              "vehicleTax",
+                              vehicleForm.existingTaxName,
+                              vehicleForm.editIndex,
+                            )
+                          }
+                          onChange={(e) =>
+                            setVehicleForm({
+                              ...vehicleForm,
+                              taxDoc: e.target.files[0],
+                            })
+                          }
+                          error={vehicleErrors.taxDoc}
+                        />
+                        <FileUploadBox
+                          label="Emission Certificate"
+                          isRequired
+                          file={vehicleForm.emissionCert}
+                          existingFileName={vehicleForm.existingEmissionName}
+                          onView={() =>
+                            handleViewDoc(
+                              vehicleForm.existingPassRequestId,
+                              "vehicleEmission",
+                              vehicleForm.existingEmissionName,
+                              vehicleForm.editIndex,
+                            )
+                          }
+                          onChange={(e) =>
+                            setVehicleForm({
+                              ...vehicleForm,
+                              emissionCert: e.target.files[0],
+                            })
+                          }
+                          error={vehicleErrors.emissionCert}
+                        />
+                      </>
+                    )}
                 </div>
               </div>
             </div>
@@ -9426,25 +9523,25 @@ export default function PassRequestPage() {
                       type="text"
                       value={
                         selectedPassDetails.createdAt ||
-                        selectedPassDetails.created_at ||
-                        selectedPassDetails.submittedAt ||
-                        selectedPassDetails.submitted_at ||
-                        selectedPassDetails.createdat ||
-                        selectedPassDetails.submittedat
+                          selectedPassDetails.created_at ||
+                          selectedPassDetails.submittedAt ||
+                          selectedPassDetails.submitted_at ||
+                          selectedPassDetails.createdat ||
+                          selectedPassDetails.submittedat
                           ? new Date(
-                              selectedPassDetails.createdAt ||
-                                selectedPassDetails.created_at ||
-                                selectedPassDetails.submittedAt ||
-                                selectedPassDetails.submitted_at ||
-                                selectedPassDetails.createdat ||
-                                selectedPassDetails.submittedat,
-                            ).toLocaleString("en-IN", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
+                            selectedPassDetails.createdAt ||
+                            selectedPassDetails.created_at ||
+                            selectedPassDetails.submittedAt ||
+                            selectedPassDetails.submitted_at ||
+                            selectedPassDetails.createdat ||
+                            selectedPassDetails.submittedat,
+                          ).toLocaleString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
                           : "-"
                       }
                     />
@@ -9481,12 +9578,11 @@ export default function PassRequestPage() {
                       Status
                     </label>
                     <input
-                      className={`w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold cursor-not-allowed ${
-                        (selectedPassDetails.status || "").toUpperCase() ===
+                      className={`w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg h-10 px-3 text-sm font-bold cursor-not-allowed ${(selectedPassDetails.status || "").toUpperCase() ===
                         "APPROVED"
-                          ? "text-emerald-600"
-                          : "text-orange-600"
-                      }`}
+                        ? "text-emerald-600"
+                        : "text-orange-600"
+                        }`}
                       readOnly
                       type="text"
                       value={(
@@ -9508,9 +9604,10 @@ export default function PassRequestPage() {
                       <button
                         type="button"
                         onClick={() => {
+                          const primary = selectedConversionPersons[0];
                           setConversionModalState({
                             isOpen: true,
-                            entityData: null,
+                            entityData: primary || null,
                             entityType: "person",
                             selectedItems: selectedConversionPersons,
                           });
@@ -9547,14 +9644,26 @@ export default function PassRequestPage() {
                                   onChange={(e) => {
                                     if (e.target.checked) {
                                       setSelectedConversionPersons(
-                                        eligiblePersons.map((p) => ({
-                                          id: p.id,
-                                          type: "person",
-                                          name: p.name || p.person_name || `ID: ${p.id}`,
-                                          passNo: p.personPassNo || p.passNo || "N/A",
-                                          dateFrom: p.dateFrom || p.fromDate,
-                                          dateTo: p.dateTo || p.toDate,
-                                        }))
+                                        eligiblePersons.map((p) => {
+                                          const reqPath =
+                                            p.conversionRequisitionFilePath ||
+                                            p.requisitionLetterPath ||
+                                            p.requisitionLetterFilePath ||
+                                            selectedPassDetails?.requisitionLetterFilePath ||
+                                            null;
+                                          return {
+                                            ...p,
+                                            id: p.id,
+                                            type: "person",
+                                            name: p.name || p.person_name || `ID: ${p.id}`,
+                                            passNo: p.personPassNo || p.passNo || "N/A",
+                                            dateFrom: p.dateFrom || p.fromDate,
+                                            dateTo: p.dateTo || p.toDate,
+                                            conversionRequisitionFilePath: reqPath,
+                                            requisitionLetterPath: reqPath,
+                                            requisitionLetterFilePath: reqPath,
+                                          };
+                                        })
                                       );
                                     } else {
                                       setSelectedConversionPersons([]);
@@ -9584,7 +9693,7 @@ export default function PassRequestPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {selectedPassDetails.persons &&
-                        selectedPassDetails.persons.length > 0 ? (
+                          selectedPassDetails.persons.length > 0 ? (
                           selectedPassDetails.persons.map((p, i) => {
                             const isPendingConversion = isEntityConversionPending(p);
                             const isConversionActive = isEntityConversionActive(p);
@@ -9611,15 +9720,25 @@ export default function PassRequestPage() {
                                       checked={isChecked}
                                       onChange={(e) => {
                                         if (e.target.checked) {
+                                          const reqPath =
+                                            p.conversionRequisitionFilePath ||
+                                            p.requisitionLetterPath ||
+                                            p.requisitionLetterFilePath ||
+                                            selectedPassDetails?.requisitionLetterFilePath ||
+                                            null;
                                           setSelectedConversionPersons((prev) => [
                                             ...prev,
                                             {
+                                              ...p,
                                               id: p.id,
                                               type: "person",
                                               name: p.name || p.person_name || `ID: ${p.id}`,
                                               passNo: p.personPassNo || p.passNo || "N/A",
                                               dateFrom: p.dateFrom || p.fromDate,
                                               dateTo: p.dateTo || p.toDate,
+                                              conversionRequisitionFilePath: reqPath,
+                                              requisitionLetterPath: reqPath,
+                                              requisitionLetterFilePath: reqPath,
                                             },
                                           ]);
                                         } else {
@@ -9681,20 +9800,19 @@ export default function PassRequestPage() {
                                     </span>
                                   ) : (
                                     <span
-                                      className={`px-2 py-1 rounded-full text-[10px] font-bold whitespace-nowrap ${
-                                        String(p.status || "").toUpperCase() ===
+                                      className={`px-2 py-1 rounded-full text-[10px] font-bold whitespace-nowrap ${String(p.status || "").toUpperCase() ===
                                         "APPROVED"
-                                          ? "bg-emerald-100 text-emerald-700"
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : String(
+                                          p.status || "",
+                                        ).toUpperCase() === "REJECTED"
+                                          ? "bg-red-100 text-red-700"
                                           : String(
-                                                p.status || "",
-                                              ).toUpperCase() === "REJECTED"
-                                            ? "bg-red-100 text-red-700"
-                                            : String(
-                                                  p.status || "",
-                                                ).toUpperCase() === "REVERTED"
-                                              ? "bg-amber-100 text-amber-700"
-                                              : "bg-blue-100 text-blue-700"
-                                      }`}
+                                            p.status || "",
+                                          ).toUpperCase() === "REVERTED"
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-blue-100 text-blue-700"
+                                        }`}
                                     >
                                       {(p.status || "PENDING").toUpperCase()}
                                     </span>
@@ -9746,9 +9864,10 @@ export default function PassRequestPage() {
                       <button
                         type="button"
                         onClick={() => {
+                          const primary = selectedConversionVehicles[0];
                           setConversionModalState({
                             isOpen: true,
-                            entityData: null,
+                            entityData: primary || null,
                             entityType: "vehicle",
                             selectedItems: selectedConversionVehicles,
                           });
@@ -9785,14 +9904,26 @@ export default function PassRequestPage() {
                                   onChange={(e) => {
                                     if (e.target.checked) {
                                       setSelectedConversionVehicles(
-                                        eligibleVehicles.map((v) => ({
-                                          id: v.id,
-                                          type: "vehicle",
-                                          name: v.registrationNo || v.registration_no || v.regNo || `ID: ${v.id}`,
-                                          passNo: v.vehiclePassNo || v.passNo || "N/A",
-                                          dateFrom: v.dateFrom || v.fromDate,
-                                          dateTo: v.dateTo || v.toDate,
-                                        }))
+                                        eligibleVehicles.map((v) => {
+                                          const reqPath =
+                                            v.conversionRequisitionFilePath ||
+                                            v.requisitionLetterPath ||
+                                            v.requisitionLetterFilePath ||
+                                            selectedPassDetails?.requisitionLetterFilePath ||
+                                            null;
+                                          return {
+                                            ...v,
+                                            id: v.id,
+                                            type: "vehicle",
+                                            name: v.registrationNo || v.registration_no || v.regNo || `ID: ${v.id}`,
+                                            passNo: v.vehiclePassNo || v.passNo || "N/A",
+                                            dateFrom: v.dateFrom || v.fromDate,
+                                            dateTo: v.dateTo || v.toDate,
+                                            conversionRequisitionFilePath: reqPath,
+                                            requisitionLetterPath: reqPath,
+                                            requisitionLetterFilePath: reqPath,
+                                          };
+                                        })
                                       );
                                     } else {
                                       setSelectedConversionVehicles([]);
@@ -9822,7 +9953,7 @@ export default function PassRequestPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {selectedPassDetails.vehicles &&
-                        selectedPassDetails.vehicles.length > 0 ? (
+                          selectedPassDetails.vehicles.length > 0 ? (
                           selectedPassDetails.vehicles.map((v, i) => {
                             const isPendingConversion = isEntityConversionPending(v);
                             const isConversionActive = isEntityConversionActive(v);
@@ -9849,15 +9980,25 @@ export default function PassRequestPage() {
                                       checked={isChecked}
                                       onChange={(e) => {
                                         if (e.target.checked) {
+                                          const reqPath =
+                                            v.conversionRequisitionFilePath ||
+                                            v.requisitionLetterPath ||
+                                            v.requisitionLetterFilePath ||
+                                            selectedPassDetails?.requisitionLetterFilePath ||
+                                            null;
                                           setSelectedConversionVehicles((prev) => [
                                             ...prev,
                                             {
+                                              ...v,
                                               id: v.id,
                                               type: "vehicle",
                                               name: v.registrationNo || v.registration_no || v.regNo || `ID: ${v.id}`,
                                               passNo: v.vehiclePassNo || v.passNo || "N/A",
                                               dateFrom: v.dateFrom || v.fromDate,
                                               dateTo: v.dateTo || v.toDate,
+                                              conversionRequisitionFilePath: reqPath,
+                                              requisitionLetterPath: reqPath,
+                                              requisitionLetterFilePath: reqPath,
                                             },
                                           ]);
                                         } else {
@@ -9957,15 +10098,14 @@ export default function PassRequestPage() {
 
                                       return (
                                         <span
-                                          className={`px-2 py-1 rounded-full text-[10px] font-bold whitespace-nowrap ${
-                                            rawStatus === "APPROVED"
-                                              ? "bg-emerald-100 text-emerald-700"
-                                              : rawStatus === "REJECTED"
-                                                ? "bg-red-100 text-red-700"
-                                                : rawStatus === "REVERTED"
-                                                  ? "bg-amber-100 text-amber-700"
-                                                  : "bg-blue-100 text-blue-700"
-                                          }`}
+                                          className={`px-2 py-1 rounded-full text-[10px] font-bold whitespace-nowrap ${rawStatus === "APPROVED"
+                                            ? "bg-emerald-100 text-emerald-700"
+                                            : rawStatus === "REJECTED"
+                                              ? "bg-red-100 text-red-700"
+                                              : rawStatus === "REVERTED"
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-blue-100 text-blue-700"
+                                            }`}
                                         >
                                           {rawStatus}
                                         </span>
@@ -10213,10 +10353,9 @@ export default function PassRequestPage() {
                   <div className="flex items-center gap-4">
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-bold
-                        ${
-                          isPassDisabled(entityModal.data)
-                            ? "bg-red-100 text-red-700"
-                            : "bg-green-100 text-green-700"
+                        ${isPassDisabled(entityModal.data)
+                          ? "bg-red-100 text-red-700"
+                          : "bg-green-100 text-green-700"
                         }`}
                     >
                       {getPassStatus(entityModal.data)}
@@ -10243,12 +10382,12 @@ export default function PassRequestPage() {
                     (String(entityModal.data.passType).toUpperCase() ===
                       "YEARLY" ||
                       String(entityModal.data.passType).toUpperCase() ===
-                        "ANNUAL" ||
+                      "ANNUAL" ||
                       String(entityModal.data.passType) === "3") &&
                     (entityModal.data.withTwoWheeler === true ||
                       String(entityModal.data.withTwoWheeler) === "true") &&
                     String(entityModal.data.status).toUpperCase() ===
-                      "APPROVED" &&
+                    "APPROVED" &&
                     (() => {
                       const count = parseInt(
                         entityModal.data.twoWheelerChangeCount || 0,
@@ -10395,8 +10534,8 @@ export default function PassRequestPage() {
                         value={
                           entityModal.data.dateFrom
                             ? new Date(
-                                entityModal.data.dateFrom,
-                              ).toLocaleDateString("en-GB")
+                              entityModal.data.dateFrom,
+                            ).toLocaleDateString("en-GB")
                             : "-"
                         }
                       />
@@ -10405,8 +10544,8 @@ export default function PassRequestPage() {
                         value={
                           entityModal.data.dateTo
                             ? new Date(
-                                entityModal.data.dateTo,
-                              ).toLocaleDateString("en-GB")
+                              entityModal.data.dateTo,
+                            ).toLocaleDateString("en-GB")
                             : "-"
                         }
                       />
@@ -10414,7 +10553,7 @@ export default function PassRequestPage() {
                         label="Two-Wheeler Availed"
                         value={
                           entityModal.data.withTwoWheeler === true ||
-                          String(entityModal.data.withTwoWheeler) === "true"
+                            String(entityModal.data.withTwoWheeler) === "true"
                             ? "Yes"
                             : "No"
                         }
@@ -10453,22 +10592,22 @@ export default function PassRequestPage() {
                             getLabelById(
                               masterData.vehicleTypes,
                               entityModal.data.vehicleTypeId ||
-                                entityModal.data.vehicle_type_id ||
-                                entityModal.data.vehicleType ||
-                                entityModal.data.type,
+                              entityModal.data.vehicle_type_id ||
+                              entityModal.data.vehicleType ||
+                              entityModal.data.type,
                               "name",
                             )) ||
                           (masterData?.vehicleTypes &&
                             getLabelById(
                               masterData.vehicleTypes,
                               entityModal.data.vehicleTypeId ||
-                                entityModal.data.vehicle_type_id ||
-                                entityModal.data.vehicleType ||
-                                entityModal.data.type,
+                              entityModal.data.vehicle_type_id ||
+                              entityModal.data.vehicleType ||
+                              entityModal.data.type,
                               "label",
                             )) ||
                           (entityModal.data.vehicleType &&
-                          isNaN(entityModal.data.vehicleType)
+                            isNaN(entityModal.data.vehicleType)
                             ? entityModal.data.vehicleType
                             : null) ||
                           (entityModal.data.type && isNaN(entityModal.data.type)
@@ -10502,8 +10641,8 @@ export default function PassRequestPage() {
                         value={
                           entityModal.data.dateFrom
                             ? new Date(
-                                entityModal.data.dateFrom,
-                              ).toLocaleDateString("en-GB")
+                              entityModal.data.dateFrom,
+                            ).toLocaleDateString("en-GB")
                             : "-"
                         }
                       />
@@ -10512,8 +10651,8 @@ export default function PassRequestPage() {
                         value={
                           entityModal.data.dateTo
                             ? new Date(
-                                entityModal.data.dateTo,
-                              ).toLocaleDateString("en-GB")
+                              entityModal.data.dateTo,
+                            ).toLocaleDateString("en-GB")
                             : "-"
                         }
                       />
@@ -10522,8 +10661,8 @@ export default function PassRequestPage() {
                         value={
                           entityModal.data.insuranceExpiry
                             ? new Date(
-                                entityModal.data.insuranceExpiry,
-                              ).toLocaleDateString("en-GB")
+                              entityModal.data.insuranceExpiry,
+                            ).toLocaleDateString("en-GB")
                             : "-"
                         }
                       />
@@ -10532,8 +10671,8 @@ export default function PassRequestPage() {
                         value={
                           entityModal.data.rcValidity
                             ? new Date(
-                                entityModal.data.rcValidity,
-                              ).toLocaleDateString("en-GB")
+                              entityModal.data.rcValidity,
+                            ).toLocaleDateString("en-GB")
                             : "-"
                         }
                       />
@@ -10561,7 +10700,7 @@ export default function PassRequestPage() {
                           onClick={() =>
                             handleViewDoc(
                               selectedPassDetails?.id ||
-                                entityModal.data.passRequestId,
+                              entityModal.data.passRequestId,
                               "personPhoto",
                               entityModal.data.photoFileName,
                             )
@@ -10577,259 +10716,259 @@ export default function PassRequestPage() {
                       )}
                       {(entityModal.data.aadharPDFFileName ||
                         entityModal.data.aadharFileName) && (
-                        <button
-                          onClick={() =>
-                            handleViewDoc(
-                              selectedPassDetails?.id ||
+                          <button
+                            onClick={() =>
+                              handleViewDoc(
+                                selectedPassDetails?.id ||
                                 entityModal.data.passRequestId,
-                              "personAadhar",
-                              entityModal.data.aadharPDFFileName ||
+                                "personAadhar",
+                                entityModal.data.aadharPDFFileName ||
                                 entityModal.data.aadharFileName,
-                            )
-                          }
-                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
-                        >
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-orange-500" />{" "}
-                            Aadhar PDF
-                          </span>
-                          <Eye className="h-4 w-4 text-slate-400" />
-                        </button>
-                      )}
+                              )
+                            }
+                            className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-orange-500" />{" "}
+                              Aadhar PDF
+                            </span>
+                            <Eye className="h-4 w-4 text-slate-400" />
+                          </button>
+                        )}
                       {(entityModal.data.idProofFileName ||
                         entityModal.data.idProofName) && (
-                        <button
-                          onClick={() =>
-                            handleViewDoc(
-                              selectedPassDetails?.id ||
+                          <button
+                            onClick={() =>
+                              handleViewDoc(
+                                selectedPassDetails?.id ||
                                 entityModal.data.passRequestId,
-                              "personIdProof",
-                              entityModal.data.idProofFileName ||
+                                "personIdProof",
+                                entityModal.data.idProofFileName ||
                                 entityModal.data.idProofName,
-                            )
-                          }
-                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
-                        >
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-orange-500" /> ID
-                            Proof
-                          </span>
-                          <Eye className="h-4 w-4 text-slate-400" />
-                        </button>
-                      )}
+                              )
+                            }
+                            className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-orange-500" /> ID
+                              Proof
+                            </span>
+                            <Eye className="h-4 w-4 text-slate-400" />
+                          </button>
+                        )}
                       {(entityModal.data.driverLicenseName ||
                         entityModal.data.dlName) && (
-                        <button
-                          onClick={() =>
-                            handleViewDoc(
-                              selectedPassDetails?.id ||
+                          <button
+                            onClick={() =>
+                              handleViewDoc(
+                                selectedPassDetails?.id ||
                                 entityModal.data.passRequestId,
-                              "personDrivingLicense",
-                              entityModal.data.driverLicenseName ||
+                                "personDrivingLicense",
+                                entityModal.data.driverLicenseName ||
                                 entityModal.data.dlName,
-                            )
-                          }
-                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
-                        >
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-orange-500" />{" "}
-                            Driving Licence
-                          </span>
-                          <Eye className="h-4 w-4 text-slate-400" />
-                        </button>
-                      )}
+                              )
+                            }
+                            className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-orange-500" />{" "}
+                              Driving Licence
+                            </span>
+                            <Eye className="h-4 w-4 text-slate-400" />
+                          </button>
+                        )}
                       {(entityModal.data.policeVerificationName ||
                         entityModal.data.policeName) && (
-                        <button
-                          onClick={() =>
-                            handleViewDoc(
-                              selectedPassDetails?.id ||
+                          <button
+                            onClick={() =>
+                              handleViewDoc(
+                                selectedPassDetails?.id ||
                                 entityModal.data.passRequestId,
-                              "policeVerification",
-                              entityModal.data.policeVerificationName ||
+                                "policeVerification",
+                                entityModal.data.policeVerificationName ||
                                 entityModal.data.policeName,
-                            )
-                          }
-                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
-                        >
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-orange-500" />{" "}
-                            Police Verification
-                          </span>
-                          <Eye className="h-4 w-4 text-slate-400" />
-                        </button>
-                      )}
+                              )
+                            }
+                            className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-orange-500" />{" "}
+                              Police Verification
+                            </span>
+                            <Eye className="h-4 w-4 text-slate-400" />
+                          </button>
+                        )}
                       {(entityModal.data.employmentProofName ||
                         entityModal.data.empName) && (
-                        <button
-                          onClick={() =>
-                            handleViewDoc(
-                              selectedPassDetails?.id ||
+                          <button
+                            onClick={() =>
+                              handleViewDoc(
+                                selectedPassDetails?.id ||
                                 entityModal.data.passRequestId,
-                              "employmentProof",
-                              entityModal.data.employmentProofName ||
+                                "employmentProof",
+                                entityModal.data.employmentProofName ||
                                 entityModal.data.empName,
-                            )
-                          }
-                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
-                        >
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-orange-500" />{" "}
-                            Employment Proof
-                          </span>
-                          <Eye className="h-4 w-4 text-slate-400" />
-                        </button>
-                      )}
+                              )
+                            }
+                            className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-orange-500" />{" "}
+                              Employment Proof
+                            </span>
+                            <Eye className="h-4 w-4 text-slate-400" />
+                          </button>
+                        )}
                       {(entityModal.data.visaDocName ||
                         entityModal.data.visaDocPath) && (
-                        <button
-                          onClick={() =>
-                            handleViewDoc(
-                              selectedPassDetails?.id ||
+                          <button
+                            onClick={() =>
+                              handleViewDoc(
+                                selectedPassDetails?.id ||
                                 entityModal.data.passRequestId,
-                              "visaDoc",
-                              entityModal.data.visaDocName ||
+                                "visaDoc",
+                                entityModal.data.visaDocName ||
                                 entityModal.data.visaDocPath,
-                            )
-                          }
-                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
-                        >
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-orange-500" />{" "}
-                            Visa
-                          </span>
-                          <Eye className="h-4 w-4 text-slate-400" />
-                        </button>
-                      )}
+                              )
+                            }
+                            className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-orange-500" />{" "}
+                              Visa
+                            </span>
+                            <Eye className="h-4 w-4 text-slate-400" />
+                          </button>
+                        )}
                       {(entityModal.data.immigrationDocName ||
                         entityModal.data.immigrationDocPath) && (
-                        <button
-                          onClick={() =>
-                            handleViewDoc(
-                              selectedPassDetails?.id ||
+                          <button
+                            onClick={() =>
+                              handleViewDoc(
+                                selectedPassDetails?.id ||
                                 entityModal.data.passRequestId,
-                              "immigrationDoc",
-                              entityModal.data.immigrationDocName ||
+                                "immigrationDoc",
+                                entityModal.data.immigrationDocName ||
                                 entityModal.data.immigrationDocPath,
-                            )
-                          }
-                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
-                        >
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-orange-500" />{" "}
-                            Immigration Clearance
-                          </span>
-                          <Eye className="h-4 w-4 text-slate-400" />
-                        </button>
-                      )}
+                              )
+                            }
+                            className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-orange-500" />{" "}
+                              Immigration Clearance
+                            </span>
+                            <Eye className="h-4 w-4 text-slate-400" />
+                          </button>
+                        )}
                       {(entityModal.data.passportName ||
                         entityModal.data.passportPath) && (
-                        <button
-                          onClick={() =>
-                            handleViewDoc(
-                              selectedPassDetails?.id ||
+                          <button
+                            onClick={() =>
+                              handleViewDoc(
+                                selectedPassDetails?.id ||
                                 entityModal.data.passRequestId,
-                              "passportDoc",
-                              entityModal.data.passportName ||
+                                "passportDoc",
+                                entityModal.data.passportName ||
                                 entityModal.data.passportPath,
-                            )
-                          }
-                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
-                        >
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-orange-500" />{" "}
-                            Passport
-                          </span>
-                          <Eye className="h-4 w-4 text-slate-400" />
-                        </button>
-                      )}
+                              )
+                            }
+                            className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-orange-500" />{" "}
+                              Passport
+                            </span>
+                            <Eye className="h-4 w-4 text-slate-400" />
+                          </button>
+                        )}
                     </>
                   ) : (
                     <>
                       {(entityModal.data.scannedCopyFileName ||
                         entityModal.data.rcName) && (
-                        <button
-                          onClick={() =>
-                            handleViewDoc(
-                              selectedPassDetails?.id ||
+                          <button
+                            onClick={() =>
+                              handleViewDoc(
+                                selectedPassDetails?.id ||
                                 entityModal.data.passRequestId,
-                              "vehicleRC",
-                              entityModal.data.scannedCopyFileName ||
+                                "vehicleRC",
+                                entityModal.data.scannedCopyFileName ||
                                 entityModal.data.rcName,
-                            )
-                          }
-                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
-                        >
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-orange-500" /> RC
-                            / NOC
-                          </span>
-                          <Eye className="h-4 w-4 text-slate-400" />
-                        </button>
-                      )}
+                              )
+                            }
+                            className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-orange-500" /> RC
+                              / NOC
+                            </span>
+                            <Eye className="h-4 w-4 text-slate-400" />
+                          </button>
+                        )}
                       {(entityModal.data.insuranceFileName ||
                         entityModal.data.insName) && (
-                        <button
-                          onClick={() =>
-                            handleViewDoc(
-                              selectedPassDetails?.id ||
+                          <button
+                            onClick={() =>
+                              handleViewDoc(
+                                selectedPassDetails?.id ||
                                 entityModal.data.passRequestId,
-                              "vehicleInsurance",
-                              entityModal.data.insuranceFileName ||
+                                "vehicleInsurance",
+                                entityModal.data.insuranceFileName ||
                                 entityModal.data.insName,
-                            )
-                          }
-                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
-                        >
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-orange-500" />{" "}
-                            Insurance
-                          </span>
-                          <Eye className="h-4 w-4 text-slate-400" />
-                        </button>
-                      )}
+                              )
+                            }
+                            className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-orange-500" />{" "}
+                              Insurance
+                            </span>
+                            <Eye className="h-4 w-4 text-slate-400" />
+                          </button>
+                        )}
                       {(entityModal.data.fitnessFileName ||
                         entityModal.data.fitnessName) && (
-                        <button
-                          onClick={() =>
-                            handleViewDoc(
-                              selectedPassDetails?.id ||
+                          <button
+                            onClick={() =>
+                              handleViewDoc(
+                                selectedPassDetails?.id ||
                                 entityModal.data.passRequestId,
-                              "vehicleFitness",
-                              entityModal.data.fitnessFileName ||
+                                "vehicleFitness",
+                                entityModal.data.fitnessFileName ||
                                 entityModal.data.fitnessName,
-                            )
-                          }
-                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
-                        >
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-orange-500" />{" "}
-                            Fitness Cert
-                          </span>
-                          <Eye className="h-4 w-4 text-slate-400" />
-                        </button>
-                      )}
+                              )
+                            }
+                            className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-orange-500" />{" "}
+                              Fitness Cert
+                            </span>
+                            <Eye className="h-4 w-4 text-slate-400" />
+                          </button>
+                        )}
                       {(entityModal.data.permitFileName ||
                         entityModal.data.permitName) && (
-                        <button
-                          onClick={() =>
-                            handleViewDoc(
-                              selectedPassDetails?.id ||
+                          <button
+                            onClick={() =>
+                              handleViewDoc(
+                                selectedPassDetails?.id ||
                                 entityModal.data.passRequestId,
-                              "vehiclePermit",
-                              entityModal.data.permitFileName ||
+                                "vehiclePermit",
+                                entityModal.data.permitFileName ||
                                 entityModal.data.permitName,
-                            )
-                          }
-                          className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
-                        >
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-orange-500" />{" "}
-                            Permit
-                          </span>
-                          <Eye className="h-4 w-4 text-slate-400" />
-                        </button>
-                      )}
+                              )
+                            }
+                            className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 hover:border-[#0a1e4d] text-left text-xs font-bold text-slate-700"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-orange-500" />{" "}
+                              Permit
+                            </span>
+                            <Eye className="h-4 w-4 text-slate-400" />
+                          </button>
+                        )}
                     </>
                   )}
                 </div>
@@ -10950,25 +11089,23 @@ export default function PassRequestPage() {
                     })
                   }
                   placeholder="e.g. MH01AB1234, KA-02-C-5678"
-                  className={`w-full mt-1 border rounded-lg h-10 px-3 text-sm font-mono font-bold focus:outline-none transition-all ${
-                    twoWheelerModal.newVehicleNo.trim().length === 0
-                      ? "border-slate-300 focus:ring-2 focus:ring-[#0a1e4d] text-[#0a1e4d]"
-                      : /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(
-                            twoWheelerModal.newVehicleNo.trim(),
-                          )
-                        ? "border-emerald-500 bg-emerald-50/50 text-emerald-800 focus:ring-2 focus:ring-emerald-500"
-                        : "border-red-400 bg-red-50/50 text-red-700 focus:ring-2 focus:ring-red-500"
-                  }`}
+                  className={`w-full mt-1 border rounded-lg h-10 px-3 text-sm font-mono font-bold focus:outline-none transition-all ${twoWheelerModal.newVehicleNo.trim().length === 0
+                    ? "border-slate-300 focus:ring-2 focus:ring-[#0a1e4d] text-[#0a1e4d]"
+                    : /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(
+                      twoWheelerModal.newVehicleNo.trim(),
+                    )
+                      ? "border-emerald-500 bg-emerald-50/50 text-emerald-800 focus:ring-2 focus:ring-emerald-500"
+                      : "border-red-400 bg-red-50/50 text-red-700 focus:ring-2 focus:ring-red-500"
+                    }`}
                 />
                 {twoWheelerModal.newVehicleNo.trim().length > 0 && (
                   <p
-                    className={`text-[11px] font-semibold mt-1 flex items-center gap-1 ${
-                      /^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(
-                        twoWheelerModal.newVehicleNo.trim(),
-                      )
-                        ? "text-emerald-600"
-                        : "text-red-500"
-                    }`}
+                    className={`text-[11px] font-semibold mt-1 flex items-center gap-1 ${/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(
+                      twoWheelerModal.newVehicleNo.trim(),
+                    )
+                      ? "text-emerald-600"
+                      : "text-red-500"
+                      }`}
                   >
                     {/^[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,3}[-\s]?[0-9]{1,4}$/i.test(
                       twoWheelerModal.newVehicleNo.trim(),
@@ -11085,27 +11222,24 @@ export default function PassRequestPage() {
                     {revertedPersons.map((person, index) => (
                       <div
                         key={person.id}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          person.status === "reverted"
-                            ? "bg-white border-amber-300"
-                            : "bg-green-50 border-green-300"
-                        }`}
+                        className={`p-4 rounded-xl border-2 transition-all ${person.status === "reverted"
+                          ? "bg-white border-amber-300"
+                          : "bg-green-50 border-green-300"
+                          }`}
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <div
-                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                person.status === "reverted"
-                                  ? "bg-amber-100"
-                                  : "bg-green-100"
-                              }`}
+                              className={`w-10 h-10 rounded-full flex items-center justify-center ${person.status === "reverted"
+                                ? "bg-amber-100"
+                                : "bg-green-100"
+                                }`}
                             >
                               <User
-                                className={`h-5 w-5 ${
-                                  person.status === "reverted"
-                                    ? "text-amber-600"
-                                    : "text-green-600"
-                                }`}
+                                className={`h-5 w-5 ${person.status === "reverted"
+                                  ? "text-amber-600"
+                                  : "text-green-600"
+                                  }`}
                               />
                             </div>
                             <div>
@@ -11130,49 +11264,107 @@ export default function PassRequestPage() {
                             </div>
                           </div>
                           <span
-                            className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                              person.status === "reverted"
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-green-100 text-green-700"
-                            }`}
+                            className={`px-2 py-1 rounded-full text-xs font-semibold ${person.status === "updated"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-amber-100 text-amber-700"
+                              }`}
                           >
-                            {person.status === "reverted"
-                              ? "Needs Update"
-                              : "Updated ✓"}
+                            {person.status === "updated"
+                              ? "Updated ✓"
+                              : person.conversionStatus === "REVERTED"
+                                ? "Conversion Reverted"
+                                : "Needs Update"}
                           </span>
                         </div>
 
+                        {/* Conversion Previous Details */}
+                        {person.conversionStatus === "REVERTED" && (
+                          <div className="bg-amber-50/70 border border-amber-200 p-2.5 rounded-lg mb-3 text-xs space-y-1">
+                            <div className="flex justify-between items-center text-amber-900">
+                              <span className="font-bold flex items-center gap-1">
+                                <Zap className="w-3.5 h-3.5 text-amber-600" /> Essential Access Requested
+                              </span>
+                              <span className="font-semibold text-slate-700">
+                                {person.conversionDepartmentId === 3
+                                  ? "Civil Dept"
+                                  : person.conversionDepartmentId === 4
+                                    ? "Mechanical Dept"
+                                    : "Traffic Dept"}
+                              </span>
+                            </div>
+                            {person.conversionStartDate && person.conversionEndDate && (
+                              <p className="text-slate-600 font-mono text-[11px]">
+                                Requested Dates: {new Date(person.conversionStartDate).toLocaleDateString("en-GB")} to {new Date(person.conversionEndDate).toLocaleDateString("en-GB")}
+                              </p>
+                            )}
+                            {person.conversionRequisitionFilePath && (
+                              <div className="flex items-center justify-between pt-1 border-t border-amber-200/60 text-[11px]">
+                                <span className="text-amber-800 font-medium truncate max-w-[170px]">
+                                  {person.conversionRequisitionFilePath.split(/[\/\\]/).pop()}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewDoc(
+                                      person.passRequestId || editingRevertedPass?.id,
+                                      "conversionRequisition",
+                                      person.conversionRequisitionFilePath,
+                                    );
+                                  }}
+                                  className="text-indigo-600 hover:text-indigo-800 font-bold underline inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Eye className="w-3 h-3" /> View Requisition Letter
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Revert Reason */}
-                        {person.rejectedReason && (
+                        {(person.rejectedReason || person.conversionRevertReason) && (
                           <div className="bg-red-50 border border-red-200 p-3 rounded-lg mb-3">
                             <p className="text-xs text-red-600 font-semibold mb-1">
                               Revert Reason:
                             </p>
                             <p className="text-sm text-red-700">
-                              {person.rejectedReason}
+                              {person.conversionRevertReason || person.rejectedReason}
                             </p>
                           </div>
                         )}
 
                         {/* Edit Button */}
                         {(person.status === "reverted" ||
+                          person.conversionStatus === "REVERTED" ||
                           person.status === "updated") && (
-                          <button
-                            onClick={() =>
-                              handleEditRevertedEntity("person", index, person)
-                            }
-                            className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
-                              person.status === "updated"
+                            <button
+                              onClick={() =>
+                                person.conversionStatus === "REVERTED"
+                                  ? handleEditRevertedConversion("person", person)
+                                  : handleEditRevertedEntity("person", index, person)
+                              }
+                              className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${person.status === "updated"
                                 ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                                : "bg-amber-500 hover:bg-amber-600 text-white"
-                            }`}
-                          >
-                            <Edit3 className="h-4 w-4" />
-                            {person.status === "updated"
-                              ? "Edit Again"
-                              : "Update Person"}
-                          </button>
-                        )}
+                                : person.conversionStatus === "REVERTED"
+                                  ? "bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
+                                  : "bg-amber-500 hover:bg-amber-600 text-white"
+                                }`}
+                            >
+                              {person.conversionStatus === "REVERTED" ? (
+                                <>
+                                  <Zap className="h-4 w-4" />
+                                  Update Conversion Request
+                                </>
+                              ) : (
+                                <>
+                                  <Edit3 className="h-4 w-4" />
+                                  {person.status === "updated"
+                                    ? "Edit Again"
+                                    : "Update Person"}
+                                </>
+                              )}
+                            </button>
+                          )}
                       </div>
                     ))}
                   </div>
@@ -11190,27 +11382,24 @@ export default function PassRequestPage() {
                     {revertedVehicles.map((vehicle, index) => (
                       <div
                         key={vehicle.id}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          vehicle.status === "reverted"
-                            ? "bg-white border-amber-300"
-                            : "bg-green-50 border-green-300"
-                        }`}
+                        className={`p-4 rounded-xl border-2 transition-all ${vehicle.status === "updated"
+                          ? "bg-green-50 border-green-300"
+                          : "bg-white border-amber-300"
+                          }`}
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <div
-                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                vehicle.status === "reverted"
-                                  ? "bg-amber-100"
-                                  : "bg-green-100"
-                              }`}
+                              className={`w-10 h-10 rounded-full flex items-center justify-center ${vehicle.status === "updated"
+                                ? "bg-green-100"
+                                : "bg-amber-100"
+                                }`}
                             >
                               <Car
-                                className={`h-5 w-5 ${
-                                  vehicle.status === "reverted"
-                                    ? "text-amber-600"
-                                    : "text-green-600"
-                                }`}
+                                className={`h-5 w-5 ${vehicle.status === "updated"
+                                  ? "text-green-600"
+                                  : "text-amber-600"
+                                  }`}
                               />
                             </div>
                             <div>
@@ -11238,53 +11427,111 @@ export default function PassRequestPage() {
                             </div>
                           </div>
                           <span
-                            className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                              vehicle.status === "reverted"
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-green-100 text-green-700"
-                            }`}
+                            className={`px-2 py-1 rounded-full text-xs font-semibold ${vehicle.status === "updated"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-amber-100 text-amber-700"
+                              }`}
                           >
-                            {vehicle.status === "reverted"
-                              ? "Needs Update"
-                              : "Updated ✓"}
+                            {vehicle.status === "updated"
+                              ? "Updated ✓"
+                              : vehicle.conversionStatus === "REVERTED"
+                                ? "Conversion Reverted"
+                                : "Needs Update"}
                           </span>
                         </div>
 
+                        {/* Conversion Previous Details */}
+                        {vehicle.conversionStatus === "REVERTED" && (
+                          <div className="bg-amber-50/70 border border-amber-200 p-2.5 rounded-lg mb-3 text-xs space-y-1">
+                            <div className="flex justify-between items-center text-amber-900">
+                              <span className="font-bold flex items-center gap-1">
+                                <Zap className="w-3.5 h-3.5 text-amber-600" /> Essential Access Requested
+                              </span>
+                              <span className="font-semibold text-slate-700">
+                                {vehicle.conversionDepartmentId === 3
+                                  ? "Civil Dept"
+                                  : vehicle.conversionDepartmentId === 4
+                                    ? "Mechanical Dept"
+                                    : "Marine Safety Dept"}
+                              </span>
+                            </div>
+                            {vehicle.conversionStartDate && vehicle.conversionEndDate && (
+                              <p className="text-slate-600 font-mono text-[11px]">
+                                Requested Dates: {new Date(vehicle.conversionStartDate).toLocaleDateString("en-GB")} to {new Date(vehicle.conversionEndDate).toLocaleDateString("en-GB")}
+                              </p>
+                            )}
+                            {vehicle.conversionRequisitionFilePath && (
+                              <div className="flex items-center justify-between pt-1 border-t border-amber-200/60 text-[11px]">
+                                <span className="text-amber-800 font-medium truncate max-w-[170px]">
+                                  {vehicle.conversionRequisitionFilePath.split(/[\/\\]/).pop()}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewDoc(
+                                      vehicle.passRequestId || editingRevertedPass?.id,
+                                      "conversionRequisition",
+                                      vehicle.conversionRequisitionFilePath,
+                                    );
+                                  }}
+                                  className="text-indigo-600 hover:text-indigo-800 font-bold underline inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Eye className="w-3 h-3" /> View Requisition Letter
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Revert Reason */}
-                        {vehicle.rejectedReason && (
+                        {(vehicle.rejectedReason || vehicle.conversionRevertReason) && (
                           <div className="bg-red-50 border border-red-200 p-3 rounded-lg mb-3">
                             <p className="text-xs text-red-600 font-semibold mb-1">
                               Revert Reason:
                             </p>
                             <p className="text-sm text-red-700">
-                              {vehicle.rejectedReason}
+                              {vehicle.conversionRevertReason || vehicle.rejectedReason}
                             </p>
                           </div>
                         )}
 
                         {/* Edit Button */}
                         {(vehicle.status === "reverted" ||
+                          vehicle.conversionStatus === "REVERTED" ||
                           vehicle.status === "updated") && (
-                          <button
-                            onClick={() =>
-                              handleEditRevertedEntity(
-                                "vehicle",
-                                index,
-                                vehicle,
-                              )
-                            }
-                            className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
-                              vehicle.status === "updated"
+                            <button
+                              onClick={() =>
+                                vehicle.conversionStatus === "REVERTED"
+                                  ? handleEditRevertedConversion("vehicle", vehicle)
+                                  : handleEditRevertedEntity(
+                                    "vehicle",
+                                    index,
+                                    vehicle,
+                                  )
+                              }
+                              className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${vehicle.status === "updated"
                                 ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                                : "bg-amber-500 hover:bg-amber-600 text-white"
-                            }`}
-                          >
-                            <Edit3 className="h-4 w-4" />
-                            {vehicle.status === "updated"
-                              ? "Edit Again"
-                              : "Update Vehicle"}
-                          </button>
-                        )}
+                                : vehicle.conversionStatus === "REVERTED"
+                                  ? "bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
+                                  : "bg-amber-500 hover:bg-amber-600 text-white"
+                                }`}
+                            >
+                              {vehicle.conversionStatus === "REVERTED" ? (
+                                <>
+                                  <Zap className="h-4 w-4" />
+                                  Update Conversion Request
+                                </>
+                              ) : (
+                                <>
+                                  <Edit3 className="h-4 w-4" />
+                                  {vehicle.status === "updated"
+                                    ? "Edit Again"
+                                    : "Update Vehicle"}
+                                </>
+                              )}
+                            </button>
+                          )}
                       </div>
                     ))}
                   </div>
@@ -11292,8 +11539,7 @@ export default function PassRequestPage() {
               )}
 
               {/* All Updated Message */}
-              {revertedPersons.every((p) => p.status !== "reverted") &&
-                revertedPersons.every((p) => p.status === "updated") &&
+              {revertedPersons.every((p) => p.status === "updated") &&
                 revertedVehicles.every((v) => v.status === "updated") && (
                   <div className="bg-green-50 border border-green-200 p-4 rounded-xl flex items-center gap-3 mb-6">
                     <CheckCircle className="h-6 w-6 text-green-600" />
@@ -11320,15 +11566,14 @@ export default function PassRequestPage() {
               <button
                 onClick={handleResubmitRevertedPass}
                 disabled={
-                  revertedPersons.some((p) => p.status === "reverted") ||
-                  revertedVehicles.some((v) => v.status === "reverted")
+                  revertedPersons.some((p) => p.status !== "updated") ||
+                  revertedVehicles.some((v) => v.status !== "updated")
                 }
-                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${
-                  revertedPersons.some((p) => p.status === "reverted") ||
-                  revertedVehicles.some((v) => v.status === "reverted")
-                    ? "bg-slate-300 text-slate-500 cursor-not-allowed"
-                    : "bg-amber-500 hover:bg-amber-600 text-white"
-                }`}
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${revertedPersons.some((p) => p.status !== "updated") ||
+                  revertedVehicles.some((v) => v.status !== "updated")
+                  ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                  : "bg-amber-500 hover:bg-amber-600 text-white"
+                  }`}
               >
                 <Send className="h-4 w-4" />
                 Resubmit Pass
@@ -11342,9 +11587,8 @@ export default function PassRequestPage() {
       {viewingDocUrl && (
         <div className="fixed inset-0 z-[150] bg-slate-900/85 backdrop-blur-sm flex items-center justify-center p-4 md:p-6 lg:p-10 animate-in fade-in duration-300">
           <div
-            className={`bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${
-              isFullscreen ? "w-full h-full" : "w-full max-w-5xl h-[85vh]"
-            }`}
+            className={`bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${isFullscreen ? "w-full h-full" : "w-full max-w-5xl h-[85vh]"
+              }`}
           >
             {/* Header */}
             <div className="bg-slate-800 text-white px-6 py-4 flex items-center justify-between shrink-0">
