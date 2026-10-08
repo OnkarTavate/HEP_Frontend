@@ -846,12 +846,12 @@ const LoginPage = () => {
                 aria-hidden
                 className="hidden xl:block absolute -inset-6 bg-gradient-to-br from-orange-400/30 via-orange-300/20 to-transparent blur-3xl rounded-[40px] -z-10"
               />
-              <div className="relative bg-white/95 backdrop-blur-2xl rounded-[20px] sm:rounded-[24px] md:rounded-[30px] shadow-[0_30px_80px_-15px_rgba(0,0,0,0.6)] ring-1 ring-white/40 overflow-hidden w-full max-w-[480px] sm:max-w-[560px] md:max-w-[780px] xl:max-w-[800px] 2xl:max-w-[880px] mx-auto xl:ml-auto xl:mr-0 min-h-0 md:min-h-[460px] lg:min-h-[480px] lg:h-[72vh] lg:max-h-[580px] 2xl:max-h-[680px] transition-shadow duration-500 hover:shadow-[0_35px_90px_-15px_rgba(0,0,0,0.7)]">
+              <div className="relative bg-white/95 backdrop-blur-2xl rounded-[24px] sm:rounded-[28px] md:rounded-[32px] shadow-[0_30px_90px_-15px_rgba(0,0,0,0.65)] ring-1 ring-white/50 overflow-hidden w-full max-w-[500px] sm:max-w-[620px] md:max-w-[840px] xl:max-w-[920px] 2xl:max-w-[980px] mx-auto xl:ml-auto xl:mr-0 min-h-0 md:min-h-[520px] lg:min-h-[560px] xl:min-h-[590px] lg:max-h-[650px] 2xl:max-h-[710px] transition-all duration-500 hover:shadow-[0_35px_95px_-15px_rgba(0,0,0,0.7)]">
                 {/* ── Form column (slides to the right half when forgot is active) ─── */}
                 <div
                   className={`md:absolute md:top-0 md:left-0 md:w-1/2 md:h-full bg-white z-[2] transition-transform duration-700 ease-in-out ${authMode === "forgot" ? "md:translate-x-full" : "md:translate-x-0"}`}
                 >
-                  <div className="h-full flex flex-col justify-center px-4 sm:px-5 md:px-6 lg:px-8 2xl:px-10 py-4 sm:py-5 max-w-md mx-auto w-full">
+                  <div className="h-full flex flex-col justify-center px-5 sm:px-7 md:px-8 lg:px-9 xl:px-10 py-6 sm:py-7 md:py-8 max-w-[430px] mx-auto w-full">
                     {/* Mobile/Tablet Header (Hidden on Desktop lg) */}
                     <div className="flex items-center gap-3 mb-4 sm:mb-6 xl:hidden justify-center bg-stone-50 border border-stone-100 p-2.5 sm:p-3 rounded-2xl">
                       <div className="w-14 h-14 sm:w-18 sm:h-18 bg-white rounded-full flex items-center justify-center shadow-md p-1.5 sm:p-2 shrink-0 border border-stone-200">
@@ -885,13 +885,16 @@ const LoginPage = () => {
                         key="signin-panel"
                         className="animate-in fade-in duration-500 ease-out"
                       >
-                        <div className="text-center mb-2 sm:mb-3">
-                          <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">
+                        <div className="text-center mb-3 sm:mb-4">
+                          <h3 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-gray-900 tracking-tight">
                             Sign In
                           </h3>
+                          <p className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">
+                            Welcome back! Please enter your credentials
+                          </p>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-2.5 sm:space-y-3">
+                        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-3.5">
                           {error && (
                             <div className="p-3 text-sm bg-red-50 border border-red-200 text-red-800 rounded-lg">
                               {error}
@@ -1001,7 +1004,7 @@ const LoginPage = () => {
 
                           <button
                             type="submit"
-                            className="w-full py-2.5 sm:py-3 bg-orange-600 text-white text-sm font-semibold tracking-wider uppercase rounded-xl hover:bg-orange-700 hover:shadow-orange-600/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] shadow-lg shadow-orange-600/20 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-orange-500/20"
+                            className="w-full py-2.5 sm:py-3 bg-gradient-to-r from-orange-600 via-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white text-sm font-bold tracking-wider uppercase rounded-xl hover:shadow-lg hover:shadow-orange-600/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] shadow-md shadow-orange-600/20 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-orange-500/20"
                           >
                             Sign In
                           </button>
@@ -1015,9 +1018,10 @@ const LoginPage = () => {
                               setTrackError("");
                               setTrackReference("");
                             }}
-                            className="w-full py-2.5 sm:py-3 bg-white text-orange-600 text-sm font-semibold tracking-wider uppercase rounded-xl border-2 border-orange-600 hover:bg-orange-50 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-orange-500/20"
+                            className="w-full py-2 sm:py-2.5 px-3 bg-orange-50/60 hover:bg-orange-100/80 text-orange-700 hover:text-orange-800 text-xs sm:text-[13px] font-semibold rounded-xl border border-orange-200/70 hover:border-orange-300 flex items-center justify-center gap-2 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 shadow-2xs hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                           >
-                            Track Registration Status
+                            <Search className="h-3.5 w-3.5 text-orange-500" />
+                            <span>Track Registration Status</span>
                           </button>
 
                           {/* Mobile-only navigation links (hidden on desktop) */}
@@ -1372,53 +1376,55 @@ const LoginPage = () => {
 
                 {/* ── Orange side panel (slides from right to left when forgot is active) ─── */}
                 <div
-                  className={`hidden md:flex absolute top-0 right-0 w-1/2 h-full flex-col items-center justify-center text-center text-white px-5 lg:px-8 bg-gradient-to-br from-orange-500 to-orange-700 transition-all duration-700 ease-in-out ${authMode === "forgot" ? "md:-translate-x-full" : "md:translate-x-0"}`}
+                  className={`hidden md:flex absolute top-0 right-0 w-1/2 h-full flex-col items-center justify-center text-center text-white px-6 lg:px-9 bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600 transition-all duration-700 ease-in-out ${authMode === "forgot" ? "md:-translate-x-full" : "md:translate-x-0"}`}
                   style={{
                     borderRadius:
                       authMode === "forgot"
-                        ? "0 100px 80px 0"
-                        : "100px 0 0 80px",
+                        ? "0 90px 75px 0"
+                        : "90px 0 0 75px",
                   }}
                 >
-                  <h2 className="text-lg md:text-xl lg:text-2xl font-bold mb-1.5 md:mb-2">
+                  <h2 className="text-xl md:text-2xl lg:text-3xl font-extrabold tracking-tight mb-2 text-white">
                     Hello,
                     <br />
                     ChennaiPort User
                   </h2>
-                  <p className="text-xs leading-relaxed opacity-95 max-w-[240px] md:max-w-[260px] mb-3 md:mb-4">
+                  <p className="text-xs sm:text-sm leading-relaxed opacity-90 max-w-[250px] md:max-w-[270px] mb-5 font-normal">
                     Register with your personal details to use all site features
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => router.push("/register")}
-                    className="px-6 md:px-8 py-2 md:py-2.5 border border-white text-white text-xs font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors mb-1.5 md:mb-2"
-                  >
-                    Sign Up
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (authMode === "signin") {
-                        fetchForgotCaptcha();
-                        setAuthMode("forgot");
-                      } else {
-                        setAuthMode("signin");
-                      }
-                    }}
-                    className="px-6 md:px-8 py-2 md:py-2.5 bg-white/10 border border-white/60 text-white text-xs font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors"
-                  >
-                    {authMode === "forgot"
-                      ? "Back to Sign In"
-                      : "Forgot Password?"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => router.push("/public/bulk-pass-request")}
-                    className="mt-1.5 md:mt-2 px-6 md:px-10 py-2.5 md:py-3 bg-white/10 border border-white/60 text-white text-xs md:text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-white hover:text-orange-600 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <FileText className="h-4 w-4" />
-                    Request Bulk Pass
-                  </button>
+                  <div className="w-full max-w-[240px] sm:max-w-[260px] flex flex-col gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => router.push("/register")}
+                      className="w-full py-2.5 sm:py-3 bg-white text-orange-600 hover:bg-orange-50 text-xs sm:text-sm font-bold uppercase tracking-wider rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+                    >
+                      Sign Up
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (authMode === "signin") {
+                          fetchForgotCaptcha();
+                          setAuthMode("forgot");
+                        } else {
+                          setAuthMode("signin");
+                        }
+                      }}
+                      className="w-full py-2.5 sm:py-3 bg-white/15 hover:bg-white/25 border border-white/60 text-white text-xs sm:text-sm font-semibold uppercase tracking-wider rounded-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 backdrop-blur-xs"
+                    >
+                      {authMode === "forgot"
+                        ? "Back to Sign In"
+                        : "Forgot Password?"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push("/public/bulk-pass-request")}
+                      className="w-full py-2.5 sm:py-3 bg-white/15 hover:bg-white/25 border border-white/60 text-white text-xs sm:text-sm font-semibold uppercase tracking-wider rounded-xl hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 backdrop-blur-xs flex items-center justify-center gap-2"
+                    >
+                      <FileText className="h-4 w-4" />
+                      Request Bulk Pass
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1447,7 +1453,7 @@ const LoginPage = () => {
               {/* Form */}
               <form
                 onSubmit={handleTrackSubmit}
-                className="flex flex-col sm:flex-row gap-3"
+                className="flex flex-row items-center gap-2.5 sm:gap-3 w-full"
               >
                 <input
                   type="text"
@@ -1456,18 +1462,18 @@ const LoginPage = () => {
                   onChange={(e) =>
                     setTrackReference(e.target.value.toUpperCase())
                   }
-                  className="flex-1 px-3 sm:px-4 py-3 sm:py-4 text-base sm:text-lg bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none font-medium uppercase transition-all duration-200"
+                  className="flex-1 min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-stone-50 border border-stone-200 focus:bg-white text-gray-900 placeholder-stone-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 rounded-xl focus:outline-none font-medium uppercase transition-all duration-200"
                   style={{ fontFamily: "Arial, sans-serif" }}
                   required
                 />
                 <button
                   type="submit"
                   disabled={trackLoading}
-                  className="px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg bg-[#0a1e4d] text-white font-bold rounded-xl hover:bg-orange-600 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 shadow-md disabled:opacity-70 flex items-center justify-center min-w-[100px] sm:min-w-[130px] focus:outline-none focus:ring-4 focus:ring-orange-500/20"
+                  className="shrink-0 px-5 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base bg-[#0a1e4d] text-white font-bold rounded-xl hover:bg-orange-600 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 shadow-sm disabled:opacity-70 flex items-center justify-center focus:outline-none focus:ring-4 focus:ring-orange-500/20"
                   style={{ fontFamily: "Arial, sans-serif" }}
                 >
                   {trackLoading ? (
-                    <RefreshCw className="h-6 w-6 animate-spin" />
+                    <RefreshCw className="h-5 w-5 animate-spin" />
                   ) : (
                     "Track"
                   )}
