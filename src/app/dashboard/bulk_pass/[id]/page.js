@@ -35,7 +35,7 @@ import SubmissionHistory, { SubmissionSummaryStrip } from "@/components/bulk-pas
 import ValidityBanner from "@/components/bulk-pass/ValidityBanner";
 import ApplicantLinkCard from "@/components/bulk-pass/ApplicantLinkCard";
 import BulkPassLimitsPanel from "@/components/bulk-pass/BulkPassLimitsPanel";
-import { getValidityState } from "@/lib/bulkPassValidity";
+import { getValidityState, formatValidityDateTime } from "@/lib/bulkPassValidity";
 import { countLabelsFor } from "@/lib/bulkPassConstants";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -315,6 +315,7 @@ function PersonsTable({ persons }) {
                   </td>
                   <td className="px-4 py-3 font-semibold text-stone-800 dark:text-stone-200 whitespace-nowrap">
                     {p.name || "—"}
+                    {p.inCharge && <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 align-middle" title="Teacher / escort in charge of the group">In-charge</span>}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-stone-600 dark:text-stone-400 whitespace-nowrap">
                     {p.aadhaar
@@ -812,7 +813,7 @@ export default function BulkPassDetailPage() {
               <StatusChip status={status} />
             </div>
             <p className="text-sm text-stone-500 dark:text-stone-400 mt-0.5">
-              Created {fmtDate(batch.createdAt)}
+              Created {fmtDate(batch.createdAt)}{batch.createdByName ? ` by ${batch.createdByName}` : ""}{batch.approvedByName ? ` · Approved by ${batch.approvedByName}` : ""}
             </p>
           </div>
         </div>
@@ -1005,7 +1006,7 @@ export default function BulkPassDetailPage() {
             Batch #{batch.submissionNumber ?? "—"}
           </span>
           <p className="text-xs text-stone-600 dark:text-stone-400">
-            This is one batch submitted against a reusable bulk pass.
+            This is one batch submitted under a bulk pass.
           </p>
           <button
             onClick={() => router.push(`/dashboard/bulk_pass/${batch.parentRequestId}`)}
@@ -1087,13 +1088,15 @@ export default function BulkPassDetailPage() {
             <ReadField label="Ref. Doc No." value={batch.refDocNo} />
             <ReadField
               label="Validity From"
-              value={fmtDate(batch.validityFrom)}
+              value={formatValidityDateTime(batch.validityFrom)}
             />
             <ReadField
               label="Validity Upto"
-              value={fmtDate(batch.validityUpto)}
+              value={formatValidityDateTime(batch.validityUpto, { upto: true })}
             />
             <ReadField label="Created At" value={fmtDate(batch.createdAt)} />
+            <ReadField label={batch.parent_request_id || batch.parentRequestId ? "Pass Created By" : "Created By"} value={batch.createdByName} />
+            <ReadField label="Approved By" value={batch.approvedByName ? `${batch.approvedByName} · ${fmtDate(batch.approvedAt)}` : null} />
             <div className="sm:col-span-2 lg:col-span-3">
               <ReadField
                 label="Purpose of Visit"

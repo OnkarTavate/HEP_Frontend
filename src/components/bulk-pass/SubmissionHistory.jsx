@@ -14,13 +14,13 @@
 
 import React from "react";
 import { Archive, Eye, Users, Car, Clock, CheckCircle2, XCircle, Download, Loader2, CalendarDays } from "lucide-react";
-import { formatDateKey, toIstDateKey } from "@/lib/bulkPassValidity";
+import { formatValidityDateTime, getValidityState } from "@/lib/bulkPassValidity";
 
-// Each batch carries its own visit window (date-only, IST).
+// Each batch carries its own visit window (date + time, IST).
 export function formatBatchWindow(from, upto) {
-  const f = formatDateKey(toIstDateKey(from));
-  const u = formatDateKey(toIstDateKey(upto));
-  if (f && u) return f === u ? f : `${f} – ${u}`;
+  const f = formatValidityDateTime(from, { fallback: "" });
+  const u = formatValidityDateTime(upto, { upto: true, fallback: "" });
+  if (f && u) return `${f} – ${u}`;
   return u ? `Until ${u}` : "—";
 }
 
@@ -95,7 +95,7 @@ export function SubmissionStatusBadge({ status }) {
  * Tolerates both shapes the API returns for a submission: the applicant
  * `validate-token` payload and the management `getChildSubmissions` payload.
  */
-function normalise(submission, index) {
+export function normalise(submission, index) {
   const persons =
     submission.personsCount ??
     submission.submittedPersonsCount ??
@@ -130,6 +130,47 @@ function normalise(submission, index) {
     // The approved pass exists once Traffic has finalised the batch.
     passAvailable: submission.passAvailable ?? (submission.status === "COMPLETED" && !!submission.qrPdfPath),
   };
+}
+
+// Order inside "Active": what needs the applicant first, then what is waiting
+// on the port, then passes they can use, then unfinished drafts.
+const ACTIVE_PRIORITY = { RETURNED_TO_APPLICANT: 0, UNDER_REVIEW: 1, COMPLETED: 2, DRAFT: 3 };
+
+const timeOf = (v) => {
+  const t = v ? new Date(v).getTime() : NaN;
+  return Number.isNaN(t) ? 0 : t;
+};
+
+/**
+ * Split a Bulk Pass's batches into what is still in play and what is done.
+ *
+ *   Active  — returned, under review, draft, or approved with a visit window
+ *             that has not ended yet.
+ *   History — rejected, or approved with a visit window already over.
+ *
+ * Rows come back normalised (see `normalise`), Active sorted by priority and
+ * History newest first.
+ */
+export function groupApplicantBatches(submissions = [], now = new Date()) {
+  const active = [];
+  const history = [];
+  submissions.map(normalise).forEach((s) => {
+    if (s.status === "REJECTED") history.push(s);
+    else if (s.status === "COMPLETED") {
+      const over = getValidityState({ validityFrom: s.validityFrom, validityUpto: s.validityUpto }, now).state === "EXPIRED";
+      (over ? history : active).push(s);
+    } else active.push(s);
+  });
+  active.sort((a, b) => {
+    const pa = ACTIVE_PRIORITY[a.status] ?? 9;
+    const pb = ACTIVE_PRIORITY[b.status] ?? 9;
+    if (pa !== pb) return pa - pb;
+    // Approved passes by when the visit starts; the rest newest first.
+    if (a.status === "COMPLETED") return timeOf(a.validityFrom) - timeOf(b.validityFrom);
+    return timeOf(b.submittedAt) - timeOf(a.submittedAt);
+  });
+  history.sort((a, b) => timeOf(b.submittedAt) - timeOf(a.submittedAt));
+  return { active, history };
 }
 
 /**

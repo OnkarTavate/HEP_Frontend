@@ -24,15 +24,16 @@ export const BULK_PASS_LIMITS = Object.freeze({
   // Sanity ceiling for a pass-level total.
   MAX_TOTAL_PERSONS: 10000,
   MAX_TOTAL_VEHICLES: 10000,
-  // A student batch needs this many persons with a mobile number (or every
-  // person, when the batch is smaller). Other visitor types need one per head.
-  // Mirrors BULK_PASS_LIMITS.MIN_STUDENT_CONTACT_MOBILES on the server.
-  MIN_STUDENT_CONTACT_MOBILES: 2,
+  // A student batch names 1–2 in-charge persons (teacher / escort); each must
+  // have a mobile number. Other students need none. Mirrors the server's
+  // BULK_PASS_LIMITS.MIN_STUDENT_INCHARGE / MAX_INCHARGE_PER_BATCH.
+  MIN_STUDENT_INCHARGE: 1,
+  MAX_INCHARGE_PER_BATCH: 2,
 });
 
 // Student groups are mostly minors travelling together, so the Bulk Pass does
-// not need a mobile number for every head — a couple of contact numbers per
-// batch (teachers / escorts) is enough. Mirrors STUDENT_VISITOR_TYPE /
+// not need a mobile number for every head — the batch's in-charge (teacher /
+// escort) carries the contact number instead. Mirrors STUDENT_VISITOR_TYPE /
 // isStudentVisitorType on the server so FE and BE agree on who is exempt.
 export const STUDENT_VISITOR_TYPE = "Students";
 

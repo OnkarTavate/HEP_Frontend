@@ -8,6 +8,8 @@ import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
 import { enforceRouteGuard, resolveHome } from "@/lib/roleRouting";
 import NotificationPanel from "@/components/NotificationPanel";
+import NavUnreadBadge from "@/components/NavUnreadBadge";
+import { useNotificationCounts, unreadForHref } from "@/lib/notificationCounts";
 import GlowingBorderButton, { LiveClock } from "@/components/ui/GlowingBorderButton";
 
 import { Button } from "@/components/ui/button";
@@ -290,6 +292,7 @@ function UserProfilePanel({
 export default function AdminLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
+  const unreadCounts = useNotificationCounts();
   const [user, setUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
@@ -714,6 +717,7 @@ export default function AdminLayout({ children }) {
                 )}
               />
               <span className="flex-1">{item.name}</span>
+              <NavUnreadBadge count={unreadForHref(unreadCounts, item.href)} />
             </Link>
           );
         })}
@@ -852,6 +856,7 @@ export default function AdminLayout({ children }) {
                 {expanded && (
                   <span className="flex-1 truncate" style={{ letterSpacing: "-0.01em" }}>{item.name}</span>
                 )}
+                <NavUnreadBadge count={unreadForHref(unreadCounts, item.href)} expanded={expanded} />
               </Link>
             );
           })}

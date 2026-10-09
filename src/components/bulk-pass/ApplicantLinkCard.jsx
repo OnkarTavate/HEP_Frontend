@@ -75,11 +75,6 @@ export default function ApplicantLinkCard({
         <p className={`text-sm font-bold ${usable ? "text-sky-800" : "text-slate-600"}`}>
           Applicant Upload Link
         </p>
-        {reusable && (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700">
-            Reusable
-          </span>
-        )}
         {!usable && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-100 text-red-600">
             <AlertCircle className="h-3 w-3" />

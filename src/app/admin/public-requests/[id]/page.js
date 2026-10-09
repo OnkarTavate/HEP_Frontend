@@ -12,7 +12,15 @@ import { getPublicRequestDetail, approvePublicRequest, rejectPublicRequest } fro
 import { BULK_PASS_LABELS, batchesNeededHint } from "@/lib/bulkPassConstants";
 import SubmissionHistory, { SubmissionSummaryStrip } from "@/components/bulk-pass/SubmissionHistory";
 import ApplicantLinkCard from "@/components/bulk-pass/ApplicantLinkCard";
-import { getValidityState } from "@/lib/bulkPassValidity";
+import {
+  getValidityState,
+  combineValidity,
+  formatValidityDateTime,
+  toValidityInputs,
+  toIstDateKey,
+  DEFAULT_VALIDITY_FROM_TIME,
+  DEFAULT_VALIDITY_UPTO_TIME,
+} from "@/lib/bulkPassValidity";
 import {
   RequestSummaryCard,
   CompanyInformationCard,
@@ -116,6 +124,8 @@ function SectionHeader({ title, icon: Icon }) {
 function ApprovalModal({ request, onClose, onApprove, loading }) {
   const [validityFrom, setValidityFrom] = useState("");
   const [validityUpto, setValidityUpto] = useState("");
+  const [validityFromTime, setValidityFromTime] = useState(DEFAULT_VALIDITY_FROM_TIME);
+  const [validityUptoTime, setValidityUptoTime] = useState(DEFAULT_VALIDITY_UPTO_TIME);
   const [remarks, setRemarks] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
 
@@ -127,9 +137,19 @@ function ApprovalModal({ request, onClose, onApprove, loading }) {
 
   useEffect(() => {
     if (request) {
-      const today = new Date().toISOString().split("T")[0];
-      setValidityFrom(today);
-      setValidityUpto(request.validity_upto ? request.validity_upto.split("T")[0] : "");
+      // Start from the requested window; a start already in the past opens today.
+      const today = toIstDateKey(new Date());
+      const from = toValidityInputs(request.validity_from);
+      const upto = toValidityInputs(request.validity_upto, { upto: true });
+      if (from.date && from.date >= today) {
+        setValidityFrom(from.date);
+        setValidityFromTime(from.time);
+      } else {
+        setValidityFrom(today);
+        setValidityFromTime(DEFAULT_VALIDITY_FROM_TIME);
+      }
+      setValidityUpto(upto.date);
+      setValidityUptoTime(upto.time);
     }
   }, [request]);
 
@@ -138,19 +158,27 @@ function ApprovalModal({ request, onClose, onApprove, loading }) {
       toast.error("Please select validity dates.");
       return;
     }
-    if (new Date(validityFrom) >= new Date(validityUpto)) {
-      toast.error("Validity from date must be before validity upto date.");
+    const from = combineValidity(validityFrom, validityFromTime);
+    const upto = combineValidity(validityUpto, validityUptoTime, { upto: true });
+    if (!from || !upto) {
+      toast.error("Please enter valid validity dates and times.");
       return;
     }
-    // A past upto date yields an ACTIVE-but-expired (dead-on-arrival) pass.
-    if (new Date(validityUpto) < new Date(new Date().toDateString())) {
-      toast.error("Validity upto date must be today or in the future.");
+    if (from >= upto) {
+      toast.error("Validity from must be before validity upto.");
+      return;
+    }
+    // A past upto yields an ACTIVE-but-expired (dead-on-arrival) pass.
+    if (upto <= new Date()) {
+      toast.error("Validity upto must be in the future.");
       return;
     }
     try {
       await onApprove(request.id, {
         validityFrom,
         validityUpto,
+        validityFromTime: validityFromTime || DEFAULT_VALIDITY_FROM_TIME,
+        validityUptoTime: validityUptoTime || DEFAULT_VALIDITY_UPTO_TIME,
         remarks: remarks.trim() || undefined,
       });
       onClose();
@@ -170,7 +198,7 @@ function ApprovalModal({ request, onClose, onApprove, loading }) {
           <p className="text-sm text-slate-500 mb-6">
             You are about to approve the public request from <span className="font-semibold text-slate-700">{request.company_name}</span>.
             <br/><br/>
-            This will generate an upload link for the applicant and enable multiple submissions if configured.
+            This sends the applicant an upload link. They can submit as many batches as they need until the validity ends.
           </p>
           <div className="flex gap-3 justify-end">
             <button
@@ -210,24 +238,43 @@ function ApprovalModal({ request, onClose, onApprove, loading }) {
             <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
               Validity From <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
-              value={validityFrom}
-              onChange={(e) => setValidityFrom(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/50 transition"
-            />
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={validityFrom}
+                onChange={(e) => setValidityFrom(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/50 transition flex-[2_1_0%] min-w-0"
+              />
+              <input
+                type="time"
+                aria-label="Validity from time (IST)"
+                value={validityFromTime}
+                onChange={(e) => setValidityFromTime(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/50 transition flex-[1_1_0%] min-w-0"
+              />
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
               Validity Upto <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
-              value={validityUpto}
-              onChange={(e) => setValidityUpto(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/50 transition"
-            />
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={validityUpto}
+                onChange={(e) => setValidityUpto(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/50 transition flex-[2_1_0%] min-w-0"
+              />
+              <input
+                type="time"
+                aria-label="Validity upto time (IST)"
+                value={validityUptoTime}
+                onChange={(e) => setValidityUptoTime(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/50 transition flex-[1_1_0%] min-w-0"
+              />
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">Times are in IST. Defaults: 06:00 from, 18:00 upto.</p>
           </div>
 
           {/* What approving grants: the requested totals, spent in batches. */}
@@ -599,8 +646,8 @@ export default function AdminPublicRequestDetailPage() {
               {request.approved_time_from && request.approved_time_upto && (
                 <>
                   {" "}
-                  for validity period from {fmtDateShort(request.approved_time_from)} to{" "}
-                  {fmtDateShort(request.approved_time_upto)}
+                  for validity period from {formatValidityDateTime(request.approved_time_from)} to{" "}
+                  {formatValidityDateTime(request.approved_time_upto, { upto: true })} IST
                 </>
               )}
             </p>
@@ -714,11 +761,11 @@ export default function AdminPublicRequestDetailPage() {
             />
             <ReadField
               label="Validity From"
-              value={fmtDate(request.approved_time_from)}
+              value={request.approved_time_from ? `${formatValidityDateTime(request.approved_time_from)} IST` : null}
             />
             <ReadField
               label="Validity Upto"
-              value={fmtDate(request.approved_time_upto)}
+              value={request.approved_time_upto ? `${formatValidityDateTime(request.approved_time_upto, { upto: true })} IST` : null}
             />
           </div>
         </div>

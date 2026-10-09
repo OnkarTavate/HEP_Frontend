@@ -23,17 +23,15 @@ import {
   Send,
   Users,
   Car,
-  RefreshCw,
+  CalendarClock,
   Clock,
 } from "lucide-react";
+import { surface as cardShell } from "./ui";
 
-const cardShell =
-  "rounded-2xl bg-white dark:bg-[#1f232d] ring-1 ring-slate-200/80 dark:ring-white/[0.06] " +
-  "shadow-sm transition-all duration-200";
 
 function Tile({ label, value, hint, icon: Icon, tone, onClick, active }) {
   const tones = {
-    slate: "bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-slate-300",
+    stone: "bg-stone-100 text-stone-600 dark:bg-white/5 dark:text-stone-300",
     emerald: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400",
     red: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400",
     amber: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400",
@@ -48,21 +46,21 @@ function Tile({ label, value, hint, icon: Icon, tone, onClick, active }) {
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
       className={`${cardShell} px-4 py-4 ${
-        onClick ? "cursor-pointer hover:ring-slate-300 hover:shadow-md active:scale-[0.98]" : ""
+        onClick ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]" : ""
       } ${active ? "ring-2 ring-amber-400" : ""}`}
     >
       <div className="flex items-start gap-3">
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tones[tone] || tones.slate}`}>
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tones[tone] || tones.stone}`}>
           <Icon className="h-4 w-4" strokeWidth={2.2} />
         </span>
         <div className="min-w-0">
-          <p className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tabular-nums leading-none">
+          <p className="text-2xl font-extrabold text-stone-900 dark:text-stone-100 leading-none">
             {value ?? 0}
           </p>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mt-1.5 leading-tight">
+          <p className="text-xs font-semibold text-stone-600 dark:text-stone-300 mt-1.5 leading-tight">
             {label}
           </p>
-          {hint && <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 leading-tight">{hint}</p>}
+          {hint && <p className="text-[11px] text-stone-400 dark:text-stone-500 mt-1 leading-tight">{hint}</p>}
         </div>
       </div>
     </div>
@@ -81,7 +79,7 @@ export default function BulkPassOverviewPanel({ overview, onFilter, activeKey, c
     <div className={`flex flex-col gap-4 ${className}`}>
       {/* Bulk Passes — the containers */}
       <div>
-        <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2.5">
+        <h3 className="text-xs font-bold text-stone-500 dark:text-stone-400 mb-2.5">
           Bulk Passes
         </h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -90,7 +88,7 @@ export default function BulkPassOverviewPanel({ overview, onFilter, activeKey, c
             value={o.totalBulkPasses}
             hint={`${o.departmentBulkPasses ?? 0} department · ${o.publicBulkPasses ?? 0} public`}
             icon={Layers}
-            tone="slate"
+            tone="stone"
             onClick={onFilter ? () => onFilter("ALL") : undefined}
             active={activeKey === "ALL"}
           />
@@ -113,20 +111,20 @@ export default function BulkPassOverviewPanel({ overview, onFilter, activeKey, c
             active={activeKey === "VALIDITY_EXPIRED"}
           />
           <Tile
-            label="Reusable Links"
-            value={o.reusableBulkPasses}
-            hint="Accept multiple batches"
-            icon={RefreshCw}
-            tone="amber"
-            onClick={onFilter ? () => onFilter("MULTI") : undefined}
-            active={activeKey === "MULTI"}
+            label="Not Started"
+            value={o.notStartedBulkPasses}
+            hint="Validity opens later"
+            icon={CalendarClock}
+            tone="blue"
+            onClick={onFilter ? () => onFilter("VALIDITY_NOT_STARTED") : undefined}
+            active={activeKey === "VALIDITY_NOT_STARTED"}
           />
         </div>
       </div>
 
       {/* Activity flowing through those passes */}
       <div>
-        <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2.5">
+        <h3 className="text-xs font-bold text-stone-500 dark:text-stone-400 mb-2.5">
           Submission Activity
         </h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

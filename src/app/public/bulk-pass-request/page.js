@@ -173,8 +173,8 @@ export default function PublicBulkPassRequestPage() {
     applicantMobile: "",
 
     // Pass requirements
-    noOfPersons: String(BULK_PASS_LIMITS.DEFAULT_MAX_PERSONS),
-    noOfVehicles: String(BULK_PASS_LIMITS.DEFAULT_MAX_VEHICLES),
+    noOfPersons: "0",
+    noOfVehicles: "0",
     validityUpto: "",
     paymentMode: "",
 
@@ -959,8 +959,8 @@ export default function PublicBulkPassRequestPage() {
                 companyName: "",
                 visitorType: "",
                 applicantMobile: "",
-                noOfPersons: String(BULK_PASS_LIMITS.DEFAULT_MAX_PERSONS),
-                noOfVehicles: String(BULK_PASS_LIMITS.DEFAULT_MAX_VEHICLES),
+                noOfPersons: "0",
+                noOfVehicles: "0",
                 validityUpto: "",
                 paymentMode: "",
                 workOrderRequired: false,

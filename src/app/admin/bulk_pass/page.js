@@ -3,109 +3,47 @@
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Search, Plus, Download, ChevronRight, ChevronLeft,
-  RefreshCw, RotateCcw, Edit3, Users, X,
-  CheckSquare, FileStack, FileText, Car,
-  CalendarDays, Eye, Globe, Building2,
+  Plus, X, Layers, LayoutDashboard, FileStack, Globe, CheckCircle2, XCircle, Clock,
+  CalendarClock, CornerUpLeft, ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  listBulkBatches, returnToApplicant, downloadBulkPdf,
+  listBulkBatches, returnToApplicant,
   listPublicRequests, approvePublicRequest, rejectPublicRequest,
 } from "@/lib/bulkPassApi";
 import { computeBulkPassStats, computeBulkPassOverview } from "@/lib/bulkPassStats";
-import RequestsTable from "@/components/bulk-pass/RequestsTable.jsx";
+import RequestsTable, { REQUEST_STATUS } from "@/components/bulk-pass/RequestsTable.jsx";
 import BulkPassOverviewPanel from "@/components/bulk-pass/BulkPassOverviewPanel.jsx";
-import { ValidityBadge } from "@/components/bulk-pass/ValidityBanner.jsx";
-import { getValidityState } from "@/lib/bulkPassValidity";
+import BulkPassDashboard from "@/components/bulk-pass/BulkPassDashboard.jsx";
+import { BatchesTable, BatchFilterSelects } from "@/components/bulk-pass/BatchesTable.jsx";
+import {
+  BATCH_SORTERS, EMPTY_BATCH_FILTERS, REQUEST_SORTERS, applyBatchFilters, batchFilterChips, batchFilterOptions,
+  nextSort, sortRows,
+} from "@/lib/bulkPassFilters";
+import {
+  Button, Card, DateRange, FieldLabel, Modal, PageHeader, Pagination, RefreshButton, ResultSummary,
+  SearchInput, Spinner, StatusFilterCards, TableCard, Toolbar, ViewTabs, batchStatusCards, fieldCls, statusMeta,
+  usePaged,
+} from "@/components/bulk-pass/ui.jsx";
+import {
+  getValidityState, combineValidity, toIstDateKey, toValidityInputs,
+  DEFAULT_VALIDITY_FROM_TIME,
+} from "@/lib/bulkPassValidity";
 
 const BASE = "/admin/bulk_pass";
-const PAGE_SIZE_OPTIONS = [10, 15, 25, 50];
 
-// ── Department Batch Status Config ─────────────────────────────────────────────
-const BATCH_STATUS_CFG = {
-  DRAFT: {
-    label: "Sent to User",
-    badge: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
-    dot: "bg-slate-400",
-  },
-  UNDER_REVIEW: {
-    label: "Pending Approval",
-    badge: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
-    dot: "bg-amber-500",
-  },
-  RETURNED_TO_APPLICANT: {
-    label: "Returned",
-    badge: "bg-purple-50 text-purple-700 ring-1 ring-purple-200",
-    dot: "bg-purple-500",
-  },
-  REJECTED: {
-    label: "Rejected",
-    badge: "bg-red-50 text-red-600 ring-1 ring-red-200",
-    dot: "bg-red-500",
-  },
-  COMPLETED: {
-    label: "Approved",
-    badge: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-    dot: "bg-emerald-500",
-  },
+const BULK_PASS_FILTER_LABEL = {
+  ALL: "Bulk passes only",
+  VALIDITY_ACTIVE: "Active bulk passes",
+  VALIDITY_EXPIRED: "Expired bulk passes",
+  VALIDITY_NOT_STARTED: "Bulk passes not started yet",
 };
 
-const fmtDateShort = (v) => {
-  if (!v) return "—";
-  const d = new Date(v);
-  return isNaN(d) ? v : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+const batchAction = (batch) => {
+  if (batch.status === "UNDER_REVIEW" || batch.status === "RETURNED_TO_APPLICANT") return { label: "Review now", kind: "review" };
+  if (batch.status === "COMPLETED") return { label: "View pass", kind: "view" };
+  return { label: "View", kind: "view" };
 };
-const visitorLabel = (v) => v ? v.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "—";
-
-function BatchStatusBadge({ status }) {
-  const cfg = BATCH_STATUS_CFG[status] || { label: status || "Unknown", badge: "bg-slate-100 text-slate-500 ring-1 ring-slate-200", dot: "bg-slate-400" };
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap ${cfg.badge}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot} shrink-0`} />
-      {cfg.label}
-    </span>
-  );
-}
-
-// ── Bulk Pass container lifecycle badge ───────────────────────────────────────
-const BULK_PASS_STATE_CFG = {
-  ACTIVE:      { label: "Accepting Batches", badge: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200", dot: "bg-emerald-500" },
-  EXPIRED:     { label: "Closed",            badge: "bg-red-50 text-red-600 ring-1 ring-red-200",             dot: "bg-red-500" },
-  NOT_STARTED: { label: "Not Started",       badge: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",             dot: "bg-sky-500" },
-  REVOKED:     { label: "Revoked",           badge: "bg-orange-50 text-orange-700 ring-1 ring-orange-200",    dot: "bg-orange-500" },
-};
-
-function BulkPassStatusBadge({ state }) {
-  const cfg = BULK_PASS_STATE_CFG[state] || {
-    label: "No Validity",
-    badge: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
-    dot: "bg-slate-400",
-  };
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap ${cfg.badge}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot} shrink-0`} />
-      {cfg.label}
-    </span>
-  );
-}
-
-// ── Batch Action Button ───────────────────────────────────────────────────────
-function BatchActionBtn({ batch, onEdit }) {
-  const { status } = batch;
-  const base = "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-xs font-semibold transition whitespace-nowrap border";
-  if (status === "DRAFT")
-    return <button onClick={() => onEdit(batch)} className={`${base} border-slate-200 text-slate-700 bg-white hover:bg-slate-50`}><Eye className="h-3.5 w-3.5" />View</button>;
-  if (status === "RETURNED_TO_APPLICANT")
-    return <button onClick={() => onEdit(batch)} className={`${base} border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100`}><Edit3 className="h-3.5 w-3.5" />Review Now</button>;
-  if (status === "UNDER_REVIEW")
-    return <button onClick={() => onEdit(batch)} className={`${base} border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100`}><CheckSquare className="h-3.5 w-3.5" />Review Now</button>;
-  if (status === "REJECTED")
-    return <button onClick={() => onEdit(batch)} className={`${base} border-red-200 text-red-700 bg-red-50 hover:bg-red-100`}><FileText className="h-3.5 w-3.5" />View Details</button>;
-  if (status === "COMPLETED")
-    return <button onClick={() => onEdit(batch)} className={`${base} border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100`}><Eye className="h-3.5 w-3.5" />View Pass</button>;
-  return <button onClick={() => onEdit(batch)} className={`${base} border-slate-200 text-slate-600 bg-white hover:bg-slate-50`}><ChevronRight className="h-3.5 w-3.5" />View</button>;
-}
 
 // ── Return Modal for Department Batches ───────────────────────────────────────
 function ReturnModal({ batchId, refNo, onClose, onSuccess }) {
@@ -119,52 +57,47 @@ function ReturnModal({ batchId, refNo, onClose, onSuccess }) {
     finally { setLoading(false); }
   };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-bold text-slate-900">Return to Applicant</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition"><X className="h-5 w-5" /></button>
-        </div>
-        <p className="text-sm text-slate-500 mb-4">Batch: <span className="font-semibold text-slate-700">{refNo}</span></p>
-        <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
-          Return Reason <span className="text-red-500">*</span>
-        </label>
-        <textarea rows={4} value={reason} onChange={(e) => setReason(e.target.value)}
-          placeholder="Describe what needs to be corrected…"
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-amber-400/50 resize-none transition" />
-        <div className="flex gap-3 mt-5 justify-end">
-          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancel</button>
-          <button onClick={handleSubmit} disabled={loading}
-            className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 transition">
-            {loading ? "Returning…" : "Return to Applicant"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <Modal
+      title="Return to applicant"
+      description={<>Batch <b className="text-stone-700 dark:text-stone-200">{refNo}</b> will be sent back with a fresh link.</>}
+      icon={CornerUpLeft}
+      tone="violet"
+      onClose={onClose}
+      busy={loading}
+      footer={<>
+        <Button onClick={onClose} disabled={loading}>Cancel</Button>
+        <Button variant="violet" onClick={handleSubmit} disabled={loading}>{loading ? "Returning…" : "Return to applicant"}</Button>
+      </>}
+    >
+      <FieldLabel required>What needs to be corrected?</FieldLabel>
+      <textarea rows={4} value={reason} onChange={(e) => setReason(e.target.value)}
+        placeholder="Describe what needs to be corrected…" className={`${fieldCls} resize-none`} />
+    </Modal>
   );
 }
 
 // ── Quick Approval Modal for Public Requests ─────────────────────────────────
 function QuickApprovalModal({ request, onClose, onApprove }) {
-  const [validityFrom, setValidityFrom] = useState("");
-  const [validityUpto, setValidityUpto] = useState("");
+  // Prefill: from today 06:00 IST, upto the requested end (18:00 default).
+  const [validityFrom, setValidityFrom] = useState(() => toIstDateKey(new Date()));
+  const [validityFromTime, setValidityFromTime] = useState(DEFAULT_VALIDITY_FROM_TIME);
+  const [validityUpto, setValidityUpto] = useState(() => toValidityInputs(request?.validity_upto, { upto: true }).date);
+  const [validityUptoTime, setValidityUptoTime] = useState(() => toValidityInputs(request?.validity_upto, { upto: true }).time);
   const [remarks, setRemarks] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (request) {
-      const today = new Date().toISOString().split("T")[0];
-      setValidityFrom(today);
-      setValidityUpto(request.validity_upto ? request.validity_upto.split("T")[0] : "");
-    }
-  }, [request]);
-
   const handleSubmit = async () => {
     if (!validityFrom || !validityUpto) { toast.error("Please select validity dates."); return; }
-    if (new Date(validityFrom) >= new Date(validityUpto)) { toast.error("Validity from date must be before validity upto date."); return; }
+    const fromAt = combineValidity(validityFrom, validityFromTime);
+    const uptoAt = combineValidity(validityUpto, validityUptoTime, { upto: true });
+    if (!fromAt || !uptoAt) { toast.error("Please enter valid validity dates and times."); return; }
+    if (fromAt >= uptoAt) { toast.error("Validity from must be before validity upto."); return; }
     setLoading(true);
     try {
-      await onApprove(request.id, { validityFrom, validityUpto, remarks: remarks.trim() || undefined });
+      await onApprove(request.id, {
+        validityFrom, validityUpto, validityFromTime, validityUptoTime,
+        remarks: remarks.trim() || undefined,
+      });
       onClose();
     } catch (err) {
       console.error("Approval error:", err);
@@ -174,49 +107,46 @@ function QuickApprovalModal({ request, onClose, onApprove }) {
   };
 
   if (!request) return null;
+  const pair = "flex gap-2";
+  const dateCls = `${fieldCls} flex-1 min-w-0 focus:ring-emerald-400/50`;
+  const timeCls = `${fieldCls} w-32 focus:ring-emerald-400/50`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-bold text-slate-900">Approve Public Request</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition"><X className="h-5 w-5" /></button>
-        </div>
-        <p className="text-sm text-slate-500 mb-4">Company: <span className="font-semibold text-slate-700">{request.company_name}</span></p>
-
-        <div className="space-y-4 mb-5">
-          <div>
-            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
-              Validity From <span className="text-red-500">*</span>
-            </label>
-            <input type="date" value={validityFrom} onChange={(e) => setValidityFrom(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/50 transition" />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
-              Validity Upto <span className="text-red-500">*</span>
-            </label>
-            <input type="date" value={validityUpto} onChange={(e) => setValidityUpto(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/50 transition" />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Approval Remarks (Optional)</label>
-            <textarea rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Add any remarks for this approval…"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/50 resize-none transition" />
+    <Modal
+      title="Approve public request"
+      description={<>{request.company_name} · <span className="font-mono">{request.tracking_number}</span></>}
+      icon={CheckCircle2}
+      tone="emerald"
+      onClose={onClose}
+      busy={loading}
+      footer={<>
+        <Button onClick={onClose} disabled={loading}>Cancel</Button>
+        <Button variant="success" onClick={handleSubmit} disabled={loading}>{loading ? "Approving…" : "Approve & send link"}</Button>
+      </>}
+    >
+      <div className="flex flex-col gap-4">
+        <div>
+          <FieldLabel required hint="IST">Valid from</FieldLabel>
+          <div className={pair}>
+            <input type="date" value={validityFrom} onChange={(e) => setValidityFrom(e.target.value)} className={dateCls} />
+            <input type="time" value={validityFromTime} onChange={(e) => setValidityFromTime(e.target.value)} className={timeCls} />
           </div>
         </div>
-
-        <div className="flex gap-3 justify-end">
-          <button onClick={onClose} disabled={loading} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancel</button>
-          <button onClick={handleSubmit} disabled={loading} className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 transition">
-            {loading ? "Approving…" : "Approve Request"}
-          </button>
+        <div>
+          <FieldLabel required hint="IST">Valid upto</FieldLabel>
+          <div className={pair}>
+            <input type="date" value={validityUpto} min={validityFrom || undefined} onChange={(e) => setValidityUpto(e.target.value)} className={dateCls} />
+            <input type="time" value={validityUptoTime} onChange={(e) => setValidityUptoTime(e.target.value)} className={timeCls} />
+          </div>
+          <p className="mt-1.5 text-[11px] text-stone-400">Default window is 6:00 AM – 6:00 PM. The applicant can submit batches inside it.</p>
+        </div>
+        <div>
+          <FieldLabel hint="Optional">Approval remarks</FieldLabel>
+          <textarea rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)}
+            placeholder="Add any remarks for this approval…" className={`${fieldCls} resize-none focus:ring-emerald-400/50`} />
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -224,9 +154,10 @@ function QuickApprovalModal({ request, onClose, onApprove }) {
 function QuickRejectionModal({ request, onClose, onReject }) {
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
+  const enough = reason.trim().length >= 10;
 
   const handleSubmit = async () => {
-    if (!reason.trim() || reason.trim().length < 10) {
+    if (!enough) {
       toast.error("Please enter a rejection reason (minimum 10 characters).");
       return;
     }
@@ -244,30 +175,23 @@ function QuickRejectionModal({ request, onClose, onReject }) {
   if (!request) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-bold text-slate-900">Reject Public Request</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition"><X className="h-5 w-5" /></button>
-        </div>
-        <p className="text-sm text-slate-500 mb-4">Company: <span className="font-semibold text-slate-700">{request.company_name}</span></p>
-        <div className="mb-5">
-          <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
-            Rejection Reason <span className="text-red-500">*</span>
-          </label>
-          <textarea rows={4} value={reason} onChange={(e) => setReason(e.target.value)}
-            placeholder="Provide a detailed reason for rejecting this request (minimum 10 characters)…"
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-red-400/50 resize-none transition" />
-          <p className="text-xs text-slate-400 mt-1">Characters: {reason.length} / 10 minimum</p>
-        </div>
-        <div className="flex gap-3 justify-end">
-          <button onClick={onClose} disabled={loading} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancel</button>
-          <button onClick={handleSubmit} disabled={loading} className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition">
-            {loading ? "Rejecting…" : "Reject Request"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <Modal
+      title="Reject public request"
+      description={<>{request.company_name} · <span className="font-mono">{request.tracking_number}</span></>}
+      icon={XCircle}
+      tone="red"
+      onClose={onClose}
+      busy={loading}
+      footer={<>
+        <Button onClick={onClose} disabled={loading}>Cancel</Button>
+        <Button variant="danger" onClick={handleSubmit} disabled={loading || !enough}>{loading ? "Rejecting…" : "Reject request"}</Button>
+      </>}
+    >
+      <FieldLabel required hint={`${reason.trim().length} / 10 min`}>Reason for rejection</FieldLabel>
+      <textarea rows={4} value={reason} onChange={(e) => setReason(e.target.value)}
+        placeholder="Explain why this request cannot be approved — the applicant will see it."
+        className={`${fieldCls} resize-none focus:ring-red-400/50`} />
+    </Modal>
   );
 }
 
@@ -288,14 +212,18 @@ function AdminBulkPassPageContent() {
   const isAdmin = user && (user.role?.toLowerCase() === "admin" || user.role?.toLowerCase() === "administrator");
   const isGenAdmin = isAdmin || (user?.departmentName || user?.department_name || "").toLowerCase().trim() === "general administration" || Number(user?.departmentId || user?.department_id) === 6;
 
-  // Main navigation tab ("DEPARTMENT" vs "PUBLIC")
-  const initialMainTab = searchParams.get("tab") === "public" && isGenAdmin ? "PUBLIC" : "DEPARTMENT";
-  const [mainTab, setMainTab] = useState(initialMainTab);
+  // Main view: "OVERVIEW" | "DEPARTMENT" | "PUBLIC" (public is General Administration only)
+  const tabParam = searchParams.get("tab");
+  const initialMainTab = tabParam === "public" ? "PUBLIC" : tabParam === "overview" ? "OVERVIEW" : "DEPARTMENT";
+  const [mainTabState, setMainTab] = useState(initialMainTab);
+  // `user` loads after mount; until then a ?tab=public link must not show a forbidden view.
+  const mainTab = mainTabState === "PUBLIC" && !isGenAdmin ? "DEPARTMENT" : mainTabState;
+  const [updatedAt, setUpdatedAt] = useState(null);
 
   // Update tab in URL state cleanly
   const handleMainTabChange = (newTab) => {
     setMainTab(newTab);
-    const url = newTab === "PUBLIC" ? `${BASE}?tab=public` : BASE;
+    const url = newTab === "PUBLIC" ? `${BASE}?tab=public` : newTab === "OVERVIEW" ? `${BASE}?tab=overview` : BASE;
     router.replace(url, { scroll: false });
   };
 
@@ -307,12 +235,12 @@ function AdminBulkPassPageContent() {
   const [batchSearch, setBatchSearch] = useState("");
   const [batchFromDate, setBatchFromDate] = useState("");
   const [batchToDate, setBatchToDate] = useState("");
-  const [batchPageSize, setBatchPageSize] = useState(15);
-  const [batchPage, setBatchPage] = useState(1);
   const [returnModal, setReturnModal] = useState(null);
-  const [multipleSubmissionsFilter, setMultipleSubmissionsFilter] = useState(null);
+  // Visitor type · validity · pass type · department, applied to the loaded rows.
+  const [batchFilters, setBatchFilters] = useState(EMPTY_BATCH_FILTERS);
+  const [batchSort, setBatchSort] = useState({ key: "updated", direction: "desc" });
   // Bulk-Pass-level filter driven by the overview tiles:
-  // null | "VALIDITY_ACTIVE" | "VALIDITY_EXPIRED" | "MULTI"
+  // null | "ALL" | "VALIDITY_ACTIVE" | "VALIDITY_EXPIRED" | "VALIDITY_NOT_STARTED"
   const [bulkPassFilter, setBulkPassFilter] = useState(null);
 
   // ── PUBLIC REQUESTS STATE ──
@@ -323,8 +251,6 @@ function AdminBulkPassPageContent() {
   const [publicSearch, setPublicSearch] = useState("");
   const [publicFromDate, setPublicFromDate] = useState("");
   const [publicToDate, setPublicToDate] = useState("");
-  const [publicPageSize, setPublicPageSize] = useState(15);
-  const [publicPage, setPublicPage] = useState(1);
   const [quickApproveReq, setQuickApproveReq] = useState(null);
   const [quickRejectReq, setQuickRejectReq] = useState(null);
 
@@ -382,13 +308,12 @@ function AdminBulkPassPageContent() {
       if (batchActiveTab !== "ALL") filters.status = batchActiveTab;
       if (batchFromDate) filters.fromDate = batchFromDate;
       if (batchToDate) filters.toDate = batchToDate;
-      if (multipleSubmissionsFilter !== null) filters.multipleSubmissionsEnabled = multipleSubmissionsFilter;
       const data = await listBulkBatches(filters);
       setBatches(Array.isArray(data) ? data : []);
-      setBatchPage(1);
+      setUpdatedAt(Date.now());
     } catch { toast.error("Failed to load department bulk passes."); setBatches([]); }
     finally { setBatchLoading(false); }
-  }, [batchSearch, batchActiveTab, batchFromDate, batchToDate, multipleSubmissionsFilter]);
+  }, [batchSearch, batchActiveTab, batchFromDate, batchToDate]);
 
   // ── Fetch Public Requests ──
   const fetchAllPublicRequests = useCallback(async () => {
@@ -410,7 +335,7 @@ function AdminBulkPassPageContent() {
       if (publicToDate) filters.toDate = publicToDate;
       const data = await listPublicRequests(filters);
       setPublicRequests(Array.isArray(data) ? data : []);
-      setPublicPage(1);
+      setUpdatedAt(Date.now());
     } catch { toast.error("Failed to load public website requests."); setPublicRequests([]); }
     finally { setPublicLoading(false); }
   }, [publicSearch, publicActiveTab, publicFromDate, publicToDate, isGenAdmin]);
@@ -421,21 +346,22 @@ function AdminBulkPassPageContent() {
   }, [fetchAllBatches, fetchAllPublicRequests, isGenAdmin]);
 
   useEffect(() => {
-    if (mainTab === "DEPARTMENT") fetchBatches();
-    else if (mainTab === "PUBLIC") fetchPublicRequests();
+    if (mainTab === "PUBLIC") fetchPublicRequests();
+    else fetchBatches();
   }, [mainTab, fetchBatches, fetchPublicRequests]);
 
   // Real-time polling
   useEffect(() => {
-    if (mainTab === "DEPARTMENT" && multipleSubmissionsFilter !== null) {
+    // Bulk passes fill up batch by batch — keep their counts live.
+    if (mainTab === "DEPARTMENT" && batchFilters.passType === "PASS") {
       const intervalId = setInterval(() => { fetchBatches(); }, 8000);
       return () => clearInterval(intervalId);
     }
-  }, [mainTab, multipleSubmissionsFilter, fetchBatches]);
+  }, [mainTab, batchFilters.passType, fetchBatches]);
 
   const handleRefresh = () => {
-    if (mainTab === "DEPARTMENT") { fetchBatches(); fetchAllBatches(); }
-    else { fetchPublicRequests(); fetchAllPublicRequests(); }
+    if (mainTab === "PUBLIC") { fetchPublicRequests(); fetchAllPublicRequests(); }
+    else { fetchBatches(); fetchAllBatches(); if (isGenAdmin) fetchAllPublicRequests(); }
   };
 
   // Public quick actions
@@ -474,549 +400,210 @@ function AdminBulkPassPageContent() {
         return containers.filter((b) => getValidityState(b).state === "ACTIVE");
       case "VALIDITY_EXPIRED":
         return containers.filter((b) => getValidityState(b).state === "EXPIRED");
-      case "MULTI":
-        return containers.filter((b) => b.multipleSubmissionsEnabled);
+      case "VALIDITY_NOT_STARTED":
+        return containers.filter((b) => getValidityState(b).state === "NOT_STARTED");
       case "ALL":
       default:
         return containers;
     }
   }, [batches, bulkPassFilter]);
 
-  // Department Batches Pagination
-  const batchTotalPages = Math.max(1, Math.ceil(visibleBatches.length / batchPageSize));
-  const batchPaginated = visibleBatches.slice((batchPage - 1) * batchPageSize, batchPage * batchPageSize);
-  const batchHasFilters = batchSearch || batchFromDate || batchToDate;
+  // Dropdown filters, then sort — both before paging so they cover every row.
+  const batchFilterOpts = useMemo(() => batchFilterOptions(visibleBatches, batchFilters), [visibleBatches, batchFilters]);
+  const shownBatches = useMemo(
+    () => sortRows(applyBatchFilters(visibleBatches, batchFilters), batchSort, BATCH_SORTERS),
+    [visibleBatches, batchFilters, batchSort]
+  );
 
-  // Public Requests Pagination
-  const publicTotalPages = Math.max(1, Math.ceil(publicRequests.length / publicPageSize));
-  const publicPaginated = publicRequests.slice((publicPage - 1) * publicPageSize, publicPage * publicPageSize);
-  const publicHasFilters = publicSearch || publicFromDate || publicToDate;
+  // Public requests: visitor type + validity reuse the batch matchers.
+  const [publicFilters, setPublicFilters] = useState(EMPTY_BATCH_FILTERS);
+  const [publicSort, setPublicSort] = useState({ key: "received", direction: "desc" });
+  const publicFilterOpts = useMemo(() => batchFilterOptions(publicRequests, publicFilters), [publicRequests, publicFilters]);
+  const shownRequests = useMemo(
+    () => sortRows(applyBatchFilters(publicRequests, publicFilters), publicSort, REQUEST_SORTERS),
+    [publicRequests, publicFilters, publicSort]
+  );
+
+  const batchPaged = usePaged(shownBatches);
+  const publicPaged = usePaged(shownRequests);
+  const resetBatchPage = batchPaged.reset;
+  const resetPublicPage = publicPaged.reset;
+  useEffect(() => { resetBatchPage(); }, [batchSearch, batchActiveTab, batchFromDate, batchToDate, batchFilters, batchSort, bulkPassFilter, resetBatchPage]);
+  useEffect(() => { resetPublicPage(); }, [publicSearch, publicActiveTab, publicFromDate, publicToDate, publicFilters, publicSort, resetPublicPage]);
+
+  const clearBatchFilters = () => {
+    setBatchSearch(""); setBatchFromDate(""); setBatchToDate("");
+    setBatchFilters(EMPTY_BATCH_FILTERS); setBulkPassFilter(null); setBatchActiveTab("ALL");
+  };
+  const clearPublicFilters = () => {
+    setPublicSearch(""); setPublicFromDate(""); setPublicToDate(""); setPublicFilters(EMPTY_BATCH_FILTERS); setPublicActiveTab("ALL");
+  };
+  const batchChips = [
+    batchActiveTab !== "ALL" && { key: "status", label: statusMeta(batchActiveTab).label, onClear: () => setBatchActiveTab("ALL") },
+    bulkPassFilter && { key: "pass", label: BULK_PASS_FILTER_LABEL[bulkPassFilter], onClear: () => setBulkPassFilter(null) },
+    batchSearch && { key: "search", label: `“${batchSearch}”`, onClear: () => setBatchSearch("") },
+    (batchFromDate || batchToDate) && { key: "date", label: `${batchFromDate || "…"} → ${batchToDate || "…"}`, onClear: () => { setBatchFromDate(""); setBatchToDate(""); } },
+    ...batchFilterChips(batchFilters, batchFilterOpts, setBatchFilters),
+  ].filter(Boolean);
+  const publicChips = [
+    publicActiveTab !== "ALL" && { key: "status", label: REQUEST_STATUS[publicActiveTab]?.label || publicActiveTab, onClear: () => setPublicActiveTab("ALL") },
+    publicSearch && { key: "search", label: `“${publicSearch}”`, onClear: () => setPublicSearch("") },
+    (publicFromDate || publicToDate) && { key: "date", label: `${publicFromDate || "…"} → ${publicToDate || "…"}`, onClear: () => { setPublicFromDate(""); setPublicToDate(""); } },
+    ...batchFilterChips(publicFilters, publicFilterOpts, setPublicFilters),
+  ].filter(Boolean);
+
+  const newPassButton = canCreateBatch ? (
+    <Button variant="primary" icon={Plus} onClick={() => router.push(`${BASE}/create`)}>New bulk pass</Button>
+  ) : null;
+
+  const publicCards = [
+    { key: "ALL", label: "All requests", value: publicSummary.total, icon: Globe, bar: "bg-stone-800 dark:bg-stone-300" },
+    { key: "PENDING_ADMIN_APPROVAL", label: "Pending review", value: publicSummary.pending, icon: Clock, soft: "bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300", bar: "bg-amber-500", hint: "Waiting for your approval" },
+    { key: "ACTIVE", label: "Approved", value: publicSummary.active, icon: CheckCircle2, soft: "bg-emerald-100 text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-300", bar: "bg-emerald-500", hint: "Link sent — accepting batches" },
+    { key: "REJECTED_BY_ADMIN", label: "Rejected", value: publicSummary.rejected, icon: XCircle, soft: "bg-red-100 text-red-600 dark:bg-red-400/15 dark:text-red-300", bar: "bg-red-500" },
+    { key: "EXPIRED", label: "Expired", value: publicSummary.expired, icon: CalendarClock, soft: "bg-stone-100 text-stone-600 dark:bg-white/5 dark:text-stone-300", bar: "bg-stone-400" },
+  ];
 
   return (
-    <div className="pt-6 pb-10 flex flex-col gap-6" style={{ fontFamily: "'Inter', 'Montserrat', Arial, sans-serif" }}>
+    <div className="pt-6 pb-10 flex flex-col gap-6">
+      <PageHeader
+        icon={Layers}
+        eyebrow="Bulk Pass"
+        title="Bulk Pass Management"
+        subtitle="Department bulk passes and public website applications in one place."
+        actions={<>
+          <RefreshButton onClick={handleRefresh} loading={mainTab === "PUBLIC" ? publicLoading : batchLoading} updatedAt={updatedAt} />
+          {newPassButton}
+        </>}
+      />
 
-      {/* ── TOP HEADER & SUB-NAVIGATION ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
-        <div>
-          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Bulk Pass Management</h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Manage internal department bulk pass batches and public website applications
-          </p>
-        </div>
+      <ViewTabs
+        value={mainTab}
+        onChange={handleMainTabChange}
+        tabs={[
+          { key: "OVERVIEW", label: "Overview", icon: LayoutDashboard },
+          { key: "DEPARTMENT", label: "Department batches", icon: FileStack, count: batchSummary.underReview, countTone: "bg-amber-500 text-white" },
+          ...(isGenAdmin ? [{ key: "PUBLIC", label: "Public requests", icon: Globe, count: publicSummary.pending, countTone: "bg-sky-500 text-white" }] : []),
+        ]}
+      />
 
-        {/* Sub-nav Pill Switcher */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/60 shadow-inner">
-            <button
-              onClick={() => handleMainTabChange("DEPARTMENT")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-150 ${
-                mainTab === "DEPARTMENT"
-                  ? "bg-white text-slate-900 shadow-md shadow-slate-900/5"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <FileStack className="h-3.5 w-3.5 text-amber-500" />
-              Department Batches
-              {batchSummary.underReview > 0 && (
-                <span className="ml-1 inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-amber-500 text-white text-[10px]">
-                  {batchSummary.underReview}
-                </span>
-              )}
-            </button>
+      {/* ── OVERVIEW ── */}
+      {mainTab === "OVERVIEW" && (
+        <div className="flex flex-col gap-6">
+          {isGenAdmin && publicSummary.pending > 0 && (
+            <Card className="flex flex-col sm:flex-row sm:items-center gap-4 px-5 py-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-600 dark:bg-sky-400/15 dark:text-sky-300">
+                <Globe className="h-5 w-5" />
+              </span>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-stone-900 dark:text-stone-50">
+                  {publicSummary.pending} public request{publicSummary.pending === 1 ? "" : "s"} waiting for approval
+                </p>
+                <p className="text-xs text-stone-500 dark:text-stone-400">Approve to send the applicant an upload link with its validity window.</p>
+              </div>
+              <Button onClick={() => { setPublicActiveTab("PENDING_ADMIN_APPROVAL"); handleMainTabChange("PUBLIC"); }}>
+                Review requests <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Card>
+          )}
 
-            {isGenAdmin && (
-              <button
-                onClick={() => handleMainTabChange("PUBLIC")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-150 ${
-                  mainTab === "PUBLIC"
-                    ? "bg-white text-slate-900 shadow-md shadow-slate-900/5"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <Globe className="h-3.5 w-3.5 text-sky-500" />
-                Public Website Requests
-                {publicSummary.pending > 0 && (
-                  <span className="ml-1 inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-sky-500 text-white text-[10px]">
-                    {publicSummary.pending}
-                  </span>
-                )}
-              </button>
-            )}
-          </div>
-
-          <button onClick={handleRefresh} title="Refresh Data"
-            className="flex items-center justify-center h-9 w-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition text-slate-500 shadow-sm shrink-0">
-            <RefreshCw className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* ══════════════════════════════════════════════════════════════════════ */}
-      {/* ── TAB 1: DEPARTMENT BATCHES ── */}
-      {/* ══════════════════════════════════════════════════════════════════════ */}
-      {mainTab === "DEPARTMENT" && (
-        <>
-          {/* BULK PASS OVERVIEW — the container level: how many passes exist,
-              how many are still open, and what has flowed through them. */}
           <BulkPassOverviewPanel
             overview={bulkPassOverview}
             activeKey={bulkPassFilter}
             onFilter={(key) => {
-              // Re-clicking a tile clears it, so the table returns to every row.
-              setBulkPassFilter((prev) => (prev === key ? null : key));
+              setBulkPassFilter(key);
               setBatchActiveTab("ALL");
-              setBatchPage(1);
+              handleMainTabChange("DEPARTMENT");
             }}
           />
 
-          {bulkPassFilter && (
-            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-50 ring-1 ring-amber-200">
-              <p className="text-xs font-semibold text-amber-800">
-                Showing bulk passes only
-                {bulkPassFilter === "VALIDITY_ACTIVE" && " · active validity"}
-                {bulkPassFilter === "VALIDITY_EXPIRED" && " · expired validity"}
-                {bulkPassFilter === "MULTI" && " · reusable links"}
-                {" "}— individual batch submissions are hidden.
-              </p>
-              <button
-                onClick={() => { setBulkPassFilter(null); setBatchPage(1); }}
-                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 transition"
-              >
-                <X className="h-3.5 w-3.5" /> Clear
-              </button>
-            </div>
-          )}
+          <BulkPassDashboard
+            stats={batchStats}
+            loading={false}
+            hideHeader
+            queueLabel="Show pending batches"
+            detailHrefBase={BASE}
+            onCardClick={(key) => { setBulkPassFilter(null); setBatchActiveTab(key); handleMainTabChange("DEPARTMENT"); }}
+          />
+        </div>
+      )}
 
-          <div className="border-t border-slate-200/70 pt-5">
-            <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2.5">
-              Batches by Status
-            </h3>
+      {/* ── DEPARTMENT BATCHES ── */}
+      {mainTab === "DEPARTMENT" && (
+        <>
+          <StatusFilterCards
+            items={batchStatusCards(batchSummary)}
+            value={batchActiveTab}
+            onChange={(k) => { setBatchActiveTab(k); }}
+            total={batchSummary.totalBatches}
+          />
+
+          <div className="flex flex-col gap-3">
+            <Toolbar>
+              <SearchInput value={batchSearch} onChange={setBatchSearch} placeholder="Search by reference number or company…" />
+              <DateRange from={batchFromDate} to={batchToDate} onChange={({ from, to }) => { setBatchFromDate(from); setBatchToDate(to); }} />
+              <BatchFilterSelects filters={batchFilters} options={batchFilterOpts} onChange={setBatchFilters} />
+            </Toolbar>
+            <ResultSummary count={shownBatches.length} noun="result" chips={batchChips} onClearAll={clearBatchFilters} />
           </div>
 
-          {/* STAT CARDS */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 -mt-2">
-            {[
-              {
-                key: "ALL", label: "Total Batches", value: batchSummary.totalBatches ?? 0,
-                active: "bg-slate-900 text-white shadow-lg shadow-slate-900/20",
-                inactive: "bg-white border border-slate-200 text-slate-700 hover:border-slate-300 hover:shadow-sm",
-                countCls: { active: "bg-white/20 text-white", inactive: "bg-slate-100 text-slate-600" },
-                valueCls: { active: "text-white", inactive: "text-slate-900" },
-                labelCls: { active: "text-slate-300", inactive: "text-slate-400" },
-              },
-              {
-                key: "UNDER_REVIEW", label: "Pending Approval", value: batchSummary.underReview ?? 0,
-                active: "bg-amber-500 text-white shadow-lg shadow-amber-500/30",
-                inactive: "bg-amber-50 border border-amber-200 text-amber-800 hover:border-amber-300 hover:shadow-sm",
-                countCls: { active: "bg-white/25 text-white", inactive: "bg-amber-100 text-amber-700" },
-                valueCls: { active: "text-white", inactive: "text-amber-700" },
-                labelCls: { active: "text-amber-100", inactive: "text-amber-500" },
-              },
-              {
-                key: "RETURNED_TO_APPLICANT", label: "Returned", value: batchSummary.returned ?? 0,
-                active: "bg-purple-600 text-white shadow-lg shadow-purple-600/30",
-                inactive: "bg-purple-50 border border-purple-200 text-purple-800 hover:border-purple-300 hover:shadow-sm",
-                countCls: { active: "bg-white/25 text-white", inactive: "bg-purple-100 text-purple-700" },
-                valueCls: { active: "text-white", inactive: "text-purple-700" },
-                labelCls: { active: "text-purple-100", inactive: "text-purple-500" },
-              },
-              {
-                key: "REJECTED", label: "Rejected", value: batchSummary.rejected ?? 0,
-                active: "bg-red-500 text-white shadow-lg shadow-red-500/30",
-                inactive: "bg-red-50 border border-red-200 text-red-800 hover:border-red-300 hover:shadow-sm",
-                countCls: { active: "bg-white/25 text-white", inactive: "bg-red-100 text-red-700" },
-                valueCls: { active: "text-white", inactive: "text-red-600" },
-                labelCls: { active: "text-red-100", inactive: "text-red-400" },
-              },
-              {
-                key: "COMPLETED", label: "Approved", value: batchSummary.completed ?? 0,
-                active: "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30",
-                inactive: "bg-emerald-50 border border-emerald-200 text-emerald-800 hover:border-emerald-300 hover:shadow-sm",
-                countCls: { active: "bg-white/25 text-white", inactive: "bg-emerald-100 text-emerald-700" },
-                valueCls: { active: "text-white", inactive: "text-emerald-700" },
-                labelCls: { active: "text-emerald-100", inactive: "text-emerald-500" },
-              },
-              {
-                key: "DRAFT", label: "Sent to Applicant", value: batchSummary.draft ?? 0,
-                active: "bg-sky-500 text-white shadow-lg shadow-sky-500/30",
-                inactive: "bg-sky-50 border border-sky-200 text-sky-800 hover:border-sky-300 hover:shadow-sm",
-                countCls: { active: "bg-white/25 text-white", inactive: "bg-sky-100 text-sky-700" },
-                valueCls: { active: "text-white", inactive: "text-sky-700" },
-                labelCls: { active: "text-sky-100", inactive: "text-sky-500" },
-              },
-            ].map((card) => {
-              const isActive = batchActiveTab === card.key;
-              return (
-                <button key={card.key} onClick={() => { setBatchActiveTab(card.key); setBatchPage(1); }}
-                  className={`relative flex flex-col gap-2 px-4 py-4 rounded-2xl text-left transition-all duration-150 active:scale-[0.97] ${
-                    isActive ? card.active : card.inactive
-                  }`}>
-                  <div className="flex items-start justify-between">
-                    <p className={`text-3xl font-extrabold tabular-nums leading-none ${isActive ? card.valueCls.active : card.valueCls.inactive}`}>
-                      {card.value}
-                    </p>
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full tabular-nums ${isActive ? card.countCls.active : card.countCls.inactive}`}>
-                      {card.value}
-                    </span>
-                  </div>
-                  <p className={`text-[11px] font-semibold leading-tight ${isActive ? card.labelCls.active : card.labelCls.inactive}`}>
-                    {card.label}
-                  </p>
-                  {isActive && <span className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full bg-white/40" />}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* FILTER ROW */}
-          <div className="flex flex-wrap items-center gap-3">
-            {canCreateBatch && (
-              <button onClick={() => router.push(`${BASE}/create`)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 active:scale-95 text-[#1f1f1f] font-bold text-sm transition shadow-sm shrink-0">
-                <Plus className="h-4 w-4" strokeWidth={2.5} />New Bulk Pass
-              </button>
+          <TableCard
+            footer={!batchLoading && shownBatches.length > 0 && (
+              <Pagination page={batchPaged.page} pageSize={batchPaged.pageSize} total={batchPaged.total} onPage={batchPaged.setPage} onPageSize={batchPaged.setPageSize} />
             )}
-
-            <button
-              onClick={() => setMultipleSubmissionsFilter(multipleSubmissionsFilter === null ? true : null)}
-              className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition border ${
-                multipleSubmissionsFilter !== null ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              Multiple Submissions
-              {multipleSubmissionsFilter !== null && (
-                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-amber-200 text-amber-800 text-[10px] font-bold">
-                  {allBatches.filter((b) => b.multipleSubmissionsEnabled).length}
-                </span>
-              )}
-            </button>
-
-            <div className="h-8 w-px bg-slate-200 shrink-0" />
-
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input type="text" placeholder="Search by ref number or company…" value={batchSearch}
-                onChange={(e) => { setBatchSearch(e.target.value); setBatchPage(1); }}
-                className="w-full pl-10 pr-9 py-2.5 text-sm bg-white border border-slate-200 rounded-xl outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 transition placeholder:text-slate-400 text-slate-800 shadow-sm" />
-              {batchSearch && (
-                <button onClick={() => { setBatchSearch(""); setBatchPage(1); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 hover:border-slate-300 transition">
-              <CalendarDays className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-              <input type="date" value={batchFromDate} onChange={(e) => { setBatchFromDate(e.target.value); setBatchPage(1); }}
-                className="outline-none bg-transparent text-sm text-slate-600 w-[130px]" />
-            </div>
-            <span className="text-slate-300 text-xs font-medium">to</span>
-            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 hover:border-slate-300 transition">
-              <CalendarDays className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-              <input type="date" value={batchToDate} onChange={(e) => { setBatchToDate(e.target.value); setBatchPage(1); }}
-                className="outline-none bg-transparent text-sm text-slate-600 w-[130px]" />
-            </div>
-
-            {batchHasFilters && (
-              <button onClick={() => { setBatchSearch(""); setBatchFromDate(""); setBatchToDate(""); setBatchPage(1); }}
-                className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition">
-                <X className="h-3.5 w-3.5" />Clear
-              </button>
-            )}
-            <span className="ml-auto text-xs text-slate-400 hidden sm:inline">{visibleBatches.length} result{visibleBatches.length !== 1 ? "s" : ""}</span>
-          </div>
-
-          {/* TABLE */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            {batchLoading ? (
-              <div className="flex flex-col items-center justify-center py-24 gap-3">
-                <div className="h-9 w-9 rounded-full border-[3px] border-amber-400 border-t-transparent animate-spin" />
-                <p className="text-sm text-slate-400">Loading department batches…</p>
-              </div>
-            ) : visibleBatches.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                  <FileStack className="h-7 w-7" />
-                </div>
-                <p className="text-base font-semibold text-slate-700">
-                  {batchHasFilters || batchActiveTab !== "ALL" ? "No batches match your filters" : "No department bulk pass batches yet"}
-                </p>
-                <p className="text-sm text-slate-400">
-                  {batchHasFilters || batchActiveTab !== "ALL" ? "Try adjusting your search or filters." : "Create your first bulk pass to get started."}
-                </p>
-                {!batchHasFilters && batchActiveTab === "ALL" && canCreateBatch && (
-                  <button onClick={() => router.push(`${BASE}/create`)}
-                    className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-[#1f1f1f] font-bold text-sm transition">
-                    <Plus className="h-4 w-4" />New Bulk Pass
-                  </button>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1040px] text-sm">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100">
-                        {["Status", "Batch ID", "Company", "Max Persons", "Max Vehicles", "Batches", "Validity", "Submitted On", "Action"].map((h) => (
-                          <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {batchPaginated.map((batch) => {
-                        const isChild = !!batch.parentRequestId;
-                        return (
-                        <tr key={batch.id}
-                          className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
-                          onClick={() => router.push(`${BASE}/${batch.id}`)}>
-                          <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
-                            {/* A reusable bulk pass is a container, not a batch —
-                                its own status never moves past DRAFT, so show the
-                                lifecycle the backend derives from validity. */}
-                            {batch.isBulkPassContainer ? (
-                              <BulkPassStatusBadge state={batch.bulkPassStatus} />
-                            ) : (
-                              <BatchStatusBadge status={batch.status} />
-                            )}
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-2">
-                              <p className="font-bold text-slate-900 text-sm font-mono group-hover:text-amber-600 transition-colors">
-                                {batch.refNo || "—"}
-                              </p>
-                              {batch.multipleSubmissionsEnabled && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[9px] font-bold">
-                                  Multi
-                                </span>
-                              )}
-                              {/* A child row is one batch inside a reusable bulk pass. */}
-                              {isChild && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[9px] font-bold">
-                                  Batch #{batch.submissionNumber ?? "—"}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-slate-400 mt-0.5">{visitorLabel(batch.visitorType)}</p>
-                          </td>
-                          <td className="px-5 py-3.5 max-w-[200px]">
-                            <p className="font-medium text-slate-800 truncate" title={batch.companyName}>{batch.companyName || "—"}</p>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-1.5">
-                              <Users className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                              <span className="font-semibold text-slate-700 tabular-nums">{batch.noOfPersons ?? "—"}</span>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-1.5">
-                              <Car className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                              <span className="font-semibold text-slate-700 tabular-nums">{batch.noOfVehicles ?? "—"}</span>
-                            </div>
-                          </td>
-                          {/* Submission activity: batches received for a reusable pass,
-                              or the persons/vehicles actually uploaded for a single one. */}
-                          <td className="px-5 py-3.5 whitespace-nowrap">
-                            {batch.multipleSubmissionsEnabled ? (
-                              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                                <FileStack className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                {batch.childSubmissionsCount ?? 0}
-                                <span className="font-normal text-slate-400">
-                                  ({batch.childPersonsCount ?? 0}p / {batch.childVehiclesCount ?? 0}v)
-                                </span>
-                              </span>
-                            ) : (
-                              <span className="text-xs text-slate-500">
-                                {batch.submittedPersonsCount ?? 0}p / {batch.submittedVehiclesCount ?? 0}v
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
-                            <ValidityBadge validity={getValidityState(batch)} />
-                          </td>
-                          <td className="px-5 py-3.5 whitespace-nowrap text-slate-500 text-xs">
-                            {fmtDateShort(batch.updatedAt || batch.createdAt)}
-                          </td>
-                          <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
-                            <BatchActionBtn batch={batch} onEdit={(b) => router.push(`${BASE}/${b.id}`)} />
-                          </td>
-                        </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* PAGINATION */}
-                <div className="px-5 py-3.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <span>Rows per page:</span>
-                    <select value={batchPageSize} onChange={(e) => { setBatchPageSize(Number(e.target.value)); setBatchPage(1); }}
-                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 outline-none cursor-pointer">
-                      {PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                    <span className="ml-2 font-semibold text-slate-700">
-                      {(batchPage - 1) * batchPageSize + 1}–{Math.min(batchPage * batchPageSize, visibleBatches.length)} of {visibleBatches.length}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button disabled={batchPage === 1} onClick={() => setBatchPage(1)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-200 disabled:opacity-40">«</button>
-                    <button disabled={batchPage === 1} onClick={() => setBatchPage(p => p - 1)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-200 disabled:opacity-40">
-                      <ChevronLeft className="h-3.5 w-3.5" />Previous
-                    </button>
-                    <button disabled={batchPage === batchTotalPages} onClick={() => setBatchPage(p => p + 1)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-200 disabled:opacity-40">
-                      Next<ChevronRight className="h-3.5 w-3.5" />
-                    </button>
-                    <button disabled={batchPage === batchTotalPages} onClick={() => setBatchPage(batchTotalPages)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-200 disabled:opacity-40">»</button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+          >
+            <BatchesTable
+              rows={batchPaged.rows}
+              loading={batchLoading}
+              onOpen={(b) => router.push(`${BASE}/${b.id}`)}
+              getAction={batchAction}
+              sort={batchSort}
+              onSort={(key) => setBatchSort((cur) => nextSort(cur, key))}
+              empty={batchChips.length ? {
+                title: "No batches match your filters",
+                message: "Try a different search or clear the filters.",
+                action: <Button onClick={clearBatchFilters}><X className="h-4 w-4" /> Clear filters</Button>,
+              } : {
+                title: "No department bulk passes yet",
+                message: "Create a bulk pass and the applicant receives a link to upload visitor details.",
+                action: newPassButton,
+              }}
+            />
+          </TableCard>
         </>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════ */}
-      {/* ── TAB 2: PUBLIC WEBSITE REQUESTS ── */}
-      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* ── PUBLIC WEBSITE REQUESTS ── */}
       {mainTab === "PUBLIC" && isGenAdmin && (
         <>
-          {/* STAT CARDS */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {[
-              {
-                key: "ALL", label: "Total Requests", value: publicSummary.total,
-                active: "bg-slate-900 text-white shadow-lg shadow-slate-900/20",
-                inactive: "bg-white border border-slate-200 text-slate-700 hover:border-slate-300 hover:shadow-sm",
-                countCls: { active: "bg-white/20 text-white", inactive: "bg-slate-100 text-slate-600" },
-                valueCls: { active: "text-white", inactive: "text-slate-900" },
-                labelCls: { active: "text-slate-300", inactive: "text-slate-400" },
-              },
-              {
-                key: "PENDING_ADMIN_APPROVAL", label: "Pending Review", value: publicSummary.pending,
-                active: "bg-amber-500 text-white shadow-lg shadow-amber-500/30",
-                inactive: "bg-amber-50 border border-amber-200 text-amber-800 hover:border-amber-300 hover:shadow-sm",
-                countCls: { active: "bg-white/25 text-white", inactive: "bg-amber-100 text-amber-700" },
-                valueCls: { active: "text-white", inactive: "text-amber-700" },
-                labelCls: { active: "text-amber-100", inactive: "text-amber-500" },
-              },
-              {
-                key: "ACTIVE", label: "Approved", value: publicSummary.active,
-                active: "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30",
-                inactive: "bg-emerald-50 border border-emerald-200 text-emerald-800 hover:border-emerald-300 hover:shadow-sm",
-                countCls: { active: "bg-white/25 text-white", inactive: "bg-emerald-100 text-emerald-700" },
-                valueCls: { active: "text-white", inactive: "text-emerald-700" },
-                labelCls: { active: "text-emerald-100", inactive: "text-emerald-500" },
-              },
-              {
-                key: "REJECTED_BY_ADMIN", label: "Rejected", value: publicSummary.rejected,
-                active: "bg-red-500 text-white shadow-lg shadow-red-500/30",
-                inactive: "bg-red-50 border border-red-200 text-red-800 hover:border-red-300 hover:shadow-sm",
-                countCls: { active: "bg-white/25 text-white", inactive: "bg-red-100 text-red-700" },
-                valueCls: { active: "text-white", inactive: "text-red-600" },
-                labelCls: { active: "text-red-100", inactive: "text-red-400" },
-              },
-              {
-                key: "EXPIRED", label: "Expired", value: publicSummary.expired,
-                active: "bg-slate-600 text-white shadow-lg shadow-slate-600/30",
-                inactive: "bg-slate-100 border border-slate-200 text-slate-700 hover:border-slate-300 hover:shadow-sm",
-                countCls: { active: "bg-white/25 text-white", inactive: "bg-slate-200 text-slate-700" },
-                valueCls: { active: "text-white", inactive: "text-slate-700" },
-                labelCls: { active: "text-slate-200", inactive: "text-slate-500" },
-              },
-            ].map((card) => {
-              const isActive = publicActiveTab === card.key;
-              return (
-                <button key={card.key} onClick={() => { setPublicActiveTab(card.key); setPublicPage(1); }}
-                  className={`relative flex flex-col gap-2 px-4 py-4 rounded-2xl text-left transition-all duration-150 active:scale-[0.97] ${
-                    isActive ? card.active : card.inactive
-                  }`}>
-                  <div className="flex items-start justify-between">
-                    <p className={`text-3xl font-extrabold tabular-nums leading-none ${isActive ? card.valueCls.active : card.valueCls.inactive}`}>
-                      {card.value}
-                    </p>
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full tabular-nums ${isActive ? card.countCls.active : card.countCls.inactive}`}>
-                      {card.value}
-                    </span>
-                  </div>
-                  <p className={`text-[11px] font-semibold leading-tight ${isActive ? card.labelCls.active : card.labelCls.inactive}`}>
-                    {card.label}
-                  </p>
-                  {isActive && <span className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full bg-white/40" />}
-                </button>
-              );
-            })}
+          <StatusFilterCards items={publicCards} value={publicActiveTab} onChange={setPublicActiveTab} total={publicSummary.total} />
+
+          <div className="flex flex-col gap-3">
+            <Toolbar>
+              <SearchInput value={publicSearch} onChange={setPublicSearch} placeholder="Search tracking no, email or company…" />
+              <DateRange label="Received" from={publicFromDate} to={publicToDate} onChange={({ from, to }) => { setPublicFromDate(from); setPublicToDate(to); }} />
+              <BatchFilterSelects filters={publicFilters} options={publicFilterOpts} onChange={setPublicFilters} show={["visitorType", "validity"]} />
+            </Toolbar>
+            <ResultSummary count={shownRequests.length} noun="request" chips={publicChips} onClearAll={clearPublicFilters} />
           </div>
 
-          {/* FILTER ROW */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input type="text" placeholder="Search tracking no, email, company…" value={publicSearch}
-                onChange={(e) => { setPublicSearch(e.target.value); setPublicPage(1); }}
-                className="w-full pl-10 pr-9 py-2.5 text-sm bg-white border border-slate-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 transition text-slate-800 shadow-sm" />
-              {publicSearch && (
-                <button onClick={() => { setPublicSearch(""); setPublicPage(1); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 hover:border-slate-300 transition">
-              <CalendarDays className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-              <input type="date" value={publicFromDate} onChange={(e) => { setPublicFromDate(e.target.value); setPublicPage(1); }}
-                className="outline-none bg-transparent text-sm text-slate-600 w-[130px]" />
-            </div>
-            <span className="text-slate-300 text-xs font-medium">to</span>
-            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2.5 hover:border-slate-300 transition">
-              <CalendarDays className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-              <input type="date" value={publicToDate} onChange={(e) => { setPublicToDate(e.target.value); setPublicPage(1); }}
-                className="outline-none bg-transparent text-sm text-slate-600 w-[130px]" />
-            </div>
-
-            {publicHasFilters && (
-              <button onClick={() => { setPublicSearch(""); setPublicFromDate(""); setPublicToDate(""); setPublicPage(1); }}
-                className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition">
-                <X className="h-3.5 w-3.5" />Clear
-              </button>
+          <TableCard
+            footer={!publicLoading && shownRequests.length > 0 && (
+              <Pagination page={publicPaged.page} pageSize={publicPaged.pageSize} total={publicPaged.total} onPage={publicPaged.setPage} onPageSize={publicPaged.setPageSize} />
             )}
-            <span className="ml-auto text-xs text-slate-400 hidden sm:inline">{publicRequests.length} result{publicRequests.length !== 1 ? "s" : ""}</span>
-          </div>
-
-          {/* REQUESTS TABLE */}
-          <RequestsTable
-            requests={publicPaginated}
-            loading={publicLoading}
-            onView={(req) => router.push(`/admin/public-requests/${req.id}`)}
-            onQuickApprove={(req) => setQuickApproveReq(req)}
-            onQuickReject={(req) => setQuickRejectReq(req)}
-            hasFilters={publicHasFilters || publicActiveTab !== "ALL"}
-          />
-
-          {/* PUBLIC PAGINATION */}
-          {!publicLoading && publicRequests.length > 0 && (
-            <div className="px-5 py-3.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50 rounded-2xl border">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span>Rows per page:</span>
-                <select value={publicPageSize} onChange={(e) => { setPublicPageSize(Number(e.target.value)); setPublicPage(1); }}
-                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 outline-none cursor-pointer">
-                  {PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-                <span className="ml-2 font-semibold text-slate-700">
-                  {(publicPage - 1) * publicPageSize + 1}–{Math.min(publicPage * publicPageSize, publicRequests.length)} of {publicRequests.length}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button disabled={publicPage === 1} onClick={() => setPublicPage(1)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-200 disabled:opacity-40">«</button>
-                <button disabled={publicPage === 1} onClick={() => setPublicPage(p => p - 1)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-200 disabled:opacity-40">
-                  <ChevronLeft className="h-3.5 w-3.5" />Previous
-                </button>
-                <button disabled={publicPage === publicTotalPages} onClick={() => setPublicPage(p => p + 1)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-200 disabled:opacity-40">
-                  Next<ChevronRight className="h-3.5 w-3.5" />
-                </button>
-                <button disabled={publicPage === publicTotalPages} onClick={() => setPublicPage(publicTotalPages)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-200 disabled:opacity-40">»</button>
-              </div>
-            </div>
-          )}
+          >
+            <RequestsTable
+              requests={publicPaged.rows}
+              loading={publicLoading}
+              onView={(req) => router.push(`/admin/public-requests/${req.id}`)}
+              onQuickApprove={(req) => setQuickApproveReq(req)}
+              onQuickReject={(req) => setQuickRejectReq(req)}
+              hasFilters={publicChips.length > 0}
+              emptyAction={<Button onClick={clearPublicFilters}><X className="h-4 w-4" /> Clear filters</Button>}
+              sort={publicSort}
+              onSort={(key) => setPublicSort((cur) => nextSort(cur, key))}
+            />
+          </TableCard>
         </>
       )}
 
@@ -1040,12 +627,7 @@ function AdminBulkPassPageContent() {
 
 export default function AdminBulkPassListPage() {
   return (
-    <Suspense fallback={
-      <div className="flex flex-col items-center justify-center py-24 gap-3">
-        <div className="h-9 w-9 rounded-full border-[3px] border-amber-400 border-t-transparent animate-spin" />
-        <p className="text-sm text-slate-400">Loading Bulk Pass Console…</p>
-      </div>
-    }>
+    <Suspense fallback={<Spinner label="Loading Bulk Pass console…" />}>
       <AdminBulkPassPageContent />
     </Suspense>
   );

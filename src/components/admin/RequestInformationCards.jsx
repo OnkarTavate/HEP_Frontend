@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { formatValidityDateTime } from "@/lib/bulkPassValidity";
 import {
   FileText, Building2, Mail, Phone, Calendar, Users, Car, FileCheck,
 } from "lucide-react";
@@ -214,7 +215,7 @@ export function ValidityCard({ validityFrom, validityUpto, approvedTimeFrom, app
               </p>
             </div>
             <p className="text-sm font-semibold text-emerald-700">
-              {fmtDateShort(approvedTimeFrom)}
+              {formatValidityDateTime(approvedTimeFrom)}
             </p>
           </div>
         )}
@@ -227,7 +228,7 @@ export function ValidityCard({ validityFrom, validityUpto, approvedTimeFrom, app
               </p>
             </div>
             <p className="text-sm font-semibold text-emerald-700">
-              {fmtDateShort(approvedTimeUpto)}
+              {formatValidityDateTime(approvedTimeUpto, { upto: true })}
             </p>
           </div>
         )}

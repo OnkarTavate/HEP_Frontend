@@ -20,14 +20,8 @@ import { Gauge, Pencil, Power, PowerOff, Loader2, CheckCircle2, Clock, XCircle, 
 import { toast } from "sonner";
 import { updateBulkBatch, setBulkPassLinkActive } from "@/lib/bulkPassApi";
 import { BULK_PASS_LIMITS, validatePassTotals, batchesNeededHint } from "@/lib/bulkPassConstants";
+import { combineValidity, toValidityInputs } from "@/lib/bulkPassValidity";
 
-const toDateInput = (v) => {
-  if (!v) return "";
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
 
 /**
  * A used / total meter with the verdict split underneath.
@@ -83,11 +77,15 @@ export default function BulkPassLimitsPanel({
   const [switching, setSwitching] = useState(false);
   // The editor is seeded from the batch each time it opens, so a refetch never
   // overwrites what the officer is typing and a stale draft is never shown.
-  const seedForm = () => ({
-    noOfPersons: String(batch?.maxTotalPersons ?? batch?.noOfPersons ?? ""),
-    noOfVehicles: String(batch?.maxTotalVehicles ?? batch?.noOfVehicles ?? ""),
-    validityUpto: toDateInput(batch?.validityUpto),
-  });
+  const seedForm = () => {
+    const upto = toValidityInputs(batch?.validityUpto, { upto: true });
+    return {
+      noOfPersons: String(batch?.maxTotalPersons ?? batch?.noOfPersons ?? ""),
+      noOfVehicles: String(batch?.maxTotalVehicles ?? batch?.noOfVehicles ?? ""),
+      validityUpto: upto.date,
+      validityUptoTime: upto.time,
+    };
+  };
   const [form, setForm] = useState(seedForm);
   const openEditor = () => {
     setForm(seedForm());
@@ -130,15 +128,20 @@ export default function BulkPassLimitsPanel({
   const save = async () => {
     if (formError) { toast.error(formError); return; }
     // The clock is read here, in the handler, rather than during render.
-    if (form.validityUpto && new Date(form.validityUpto).setHours(23, 59, 59, 999) < Date.now()) {
-      toast.error("Validity upto must be today or later.");
-      return;
+    const current = toValidityInputs(batch.validityUpto, { upto: true });
+    const uptoChanged =
+      !!form.validityUpto && (form.validityUpto !== current.date || form.validityUptoTime !== current.time);
+    if (uptoChanged) {
+      const uptoAt = combineValidity(form.validityUpto, form.validityUptoTime, { upto: true });
+      if (!uptoAt) { toast.error("Please enter a valid validity upto date and time."); return; }
+      if (uptoAt.getTime() <= Date.now()) { toast.error("Validity upto must be in the future."); return; }
     }
     setSaving(true);
     try {
       const payload = { noOfPersons: newPersons, noOfVehicles: newVehicles };
-      if (form.validityUpto && form.validityUpto !== toDateInput(batch.validityUpto)) {
+      if (uptoChanged) {
         payload.validityUpto = form.validityUpto;
+        payload.validityUptoTime = form.validityUptoTime;
       }
       await updateBulkBatch(batch.id, payload);
       toast.success("Bulk pass limits updated.");
@@ -269,12 +272,20 @@ export default function BulkPassLimitsPanel({
             </div>
             <div>
               <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">Validity Upto</label>
-              <input
-                type="date"
-                value={form.validityUpto}
-                onChange={(e) => setForm((f) => ({ ...f, validityUpto: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/50"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={form.validityUpto}
+                  onChange={(e) => setForm((f) => ({ ...f, validityUpto: e.target.value }))}
+                  className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/50"
+                />
+                <input
+                  type="time"
+                  value={form.validityUptoTime}
+                  onChange={(e) => setForm((f) => ({ ...f, validityUptoTime: e.target.value }))}
+                  className="w-28 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400/50"
+                />
+              </div>
             </div>
           </div>
           {formError && <p className="text-xs text-red-600 mt-3">{formError}</p>}

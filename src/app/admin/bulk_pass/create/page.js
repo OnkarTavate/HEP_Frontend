@@ -9,6 +9,7 @@ import { ArrowLeft, Users, Mail, Hash, MessageSquare, Upload, X, Loader2, CheckC
 import { toast } from "sonner";
 import { createBulkIntake } from "@/lib/bulkPassApi";
 import { BULK_PASS_LIMITS, BULK_PASS_LABELS, validatePassTotals } from "@/lib/bulkPassConstants";
+import { DEFAULT_VALIDITY_FROM_TIME, DEFAULT_VALIDITY_UPTO_TIME, combineValidity } from "@/lib/bulkPassValidity";
 
 const BASE = "/admin/bulk_pass";
 
@@ -36,10 +37,14 @@ function validate(fields) {
   Object.assign(errors, validatePassTotals(fields.noOfPersons, fields.noOfVehicles, !!fields.multipleSubmissionsEnabled));
   if (!fields.paymentMode) errors.paymentMode = "Payment mode is required.";
   if (!fields.purposeOfVisit?.trim()) errors.purposeOfVisit = "Purpose of visit is required.";
+  const from = fields.validityFrom ? combineValidity(fields.validityFrom, fields.validityFromTime) : null;
+  const upto = fields.validityUpto ? combineValidity(fields.validityUpto, fields.validityUptoTime, { upto: true }) : null;
   if (!fields.validityUpto) errors.validityUpto = "Validity upto is required.";
-  else if (new Date(fields.validityUpto) <= new Date()) errors.validityUpto = "Validity upto must be a future date.";
+  else if (!upto) errors.validityUpto = "Invalid validity upto date or time.";
+  else if (upto <= new Date()) errors.validityUpto = "Validity upto must be in the future.";
   if (!fields.validityFrom) errors.validityFrom = "Validity from is required.";
-  else if (fields.validityUpto && new Date(fields.validityFrom) >= new Date(fields.validityUpto)) errors.validityFrom = "Validity from must be before validity upto.";
+  else if (!from) errors.validityFrom = "Invalid validity from date or time.";
+  else if (upto && from >= upto) errors.validityFrom = "Validity from must be before validity upto.";
   return errors;
 }
 
@@ -74,17 +79,18 @@ function SectionHeading({ icon, title }) {
 
 /**
  * A sensible default validity window so the officer is not typing two dates on
- * every single pass: open now, close thirty days out. Both remain editable.
+ * every single pass: open today, close thirty days out. Both remain editable;
+ * the times default to 06:00 / 18:00 IST.
  */
 function defaultValidityWindow() {
   const pad = (n) => String(n).padStart(2, "0");
-  const toLocalInput = (d) =>
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  const from = new Date(Date.now() + 5 * 60000); // a few minutes ahead of "now"
+  const toDateInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const from = new Date();
   const upto = new Date(from.getTime() + 30 * 86400000);
-  upto.setHours(23, 59, 0, 0);
-  return { from: toLocalInput(from), upto: toLocalInput(upto) };
+  return { from: toDateInput(from), upto: toDateInput(upto) };
 }
+
+const VALIDITY_KEYS = ["validityFrom", "validityUpto", "validityFromTime", "validityUptoTime"];
 
 
 export default function AdminCreateBulkPassPage() {
@@ -108,9 +114,10 @@ export default function AdminCreateBulkPassPage() {
     return {
     visitorType: "", companyName: "", applicantEmail: "", applicantMobile: "",
     refDocNo: "", workOrderRequired: "no",
-    noOfPersons: String(BULK_PASS_LIMITS.DEFAULT_MAX_PERSONS),
-    noOfVehicles: String(BULK_PASS_LIMITS.DEFAULT_MAX_VEHICLES),
-    paymentMode: "", purposeOfVisit: "", validityFrom: from, validityUpto: upto, remarks: "",
+    noOfPersons: "0",
+    noOfVehicles: "0",
+    paymentMode: "", purposeOfVisit: "", validityFrom: from, validityUpto: upto,
+    validityFromTime: DEFAULT_VALIDITY_FROM_TIME, validityUptoTime: DEFAULT_VALIDITY_UPTO_TIME, remarks: "",
     // Every bulk pass is a reusable link: the organisation submits batches of up
     // to 30 persons / 30 vehicles until the totals above are used up.
     multipleSubmissionsEnabled: true,
@@ -124,7 +131,9 @@ export default function AdminCreateBulkPassPage() {
 
   const set = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-    if (touched[key]) setErrors((prev) => { const e = validate({ ...form, [key]: value }); return { ...prev, [key]: e[key] }; });
+    // The validity fields are checked as one window, so refresh both together.
+    const shown = (VALIDITY_KEYS.includes(key) ? ["validityFrom", "validityUpto"] : [key]).filter((k) => touched[k]);
+    if (shown.length) setErrors((prev) => { const e = validate({ ...form, [key]: value }); return { ...prev, ...Object.fromEntries(shown.map((k) => [k, e[k]])) }; });
   };
   const touch = (key) => {
     setTouched((prev) => ({ ...prev, [key]: true }));
@@ -151,6 +160,8 @@ export default function AdminCreateBulkPassPage() {
         } else if (k === "workOrderRequired") {
           // Backend coerces via === "true"; the radio holds "yes"/"no".
           fd.append(k, v === "yes" ? "true" : "false");
+        } else if (k === "validityFromTime" || k === "validityUptoTime") {
+          fd.append(k, v || (k === "validityFromTime" ? DEFAULT_VALIDITY_FROM_TIME : DEFAULT_VALIDITY_UPTO_TIME));
         } else {
           fd.append(k, typeof v === "string" ? v.trim() : v);
         }
@@ -257,16 +268,24 @@ export default function AdminCreateBulkPassPage() {
             </div>
             <div>
               <FieldLabel required>Validity From</FieldLabel>
-              <input type="date" value={form.validityFrom} onChange={(e) => set("validityFrom", e.target.value)} onBlur={() => touch("validityFrom")}
-                min={new Date().toISOString().slice(0, 10)} className={inputCls(!!errors.validityFrom)} />
-              <p className="text-[11px] text-stone-400 mt-1">Pass valid from start of this date</p>
+              <div className="flex flex-wrap gap-2">
+                <input type="date" value={form.validityFrom} onChange={(e) => set("validityFrom", e.target.value)} onBlur={() => touch("validityFrom")}
+                  min={new Date().toISOString().slice(0, 10)} className={`${inputCls(!!errors.validityFrom)} flex-[2_1_9rem] min-w-0`} />
+                <input type="time" aria-label="Validity from time (IST)" value={form.validityFromTime} onChange={(e) => set("validityFromTime", e.target.value)}
+                  onBlur={() => touch("validityFrom")} className={`${inputCls(!!errors.validityFrom)} flex-[1_1_7rem] min-w-0`} />
+              </div>
+              <p className="text-[11px] text-stone-400 mt-1">Pass opens at this date and time (IST)</p>
               <FieldError msg={errors.validityFrom} />
             </div>
             <div>
               <FieldLabel required>Validity Upto</FieldLabel>
-              <input type="date" value={form.validityUpto} onChange={(e) => set("validityUpto", e.target.value)} onBlur={() => touch("validityUpto")}
-                min={form.validityFrom || new Date().toISOString().slice(0, 10)} className={inputCls(!!errors.validityUpto)} />
-              <p className="text-[11px] text-stone-400 mt-1">Pass valid throughout entire day</p>
+              <div className="flex flex-wrap gap-2">
+                <input type="date" value={form.validityUpto} onChange={(e) => set("validityUpto", e.target.value)} onBlur={() => touch("validityUpto")}
+                  min={form.validityFrom || new Date().toISOString().slice(0, 10)} className={`${inputCls(!!errors.validityUpto)} flex-[2_1_9rem] min-w-0`} />
+                <input type="time" aria-label="Validity upto time (IST)" value={form.validityUptoTime} onChange={(e) => set("validityUptoTime", e.target.value)}
+                  onBlur={() => touch("validityUpto")} className={`${inputCls(!!errors.validityUpto)} flex-[1_1_7rem] min-w-0`} />
+              </div>
+              <p className="text-[11px] text-stone-400 mt-1">Pass closes at this date and time (IST)</p>
               <FieldError msg={errors.validityUpto} />
             </div>
             </div>

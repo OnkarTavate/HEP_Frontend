@@ -8,6 +8,7 @@ import {
   CheckCircle2, AlertCircle, Shield, Eye, Mail,
 } from "lucide-react";
 import { toast } from "sonner";
+import ReturnForRevisionModal from "@/components/bulk-pass/ReturnForRevisionModal.jsx";
 import {
   getBulkBatchDetail,
   approvePersonInBatch,
@@ -26,7 +27,7 @@ import {
 import SubmissionHistory, { SubmissionSummaryStrip } from "@/components/bulk-pass/SubmissionHistory";
 import ValidityBanner from "@/components/bulk-pass/ValidityBanner";
 import DocumentViewer from "@/components/bulk-pass/DocumentViewer";
-import { getValidityState } from "@/lib/bulkPassValidity";
+import { getValidityState, formatValidityDateTime } from "@/lib/bulkPassValidity";
 import { countLabelsFor } from "@/lib/bulkPassConstants";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -94,13 +95,6 @@ const QUICK_REJECTION_REASONS = [
   "Document has expired",
   "Entry is blacklisted",
   "Duplicate entry — already submitted",
-];
-
-const QUICK_RETURN_REASONS = [
-  "Photographs do not meet the required quality",
-  "Aadhaar cards missing for one or more persons",
-  "Vehicle documents incomplete",
-  "Details do not match the supporting documents",
 ];
 
 function ReasonModal({
@@ -320,6 +314,7 @@ function ReviewCard({ entry, index, isVehicle, focused, actioning, canAct, onFoc
           <p className="font-bold text-slate-800 truncate">
             <span className="text-slate-400 font-normal mr-1.5">{index + 1}.</span>
             {isVehicle ? entry.vehicleNumber : entry.name || "—"}
+            {!isVehicle && entry.inCharge && <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 align-middle" title="Teacher / escort in charge of the group">In-charge</span>}
           </p>
           <p className="text-[11px] text-slate-500 font-mono truncate">
             {isVehicle
@@ -408,6 +403,7 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
       onPersonActioned();
     } catch (err) {
       toast.error(err?.response?.data?.message || "Failed to approve person.");
+      onPersonActioned(); // screen may be stale — resync so the right buttons show
     } finally { setActioningId(null); }
   };
 
@@ -420,6 +416,7 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
       onPersonActioned();
     } catch (err) {
       toast.error(err?.response?.data?.message || "Failed to reject person.");
+      onPersonActioned(); // screen may be stale — resync so the right buttons show
       throw err;
     }
   };
@@ -432,6 +429,7 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
       onPersonActioned();
     } catch (err) {
       toast.error(err?.response?.data?.message || "Failed to undo decision.");
+      onPersonActioned(); // screen may be stale — resync so the right buttons show
     } finally { setActioningId(null); }
   };
 
@@ -548,7 +546,7 @@ function PersonsSection({ persons, batchId, canApprove, isUnderReview, onPersonA
                             ? <img src={photoSrc} alt={p.name} onClick={() => setLightboxSrc(photoSrc)} className="h-10 w-10 rounded-xl object-cover cursor-pointer ring-1 ring-slate-200 hover:ring-amber-400 transition" onError={(e) => { e.target.style.display = "none"; }} />
                             : <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center"><ImageIcon className="h-5 w-5 text-slate-300" /></div>}
                         </td>
-                        <td className="px-3 py-3 font-semibold text-slate-800 whitespace-nowrap">{p.name || "—"}</td>
+                        <td className="px-3 py-3 font-semibold text-slate-800 whitespace-nowrap">{p.name || "—"}{p.inCharge && <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 align-middle" title="Teacher / escort in charge of the group">In-charge</span>}</td>
                         <td className="px-3 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">{p.aadhaar ? `XXXX XXXX ${String(p.aadhaar).slice(-4)}` : "—"}</td>
                         <td className="px-3 py-3 text-xs text-slate-600 whitespace-nowrap">{fmtShort(p.dob)}</td>
                         <td className="px-3 py-3 font-mono text-xs text-slate-600">{p.mobile || "—"}</td>
@@ -886,6 +884,22 @@ export default function TrafficBulkPassDetailPage() {
 
   useEffect(() => { fetchBatch(); }, [fetchBatch]);
 
+  // Decisions stay undoable until the batch is finalized, so whenever the
+  // officer comes back to this page (browser Back, a restored tab, switching
+  // windows) reload them — otherwise a stale copy hides the Undo buttons.
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") fetchBatch(true); };
+    const onPageShow = (e) => { if (e.persisted) fetchBatch(true); };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [fetchBatch]);
+
   // When this record is a reusable bulk pass, load the batches submitted
   // against it so an officer can see the whole picture in one place.
   const [childSubmissions, setChildSubmissions] = useState([]);
@@ -948,9 +962,9 @@ export default function TrafficBulkPassDetailPage() {
     }
   };
 
-  const handleReturn = async (reason) => {
+  const handleReturn = async ({ returnReason, flagged }) => {
     try {
-      await returnBulkBatchByTraffic(id, reason);
+      await returnBulkBatchByTraffic(id, returnReason, flagged);
       toast.success(`Batch ${batch.refNo} returned to applicant for revision.`);
       router.push("/traffic_approval/bulk-pass");
     } catch (err) {
@@ -974,10 +988,14 @@ export default function TrafficBulkPassDetailPage() {
   };
 
   const handleViewPass = () => {
-    // Open the public pass view page in a new tab
-    if (batch?.id) {
-      window.open(`/bulk_pass_approved/${batch.id}`, "_blank");
+    // Open the public pass view page in a new tab. The page takes the
+    // AES-encrypted batch id, which only the server can produce (it comes back
+    // on the batch detail as `encryptedId`) — never expose the raw numeric id.
+    if (!batch?.encryptedId) {
+      toast.error("Pass link is not available yet. Please refresh and try again.");
+      return;
     }
+    window.open(`/bulk_pass_approved/${batch.encryptedId}`, "_blank");
   };
 
   const handleResendPass = async () => {
@@ -1034,7 +1052,7 @@ export default function TrafficBulkPassDetailPage() {
               <h2 className="text-2xl font-bold text-slate-800 font-mono">{batch.refNo}</h2>
               <StatusChip status={batch.status} />
             </div>
-            <p className="text-sm text-slate-500 mt-0.5">{batch.companyName} · Created {fmtDate(batch.createdAt)}</p>
+            <p className="text-sm text-slate-500 mt-0.5">{batch.companyName} · Created {fmtDate(batch.createdAt)}{batch.createdByName ? ` by ${batch.createdByName}` : ""}{batch.approvedByName ? ` · Approved by ${batch.approvedByName}` : ""}</p>
           </div>
         </div>
 
@@ -1074,7 +1092,7 @@ export default function TrafficBulkPassDetailPage() {
       </div>
 
       {/* ── Bulk Pass context ──
-          A batch is never standalone when it came through a reusable link:
+          A batch always belongs to a bulk pass:
           surface the pass it belongs to, and for the pass itself show every
           batch received so far. */}
       {batch.parentRequestId && (
@@ -1083,7 +1101,7 @@ export default function TrafficBulkPassDetailPage() {
             Batch #{batch.submissionNumber ?? "\u2014"}
           </span>
           <p className="text-xs text-slate-600">
-            Submitted against a reusable bulk pass held by{" "}
+            Submitted under the bulk pass held by{" "}
             <span className="font-semibold text-slate-800">{batch.companyName || "this organisation"}</span>.
           </p>
           <button
@@ -1185,9 +1203,11 @@ export default function TrafficBulkPassDetailPage() {
             <Field label={countLabels.persons} value={batch.noOfPersons != null ? String(batch.noOfPersons) : null} />
             <Field label={countLabels.vehicles} value={batch.noOfVehicles != null ? String(batch.noOfVehicles) : null} />
             <Field label="Payment Mode" value={batch.paymentMode} />
-            <Field label="Validity From" value={fmtDate(batch.validityFrom)} />
-            <Field label="Validity Upto" value={fmtDate(batch.validityUpto)} />
+            <Field label="Validity From" value={formatValidityDateTime(batch.validityFrom)} />
+            <Field label="Validity Upto" value={formatValidityDateTime(batch.validityUpto, { upto: true })} />
             <Field label="Created At" value={fmtDate(batch.createdAt)} />
+            <Field label={batch.parent_request_id || batch.parentRequestId ? "Pass Created By" : "Created By"} value={batch.createdByName} />
+            <Field label="Approved By" value={batch.approvedByName ? `${batch.approvedByName} · ${fmtDate(batch.approvedAt)}` : null} />
             <div className="sm:col-span-2 lg:col-span-3"><Field label="Purpose of Visit" value={batch.purpose || batch.purposeOfVisit} /></div>
             {batch.remarks && <div className="sm:col-span-2 lg:col-span-3"><Field label="Remarks" value={batch.remarks} /></div>}
           </div>
@@ -1279,13 +1299,9 @@ export default function TrafficBulkPassDetailPage() {
         />
       )}
       {modal === "return" && (
-        <ReasonModal
-          title="Return for Revision"
-          label="Return Remarks"
-          placeholder="Describe what needs to be corrected — the applicant will see this message…"
-          confirmLabel="Return to Applicant"
-          confirmClass="bg-orange-500 hover:bg-orange-600"
-          presets={QUICK_RETURN_REASONS}
+        <ReturnForRevisionModal
+          batch={batch}
+          rows={persons}
           onConfirm={handleReturn}
           onClose={() => setModal(null)}
         />

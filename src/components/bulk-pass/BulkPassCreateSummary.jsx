@@ -14,6 +14,7 @@
 import React from "react";
 import { Users, Car, CalendarClock, Building2, CheckCircle2, Layers } from "lucide-react";
 import { BULK_PASS_LIMITS, batchesNeededHint } from "@/lib/bulkPassConstants";
+import { combineValidity, formatValidityDateTime } from "@/lib/bulkPassValidity";
 
 const REQUIRED = [
   ["visitorType", "Visitor type"],
@@ -27,11 +28,11 @@ const REQUIRED = [
   ["validityUpto", "Validity upto"],
 ];
 
-const dateFmt = new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-const fmtDate = (v) => {
-  if (!v) return null;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? String(v) : dateFmt.format(d);
+// Unsaved form state: a date input plus an optional "HH:MM" (IST).
+const fmtValidity = (date, time, opts) => {
+  if (!date) return null;
+  const d = combineValidity(date, time ?? "", opts);
+  return d ? formatValidityDateTime(d, opts) : String(date);
 };
 
 function Chip({ icon: Icon, label, value, muted, dark }) {
@@ -113,7 +114,11 @@ export default function BulkPassCreateSummary({ form, errors = {}, dark = false,
         <Chip
           icon={CalendarClock}
           label="Valid"
-          value={form?.validityUpto ? `${fmtDate(form.validityFrom) || "now"} → ${fmtDate(form.validityUpto)}` : null}
+          value={
+            form?.validityUpto
+              ? `${fmtValidity(form.validityFrom, form.validityFromTime) || "now"} → ${fmtValidity(form.validityUpto, form.validityUptoTime, { upto: true })} IST`
+              : null
+          }
           muted={!form?.validityUpto}
           dark={dark}
         />

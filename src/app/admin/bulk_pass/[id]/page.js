@@ -9,12 +9,13 @@ import {
   XCircle, AlertCircle, X, RefreshCw, ChevronDown, ChevronUp, Car, ImageIcon, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
+import ReturnForRevisionModal from "@/components/bulk-pass/ReturnForRevisionModal.jsx";
 import { getBulkBatchDetail, returnToApplicant, resendInvitation, resubmitBatch, downloadBulkPdfAdmin, fileUrl, getChildSubmissions } from "@/lib/bulkPassApi";
 import SubmissionHistory, { SubmissionSummaryStrip } from "@/components/bulk-pass/SubmissionHistory";
 import ValidityBanner from "@/components/bulk-pass/ValidityBanner";
 import ApplicantLinkCard from "@/components/bulk-pass/ApplicantLinkCard";
 import BulkPassLimitsPanel from "@/components/bulk-pass/BulkPassLimitsPanel";
-import { getValidityState } from "@/lib/bulkPassValidity";
+import { getValidityState, formatValidityDateTime } from "@/lib/bulkPassValidity";
 import { countLabelsFor } from "@/lib/bulkPassConstants";
 
 const BASE = "/admin/bulk_pass";
@@ -51,37 +52,6 @@ function ReadField({ label, value, mono }) {
   );
 }
 
-function ReturnModal({ batchId, refNo, onClose, onSuccess }) {  const [reason, setReason] = useState("");
-  const [loading, setLoading] = useState(false);
-  const handleSubmit = async () => {
-    if (!reason.trim()) { toast.error("Please enter a return reason."); return; }
-    setLoading(true);
-    try { await returnToApplicant(batchId, reason.trim()); toast.success(`Batch ${refNo} returned.`); onSuccess(); }
-    catch (err) { toast.error(err?.response?.data?.message || "Failed."); }
-    finally { setLoading(false); }
-  };
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-slate-900">Return to Applicant</h3>
-          <button onClick={onClose}><X className="h-5 w-5 text-slate-400" /></button>
-        </div>
-        <p className="text-sm text-slate-500 mb-4">Batch: <span className="font-semibold">{refNo}</span></p>
-        <label className="block text-sm font-semibold text-slate-700 mb-2">Return Reason <span className="text-red-500">*</span></label>
-        <textarea rows={4} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Describe what needs to be corrected..."
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-amber-400/50 resize-none" />
-        <div className="flex gap-3 mt-5 justify-end">
-          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancel</button>
-          <button onClick={handleSubmit} disabled={loading}
-            className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 transition">
-            {loading ? "Returning…" : "Return to Applicant"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function PhotoThumb({ src, name }) {
   const [error, setError] = useState(false);
@@ -156,7 +126,7 @@ function PersonsTable({ persons }) {
                 <tr key={p.id || idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors last:border-b-0">
                   <td className="px-4 py-3 text-xs text-slate-400 tabular-nums">{idx + 1}</td>
                   <td className="px-4 py-3"><PhotoThumb src={p.photoPath} name={p.name} /></td>
-                  <td className="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">{p.name || "—"}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">{p.name || "—"}{p.inCharge && <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 align-middle" title="Teacher / escort in charge of the group">In-charge</span>}</td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">{p.aadhaar ? `XXXX XXXX ${String(p.aadhaar).slice(-4)}` : "—"}</td>
                   <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{fmtDateShort(p.dob)}</td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-600">{p.mobile || "—"}</td>
@@ -379,7 +349,7 @@ export default function AdminBulkPassDetailPage() {
               <h2 className="text-2xl font-bold text-slate-800 font-mono">{batch.refNo || `Batch #${id}`}</h2>
               <StatusChip status={status} />
             </div>
-            <p className="text-sm text-slate-500 mt-0.5">Created {fmtDate(batch.createdAt)}</p>
+            <p className="text-sm text-slate-500 mt-0.5">Created {fmtDate(batch.createdAt)}{batch.createdByName ? ` by ${batch.createdByName}` : ""}{batch.approvedByName ? ` · Approved by ${batch.approvedByName}` : ""}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
@@ -500,7 +470,7 @@ export default function AdminBulkPassDetailPage() {
             Batch #{batch.submissionNumber ?? "—"}
           </span>
           <p className="text-xs text-slate-600">
-            This is one batch submitted against a reusable bulk pass.
+            This is one batch submitted under a bulk pass.
           </p>
           <button
             onClick={() => router.push(`${BASE}/${batch.parentRequestId}`)}
@@ -541,6 +511,8 @@ export default function AdminBulkPassDetailPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
             <ReadField label="Reference Number" value={batch.refNo} mono />
             <ReadField label="Department" value={batch.departmentName || batch.department} />
+            <ReadField label={batch.parent_request_id || batch.parentRequestId ? "Pass Created By" : "Created By"} value={batch.createdByName} />
+            <ReadField label="Approved By" value={batch.approvedByName ? `${batch.approvedByName} · ${fmtDate(batch.approvedAt)}` : null} />
             <ReadField label="Visitor Type" value={visitorTypeLabel(batch.visitorType)} />
             <ReadField label="Company / Organisation" value={batch.companyName} />
             <ReadField label="Applicant Email" value={batch.applicantEmail} />
@@ -564,8 +536,8 @@ export default function AdminBulkPassDetailPage() {
                 }
               />
             )}
-            <ReadField label="Validity From" value={fmtDate(batch.validityFrom)} />
-            <ReadField label="Validity Upto" value={fmtDate(batch.validityUpto)} />
+            <ReadField label="Validity From" value={formatValidityDateTime(batch.validityFrom)} />
+            <ReadField label="Validity Upto" value={formatValidityDateTime(batch.validityUpto, { upto: true })} />
             <div className="sm:col-span-2 lg:col-span-3"><ReadField label="Purpose of Visit" value={batch.purpose || batch.purposeOfVisit} /></div>
             {batch.remarks && <div className="sm:col-span-2 lg:col-span-3"><ReadField label="Remarks" value={batch.remarks} /></div>}
           </div>
@@ -617,9 +589,22 @@ export default function AdminBulkPassDetailPage() {
       </div>
 
       {showReturnModal && (
-        <ReturnModal batchId={id} refNo={batch.refNo}
+        <ReturnForRevisionModal
+          batch={batch}
+          rows={persons}
           onClose={() => setShowReturnModal(false)}
-          onSuccess={() => { setShowReturnModal(false); fetchBatch(); }} />
+          onConfirm={async ({ returnReason, flagged }) => {
+            try {
+              await returnToApplicant(id, returnReason, flagged);
+              toast.success(`Batch ${batch.refNo} returned to applicant for revision.`);
+              setShowReturnModal(false);
+              fetchBatch();
+            } catch (err) {
+              toast.error(err?.response?.data?.message || "Failed to return batch.");
+              throw err;
+            }
+          }}
+        />
       )}
     </div>
   );

@@ -12,22 +12,7 @@
 
 import React from "react";
 import { CheckCircle2, AlertTriangle, XCircle, CalendarClock, Info } from "lucide-react";
-import { getValidityMeta, describeRemaining } from "@/lib/bulkPassValidity";
-
-const dateFmt = new Intl.DateTimeFormat("en-IN", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: true,
-});
-
-function formatWhen(v) {
-  if (!v) return "—";
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? String(v) : dateFmt.format(d);
-}
+import { getValidityMeta, describeRemaining, formatValidityDateTime } from "@/lib/bulkPassValidity";
 
 const ICONS = {
   ACTIVE: CheckCircle2,
@@ -78,11 +63,13 @@ export default function ValidityBanner({ validity, canSubmit, message, className
   const detail =
     message ||
     (meta.key === "ACTIVE"
-      ? `Use this same link for every batch until ${formatWhen(validity?.validityUpto)}.`
+      ? `Use this same link to send batches any time until ${formatValidityDateTime(validity?.validityUpto, { upto: true })}.` +
+        // The link opens when it is issued; the visit window may start later.
+        (validity?.visitsNotStarted ? ` Visits can be scheduled from ${formatValidityDateTime(validity?.validityFrom)}.` : "")
       : meta.key === "EXPIRING_SOON"
-      ? `Submissions close on ${formatWhen(validity?.validityUpto)}. Send any remaining batches before then.`
+      ? `Submissions close on ${formatValidityDateTime(validity?.validityUpto, { upto: true })}. Send any remaining batches before then.`
       : meta.key === "NOT_STARTED"
-      ? `Submissions open on ${formatWhen(validity?.validityFrom)}.`
+      ? `Submissions open on ${formatValidityDateTime(validity?.validityFrom)}.`
       : "");
 
   // How far through the validity window we are, from the dates alone (no
@@ -117,12 +104,12 @@ export default function ValidityBanner({ validity, canSubmit, message, className
             {validity?.validityFrom && (
               <span>
                 <span className="font-semibold uppercase tracking-wider opacity-70">Valid From</span>{" "}
-                <span className="font-bold">{formatWhen(validity.validityFrom)}</span>
+                <span className="font-bold">{formatValidityDateTime(validity.validityFrom)}</span>
               </span>
             )}
             <span>
               <span className="font-semibold uppercase tracking-wider opacity-70">Valid Until</span>{" "}
-              <span className="font-bold">{formatWhen(validity?.validityUpto)}</span>
+              <span className="font-bold">{formatValidityDateTime(validity?.validityUpto, { upto: true })}</span>
             </span>
             <span className="font-bold">{describeRemaining(validity)}</span>
           </div>

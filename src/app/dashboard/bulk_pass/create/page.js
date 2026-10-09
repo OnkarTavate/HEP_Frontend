@@ -17,6 +17,11 @@ import {
 import { toast } from "sonner";
 import { createBulkIntake } from "@/lib/bulkPassApi";
 import { BULK_PASS_LIMITS, BULK_PASS_LABELS, validatePassTotals } from "@/lib/bulkPassConstants";
+import {
+  DEFAULT_VALIDITY_FROM_TIME,
+  DEFAULT_VALIDITY_UPTO_TIME,
+  combineValidity,
+} from "@/lib/bulkPassValidity";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -65,18 +70,24 @@ function validate(fields) {
   if (!fields.paymentMode) errors.paymentMode = "Payment mode is required.";
   if (!fields.purposeOfVisit?.trim()) errors.purposeOfVisit = "Purpose of visit is required.";
 
+  const from = fields.validityFrom ? combineValidity(fields.validityFrom, fields.validityFromTime) : null;
+  const upto = fields.validityUpto
+    ? combineValidity(fields.validityUpto, fields.validityUptoTime, { upto: true })
+    : null;
+
   if (!fields.validityUpto) {
     errors.validityUpto = "Validity upto is required.";
-  } else if (new Date(fields.validityUpto) <= new Date()) {
-    errors.validityUpto = "Validity upto must be a future date.";
+  } else if (!upto) {
+    errors.validityUpto = "Invalid validity upto date or time.";
+  } else if (upto <= new Date()) {
+    errors.validityUpto = "Validity upto must be in the future.";
   }
 
   if (!fields.validityFrom) {
     errors.validityFrom = "Validity from is required.";
-  } else if (
-    fields.validityUpto &&
-    new Date(fields.validityFrom) >= new Date(fields.validityUpto)
-  ) {
+  } else if (!from) {
+    errors.validityFrom = "Invalid validity from date or time.";
+  } else if (upto && from >= upto) {
     errors.validityFrom = "Validity from must be before validity upto.";
   }
 
@@ -119,6 +130,8 @@ const inputCls = (hasError) =>
       ? "border-red-400 dark:border-red-500 focus:ring-red-300/50"
       : "border-stone-200 dark:border-white/10 focus:ring-amber-400/50"
   }`;
+
+const VALIDITY_KEYS = ["validityFrom", "validityUpto", "validityFromTime", "validityUptoTime"];
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
@@ -166,12 +179,14 @@ export default function CreateBulkPassPage() {
     applicantMobile: "",
     refDocNo: "",
     workOrderRequired: "no",
-    noOfPersons: String(BULK_PASS_LIMITS.DEFAULT_MAX_PERSONS),
-    noOfVehicles: String(BULK_PASS_LIMITS.DEFAULT_MAX_VEHICLES),
+    noOfPersons: "0",
+    noOfVehicles: "0",
     paymentMode: "",
     purposeOfVisit: "",
     validityFrom: defaultValidityDates().from,
     validityUpto: defaultValidityDates().upto,
+    validityFromTime: DEFAULT_VALIDITY_FROM_TIME,
+    validityUptoTime: DEFAULT_VALIDITY_UPTO_TIME,
     remarks: "",
     // Every bulk pass is a reusable link: the organisation submits batches of up
     // to 30 persons / 30 vehicles until the totals above are used up.
@@ -185,11 +200,13 @@ export default function CreateBulkPassPage() {
 
   const set = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-    if (touched[key]) {
-      // re-validate just this field inline
+    // The validity fields are checked as one window, so refresh both together.
+    const keys = VALIDITY_KEYS.includes(key) ? ["validityFrom", "validityUpto"] : [key];
+    const shown = keys.filter((k) => touched[k]);
+    if (shown.length) {
       setErrors((prev) => {
         const e = validate({ ...form, [key]: value });
-        return { ...prev, [key]: e[key] };
+        return { ...prev, ...Object.fromEntries(shown.map((k) => [k, e[k]])) };
       });
     }
   };
@@ -241,6 +258,8 @@ export default function CreateBulkPassPage() {
       fd.append("purposeOfVisit", form.purposeOfVisit.trim());
       fd.append("validityFrom", form.validityFrom);
       fd.append("validityUpto", form.validityUpto);
+      fd.append("validityFromTime", form.validityFromTime || DEFAULT_VALIDITY_FROM_TIME);
+      fd.append("validityUptoTime", form.validityUptoTime || DEFAULT_VALIDITY_UPTO_TIME);
       fd.append("remarks", form.remarks.trim());
       fd.append("multipleSubmissionsEnabled", form.multipleSubmissionsEnabled ? "true" : "false");
       if (dept.id) fd.append("departmentId", dept.id);
@@ -461,36 +480,50 @@ export default function CreateBulkPassPage() {
               {/* Validity From */}
               <div>
                 <FieldLabel required>Validity From</FieldLabel>
-                <input
-                  type="date"
-                  value={form.validityFrom}
-                  min={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => {
-                    setForm((prev) => ({ ...prev, validityFrom: e.target.value }));
-                    if (touched.validityFrom) touch("validityFrom");
-                  }}
-                  onBlur={() => touch("validityFrom")}
-                  className={inputCls(!!errors.validityFrom)}
-                />
-                <p className="text-[11px] text-stone-400 mt-1">Pass valid from start of this date</p>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    type="date"
+                    value={form.validityFrom}
+                    min={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => set("validityFrom", e.target.value)}
+                    onBlur={() => touch("validityFrom")}
+                    className={`${inputCls(!!errors.validityFrom)} flex-[2_1_9rem] min-w-0`}
+                  />
+                  <input
+                    type="time"
+                    aria-label="Validity from time (IST)"
+                    value={form.validityFromTime}
+                    onChange={(e) => set("validityFromTime", e.target.value)}
+                    onBlur={() => touch("validityFrom")}
+                    className={`${inputCls(!!errors.validityFrom)} flex-[1_1_7rem] min-w-0`}
+                  />
+                </div>
+                <p className="text-[11px] text-stone-400 mt-1">Pass opens at this date and time (IST)</p>
                 <FieldError msg={errors.validityFrom} />
               </div>
 
               {/* Validity Upto */}
               <div>
                 <FieldLabel required>Validity Upto</FieldLabel>
-                <input
-                  type="date"
-                  value={form.validityUpto}
-                  min={form.validityFrom || new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => {
-                    setForm((prev) => ({ ...prev, validityUpto: e.target.value }));
-                    if (touched.validityUpto) touch("validityUpto");
-                  }}
-                  onBlur={() => touch("validityUpto")}
-                  className={inputCls(!!errors.validityUpto)}
-                />
-                <p className="text-[11px] text-stone-400 mt-1">Pass valid throughout entire day</p>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    type="date"
+                    value={form.validityUpto}
+                    min={form.validityFrom || new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => set("validityUpto", e.target.value)}
+                    onBlur={() => touch("validityUpto")}
+                    className={`${inputCls(!!errors.validityUpto)} flex-[2_1_9rem] min-w-0`}
+                  />
+                  <input
+                    type="time"
+                    aria-label="Validity upto time (IST)"
+                    value={form.validityUptoTime}
+                    onChange={(e) => set("validityUptoTime", e.target.value)}
+                    onBlur={() => touch("validityUpto")}
+                    className={`${inputCls(!!errors.validityUpto)} flex-[1_1_7rem] min-w-0`}
+                  />
+                </div>
+                <p className="text-[11px] text-stone-400 mt-1">Pass closes at this date and time (IST)</p>
                 <FieldError msg={errors.validityUpto} />
               </div>
             </div>

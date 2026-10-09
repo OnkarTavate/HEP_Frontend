@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { setNotificationCounts } from "@/lib/notificationCounts";
 
 const ADMIN_API =
   process.env.NEXT_PUBLIC_ADMIN_API || "http://localhost:5005/api";
@@ -58,12 +59,17 @@ export default function NotificationPanel({ role = "approver" }) {
       const headers = { Authorization: `Bearer ${token}` };
 
       const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
-      const approverPassUpdateLink = currentPath.startsWith("/admin")
-        ? "/admin/pass-approvals"
+      // Links point at the sidebar tab that handles the request, in the
+      // console the officer is using — the sidebar badges each tab from these.
+      const section = currentPath.startsWith("/admin")
+        ? "/admin"
+        : currentPath.startsWith("/traffic_manager")
+        ? "/traffic_manager"
         : "/traffic_approval";
-      const approverProfileUpdateLink = currentPath.startsWith("/admin")
-        ? "/admin/companies"
-        : "/traffic_approval/companies";
+      const approverPassUpdateLink = section === "/admin"
+        ? "/admin/pass-approvals"
+        : `${section}/passes`;
+      const approverProfileUpdateLink = `${section}/companies`;
 
       let savedRead = readIds;
       if (typeof window !== "undefined") {
@@ -275,6 +281,17 @@ export default function NotificationPanel({ role = "approver" }) {
     };
   }, [role]);
 
+  // Publish unread counts per sidebar tab (keyed by the link's path).
+  useEffect(() => {
+    const byHref = {};
+    notifications.forEach((n) => {
+      if (!n.link || readIds.includes(n.id)) return;
+      const path = n.link.split("?")[0];
+      byHref[path] = (byHref[path] || 0) + 1;
+    });
+    setNotificationCounts(byHref);
+  }, [notifications, readIds]);
+
   const markAsRead = (id) => {
     setReadIds((prev) => {
       if (prev.includes(id)) return prev;
@@ -307,7 +324,7 @@ export default function NotificationPanel({ role = "approver" }) {
       if (targetTab && typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("switch_tab", { detail: targetTab }));
       }
-      router.push(targetPath);
+      router.push(targetTab ? `${targetPath}?tab=${targetTab}` : targetPath);
     }
   };
 

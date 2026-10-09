@@ -11,7 +11,7 @@ import {
   Building2,
 } from "lucide-react";
 import { getBulkPassScan } from "@/lib/bulkPassApi";
-import { formatDateKey, toIstDateKey } from "@/lib/bulkPassValidity";
+import { formatValidityDateTime } from "@/lib/bulkPassValidity";
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 
@@ -36,8 +36,6 @@ const fmtDate = (v) => {
   return isNaN(d) ? v : fmt.format(d);
 };
 
-// Validity is date-only in IST — no time of day on the pass.
-const fmtDay = (v) => formatDateKey(toIstDateKey(v)) || "—";
 
 const visitorLabel = (v) =>
   v
@@ -171,8 +169,8 @@ function BulkPassViewContent() {
             <Field label="Persons" value={String(batch.noOfPersons ?? persons.length)} />
             <Field label="Vehicles" value={String(batch.noOfVehicles ?? vehicles.length)} />
             <Field label="Contact" value={batch.applicantMobile} />
-            <Field label="Valid From" value={fmtDay(batch.validityFrom)} />
-            <Field label="Valid Upto" value={fmtDay(batch.validityUpto)} />
+            <Field label="Valid From" value={formatValidityDateTime(batch.validityFrom)} />
+            <Field label="Valid Upto" value={formatValidityDateTime(batch.validityUpto, { upto: true })} />
             <div className="col-span-2 sm:col-span-3">
               <Field label="Purpose of Visit" value={batch.purpose} />
             </div>
@@ -221,6 +219,7 @@ function BulkPassViewContent() {
                       <td className="py-2.5 pr-4 text-stone-400">{i + 1}</td>
                       <td className="py-2.5 pr-4 font-semibold text-stone-800">
                         {p.name || "—"}
+                        {p.inCharge && <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 align-middle" title="Teacher / escort in charge of the group">In-charge</span>}
                       </td>
                       <td className="py-2.5 pr-4 font-mono text-stone-600">{p.aadhaar || "—"}</td>
                       <td className="py-2.5 pr-4 text-stone-600">{p.mobile || "—"}</td>

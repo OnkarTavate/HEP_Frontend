@@ -69,6 +69,9 @@ export async function listBulkBatches(filters = {}) {
 export async function getBulkBatchDetail(id) {
   const res = await axios.get(`${AGENT_API}/bulk-pass/${id}`, {
     headers: authHeaders(),
+    // Cache-buster: approval decisions change during review, so never let the
+    // browser hand back a stale copy when the officer returns to the batch.
+    params: { _ts: Date.now() },
   });
   // Backend returns { batch, persons, uploads, statusLog } — flatten into one object
   // so pages can access batch fields directly alongside persons/uploads/statusLogs
@@ -118,10 +121,11 @@ export async function setBulkPassLinkActive(id, active, reason) {
   return res.data;
 }
 
-export async function returnToApplicant(id, remarks) {
+// `flagged`: [{ id, reason }] — persons / vehicles that need fixing.
+export async function returnToApplicant(id, remarks, flagged = []) {
   const res = await axios.post(
     `${AGENT_API}/bulk-pass/${id}/return`,
-    { returnReason: remarks },
+    { returnReason: remarks, flagged },
     { headers: authHeaders() }
   );
   return res.data;
@@ -360,6 +364,31 @@ export async function submitRowsDirectly(token, rows, formData, onProgress) {
   return res.data;
 }
 
+/**
+ * Correction payload for one returned batch, opened from the Bulk Pass
+ * dashboard. Same shape as `validateUploadToken` on that batch's own link
+ * (isRevision, revisionOf, batch.previousPersons/previousVehicles, ...).
+ */
+export async function getBulkPassCorrection(token, submissionId) {
+  const res = await axios.get(
+    `${AGENT_API}/bulk-pass/public/${token}/submissions/${submissionId}/correction`
+  );
+  return res.data?.data;
+}
+
+/** Resubmit a returned batch from the Bulk Pass dashboard (multipart, like submitRowsDirectly). */
+export async function submitBulkPassCorrection(token, submissionId, formData, onProgress) {
+  const res = await axios.post(
+    `${AGENT_API}/bulk-pass/public/${token}/submissions/${submissionId}/submit-rows`,
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: onProgress,
+    }
+  );
+  return res.data;
+}
+
 // ── Traffic Officer (approval-admin-service) ─────────────────────────────────
 
 export async function getApprovalQueue() {
@@ -432,10 +461,10 @@ export async function rejectBulkBatch(id, rejectionReason) {
   return res.data;
 }
 
-export async function returnBulkBatchByTraffic(id, returnReason) {
+export async function returnBulkBatchByTraffic(id, returnReason, flagged = []) {
   const res = await axios.post(
     `${ADMIN_API}/bulk-pass/${id}/return`,
-    { returnReason },
+    { returnReason, flagged },
     { headers: authHeaders() }
   );
   return res.data;

@@ -8,6 +8,8 @@ import axios from "axios";
 import { useSessionHeartbeat } from "@/lib/useSessionHeartbeat";
 import { enforceRouteGuard } from "@/lib/roleRouting";
 import NotificationPanel from "@/components/NotificationPanel";
+import NavUnreadBadge from "@/components/NavUnreadBadge";
+import { useNotificationCounts, unreadForHref } from "@/lib/notificationCounts";
 import GlowingBorderButton, { LiveClock } from "@/components/ui/GlowingBorderButton";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -274,6 +276,7 @@ function UserProfilePanel({
 export default function TrafficLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
+  const unreadCounts = useNotificationCounts();
   const [user, setUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
@@ -725,7 +728,7 @@ export default function TrafficLayout({ children }) {
                 title={!expanded ? item.name : undefined}
                 onClick={onNavigate}
                 className={cn(
-                  "flex items-center rounded-2xl transition-colors duration-150",
+                  "relative flex items-center rounded-2xl transition-colors duration-150",
                   expanded
                     ? "gap-3 px-4 py-3.5 text-base font-bold"
                     : "justify-center w-12 h-12 mx-auto",
@@ -748,6 +751,7 @@ export default function TrafficLayout({ children }) {
                 >
                   {item.name}
                 </span>
+                <NavUnreadBadge count={unreadForHref(unreadCounts, item.href)} expanded={expanded} />
               </Link>
             );
           })}
