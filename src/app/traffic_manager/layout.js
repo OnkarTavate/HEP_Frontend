@@ -39,6 +39,7 @@ import {
   ShieldBan,
   BarChart3,
   HelpCircle,
+  Container as CargoIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -55,6 +56,7 @@ const navigationItems = [
   { name: "Overstay Records", href: "/traffic_manager/overstay", icon: ShieldCheck },
   { name: "Blacklist", href: "/traffic_manager/blacklist", icon: ShieldBan },
   { name: "Revenue Analytics", href: "/traffic_manager/revenue", icon: BarChart3 },
+  { name: "Cargo Analytics", href: "/traffic_manager/cargo-analytics", icon: CargoIcon },
 ];
 
 function UserProfilePanel({ user, onChangePassword, onLogout }) {
@@ -326,6 +328,12 @@ export default function TrafficManagerLayout({ children }) {
       return {
         eyebrow: "Security Enforcement",
         title: "Blacklist Management",
+      };
+    }
+    if (pathname?.startsWith("/traffic_manager/cargo-analytics")) {
+      return {
+        eyebrow: "Traffic Manager · Chennai Port",
+        title: "Cargo Analytics",
       };
     }
     if (pathname?.startsWith("/traffic_manager/revenue")) {

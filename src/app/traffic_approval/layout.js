@@ -59,6 +59,7 @@ import {
   Phone,
   CheckCircle,
   HelpCircle,
+  Container as CargoIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -624,6 +625,7 @@ export default function TrafficLayout({ children }) {
         },
         { name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users },
         { name: "Reports", href: "/traffic_approval/reports", icon: BarChart3 },
+        { name: "Cargo Analytics", href: "/traffic_approval/cargo-analytics", icon: CargoIcon },
       ];
 
   const SidebarContent = ({
@@ -837,6 +839,12 @@ export default function TrafficLayout({ children }) {
       return {
         eyebrow: "Traffic Department · Chennai Port",
         title: "Bulk Pass Requests",
+      };
+    }
+    if (pathname?.startsWith("/traffic_approval/cargo-analytics")) {
+      return {
+        eyebrow: "Traffic Department · Chennai Port",
+        title: "Cargo Analytics",
       };
     }
     return {
