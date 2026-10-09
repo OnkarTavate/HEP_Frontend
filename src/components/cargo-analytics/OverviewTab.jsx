@@ -69,6 +69,15 @@ export default function OverviewTab({ overview, loading, error, onOpenTab }) {
       {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div>
       )}
+      {overview?.sourceIssues?.length > 0 && (
+        <div className="flex flex-wrap items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900" role="status">
+          <span className="font-black uppercase tracking-wide">Feed not connected on this server:</span>
+          {overview.sourceIssues.map((src) => (
+            <code key={src} className="rounded-md bg-white/80 px-1.5 py-0.5 font-mono text-[11px] ring-1 ring-inset ring-amber-200">{src}</code>
+          ))}
+          <span className="basis-full text-amber-800">Figures from that source show as zero until its tables are migrated.</span>
+        </div>
+      )}
 
       {/* KPI grid */}
       <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3 2xl:grid-cols-9">
@@ -208,6 +217,7 @@ export default function OverviewTab({ overview, loading, error, onOpenTab }) {
           icon={ShieldCheck}
           loading={loading}
           empty={!loading && !num(cus.ooc) && !num(cus.rapiscan?.total) && !num(cus.examinations?.total)}
+          emptyHint={overview?.feeds && !overview.feeds.customs_ooc && !overview.feeds.customs_rapiscan ? "The Customs integration has not sent any OOC or Rapiscan records yet." : "No customs records in the selected period."}
           height={220}
         >
           <CustomsStatusRows customs={cus} />
@@ -220,6 +230,7 @@ export default function OverviewTab({ overview, loading, error, onOpenTab }) {
           legend={GATE_LEGEND}
           loading={loading}
           empty={empty(bd.gate)}
+          emptyHint={overview?.feeds && !overview.feeds.gate_verification_events ? "Gate hardware events are not connected on this server yet." : "No gate events in the selected period."}
           table={{
             columns: [
               { key: "name", label: "Gate" },
