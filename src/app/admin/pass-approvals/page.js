@@ -510,19 +510,19 @@ export default function AdminPassApprovalsPage() {
           return false;
         }
         if (
-          convState === "PENDING_CIVIL_CONVERSION" &&
+          convState.includes("CIVIL") &&
           (userDeptId === 3 || userDeptName.includes("civil"))
         ) {
           return true;
         }
         if (
-          convState === "PENDING_MECHANICAL_CONVERSION" &&
+          convState.includes("MECHANICAL") &&
           (userDeptId === 4 || userDeptName.includes("mechanical"))
         ) {
           return true;
         }
         if (
-          convState === "PENDING_PASS_SECTION_CONVERSION" &&
+          (convState.includes("PASS_SECTION") || convState.includes("TRAFFIC")) &&
           (userDeptId === 9 || userDeptName.includes("traffic") || userDeptName.includes("pass") || roleLower === "approval")
         ) {
           return true;
@@ -1348,7 +1348,10 @@ export default function AdminPassApprovalsPage() {
               mobileNo: person.companyMobile || person.mobileNo || null,
               approvedBy: person.approvedBy || person.approvedByName || null,
               status: person.status,
-              workflowState: person.essentialWorkflowState,
+              workflowState: person.conversionWorkflowState || person.essentialWorkflowState,
+              conversionWorkflowState: person.conversionWorkflowState || null,
+              conversionDepartmentId: person.conversionDepartmentId || null,
+              conversionRequisitionFilePath: person.conversionRequisitionFilePath || null,
               createdAt:
                 person.createdAt ||
                 person.updatedAt ||
@@ -1395,6 +1398,16 @@ export default function AdminPassApprovalsPage() {
                   rejectedReason: person.rejectedReason,
                   revertReason: person.revertReason,
 
+                  // Essential conversion pass fields
+                  conversionId: person.conversionId || null,
+                  conversionWorkflowState: person.conversionWorkflowState || null,
+                  conversionDepartmentId: person.conversionDepartmentId || null,
+                  conversionStartDate: person.conversionStartDate || null,
+                  conversionEndDate: person.conversionEndDate || null,
+                  conversionStatus: person.conversionStatus || null,
+                  conversionPurpose: person.conversionPurpose || null,
+                  conversionRequisitionFilePath: person.conversionRequisitionFilePath || null,
+
                   photoFilePath: person.photoFilePath,
                   photoFileName: person.photoFileName,
                   aadharPDFFilePATH: person.aadharPDFFilePATH,
@@ -1432,6 +1445,18 @@ export default function AdminPassApprovalsPage() {
 
               requestMap.set(key, {
                 ...existing,
+                conversionWorkflowState:
+                  existing.conversionWorkflowState ||
+                  person.conversionWorkflowState ||
+                  null,
+                conversionDepartmentId:
+                  existing.conversionDepartmentId ||
+                  person.conversionDepartmentId ||
+                  null,
+                conversionRequisitionFilePath:
+                  existing.conversionRequisitionFilePath ||
+                  person.conversionRequisitionFilePath ||
+                  null,
                 companyName:
                   existing.companyName || request.companyName || null,
                 entityName: existing.entityName || request.entityName || null,
@@ -3711,13 +3736,14 @@ export default function AdminPassApprovalsPage() {
                                       const userRoleNorm = String(userRole || currentUser?.role || "").trim().toLowerCase();
                                       const isCivilApprover = userDeptNum === 3 && (userRoleNorm === "approval" || !userRoleNorm);
                                       const isMechApprover = userDeptNum === 4 && (userRoleNorm === "approval" || !userRoleNorm);
-                                      const isCisfApprover = userDeptNum === 1 || ["cisf", "cisf asst commandant", "cisf assistant commandant", "cisf.assistant commandant"].includes(userRoleNorm);
 
                                       const civilDone =
                                         isCivil &&
                                         ([
-                                          "PENDING_CISF_CONVERSION",
+                                          "PENDING_TRAFFIC_PERSON_CONVERSION",
+                                          "PENDING_PASS_SECTION_PERSON_CONVERSION",
                                           "PENDING_PASS_SECTION_CONVERSION",
+                                          "PENDING_CISF_CONVERSION",
                                           "APPROVED",
                                           "COMPLETED",
                                         ].includes(convState) ||
@@ -3725,21 +3751,17 @@ export default function AdminPassApprovalsPage() {
                                       const mechDone =
                                         isMech &&
                                         ([
-                                          "PENDING_CISF_CONVERSION",
+                                          "PENDING_TRAFFIC_PERSON_CONVERSION",
+                                          "PENDING_PASS_SECTION_PERSON_CONVERSION",
                                           "PENDING_PASS_SECTION_CONVERSION",
+                                          "PENDING_CISF_CONVERSION",
                                           "APPROVED",
                                           "COMPLETED",
                                         ].includes(convState) ||
                                           (isMechApprover && entityStatuses.persons[p.id] === "APPROVED"));
-                                      const cisfDone =
-                                        [
-                                          "PENDING_PASS_SECTION_CONVERSION",
-                                          "APPROVED",
-                                          "COMPLETED",
-                                        ].includes(convState) ||
-                                        (isCisfApprover && entityStatuses.persons[p.id] === "APPROVED");
                                       const isPassSectionApprover =
-                                        userRole === "Approval" && Number(currentUser?.departmentId) === 9;
+                                        (userRole === "Approval" || userRoleNorm === "approval") &&
+                                        (Number(currentUser?.departmentId) === 9 || userDeptNum === 9);
                                       const passSectionDone =
                                         convState === "APPROVED" ||
                                         convState === "COMPLETED" ||
@@ -3765,13 +3787,6 @@ export default function AdminPassApprovalsPage() {
                                                 : "⏳ Pending Mech Dept"}
                                             </span>
                                           )}
-                                          <span
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${cisfDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-                                          >
-                                            {cisfDone
-                                              ? "✓ CISF Assistant Commandant"
-                                              : "⏳ Pending CISF"}
-                                          </span>
                                           <span
                                             className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${passSectionDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
                                           >

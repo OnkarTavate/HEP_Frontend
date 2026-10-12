@@ -1725,6 +1725,7 @@ export default function TrafficPassesPage() {
                 essentialAssignedUserId: person.essentialAssignedUserId,
                 conversionId: person.conversionId,
                 conversionWorkflowState: person.conversionWorkflowState,
+                conversionDepartmentId: person.conversionDepartmentId,
                 conversionStartDate: person.conversionStartDate,
                 conversionEndDate: person.conversionEndDate,
                 conversionStatus: person.conversionStatus,
@@ -4378,7 +4379,7 @@ export default function TrafficPassesPage() {
                             )}
                             <div className="flex flex-wrap gap-1 mt-1">
                               {(() => {
-                                const deptId = Number(p.essentialDepartmentId || p.concernDepartmentId);
+                                const deptId = Number(p.conversionDepartmentId || p.essentialDepartmentId || p.concernDepartmentId);
                                 const wf = String(p.conversionWorkflowState || p.essentialWorkflowState || p.workflowState || "").toUpperCase();
                                 const isCivil = deptId === 3 || wf.includes("CIVIL");
                                 const isMech = deptId === 4 || wf.includes("MECHANICAL");
@@ -4412,7 +4413,9 @@ export default function TrafficPassesPage() {
                                   isCivil ||
                                   isMech ||
                                   wf.includes("ESSENTIAL") ||
+                                  wf.includes("CONVERSION") ||
                                   Boolean(p.essentialWorkflowState) ||
+                                  Boolean(p.conversionWorkflowState) ||
                                   p.essentialDepartmentId != null;
 
                                 const roleNorm = String(userRole || "").trim().toLowerCase();
@@ -4450,12 +4453,12 @@ export default function TrafficPassesPage() {
                                 const civilRejected =
                                   isCivil &&
                                   ((isCivilApprover && entityStatuses.persons[p.id] === "REJECTED") ||
-                                    (wf.includes("REJECTED") && p.essentialRevertStage === "PENDING_CIVIL_ESSENTIAL"));
+                                    (wf.includes("REJECTED") && (p.essentialRevertStage === "PENDING_CIVIL_ESSENTIAL" || wf.includes("CIVIL"))));
 
                                 const civilReverted =
                                   isCivil &&
                                   ((isCivilApprover && entityStatuses.persons[p.id] === "REVERTED") ||
-                                    (wf.includes("REVERTED") && p.essentialRevertStage === "PENDING_CIVIL_ESSENTIAL"));
+                                    (wf.includes("REVERTED") && (p.essentialRevertStage === "PENDING_CIVIL_ESSENTIAL" || wf.includes("CIVIL"))));
 
                                 const mechDone =
                                   isMech &&
@@ -4468,18 +4471,20 @@ export default function TrafficPassesPage() {
                                     "APPROVED",
                                     "PENDING_VENDOR_PERSON_TRAFFIC",
                                     "PENDING_VENDOR_PERSON_CISF",
+                                    "PENDING_TRAFFIC_PERSON_CONVERSION",
+                                    "PENDING_PASS_SECTION_PERSON_CONVERSION",
                                   ].includes(wf) ||
                                     (isMechApprover && entityStatuses.persons[p.id] === "APPROVED"));
 
                                 const mechRejected =
                                   isMech &&
                                   ((isMechApprover && entityStatuses.persons[p.id] === "REJECTED") ||
-                                    (wf.includes("REJECTED") && p.essentialRevertStage === "PENDING_MECHANICAL_ESSENTIAL"));
+                                    (wf.includes("REJECTED") && (p.essentialRevertStage === "PENDING_MECHANICAL_ESSENTIAL" || wf.includes("MECHANICAL"))));
 
                                 const mechReverted =
                                   isMech &&
                                   ((isMechApprover && entityStatuses.persons[p.id] === "REVERTED") ||
-                                    (wf.includes("REVERTED") && p.essentialRevertStage === "PENDING_MECHANICAL_ESSENTIAL"));
+                                    (wf.includes("REVERTED") && (p.essentialRevertStage === "PENDING_MECHANICAL_ESSENTIAL" || wf.includes("MECHANICAL"))));
 
                                 const passSectionDone = isEssentialPerson
                                   ? ([
