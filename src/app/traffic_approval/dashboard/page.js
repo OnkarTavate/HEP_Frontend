@@ -837,8 +837,19 @@ function PassTypeDistributionChart({ persons, vehicles, loading }) {
 export default function TrafficManagerDashboard() {
   const router = useRouter();
   const [data, setData] = useState(EMPTY);
+  // Last committed dashboard state, readable from inside fetchAll without
+  // adding `data` to its dependency list.
+  const prevDataRef = useRef(EMPTY);
+  useEffect(() => {
+    prevDataRef.current = data;
+  }, [data]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // True while the slow/static group (blacklist, overstay, bulk, companies)
+  // is still loading after the pass stats have already been painted.
+  const [slowLoading, setSlowLoading] = useState(false);
+  // True while the "processed by me" count is still in flight.
+  const [mineLoading, setMineLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("");
   const [filterPeriod, setFilterPeriod] = useState("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -975,19 +986,24 @@ export default function TrafficManagerDashboard() {
       // ── Primary data: aggregated dashboard stats (SQL-computed, full dataset) ──
       // This single call replaces the old pattern of fetching 100 hydrated records
       // and computing counts, revenue, and entity totals client-side.
-      const [dashStatsRes, passMineRes] = await Promise.all([
-        g(`${AGENT_API}/pass-request/dashboard-stats`),
-        g(`${AGENT_API}/pass-request/get-agent-pass-requests`, {
+      // "Processed by me" is a heavier count — start it now but do not let it
+      // delay the first paint; it is merged in as soon as it resolves.
+      const passMinePromise = g(
+        `${AGENT_API}/pass-request/get-agent-pass-requests`,
+        {
           limit: 1,
           page: 1,
           processedByMe: "true",
-        }),
-      ]);
+          // only the processed count is shown ("My Processed") — the server
+          // skips the pending-count scans and the ID/hydration queries
+          countsOnly: "processed",
+        },
+      ).catch(() => null);
+      const dashStatsRes = await g(`${AGENT_API}/pass-request/dashboard-stats`);
 
-      // ── Slow/static data: use cache or re-fetch ───────────────────────────
-      let slowResults;
-      if (needsSlowFetch) {
-        slowResults = await Promise.allSettled([
+      // ── Slow/static data: blacklist, overstay, bulk queue, company list ──
+      const fetchSlowGroup = () =>
+        Promise.allSettled([
           g(`${ADMIN_API}/user/agent-users`, { limit: 1, page: 1 }),
           g(`${ADMIN_API}/user/profile-update-requests`, {
             status: "pending",
@@ -1005,224 +1021,252 @@ export default function TrafficManagerDashboard() {
           g(`${ADMIN_API}/overstay/exception-requests`, { limit: 1, page: 1 }),
           g(`${ADMIN_API}/bulk-pass/queue`, { limit: 1, page: 1 }),
         ]);
+
+      // Builds the full dashboard state from the primary stats plus whatever
+      // slow-group results are available (cached, fresh, or none yet).
+      const buildAndSet = (passMineRes, slowResults) => {
+        const [
+          companyRes,
+          profileRes,
+          blStatsRes,
+          blRecentRes,
+          blPendingRes,
+          overstayRes,
+          overstayExcRes,
+          bulkRes,
+        ] = slowResults || [];
+
+        // Robust helpers handling both Promise.allSettled results and direct Axios responses
+        const ok = (r) => {
+          if (!r) return false;
+          if (r.status === "fulfilled") return Boolean(r.value?.data && r.value.status < 400);
+          if (typeof r.status === "number") return r.status < 400 && Boolean(r.data);
+          return false;
+        };
+        const val = (r, fb) => {
+          if (!ok(r)) return fb;
+          if (r.status === "fulfilled") return r.value.data;
+          return r.data;
+        };
+
+        // ── Extract pre-aggregated stats from the new endpoint ──────────────
+        const ds = dashStatsRes?.data || {};
+        const dPass = ds.pass || {};
+        const dEntities = ds.entities || {};
+        const dRevenue = ds.revenue || {};
+        const dActivity = ds.portActivity || {};
+        const dPendingQueue = ds.pendingQueue || {};
+        const dCompanyList = ds.companyList || [];
+
+        // The pending list comes pre-built from the backend (limit 15, lightweight)
+        const pendingList = dPendingQueue.list || [];
+
+        // null while the count is still in flight → keep previous value
+        const passMineCounts = passMineRes?.data?.counts || null;
+        const companyCounts = val(companyRes, {}).counts || {};
+        const profilePagination = val(profileRes, {}).pagination || {};
+
+        // Build top companies from server-aggregated data
+        const companyList = dCompanyList;
+        const topCompanies = companyList.slice(0, 5).map((c) => ({
+          name: c.name.length > 18 ? c.name.slice(0, 16) + "…" : c.name,
+          fullName: c.name,
+          value: c.total,
+          passCount: c.passCount,
+          persons: c.persons,
+          vehicles: c.vehicles,
+        }));
+
+        // 3. Blacklist stats
+        const blRaw = val(blStatsRes, {});
+        const blStats = blRaw?.data || blRaw || {};
+        const blByType = blStats.by_type || {};
+        const blRecentList = val(blRecentRes, {}).data || [];
+        const blPendingList = val(blPendingRes, {}).data || [];
+
+        // 4. Overstay charges
+        const charges = val(overstayRes, {}).data || [];
+        const ovPending = charges.filter((c) => c.status === "PENDING");
+        const ovPaid = charges.filter((c) => c.status === "PAID");
+        const excData = val(overstayExcRes, {});
+        const ovExc = num(
+          excData.count ??
+            excData.pagination?.totalRecords ??
+            (excData.data || []).length,
+        );
+
+        const now = new Date();
+        const todayStart = new Date(now);
+        todayStart.setHours(0, 0, 0, 0);
+        const monthStart = new Date(now);
+        monthStart.setDate(1);
+        monthStart.setHours(0, 0, 0, 0);
+        const todayPaid = ovPaid
+          .filter(
+            (c) =>
+              new Date(c.created_at || c.updatedAt || c.createdAt) >= todayStart,
+          )
+          .reduce((s, c) => s + num(c.total_amount ?? c.amount), 0);
+        const monthPaid = ovPaid
+          .filter(
+            (c) =>
+              new Date(c.created_at || c.updatedAt || c.createdAt) >= monthStart,
+          )
+          .reduce((s, c) => s + num(c.total_amount ?? c.amount), 0);
+
+        // 6. Bulk pass counts
+        const bulkData = val(bulkRes, {});
+        const bulkCounts = bulkData.counts || bulkData.pagination || {};
+        const bulkTotal = num(bulkCounts.total ?? bulkCounts.totalRecords ?? 0);
+        const bulkPending = num(bulkCounts.pending ?? 0);
+        const bulkApproved = num(
+          bulkCounts.approved ?? bulkCounts.completed ?? 0,
+        );
+        const bulkRejected = num(bulkCounts.rejected ?? 0);
+
+        console.log(
+          "%c=== [TRAFFIC – PASS OS SECTION DASHBOARD] PASS STATISTICS ===",
+          "background: #1e3a5f; color: #fbbf24; font-weight: bold; font-size: 12px; padding: 4px 8px; border-radius: 4px;",
+        );
+        console.log("📊 Pass Request Counts (SQL-aggregated):", dPass);
+        console.log("💰 Revenue Summary (SQL-aggregated):", {
+          "Total Revenue (All Passes)": `₹ ${num(dRevenue.total).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          "Account (HEP)": `₹ ${num(dRevenue.account).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          "E-Cash": `₹ ${num(dRevenue.ecash).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          "Today's Revenue": `₹ ${num(dRevenue.today).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          "This Month's Revenue": `₹ ${num(dRevenue.month).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        });
+
+        setData({
+          pass: {
+            pending: num(dPass.pending),
+            processed: num(dPass.processed),
+            total: num(dPass.total),
+            rejected: num(dPass.rejected ?? 0),
+            reverted: num(dPass.reverted ?? 0),
+          },
+          passMine:
+            passMineCounts !== null
+              ? num(passMineCounts.processed)
+              : (prevDataRef.current?.passMine ?? 0),
+          pendingQueue: {
+            persons: num(dEntities.pendingPersons),
+            vehicles: num(dEntities.pendingVehicles),
+            companies: num(dPendingQueue.companies),
+            list: pendingList,
+            counted: pendingList.length,
+          },
+          processedQueue: {
+            persons: num(dEntities.processedPersons),
+            vehicles: num(dEntities.processedVehicles),
+            counted: num(dPass.processed),
+            list: [],
+          },
+          allPassesQueue: {
+            persons: num(dEntities.totalPersons),
+            vehicles: num(dEntities.totalVehicles),
+            list: pendingList,
+            counted: num(dPass.total),
+          },
+          rawAllPasses: pendingList,
+          company: {
+            total: num(companyCounts.total),
+            approved: num(companyCounts.approved),
+            rejected: num(companyCounts.rejected),
+            pending: num(companyCounts.pending),
+          },
+          profileUpdates: num(profilePagination.totalRecords),
+          bulk: {
+            total: bulkTotal,
+            pending: bulkPending,
+            approved: bulkApproved,
+            rejected: bulkRejected,
+          },
+          bl: {
+            active_blacklisted: num(blStats.active_blacklisted),
+            pending_blacklist: num(blStats.pending_blacklist),
+            pending_unblacklist: num(blStats.pending_unblacklist),
+            total_unblacklisted: num(blStats.total_unblacklisted),
+            total: num(blStats.total),
+          },
+          blType: {
+            COMPANY: num(blByType.COMPANY ?? 0),
+            PERSON: num(blByType.PERSON ?? 0),
+            DRIVER: num(blByType.DRIVER ?? 0),
+            VEHICLE: num(blByType.VEHICLE ?? 0),
+          },
+          blRecent: blRecentList,
+          blPending: blPendingList,
+          overstay: {
+            pending: ovPending.length,
+            paid: ovPaid.length,
+            exceptions: ovExc,
+            pendingAmount: ovPending.reduce(
+              (s, c) => s + num(c.total_amount ?? c.amount),
+              0,
+            ),
+            paidAmount: ovPaid.reduce(
+              (s, c) => s + num(c.total_amount ?? c.amount),
+              0,
+            ),
+            total: charges.length,
+            todayPaid,
+            monthPaid,
+            rawCharges: charges,
+          },
+          hepRevenue: {
+            total: num(dRevenue.total),
+            accountTotal: num(dRevenue.account),
+            ecashTotal: num(dRevenue.ecash),
+            todayTotal: num(dRevenue.today),
+            monthTotal: num(dRevenue.month),
+            processedTotal: num(dRevenue.processed),
+            pendingTotal: num(dRevenue.pending),
+            totalPersons: num(dEntities.totalPersons),
+            totalVehicles: num(dEntities.totalVehicles),
+            topCompanies,
+            companyList,
+          },
+          portActivity: {
+            today: num(dActivity.today),
+            week: num(dActivity.week),
+            month: num(dActivity.month),
+          },
+          avgApprovalMins: ds.avgApprovalMins ?? null,
+        });
+        setLastUpdated(fmtDateTime());
+        lastFetchTime.current = Date.now();
+      };
+
+      if (!needsSlowFetch) {
+        buildAndSet(null, slowCache.current);
+        setLoading(false);
+        setMineLoading(true);
+        buildAndSet(await passMinePromise, slowCache.current);
+        setMineLoading(false);
+      } else {
+        // Paint the pass stats immediately (with cached slow data if any),
+        // then fetch the slow group and fill those cards in.
+        buildAndSet(null, slowCache.current || []);
+        setLoading(false);
+        setSlowLoading(true);
+        setMineLoading(true);
+        const [passMineRes, slowResults] = await Promise.all([
+          passMinePromise,
+          fetchSlowGroup(),
+        ]);
         slowCache.current = slowResults;
         lastSlowFetch.current = nowMs;
-      } else {
-        slowResults = slowCache.current;
+        buildAndSet(passMineRes, slowResults);
+        setMineLoading(false);
       }
-
-      const [
-        companyRes,
-        profileRes,
-        blStatsRes,
-        blRecentRes,
-        blPendingRes,
-        overstayRes,
-        overstayExcRes,
-        bulkRes,
-      ] = slowResults;
-
-      // Robust helpers handling both Promise.allSettled results and direct Axios responses
-      const ok = (r) => {
-        if (!r) return false;
-        if (r.status === "fulfilled") return Boolean(r.value?.data && r.value.status < 400);
-        if (typeof r.status === "number") return r.status < 400 && Boolean(r.data);
-        return false;
-      };
-      const val = (r, fb) => {
-        if (!ok(r)) return fb;
-        if (r.status === "fulfilled") return r.value.data;
-        return r.data;
-      };
-
-      // ── Extract pre-aggregated stats from the new endpoint ──────────────
-      const ds = dashStatsRes?.data || {};
-      const dPass = ds.pass || {};
-      const dEntities = ds.entities || {};
-      const dRevenue = ds.revenue || {};
-      const dActivity = ds.portActivity || {};
-      const dPendingQueue = ds.pendingQueue || {};
-      const dCompanyList = ds.companyList || [];
-
-      // The pending list comes pre-built from the backend (limit 15, lightweight)
-      const pendingList = dPendingQueue.list || [];
-
-      const passMineCounts = passMineRes?.data?.counts || {};
-      const companyCounts = val(companyRes, {}).counts || {};
-      const profilePagination = val(profileRes, {}).pagination || {};
-
-      // Build top companies from server-aggregated data
-      const companyList = dCompanyList;
-      const topCompanies = companyList.slice(0, 5).map((c) => ({
-        name: c.name.length > 18 ? c.name.slice(0, 16) + "…" : c.name,
-        fullName: c.name,
-        value: c.total,
-        passCount: c.passCount,
-        persons: c.persons,
-        vehicles: c.vehicles,
-      }));
-
-      // 3. Blacklist stats
-      const blRaw = val(blStatsRes, {});
-      const blStats = blRaw?.data || blRaw || {};
-      const blByType = blStats.by_type || {};
-      const blRecentList = val(blRecentRes, {}).data || [];
-      const blPendingList = val(blPendingRes, {}).data || [];
-
-      // 4. Overstay charges
-      const charges = val(overstayRes, {}).data || [];
-      const ovPending = charges.filter((c) => c.status === "PENDING");
-      const ovPaid = charges.filter((c) => c.status === "PAID");
-      const excData = val(overstayExcRes, {});
-      const ovExc = num(
-        excData.count ??
-          excData.pagination?.totalRecords ??
-          (excData.data || []).length,
-      );
-
-      const now = new Date();
-      const todayStart = new Date(now);
-      todayStart.setHours(0, 0, 0, 0);
-      const monthStart = new Date(now);
-      monthStart.setDate(1);
-      monthStart.setHours(0, 0, 0, 0);
-      const todayPaid = ovPaid
-        .filter(
-          (c) =>
-            new Date(c.created_at || c.updatedAt || c.createdAt) >= todayStart,
-        )
-        .reduce((s, c) => s + num(c.total_amount ?? c.amount), 0);
-      const monthPaid = ovPaid
-        .filter(
-          (c) =>
-            new Date(c.created_at || c.updatedAt || c.createdAt) >= monthStart,
-        )
-        .reduce((s, c) => s + num(c.total_amount ?? c.amount), 0);
-
-      // 6. Bulk pass counts
-      const bulkData = val(bulkRes, {});
-      const bulkCounts = bulkData.counts || bulkData.pagination || {};
-      const bulkTotal = num(bulkCounts.total ?? bulkCounts.totalRecords ?? 0);
-      const bulkPending = num(bulkCounts.pending ?? 0);
-      const bulkApproved = num(
-        bulkCounts.approved ?? bulkCounts.completed ?? 0,
-      );
-      const bulkRejected = num(bulkCounts.rejected ?? 0);
-
-      console.log(
-        "%c=== [TRAFFIC – PASS OS SECTION DASHBOARD] PASS STATISTICS ===",
-        "background: #1e3a5f; color: #fbbf24; font-weight: bold; font-size: 12px; padding: 4px 8px; border-radius: 4px;",
-      );
-      console.log("📊 Pass Request Counts (SQL-aggregated):", dPass);
-      console.log("💰 Revenue Summary (SQL-aggregated):", {
-        "Total Revenue (All Passes)": `₹ ${num(dRevenue.total).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        "Account (HEP)": `₹ ${num(dRevenue.account).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        "E-Cash": `₹ ${num(dRevenue.ecash).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        "Today's Revenue": `₹ ${num(dRevenue.today).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        "This Month's Revenue": `₹ ${num(dRevenue.month).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      });
-
-      setData({
-        pass: {
-          pending: num(dPass.pending),
-          processed: num(dPass.processed),
-          total: num(dPass.total),
-          rejected: num(dPass.rejected ?? 0),
-          reverted: num(dPass.reverted ?? 0),
-        },
-        passMine: num(passMineCounts.processed),
-        pendingQueue: {
-          persons: num(dEntities.pendingPersons),
-          vehicles: num(dEntities.pendingVehicles),
-          companies: num(dPendingQueue.companies),
-          list: pendingList,
-          counted: pendingList.length,
-        },
-        processedQueue: {
-          persons: num(dEntities.processedPersons),
-          vehicles: num(dEntities.processedVehicles),
-          counted: num(dPass.processed),
-          list: [],
-        },
-        allPassesQueue: {
-          persons: num(dEntities.totalPersons),
-          vehicles: num(dEntities.totalVehicles),
-          list: pendingList,
-          counted: num(dPass.total),
-        },
-        rawAllPasses: pendingList,
-        company: {
-          total: num(companyCounts.total),
-          approved: num(companyCounts.approved),
-          rejected: num(companyCounts.rejected),
-          pending: num(companyCounts.pending),
-        },
-        profileUpdates: num(profilePagination.totalRecords),
-        bulk: {
-          total: bulkTotal,
-          pending: bulkPending,
-          approved: bulkApproved,
-          rejected: bulkRejected,
-        },
-        bl: {
-          active_blacklisted: num(blStats.active_blacklisted),
-          pending_blacklist: num(blStats.pending_blacklist),
-          pending_unblacklist: num(blStats.pending_unblacklist),
-          total_unblacklisted: num(blStats.total_unblacklisted),
-          total: num(blStats.total),
-        },
-        blType: {
-          COMPANY: num(blByType.COMPANY ?? 0),
-          PERSON: num(blByType.PERSON ?? 0),
-          DRIVER: num(blByType.DRIVER ?? 0),
-          VEHICLE: num(blByType.VEHICLE ?? 0),
-        },
-        blRecent: blRecentList,
-        blPending: blPendingList,
-        overstay: {
-          pending: ovPending.length,
-          paid: ovPaid.length,
-          exceptions: ovExc,
-          pendingAmount: ovPending.reduce(
-            (s, c) => s + num(c.total_amount ?? c.amount),
-            0,
-          ),
-          paidAmount: ovPaid.reduce(
-            (s, c) => s + num(c.total_amount ?? c.amount),
-            0,
-          ),
-          total: charges.length,
-          todayPaid,
-          monthPaid,
-          rawCharges: charges,
-        },
-        hepRevenue: {
-          total: num(dRevenue.total),
-          accountTotal: num(dRevenue.account),
-          ecashTotal: num(dRevenue.ecash),
-          todayTotal: num(dRevenue.today),
-          monthTotal: num(dRevenue.month),
-          processedTotal: num(dRevenue.processed),
-          pendingTotal: num(dRevenue.pending),
-          totalPersons: num(dEntities.totalPersons),
-          totalVehicles: num(dEntities.totalVehicles),
-          topCompanies,
-          companyList,
-        },
-        portActivity: {
-          today: num(dActivity.today),
-          week: num(dActivity.week),
-          month: num(dActivity.month),
-        },
-        avgApprovalMins: ds.avgApprovalMins ?? null,
-      });
-      setLastUpdated(fmtDateTime());
-      lastFetchTime.current = Date.now();
     } catch (err) {
       console.error("Dashboard fetchAll error:", err);
       toast.error("Failed to load dashboard. Please refresh.");
     } finally {
       setLoading(false);
+      setSlowLoading(false);
+      setMineLoading(false);
       setRefreshing(false);
       isInitialLoad.current = false;
       inFlightRef.current = false;
@@ -2250,7 +2294,7 @@ export default function TrafficManagerDashboard() {
             gradient="from-indigo-600 via-purple-600 to-violet-700"
             glow="shadow-indigo-500/30"
             href="/traffic_approval/companies?tab=processed"
-            loading={loading}
+            loading={loading || slowLoading}
             chips={[
               {
                 icon: Clock,
@@ -2292,7 +2336,7 @@ export default function TrafficManagerDashboard() {
             gradient="from-rose-500 to-red-600"
             glow="shadow-rose-500/30"
             href="/traffic_approval/blacklist"
-            loading={loading}
+            loading={loading || slowLoading}
             chips={[
               {
                 icon: Car,
@@ -2312,7 +2356,7 @@ export default function TrafficManagerDashboard() {
             icon={Timer}
             gradient="from-violet-500 to-purple-600"
             glow="shadow-violet-500/30"
-            loading={loading}
+            loading={loading || slowLoading}
             chips={[
               {
                 icon: AlertTriangle,
@@ -2406,7 +2450,7 @@ export default function TrafficManagerDashboard() {
           >
             <Building2 className="h-3.5 w-3.5 shrink-0" />
             <span className="text-[13px] font-black tabular-nums">
-              {loading ? "—" : fmtNum(displayData.company.approved)}
+              {loading || slowLoading ? "—" : fmtNum(displayData.company.approved)}
             </span>
             <span className="text-[11px] font-bold text-indigo-100">
               Approved
@@ -2527,21 +2571,21 @@ export default function TrafficManagerDashboard() {
               value={displayData.overstay.pending}
               tone="rose"
               icon={Timer}
-              loading={loading}
+              loading={loading || slowLoading}
             />
             <MiniStat
               label="Exceptions"
               value={displayData.overstay.exceptions}
               tone="amber"
               icon={AlertTriangle}
-              loading={loading}
+              loading={loading || slowLoading}
             />
             <MiniStat
               label="Settled"
               value={displayData.overstay.paid}
               tone="emerald"
               icon={CheckCircle2}
-              loading={loading}
+              loading={loading || slowLoading}
             />
           </div>
           <div className="grid grid-cols-3 gap-2.5">
@@ -2604,7 +2648,7 @@ export default function TrafficManagerDashboard() {
               icon={CircleDollarSign}
               tone="emerald"
               money
-              loading={loading}
+              loading={loading || slowLoading}
             />
             <IconStatRow
               label="Pending Dues"
@@ -2612,21 +2656,21 @@ export default function TrafficManagerDashboard() {
               icon={AlertTriangle}
               tone="rose"
               money
-              loading={loading}
+              loading={loading || slowLoading}
             />
             <IconStatRow
               label="Exception Requests"
               value={displayData.overstay.exceptions}
               icon={HelpCircle}
               tone="amber"
-              loading={loading}
+              loading={loading || slowLoading}
             />
             <IconStatRow
               label="Settled Cases"
               value={displayData.overstay.paid}
               icon={CheckCircle2}
               tone="sky"
-              loading={loading}
+              loading={loading || slowLoading}
             />
           </div>
           <div className="grid grid-cols-1 gap-2 mt-3">
@@ -2732,7 +2776,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.blType.PERSON + displayData.blType.DRIVER}
               tone="red"
               icon={ShieldBan}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/blacklist"
             />
           </div>
@@ -2825,7 +2869,7 @@ export default function TrafficManagerDashboard() {
               value={data.passMine}
               tone="sky"
               icon={ClipboardCheck}
-              loading={loading}
+              loading={loading || mineLoading}
               href="/traffic_approval/passes?tab=processed"
             />
           </div>
@@ -2851,7 +2895,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.company.approved}
               tone="indigo"
               icon={Building2}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/companies?tab=processed"
             />
           </div>
@@ -2875,7 +2919,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.blType.COMPANY}
               tone="red"
               icon={Building2}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/blacklist"
             />
             <MiniStat
@@ -2883,7 +2927,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.blType.PERSON}
               tone="rose"
               icon={Users}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/blacklist"
             />
             <MiniStat
@@ -2891,7 +2935,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.blType.DRIVER}
               tone="orange"
               icon={UserCircle}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/blacklist"
             />
             <MiniStat
@@ -2899,7 +2943,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.blType.VEHICLE}
               tone="amber"
               icon={Car}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/blacklist"
             />
             <MiniStat
@@ -2907,7 +2951,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.bl.pending_unblacklist}
               tone="blue"
               icon={HelpCircle}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/blacklist"
             />
             <MiniStat
@@ -2915,7 +2959,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.bl.active_blacklisted}
               tone="red"
               icon={ShieldBan}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/blacklist"
             />
           </div>
@@ -3318,7 +3362,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.company.total}
               tone="blue"
               icon={Building2}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/companies"
             />
             <MiniStat
@@ -3326,7 +3370,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.company.approved}
               tone="emerald"
               icon={CheckCircle2}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/companies?tab=processed"
             />
             <MiniStat
@@ -3334,7 +3378,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.company.pending}
               tone="amber"
               icon={Clock}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/companies?tab=pending"
             />
             <MiniStat
@@ -3342,7 +3386,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.company.rejected}
               tone="rose"
               icon={Ban}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/companies?tab=processed"
             />
             <MiniStat
@@ -3350,7 +3394,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.blType.COMPANY}
               tone="red"
               icon={ShieldBan}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/blacklist"
             />
             <MiniStat
@@ -3358,7 +3402,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.profileUpdates}
               tone="sky"
               icon={ClipboardList}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/companies?tab=profile_updates"
             />
           </div>
@@ -3378,7 +3422,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.bulk.total}
               tone="indigo"
               icon={Layers}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/bulk-pass"
             />
             <MiniStat
@@ -3386,7 +3430,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.bulk.pending}
               tone="amber"
               icon={Clock}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/bulk-pass?tab=pending"
             />
             <MiniStat
@@ -3394,7 +3438,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.bulk.approved}
               tone="emerald"
               icon={CheckCircle2}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/bulk-pass?tab=approved"
             />
             <MiniStat
@@ -3402,7 +3446,7 @@ export default function TrafficManagerDashboard() {
               value={displayData.bulk.rejected}
               tone="rose"
               icon={XCircle}
-              loading={loading}
+              loading={loading || slowLoading}
               href="/traffic_approval/bulk-pass?tab=rejected"
             />
           </div>

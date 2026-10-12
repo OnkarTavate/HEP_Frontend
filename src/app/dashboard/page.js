@@ -189,6 +189,22 @@ const filterPassesByDate = (passes, filter) => {
   });
 };
 
+// Ticking clock scoped to the component that displays it, so the rest of the
+// dashboard (charts, lists, stat cards) does not re-render every second.
+const useNow = (intervalMs = 1000) => {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+};
+
+const Greeting = memo(function Greeting() {
+  const now = useNow(60 * 1000);
+  return <>{getGreeting(now.getHours())}</>;
+});
+
 // ---------------------------------------------------------------------------
 // Card shells
 // ---------------------------------------------------------------------------
@@ -443,7 +459,8 @@ const StatCard = memo(function StatCard({
 // ---------------------------------------------------------------------------
 // Live status banner
 // ---------------------------------------------------------------------------
-const LivePortStatus = memo(function LivePortStatus({ now, stats, loading }) {
+const LivePortStatus = memo(function LivePortStatus({ stats, loading }) {
+  const now = useNow(1000);
   const timeStr = useMemo(
     () =>
       new Intl.DateTimeFormat("en-IN", {
@@ -1405,7 +1422,6 @@ const DocLinks = ({ docs }) => {
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const [now, setNow] = useState(() => new Date());
   const [dateFilter, setDateFilter] = useState("today");
 
   const [profileData, setProfileData] = useState(null);
@@ -1440,6 +1456,7 @@ export default function DashboardPage() {
   const [monthlyData, setMonthlyData] = useState([]);
   const [hepTypes, setHepTypes] = useState({});
   const [selectedPass, setSelectedPass] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [passTypeData, setPassTypeData] = useState([
     { name: "Vehicle", value: 0, color: "#f59e0b" },
     { name: "Personnel", value: 0, color: "#14b8a6" },
@@ -1497,6 +1514,31 @@ export default function DashboardPage() {
   const handleDragEnd = () => {
     setDraggedIndex(null);
     setDragOverIndex(null);
+  };
+
+  // The list is loaded in `view=summary` mode (no documents). Open the modal
+  // immediately with the summary row, then upgrade it with the full record.
+  const openPassDetail = async (pass) => {
+    setSelectedPass(pass);
+    if (!pass?.id || pass._detailLoaded) return;
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+    setDetailLoading(true);
+    try {
+      const res = await axios.get(
+        `${AGENT_API}/pass-request/my-pass-requests/${pass.id}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (res.data?.success && res.data.data) {
+        const full = { ...pass, ...res.data.data, _detailLoaded: true };
+        setSelectedPass((prev) => (prev && prev.id === pass.id ? full : prev));
+        setAllPasses((prev) => prev.map((p) => (p.id === pass.id ? full : p)));
+      }
+    } catch (err) {
+      console.warn("Pass detail fetch failed:", err?.message);
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const resetCardOrder = () => {
@@ -1596,16 +1638,11 @@ export default function DashboardPage() {
     }
   }, [router]);
 
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
   // ── Fetch all dashboard data ──────────────────────────────────────────────
   useEffect(() => {
     const fetchAllPasses = async (headers) => {
       const first = await axios.get(
-        `${AGENT_API}/pass-request/my-pass-requests?page=1&limit=100`,
+        `${AGENT_API}/pass-request/my-pass-requests?page=1&limit=100&view=summary`,
         { headers },
       );
       if (!first.data?.success) return [];
@@ -1616,7 +1653,7 @@ export default function DashboardPage() {
         for (let p = 2; p <= totalPages; p++) {
           reqs.push(
             axios.get(
-              `${AGENT_API}/pass-request/my-pass-requests?page=${p}&limit=100`,
+              `${AGENT_API}/pass-request/my-pass-requests?page=${p}&limit=100&view=summary`,
               { headers },
             ),
           );
@@ -1631,32 +1668,6 @@ export default function DashboardPage() {
     };
 
     const fetchDashboardData = async () => {
-      //   useEffect(() => {
-      //   const storedUser = localStorage.getItem("user");
-
-      //   if (!storedUser) {
-      //     router.push("/");
-      //     return;
-      //   }
-
-      //   try {
-      //     const parsedUser = JSON.parse(storedUser);
-
-      //     setUser(parsedUser);
-
-      //     const isMarineFireSafety =
-      //       String(parsedUser?.role || "").trim() ===
-      //         "Fire Safety Officer" &&
-      //       Number(parsedUser?.departmentId) === 7;
-
-      //     if (isMarineFireSafety) {
-      //       router.replace("/traffic_approval/passes?tab=pending");
-      //     }
-      //   } catch (error) {
-      //     console.error("Failed to parse logged-in user:", error);
-      //     router.push("/");
-      //   }
-      // }, [router]);
       const token = localStorage.getItem("accessToken");
       if (!token) {
         setStatsLoading(false);
@@ -1664,52 +1675,53 @@ export default function DashboardPage() {
       }
       const authHeaders = { Authorization: `Bearer ${token}` };
 
-      try {
-        const profileRes = await axios.get(`${AGENT_API}/agents/profile`, {
-          headers: authHeaders,
-        });
-        if (profileRes.data?.success) {
-          const data = profileRes.data.data;
-          setProfileData(data);
-          if (data.isBlacklisted) {
-            setIsBlacklisted(true);
-            setBlacklistReason(
-              data.blacklistReason || "Suspended due to port violations.",
-            );
-            setShowBlacklistPopup(true);
-          }
-          if (data.blacklistedVehicles?.length > 0) {
-            setBlacklistedVehicles(data.blacklistedVehicles);
-            setShowVehicleWarningPopup(true);
-          }
+      // All four sources are independent — fetch them in one parallel wave
+      // (fetchAllPasses internally fans out pages 2..N after page 1).
+      const [profileRes, hepRes, passesRes, penaltyRes] =
+        await Promise.allSettled([
+          axios.get(`${AGENT_API}/agents/profile`, { headers: authHeaders }),
+          axios.get(`${AGENT_API}/pass-request/get-hep-types`, {
+            headers: authHeaders,
+          }),
+          fetchAllPasses(authHeaders),
+          axios.get(`${ADMIN_API}/blacklist/my-blacklist?limit=100`, {
+            headers: authHeaders,
+          }),
+        ]);
+
+      // ── Profile + blacklist warnings ──
+      if (profileRes.status === "fulfilled" && profileRes.value.data?.success) {
+        const data = profileRes.value.data.data;
+        setProfileData(data);
+        if (data.isBlacklisted) {
+          setIsBlacklisted(true);
+          setBlacklistReason(
+            data.blacklistReason || "Suspended due to port violations.",
+          );
+          setShowBlacklistPopup(true);
         }
-      } catch (err) {
-        console.warn("Profile fetch failed:", err?.message);
+        if (data.blacklistedVehicles?.length > 0) {
+          setBlacklistedVehicles(data.blacklistedVehicles);
+          setShowVehicleWarningPopup(true);
+        }
+      } else if (profileRes.status === "rejected") {
+        console.warn("Profile fetch failed:", profileRes.reason?.message);
       }
 
+      // ── HEP types (id → lowercase name) ──
       const hepMap = {};
-      try {
-        const hepRes = await axios.get(
-          `${AGENT_API}/pass-request/get-hep-types`,
-          { headers: authHeaders },
-        );
-        (hepRes.data?.data || []).forEach((h) => {
+      if (hepRes.status === "fulfilled") {
+        (hepRes.value.data?.data || []).forEach((h) => {
           hepMap[h.id] = String(
             h.hepType || h.name || h.type || h.hep_type || "",
           ).toLowerCase();
         });
-      } catch {
-        /* fallback */
       }
       setHepTypes(hepMap);
 
-      try {
-        const passes = await fetchAllPasses(authHeaders);
-        console.log(
-          "%c[Dashboard] Raw passes from API — full data",
-          "color:#f59e0b;font-weight:bold;font-size:13px",
-          passes,
-        );
+      // ── Pass requests → stats ──
+      if (passesRes.status === "fulfilled") {
+        const passes = passesRes.value;
 
         const nowTs = new Date();
         const in7 = new Date(nowTs.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -1853,11 +1865,6 @@ export default function DashboardPage() {
           todayPassRequests,
         };
         console.log(
-          "%c[Dashboard] Computed apiStats",
-          "color:#14b8a6;font-weight:bold",
-          computedStats,
-        );
-        console.log(
           "%c[Dashboard] Status counts",
           "color:#a855f7;font-weight:bold",
           { approved, pending, rejected, reverted },
@@ -1872,27 +1879,20 @@ export default function DashboardPage() {
           { name: "Driver", value: driverCount, color: "#a855f7" },
         ]);
         setAllPasses(passes);
-      } catch (err) {
-        console.warn("Pass requests fetch failed:", err?.message);
+      } else {
+        console.warn("Pass requests fetch failed:", passesRes.reason?.message);
       }
 
-      try {
-        const penaltyRes = await axios.get(
-          `${ADMIN_API}/blacklist/my-blacklist?limit=100`,
-          { headers: authHeaders },
+      // ── Pending penalties ──
+      if (penaltyRes.status === "fulfilled" && penaltyRes.value.data?.success) {
+        const rows = penaltyRes.value.data.data || [];
+        setPenalties(
+          rows.filter(
+            (r) =>
+              r.has_penalty &&
+              String(r.penalty_status || "").toUpperCase() === "PENDING",
+          ),
         );
-        if (penaltyRes.data?.success) {
-          const rows = penaltyRes.data.data || [];
-          setPenalties(
-            rows.filter(
-              (r) =>
-                r.has_penalty &&
-                String(r.penalty_status || "").toUpperCase() === "PENDING",
-            ),
-          );
-        }
-      } catch {
-        /* skip */
       }
 
       setStatsLoading(false);
@@ -1925,14 +1925,9 @@ export default function DashboardPage() {
       profileData?.entityName || user?.username?.split("@")[0] || "Applicant",
     [user, profileData],
   );
-  const greeting = useMemo(() => getGreeting(now.getHours()), [now]);
 
   const oldestPendingDays = useMemo(() => {
     if (apiStats.pendingApprovals === 0) {
-      console.log(
-        "%c[Dashboard] oldestPendingDays → null (no pending approvals)",
-        "color:#6b7280",
-      );
       return null;
     }
     let max = null;
@@ -1950,13 +1945,6 @@ export default function DashboardPage() {
         }
       }
     }
-    console.log(
-      "%c[Dashboard] oldestPendingDays",
-      "color:#ef4444;font-weight:bold",
-      max,
-      "days | pendingApprovals:",
-      apiStats.pendingApprovals,
-    );
     return max;
   }, [allPasses, apiStats.pendingApprovals]);
 
@@ -2163,14 +2151,14 @@ export default function DashboardPage() {
 
       <div className="relative space-y-6">
         {/* 1 ─ Live overview banner */}
-        <LivePortStatus now={now} stats={apiStats} loading={statsLoading} />
+        <LivePortStatus stats={apiStats} loading={statsLoading} />
 
         {/* 2 ─ Welcome row */}
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-2 bg-white dark:bg-white/5 px-4 py-1.5 rounded-full text-sm font-semibold text-amber-700 dark:text-amber-300 mb-3 shadow-sm ring-1 ring-amber-200/60 dark:ring-amber-400/20">
               <Ship className="h-4 w-4" />
-              {greeting}
+              <Greeting />
             </div>
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-stone-900 dark:text-stone-100 mb-2">
               Welcome,{" "}
@@ -2476,12 +2464,12 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={pass.id || idx}
-                      onClick={() => setSelectedPass(pass)}
+                      onClick={() => openPassDetail(pass)}
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ")
-                          setSelectedPass(pass);
+                          openPassDetail(pass);
                       }}
                       className={
                         "flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-2xl hover:bg-amber-50 dark:hover:bg-amber-400/10 hover:ring-1 hover:ring-amber-300/50 transition-all gap-3 cursor-pointer group " +
@@ -2603,6 +2591,7 @@ export default function DashboardPage() {
         <PassDetailModal
           pass={selectedPass}
           hepTypes={hepTypes}
+          detailLoading={detailLoading}
           onClose={() => setSelectedPass(null)}
         />
       )}
@@ -2744,6 +2733,7 @@ const PassDetailModal = memo(function PassDetailModal({
   pass,
   hepTypes,
   onClose,
+  detailLoading = false,
 }) {
   if (!pass) return null;
   const persons = Array.isArray(pass.persons) ? pass.persons : [];
@@ -2768,6 +2758,11 @@ const PassDetailModal = memo(function PassDetailModal({
                 {persons.length} person{persons.length !== 1 ? "s" : ""} •{" "}
                 {vehicles.length} vehicle{vehicles.length !== 1 ? "s" : ""}
               </p>
+              {detailLoading && (
+                <p className="text-[10px] text-amber-300/80 animate-pulse">
+                  Loading documents &amp; full details…
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
