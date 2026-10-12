@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import PaginationBar from "@/components/ui/PaginationBar";
 import axios from "axios";
@@ -206,6 +206,9 @@ export default function TrafficPassesPage() {
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A background poll must not start while the previous request is still in
+  // flight — otherwise slow responses stack up server-side every 15 s.
+  const fetchInFlightRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Pagination state
@@ -1243,6 +1246,9 @@ export default function TrafficPassesPage() {
       if (!userContextReady) {
         return;
       }
+
+      if (isPoll && fetchInFlightRef.current) return;
+      fetchInFlightRef.current = true;
 
       try {
         if (!isPoll) setLoading(true);
@@ -2338,6 +2344,7 @@ export default function TrafficPassesPage() {
         console.error("Failed to fetch requests", error);
         if (!isPoll) toast.error("Failed to load pass requests.");
       } finally {
+        fetchInFlightRef.current = false;
         if (!isPoll) setLoading(false);
       }
     },
