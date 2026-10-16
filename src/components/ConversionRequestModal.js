@@ -308,7 +308,8 @@ export default function ConversionRequestModal({
     }
     if (!existingRequisitionPath) return;
     const cleanPath = String(existingRequisitionPath).replace(/\\/g, "/");
-    const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5001";
+    const agentApi = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
+    const backendBase = agentApi.replace(/\/api\/?$/, "");
     const url = cleanPath.startsWith("http")
       ? cleanPath
       : `${backendBase.replace(/\/$/, "")}/${cleanPath.replace(/^\//, "")}`;
@@ -437,9 +438,9 @@ export default function ConversionRequestModal({
         formData.append("passRequisitionLetter", requisitionFile);
       }
 
-      const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5001";
+      const agentApi = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
       const response = await axios.post(
-        `${backendBase.replace(/\/$/, "")}/api/pass-request/request-bulk-pass-conversion`,
+        `${agentApi.replace(/\/$/, "")}/pass-request/request-bulk-pass-conversion`,
         formData,
         {
           headers: {
