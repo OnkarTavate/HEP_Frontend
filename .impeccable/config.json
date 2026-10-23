@@ -1,0 +1,35 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "src/app/dashboard/wallet/page.js"
+        ],
+        "createdAt": "2026-10-23T06:23:54.010Z",
+        "reason": "Claude: flagged text is the intentional muted disabled state of the Continue button (stone on neutral gray), not gray on a brand color"
+      },
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "files": [
+          "src/app/dashboard/wallet/pay/page.js"
+        ],
+        "createdAt": "2026-10-23T06:28:50.953Z",
+        "reason": "Claude: Arial is only in the standalone downloaded receipt HTML, where a universally available system font is the right choice; the app UI itself uses the layout's Montserrat"
+      },
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "files": [
+          "src/lib/walletDocs.js"
+        ],
+        "createdAt": "2026-10-23T06:33:46.944Z",
+        "reason": "Claude: Arial only styles the standalone downloaded invoice/QR HTML files, where a universally installed font is appropriate"
+      }
+    ]
+  }
+}

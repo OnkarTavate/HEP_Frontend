@@ -52,6 +52,7 @@ import {
   Briefcase,
   CheckCircle,
   FileBox,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import axios from "axios";
@@ -86,6 +87,7 @@ const getNavigationItems = (role, departmentName, departmentId) => {
       href: "/dashboard/material_pass_request",
       icon: FileBox,
     },
+    { name: "Wallet", href: "/dashboard/wallet", icon: Wallet },
   ];
 
   const isTrafficDept = departmentName?.toLowerCase() === "traffic";
@@ -703,8 +705,11 @@ export default function DashboardLayout({ children }) {
     user.departmentName,
     user.departmentId,
   );
+  // Sub-routes (e.g. /dashboard/wallet/pay) keep their parent nav item active.
+  const isNavActive = (href) =>
+    pathname === href || (href !== "/dashboard" && pathname?.startsWith(`${href}/`));
   const currentPageName =
-    navigationItems.find((item) => item.href === pathname)?.name ||
+    navigationItems.find((item) => isNavActive(item.href))?.name ||
     "Port Gate Automation System";
 
   const SidebarContent = ({
@@ -792,7 +797,7 @@ export default function DashboardLayout({ children }) {
           )}
         >
           {navigationItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = isNavActive(item.href);
             return (
               <Link
                 key={item.name}
