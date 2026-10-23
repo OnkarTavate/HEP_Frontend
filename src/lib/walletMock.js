@@ -1,12 +1,13 @@
 "use client";
 
-// UI-only dummy wallet store for the Wallet / Pay-for-passes screens.
-// No backend: state lives in memory and is mirrored to sessionStorage so the
-// balance carries across /dashboard/wallet and /dashboard/wallet/pay.
+// UI-only dummy wallet store for the Wallet / Pay-for-passes / refund screens.
+// No backend: state lives in memory and is mirrored to localStorage so it is
+// shared between the applicant's wallet and the Traffic department's refund
+// approvals (same browser), and syncs live across open tabs.
 
 import { useSyncExternalStore } from "react";
 
-const STORAGE_KEY = "apacs_wallet_demo_v2";
+const STORAGE_KEY = "apacs_wallet_demo_v3";
 
 export const GST_RATE = { cgst: 0.09, sgst: 0.09 };
 export const TOPUP_LIMITS = { min: 100, max: 100000 };
@@ -16,10 +17,13 @@ export const GATEWAY_METHODS = ["UPI", "Debit / Credit Card", "Net Banking"];
 export const SAC_CODE = "9967";
 
 export const CUSTOMER = {
+  loginId: "190231026999",
   name: "S. Kailash",
   company: "Kailash Shipping Agencies Pvt Ltd",
   gstin: "33AABCK1234F1Z5",
   sapCustomerId: "1000234567",
+  mobile: "9840011223",
+  email: "accounts@kailashshipping.in",
   address: "No. 12, Rajaji Salai, Chennai – 600001, Tamil Nadu",
 };
 
@@ -50,6 +54,85 @@ const pass = (id, passType, kind, subject, from, to, baseAmount, contact, extra 
   ...extra,
 });
 
+// Refunds are paid only to bank accounts registered with EBS for the customer.
+export const BANK_ACCOUNTS = [
+  { id: "B1", bankName: "HDFC Bank", accountMasked: "XXXX XXXX 4821", ifsc: "HDFC0000123", holder: "Kailash Shipping Agencies Pvt Ltd", primary: true },
+  { id: "B2", bankName: "Indian Overseas Bank", accountMasked: "XXXX XXXX 0937", ifsc: "IOBA0000456", holder: "Kailash Shipping Agencies Pvt Ltd", primary: false },
+];
+
+export const REFUND_REASONS = [
+  "Excess balance not required",
+  "Wrong top-up amount",
+  "Duplicate top-up",
+  "Stopping operations at the port",
+  "Other",
+];
+
+export const REFUND_LIMITS = { min: 100 };
+
+/** Ordered workflow: applicant → Traffic dept → EBS (finance) → bank. */
+export const REFUND_STEPS = [
+  { key: "REQUESTED", label: "Requested" },
+  { key: "TRAFFIC", label: "Traffic approval" },
+  { key: "EBS", label: "Sent to EBS" },
+  { key: "PAID", label: "Paid to bank" },
+];
+
+export const REFUND_STATUS = {
+  PENDING_TRAFFIC: { label: "Pending Traffic approval", short: "Pending approval", step: 1 },
+  SENT_TO_EBS: { label: "Approved · Processing in EBS", short: "With EBS", step: 2 },
+  REFUNDED: { label: "Refunded to bank", short: "Refunded", step: 4 },
+  REJECTED: { label: "Rejected by Traffic", short: "Rejected", step: 1 },
+  CANCELLED: { label: "Cancelled by you", short: "Cancelled", step: 1 },
+};
+
+const EBS_PROCESSING_MS = 8000; // demo: EBS confirms the bank payment after a few seconds
+
+const otherAgent = (company, loginId, gstin, sapCustomerId) => ({ company, loginId, gstin, sapCustomerId });
+
+function seedRefunds() {
+  const ev = (status, days, time, by, note) => ({ status, at: dayOffset(days, time), by, note });
+  return [
+    {
+      id: "RF-2026-000118", agent: otherAgent("Coromandel Logistics Pvt Ltd", "190150926113", "33AACCC4521L1Z2", "1000231877"),
+      amount: 25000, reason: "Stopping operations at the port", note: "Contract with liner ended; closing APACS wallet.",
+      bank: { bankName: "State Bank of India", accountMasked: "XXXX XXXX 7710", ifsc: "SBIN0001234", holder: "Coromandel Logistics Pvt Ltd" },
+      walletBalanceAtRequest: 25000, status: "PENDING_TRAFFIC", requestedAt: dayOffset(-2, "11:20"),
+      timeline: [ev("REQUESTED", -2, "11:20", "Coromandel Logistics Pvt Ltd")],
+    },
+    {
+      id: "RF-2026-000121", agent: otherAgent("Bay Line Shipping Agency", "190030826077", "33AAFCB7788K1Z9", "1000229014"),
+      amount: 4800, reason: "Duplicate top-up", note: "Top-up TOP26101900044 was charged twice by the bank.",
+      bank: { bankName: "ICICI Bank", accountMasked: "XXXX XXXX 3302", ifsc: "ICIC0000876", holder: "Bay Line Shipping Agency" },
+      walletBalanceAtRequest: 9100, status: "PENDING_TRAFFIC", requestedAt: dayOffset(0, "09:05"),
+      timeline: [ev("REQUESTED", 0, "09:05", "Bay Line Shipping Agency")],
+    },
+    {
+      id: "RF-2026-000109", agent: otherAgent("Marina CFS Pvt Ltd", "190210726031", "33AADCM1290P1Z4", "1000225561"),
+      amount: 12000, reason: "Excess balance not required", note: "",
+      bank: { bankName: "Axis Bank", accountMasked: "XXXX XXXX 5521", ifsc: "UTIB0000321", holder: "Marina CFS Pvt Ltd" },
+      walletBalanceAtRequest: 18450, status: "REFUNDED", requestedAt: dayOffset(-9, "15:40"),
+      ebsRef: "EBS-RF-7712045", utr: "HDFCR52026101500918", ebsDocNo: "1900045512",
+      timeline: [
+        ev("REQUESTED", -9, "15:40", "Marina CFS Pvt Ltd"),
+        ev("TRAFFIC_APPROVED", -8, "10:12", "R. Venkatesh (Traffic)", "Balance verified, no dues."),
+        ev("SENT_TO_EBS", -8, "10:12", "APACS", "EBS request EBS-RF-7712045"),
+        ev("REFUNDED", -6, "16:30", "EBS / SAP FICO", "UTR HDFCR52026101500918"),
+      ],
+    },
+    {
+      id: "RF-2026-000112", agent: otherAgent("Sri Balaji Transports", "190110826052", "33AAGFS3344M1Z1", "1000227390"),
+      amount: 3000, reason: "Other", note: "Need funds for other expenses.",
+      bank: { bankName: "Canara Bank", accountMasked: "XXXX XXXX 1188", ifsc: "CNRB0000654", holder: "S. Balaji" },
+      walletBalanceAtRequest: 3200, status: "REJECTED", requestedAt: dayOffset(-6, "12:00"),
+      timeline: [
+        ev("REQUESTED", -6, "12:00", "Sri Balaji Transports"),
+        ev("REJECTED", -5, "11:45", "R. Venkatesh (Traffic)", "Bank account holder name does not match the registered company. Please update bank details with EBS."),
+      ],
+    },
+  ];
+}
+
 const PAID_10391 = pass("AP-2026-10391", "Daily Vehicle Pass", "vehicle", "TN 04 BZ 5512", -3, -3, 1000, { name: "K. Murugan", mobile: "9840012345" });
 const PAID_10217 = pass("AP-2026-10217", "Daily Person Pass", "person", "A. Rahman", -12, -12, 500, { name: "A. Rahman", mobile: "9884455667" });
 const PAID_10102 = pass("AP-2026-10102", "Weekly Person Pass", "person", "V. Lakshmi", -14, -8, 2000, { name: "V. Lakshmi", mobile: "9790011223" });
@@ -59,6 +142,7 @@ function buildInitialState() {
     balance: 7725,
     lowBalanceThreshold: 5000,
     lastGatewayMethod: "UPI",
+    refunds: seedRefunds(),
     activity: [
       { id: "TOP26102200031", type: "TOPUP", description: "Wallet top-up", method: "UPI", amount: 5000, status: "SUCCESS", at: dayOffset(-1, "10:24") },
       { id: "TXN26102000077", type: "PASS_PAYMENT", description: "Pass payment · AP-2026-10391", method: "Wallet", amount: -1180, status: "SUCCESS", at: dayOffset(-3, "16:18"), passes: [PAID_10391], invoiceNo: "APX/2026-27/004812" },
@@ -84,21 +168,33 @@ let state = INITIAL_STATE;
 let hydrated = false;
 const listeners = new Set();
 
+function readStored() {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw ? { ...INITIAL_STATE, ...JSON.parse(raw) } : null;
+  } catch {
+    return null; // ignore corrupt demo state
+  }
+}
+
 function hydrate() {
   if (hydrated || typeof window === "undefined") return;
   hydrated = true;
-  try {
-    const raw = window.sessionStorage.getItem(STORAGE_KEY);
-    if (raw) state = { ...INITIAL_STATE, ...JSON.parse(raw) };
-  } catch {
-    /* ignore corrupt demo state */
-  }
+  state = readStored() || state;
+  // Another tab (e.g. the Traffic user approving) changed the demo data.
+  window.addEventListener("storage", (e) => {
+    if (e.key !== STORAGE_KEY) return;
+    state = readStored() || buildInitialState();
+    listeners.forEach((l) => l());
+  });
+  // EBS confirms approved refunds after a short delay (survives reloads).
+  setInterval(tickEbs, 2000);
 }
 
 function setState(updater) {
   state = { ...state, ...updater(state) };
   try {
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
     /* storage unavailable — keep in-memory */
   }
@@ -106,6 +202,7 @@ function setState(updater) {
 }
 
 function subscribe(listener) {
+  hydrate();
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
@@ -161,11 +258,15 @@ export function sumBreakup(passes) {
 }
 
 /** Attaches the wallet balance after each entry (newest first), bank-statement style. */
+/** Whether an activity entry has moved the available balance (refund holds do, while pending). */
+export const affectsBalance = (a) => a.status === "SUCCESS" || (a.type === "REFUND" && a.status === "PENDING");
+
 export function withRunningBalance(activity, currentBalance) {
   let bal = currentBalance;
   return activity.map((a) => {
-    const row = { ...a, balanceAfter: a.status === "SUCCESS" ? bal : null };
-    if (a.status === "SUCCESS") bal = round2(bal - a.amount);
+    const counts = affectsBalance(a);
+    const row = { ...a, balanceAfter: counts ? bal : null };
+    if (counts) bal = round2(bal - a.amount);
     return row;
   });
 }
@@ -185,6 +286,11 @@ export const formatDate = (iso) =>
   new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
 export const maskMobile = (m) => `+91 ••••• ${String(m).slice(-5)}`;
+
+export const maskEmail = (e) => {
+  const [user, domain] = String(e).split("@");
+  return `${user.slice(0, 2)}${"•".repeat(Math.max(user.length - 2, 3))}@${domain}`;
+};
 
 /** Days from today (local) until the given yyyy-mm-dd. */
 export function daysUntil(ymdStr) {
@@ -272,4 +378,127 @@ export async function simulatePassPayment(passIds, method, gatewayMethod) {
     ],
   }));
   return { txnId, at, invoiceNo, methodLabel, method, gatewayMethod, passes, totals, walletPaid, gatewayPaid, balanceAfter: state.balance };
+}
+
+// ── Refunds ────────────────────────────────────────────────────────────────
+
+const isMine = (r) => r.agent.loginId === CUSTOMER.loginId;
+export const myRefunds = (refunds) => refunds.filter(isMine);
+export const OPEN_REFUND_STATUSES = ["PENDING_TRAFFIC", "SENT_TO_EBS"];
+export const amountOnHold = (refunds) =>
+  myRefunds(refunds).filter((r) => OPEN_REFUND_STATUSES.includes(r.status)).reduce((s, r) => s + r.amount, 0);
+
+function makeRefundId(refunds) {
+  const max = refunds.reduce((m, r) => Math.max(m, Number(r.id.split("-").pop()) || 0), 0);
+  return `RF-${new Date().getFullYear()}-${pad(max + 1, 6)}`;
+}
+
+const setRefund = (id, fn) => (s) => ({ refunds: s.refunds.map((r) => (r.id === id ? fn(r) : r)) });
+
+/** Applicant: request a refund. The amount is put on hold immediately. */
+export async function requestRefund({ amount, reason, note, bankId }) {
+  await delay(900);
+  if (amount > state.balance) throw new Error("Amount is more than your available balance");
+  if (myRefunds(state.refunds).some((r) => r.status === "PENDING_TRAFFIC")) throw new Error("You already have a refund awaiting approval");
+  const bank = BANK_ACCOUNTS.find((b) => b.id === bankId) || BANK_ACCOUNTS[0];
+  const at = new Date().toISOString();
+  const refund = {
+    id: makeRefundId(state.refunds),
+    agent: { company: CUSTOMER.company, loginId: CUSTOMER.loginId, gstin: CUSTOMER.gstin, sapCustomerId: CUSTOMER.sapCustomerId },
+    amount,
+    reason,
+    note,
+    bank: { bankName: bank.bankName, accountMasked: bank.accountMasked, ifsc: bank.ifsc, holder: bank.holder },
+    walletBalanceAtRequest: state.balance,
+    status: "PENDING_TRAFFIC",
+    requestedAt: at,
+    timeline: [{ status: "REQUESTED", at, by: CUSTOMER.company }],
+  };
+  setState((s) => ({
+    balance: round2(s.balance - amount),
+    refunds: [refund, ...s.refunds],
+    activity: [
+      { id: refund.id, type: "REFUND", description: `Refund request · ${refund.id}`, method: `To ${bank.bankName} ${bank.accountMasked.slice(-4)}`, amount: -amount, status: "PENDING", at, refundId: refund.id },
+      ...s.activity,
+    ],
+  }));
+  return refund;
+}
+
+/** Releases a held refund amount back to the wallet (rejected / cancelled). */
+function releaseHold(s, refund, label) {
+  if (!isMine(refund)) return {};
+  return {
+    balance: round2(s.balance + refund.amount),
+    activity: s.activity.map((a) =>
+      a.refundId === refund.id ? { ...a, status: "REVERSED", description: `Refund ${label} · ${refund.id}` } : a,
+    ),
+  };
+}
+
+export async function cancelRefund(id) {
+  await delay(500);
+  const r = state.refunds.find((x) => x.id === id);
+  if (!r || r.status !== "PENDING_TRAFFIC") throw new Error("This request can no longer be cancelled");
+  const at = new Date().toISOString();
+  setState((s) => ({
+    ...setRefund(id, (x) => ({ ...x, status: "CANCELLED", timeline: [...x.timeline, { status: "CANCELLED", at, by: CUSTOMER.company }] }))(s),
+    ...releaseHold(s, r, "cancelled"),
+  }));
+}
+
+/** Traffic department: approve → forwarded to EBS for payment. */
+export async function approveRefund(id, { by, remarks }) {
+  await delay(900);
+  const at = new Date().toISOString();
+  const ebsRef = `EBS-RF-${Math.floor(7000000 + Math.random() * 999999)}`;
+  setState(
+    setRefund(id, (r) => ({
+      ...r,
+      status: "SENT_TO_EBS",
+      ebsRef,
+      ebsDueAt: Date.now() + EBS_PROCESSING_MS,
+      timeline: [
+        ...r.timeline,
+        { status: "TRAFFIC_APPROVED", at, by, note: remarks || "" },
+        { status: "SENT_TO_EBS", at, by: "APACS", note: `EBS request ${ebsRef}` },
+      ],
+    })),
+  );
+  return ebsRef;
+}
+
+export async function rejectRefund(id, { by, remarks }) {
+  await delay(700);
+  const r = state.refunds.find((x) => x.id === id);
+  const at = new Date().toISOString();
+  setState((s) => ({
+    ...setRefund(id, (x) => ({ ...x, status: "REJECTED", timeline: [...x.timeline, { status: "REJECTED", at, by, note: remarks }] }))(s),
+    ...releaseHold(s, r, "rejected"),
+  }));
+}
+
+/** Simulated EBS / SAP FICO callback: pays approved refunds to the bank. */
+function tickEbs() {
+  const due = state.refunds.filter((r) => r.status === "SENT_TO_EBS" && r.ebsDueAt && r.ebsDueAt <= Date.now());
+  if (!due.length) return;
+  const at = new Date().toISOString();
+  setState((s) => ({
+    refunds: s.refunds.map((r) => {
+      if (!due.some((d) => d.id === r.id)) return r;
+      const utr = `HDFCR5${Date.now().toString().slice(-13)}`;
+      return {
+        ...r,
+        status: "REFUNDED",
+        utr,
+        ebsDocNo: String(1900000000 + Math.floor(Math.random() * 99999)),
+        timeline: [...r.timeline, { status: "REFUNDED", at, by: "EBS / SAP FICO", note: `UTR ${utr}` }],
+      };
+    }),
+    activity: s.activity.map((a) =>
+      due.some((d) => d.id === a.refundId) && a.status === "PENDING"
+        ? { ...a, status: "SUCCESS", description: `Refund to bank · ${a.refundId}` }
+        : a,
+    ),
+  }));
 }

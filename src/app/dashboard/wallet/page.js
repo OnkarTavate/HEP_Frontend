@@ -18,6 +18,11 @@ import {
   Download,
   ChevronRight,
   RotateCcw,
+  Truck,
+  User,
+  Clock,
+  PartyPopper,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -30,6 +35,11 @@ import {
   formatINR,
   formatDateTime,
   formatTime,
+  priceBreakup,
+  myRefunds,
+  amountOnHold,
+  cancelRefund,
+  REFUND_LIMITS,
   QUICK_AMOUNTS,
   TOPUP_LIMITS,
 } from "@/lib/walletMock";
@@ -42,12 +52,18 @@ import {
   AmountText,
   TopUpGatewayModal,
   TransactionDrawer,
+  urgency,
+  RefundStatusPill,
+  RefundTracker,
+  RefundIcon,
 } from "@/components/wallet/WalletUI";
+import RefundRequestModal from "@/components/wallet/RefundRequestModal";
 
 const FILTERS = [
   { key: "all", label: "All", test: () => true },
   { key: "credit", label: "Top-ups", test: (a) => a.type === "TOPUP" && a.status === "SUCCESS" },
   { key: "debit", label: "Payments", test: (a) => a.type === "PASS_PAYMENT" },
+  { key: "refund", label: "Refunds", test: (a) => a.type === "REFUND" },
   { key: "pending", label: "Pending", test: (a) => a.status === "PENDING" },
   { key: "failed", label: "Failed", test: (a) => a.status === "FAILED" },
 ];
@@ -106,6 +122,7 @@ function WalletPage() {
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [openTxnId, setOpenTxnId] = useState(null);
   const [statementRange, setStatementRange] = useState("month");
+  const [refundOpen, setRefundOpen] = useState(false);
 
   const amount = parseAmount(amountText);
   const amountError =
@@ -154,6 +171,14 @@ function WalletPage() {
   }, [rows]);
 
   const openTxn = rows.find((a) => a.id === openTxnId) || null;
+  const mine = useMemo(() => myRefunds(wallet.refunds), [wallet.refunds]);
+  const onHold = amountOnHold(wallet.refunds);
+  const refundAwaiting = mine.some((r) => r.status === "PENDING_TRAFFIC");
+  const refundBlockedReason = refundAwaiting
+    ? "You already have a refund awaiting Traffic approval"
+    : wallet.balance < REFUND_LIMITS.min
+      ? `Minimum refundable balance is ${formatINR(REFUND_LIMITS.min)}`
+      : null;
 
   const handleContinue = () => {
     setTouched(true);
@@ -169,7 +194,7 @@ function WalletPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto py-2 space-y-5">
+    <div className="w-full py-2 space-y-5">
       {/* Title */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -194,10 +219,11 @@ function WalletPage() {
         </div>
       </div>
 
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_400px] xl:grid-rows-[auto_1fr] 2xl:grid-cols-[minmax(0,1fr)_440px]">
       {/* Balance hero */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#1a1d27] via-[#252836] to-[#1a1d27] dark:from-black dark:via-[#1a1d27] dark:to-black text-white ring-1 ring-white/5 shadow-[0_24px_56px_-20px_rgba(15,23,42,0.40)]">
+      <section className="xl:col-start-1 relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#1a1d27] via-[#252836] to-[#1a1d27] dark:from-black dark:via-[#1a1d27] dark:to-black text-white ring-1 ring-white/5 shadow-[0_24px_56px_-20px_rgba(15,23,42,0.40)]">
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" />
-        <div className="relative grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div className="relative grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] xl:grid-cols-1 2xl:grid-cols-[1fr_auto] lg:items-center">
           <div className="flex items-center gap-5">
             <span className="flex h-16 w-16 sm:h-20 sm:w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/30 to-orange-600/20 ring-1 ring-amber-400/30">
               <Wallet className="h-8 w-8 sm:h-10 sm:w-10 text-amber-400" strokeWidth={2.2} />
@@ -208,6 +234,21 @@ function WalletPage() {
                 {formatINR(wallet.balance)}
               </p>
               <LowBalanceSetting threshold={wallet.lowBalanceThreshold} low={lowBalance} />
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setRefundOpen(true)}
+                  disabled={Boolean(refundBlockedReason)}
+                  title={refundBlockedReason || "Get unused balance back to your bank account"}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-xs sm:text-sm font-bold text-white ring-1 ring-white/15 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RefundIcon className="h-4 w-4" /> Request refund
+                </button>
+                {onHold > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-400/15 px-3 py-1 text-xs font-bold text-sky-200">
+                    <Clock className="h-3.5 w-3.5" /> {formatINR(onHold)} on hold for refund
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -223,28 +264,13 @@ function WalletPage() {
           </div>
         </div>
 
-        {payable.length > 0 && (
-          <div className="relative flex flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-white/[0.03] px-6 sm:px-8 py-3.5">
-            <p className="text-sm text-stone-200">
-              <span className="font-bold text-white">
-                {payable.length} approved pass{payable.length > 1 ? "es" : ""}
-              </span>{" "}
-              awaiting payment · <span className="font-bold tabular-nums">{formatINR(pending.total)}</span>
-              {shortfall > 0 && <span className="text-amber-300"> · you need {formatINR(shortfall)} more</span>}
-            </p>
-            <Link
-              href="/dashboard/wallet/pay"
-              className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-4 py-2 text-sm font-bold text-black hover:bg-amber-300 transition-colors"
-            >
-              Pay now <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        )}
       </section>
 
+      {/* Right column on wide screens: primary action + what's due */}
+      <aside className="space-y-5 xl:col-start-2 xl:row-start-1 xl:row-span-2">
       {/* Add money */}
       <section className={cn(CARD, "p-6 sm:p-7")}>
-        <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
+        <div className="grid gap-6 md:grid-cols-2 md:gap-8 xl:grid-cols-1 xl:gap-6">
           <div>
             <h2 className="text-xl font-extrabold text-[#1f1f1f] dark:text-white">Add Money</h2>
             <label htmlFor="topup-amount" className="block mt-5 mb-2 text-sm font-bold text-stone-600 dark:text-stone-300">
@@ -328,7 +354,7 @@ function WalletPage() {
             )}
           </div>
 
-          <div className="lg:border-l lg:border-stone-200 dark:lg:border-white/10 lg:pl-8 flex flex-col">
+          <div className="flex flex-col border-stone-200 dark:border-white/10 md:border-l md:pl-8 xl:border-l-0 xl:pl-0 xl:border-t xl:pt-6">
             <div className="flex items-start gap-4">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-orange-50 dark:bg-orange-500/10">
                 <ShieldCheck className="h-6 w-6 text-orange-500" />
@@ -374,8 +400,12 @@ function WalletPage() {
         </div>
       </section>
 
+      <PendingPaymentsCard passes={wallet.approvedPasses} total={pending.total} shortfall={shortfall} />
+      {mine.length > 0 && <RefundRequestsCard refunds={mine} />}
+      </aside>
+
       {/* Activity */}
-      <section className={cn(CARD, "p-6 sm:p-7")}>
+      <section className={cn(CARD, "@container xl:col-start-1 min-w-0 p-6 sm:p-7")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-extrabold text-[#1f1f1f] dark:text-white">Wallet Activity</h2>
@@ -447,7 +477,7 @@ function WalletPage() {
         ) : (
           <>
             {/* Desktop table */}
-            <div className="mt-5 hidden md:block overflow-hidden rounded-2xl ring-1 ring-stone-100 dark:ring-white/5">
+            <div className="mt-5 hidden @min-[860px]:block overflow-hidden rounded-2xl ring-1 ring-stone-100 dark:ring-white/5">
               <table className="w-full text-sm">
                 <thead className="bg-stone-50 dark:bg-white/5 text-left text-xs font-bold uppercase tracking-wider text-stone-500">
                   <tr>
@@ -505,11 +535,11 @@ function WalletPage() {
             </div>
 
             {/* Mobile cards */}
-            <div className="mt-5 space-y-5 md:hidden">
+            <div className="mt-5 space-y-5 @min-[860px]:hidden">
               {groups.map((g) => (
                 <div key={g.label}>
                   <p className="mb-2 text-xs font-extrabold uppercase tracking-wider text-stone-400">{g.label}</p>
-                  <ul className="space-y-2.5">
+                  <ul className="grid gap-2.5 @min-[560px]:grid-cols-2">
                     {g.items.map((a) => (
                       <li key={a.id}>
                         <button
@@ -521,7 +551,7 @@ function WalletPage() {
                               <ActivityIcon item={a} />
                               <div className="min-w-0">
                                 <p className="font-bold text-[#1f1f1f] dark:text-white truncate">{a.description}</p>
-                                <p className="text-xs text-stone-500">{formatTime(a.at)} · {a.method}</p>
+                                <p className="text-xs text-stone-500">{g.label === "Today" || g.label === "Yesterday" ? formatTime(a.at) : formatDateTime(a.at)} · {a.method}</p>
                               </div>
                             </div>
                             <AmountText item={a} />
@@ -551,6 +581,7 @@ function WalletPage() {
           </>
         )}
       </section>
+      </div>
 
       {gatewayAmount !== null && (
         <TopUpGatewayModal
@@ -564,7 +595,16 @@ function WalletPage() {
         />
       )}
 
-      <TransactionDrawer key={openTxnId} item={openTxn} onClose={() => setOpenTxnId(null)} />
+      <TransactionDrawer
+        key={openTxnId}
+        item={openTxn}
+        refund={openTxn?.refundId ? wallet.refunds.find((r) => r.id === openTxn.refundId) : null}
+        onClose={() => setOpenTxnId(null)}
+      />
+
+      {refundOpen && (
+        <RefundRequestModal balance={wallet.balance} pendingPassesTotal={pending.total} onClose={() => setRefundOpen(false)} />
+      )}
     </div>
   );
 }
@@ -617,5 +657,157 @@ function LowBalanceSetting({ threshold, low }) {
         <Bell className="h-3.5 w-3.5" /> {threshold ? `Low-balance alert: ${formatINR(threshold)}` : "Set low-balance alert"}
       </button>
     </div>
+  );
+}
+
+function PendingPaymentsCard({ passes, total, shortfall }) {
+  const sorted = [...passes].sort((a, b) => a.validFrom.localeCompare(b.validFrom));
+  const payable = sorted.filter((p) => !p.paymentPending);
+  const confirming = sorted.length - payable.length;
+  const shown = payable.slice(0, 4);
+
+  return (
+    <section className={cn(CARD, "p-6")}>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg font-extrabold text-[#1f1f1f] dark:text-white">Awaiting payment</h2>
+        {payable.length > 0 && (
+          <span className="rounded-full bg-orange-100 dark:bg-orange-500/15 px-2.5 py-0.5 text-xs font-extrabold text-orange-700 dark:text-orange-300">
+            {payable.length}
+          </span>
+        )}
+      </div>
+
+      {payable.length === 0 ? (
+        <div className="mt-4 flex items-center gap-3 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 p-4">
+          <PartyPopper className="h-5 w-5 shrink-0 text-emerald-600" />
+          <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">All approved passes are paid.</p>
+        </div>
+      ) : (
+        <>
+          <ul className="mt-3 divide-y divide-stone-100 dark:divide-white/5">
+            {shown.map((p) => {
+              const Icon = p.kind === "vehicle" ? Truck : User;
+              const urg = urgency(p);
+              return (
+                <li key={p.id} className="flex items-center gap-3 py-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-stone-100 dark:bg-white/5">
+                    <Icon className="h-4 w-4 text-stone-600 dark:text-stone-300" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-[#1f1f1f] dark:text-white">{p.passType}</p>
+                    <p className="truncate text-xs text-stone-500">{p.subject}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold tabular-nums text-[#1f1f1f] dark:text-white">{formatINR(priceBreakup(p.baseAmount).total)}</p>
+                    {urg && <p className={cn("mt-0.5 inline-block rounded-full px-1.5 text-[10px] font-bold ring-1", urg.cls)}>{urg.label}</p>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {payable.length > shown.length && (
+            <p className="text-xs text-stone-500">+ {payable.length - shown.length} more</p>
+          )}
+
+          <div className="mt-3 flex items-center justify-between border-t border-stone-100 dark:border-white/5 pt-3 text-sm">
+            <span className="text-stone-500">Total due</span>
+            <span className="font-extrabold tabular-nums text-[#1f1f1f] dark:text-white">{formatINR(total)}</span>
+          </div>
+          {shortfall > 0 && (
+            <p className="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
+              Wallet short by {formatINR(shortfall)} — you can pay the rest by UPI at checkout.
+            </p>
+          )}
+          <Link
+            href="/dashboard/wallet/pay"
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1f1f1f] dark:bg-amber-400 py-3 text-sm font-bold text-white dark:text-black hover:opacity-90"
+          >
+            Review &amp; pay <ArrowRight className="h-4 w-4" />
+          </Link>
+        </>
+      )}
+
+      {confirming > 0 && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-stone-500">
+          <Clock className="h-3.5 w-3.5 text-amber-600" /> {confirming} payment{confirming > 1 ? "s" : ""} waiting for bank confirmation
+        </p>
+      )}
+    </section>
+  );
+}
+
+function RefundRequestsCard({ refunds }) {
+  const [expanded, setExpanded] = useState(null);
+  const [cancelling, setCancelling] = useState(null);
+  const shown = refunds.slice(0, 3);
+
+  const cancel = async (id) => {
+    setCancelling(id);
+    try {
+      await cancelRefund(id);
+      toast.success("Refund request cancelled", { description: "The held amount is back in your wallet." });
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setCancelling(null);
+    }
+  };
+
+  return (
+    <section className={cn(CARD, "p-6")}>
+      <h2 className="text-lg font-extrabold text-[#1f1f1f] dark:text-white">Refund requests</h2>
+      <ul className="mt-3 space-y-3">
+        {shown.map((r) => {
+          const open = expanded === r.id || (expanded === null && r === shown[0]);
+          const lastNote = [...r.timeline].reverse().find((t) => t.note)?.note;
+          return (
+            <li key={r.id} className="rounded-2xl ring-1 ring-stone-100 dark:ring-white/5 p-4">
+              <button onClick={() => setExpanded(open ? "" : r.id)} className="flex w-full items-start justify-between gap-3 text-left" aria-expanded={open}>
+                <div className="min-w-0">
+                  <p className="font-extrabold tabular-nums text-[#1f1f1f] dark:text-white">{formatINR(r.amount)}</p>
+                  <p className="text-xs text-stone-500">
+                    <span className="font-mono">{r.id}</span> · {formatDateTime(r.requestedAt)}
+                  </p>
+                </div>
+                <RefundStatusPill status={r.status} />
+              </button>
+              {open && (
+                <div className="mt-4 space-y-3">
+                  <RefundTracker refund={r} showHistory={false} />
+                  {r.status === "REJECTED" && lastNote && (
+                    <p className="rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-xs text-red-800 dark:text-red-300">
+                      <span className="font-bold">Reason: </span>{lastNote}
+                    </p>
+                  )}
+                  {r.status === "REFUNDED" && r.utr && (
+                    <p className="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-300">
+                      Paid to {r.bank.bankName} {r.bank.accountMasked.slice(-4)} · UTR <span className="font-mono">{r.utr}</span>
+                    </p>
+                  )}
+                  {r.status === "SENT_TO_EBS" && (
+                    <p className="flex items-center gap-1.5 text-xs text-sky-700 dark:text-sky-300">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Approved. EBS is processing payment to {r.bank.bankName} {r.bank.accountMasked.slice(-4)}.
+                    </p>
+                  )}
+                  {r.status === "PENDING_TRAFFIC" && (
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-stone-500">Waiting for Traffic department review.</p>
+                      <button
+                        onClick={() => cancel(r.id)}
+                        disabled={cancelling === r.id}
+                        className="rounded-xl px-3 py-1.5 text-xs font-bold text-red-600 ring-1 ring-red-200 hover:bg-red-50 dark:ring-red-500/30 dark:hover:bg-red-500/10 disabled:opacity-50"
+                      >
+                        {cancelling === r.id ? "Cancelling…" : "Cancel request"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {refunds.length > shown.length && <p className="mt-2 text-xs text-stone-500">+ {refunds.length - shown.length} older requests</p>}
+    </section>
   );
 }

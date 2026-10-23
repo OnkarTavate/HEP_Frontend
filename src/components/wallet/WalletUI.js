@@ -21,6 +21,8 @@ import {
   User,
   ArrowDownLeft,
   ArrowUpRight,
+  Undo2,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -31,6 +33,9 @@ import {
   formatINR,
   formatDateTime,
   formatDate,
+  daysUntil,
+  REFUND_STEPS,
+  REFUND_STATUS,
 } from "@/lib/walletMock";
 import { downloadTaxInvoice } from "@/lib/walletDocs";
 
@@ -38,6 +43,15 @@ export const CARD = "rounded-3xl bg-white dark:bg-[#1f232d] ring-1 ring-stone-20
 
 export const validityLabel = (p) =>
   p.validFrom === p.validTo ? formatDate(p.validFrom) : `${formatDate(p.validFrom)} – ${formatDate(p.validTo)}`;
+
+/** "Starts tomorrow"-style chip for passes whose validity begins soon. */
+export function urgency(p) {
+  const d = daysUntil(p.validFrom);
+  if (d <= 0) return { label: "Starts today", cls: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/20" };
+  if (d === 1) return { label: "Starts tomorrow", cls: "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20" };
+  if (d <= 3) return { label: `Starts in ${d} days`, cls: "bg-stone-100 text-stone-700 ring-stone-200 dark:bg-white/5 dark:text-stone-300 dark:ring-white/10" };
+  return null;
+}
 
 const METHOD_META = {
   UPI: { icon: Smartphone, hint: "GPay, PhonePe, Paytm, BHIM" },
@@ -51,6 +65,7 @@ const STATUS_STYLE = {
   SUCCESS: { label: "Success", pill: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400", dot: "bg-emerald-500" },
   FAILED: { label: "Failed", pill: "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400", dot: "bg-red-500" },
   PENDING: { label: "Pending", pill: "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300", dot: "bg-amber-500 animate-pulse" },
+  REVERSED: { label: "Released", pill: "bg-stone-100 text-stone-600 dark:bg-white/5 dark:text-stone-300", dot: "bg-stone-400" },
 };
 
 export function StatusPill({ status }) {
@@ -97,7 +112,9 @@ export function ActivityIcon({ item }) {
           ? "bg-stone-100 text-stone-400 dark:bg-white/5"
           : item.status === "PENDING"
             ? "bg-amber-50 text-amber-600 dark:bg-amber-500/10"
-            : credit
+            : item.status === "REVERSED"
+              ? "bg-stone-100 text-stone-400 dark:bg-white/5"
+              : credit
               ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
               : "bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400",
       )}
@@ -113,7 +130,7 @@ export function AmountText({ item, className }) {
     <span
       className={cn(
         "font-extrabold tabular-nums whitespace-nowrap",
-        item.status === "FAILED"
+        item.status === "FAILED" || item.status === "REVERSED"
           ? "text-stone-400 line-through"
           : item.status === "PENDING"
             ? "text-amber-700 dark:text-amber-300"
@@ -198,7 +215,7 @@ export function TopUpGatewayModal({ amount, defaultMethod, onClose, onDone }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-in fade-in"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-in fade-in"
       role="dialog"
       aria-modal="true"
       aria-labelledby="gateway-title"
@@ -340,7 +357,7 @@ const ISSUE_REASONS = [
   "Other",
 ];
 
-export function TransactionDrawer({ item, onClose }) {
+export function TransactionDrawer({ item, refund, onClose }) {
   const [reporting, setReporting] = useState(false);
   const [reason, setReason] = useState(ISSUE_REASONS[0]);
   const [note, setNote] = useState("");
@@ -358,14 +375,16 @@ export function TransactionDrawer({ item, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="txn-title">
+    <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-labelledby="txn-title">
       <button aria-label="Close details" onClick={onClose} className="absolute inset-0 bg-black/40 backdrop-blur-[2px] animate-in fade-in" />
       <aside className="relative flex h-full w-full max-w-md flex-col bg-white dark:bg-[#1f232d] shadow-2xl animate-in slide-in-from-right-10 duration-200">
         <div className="flex items-start justify-between gap-3 border-b border-stone-100 dark:border-white/5 px-6 py-5">
           <div className="flex items-center gap-3">
             <ActivityIcon item={item} />
             <div>
-              <p id="txn-title" className="font-extrabold text-[#1f1f1f] dark:text-white">{isPass ? "Pass payment" : "Wallet top-up"}</p>
+              <p id="txn-title" className="font-extrabold text-[#1f1f1f] dark:text-white">
+                {isPass ? "Pass payment" : item.type === "REFUND" ? "Wallet refund" : "Wallet top-up"}
+              </p>
               <p className="text-xs text-stone-500">{formatDateTime(item.at)}</p>
             </div>
           </div>
@@ -380,7 +399,9 @@ export function TransactionDrawer({ item, onClose }) {
             <StatusPill status={item.status} />
           </div>
 
-          {item.status === "PENDING" && (
+          {refund && <RefundTracker refund={refund} />}
+
+          {item.status === "PENDING" && item.type !== "REFUND" && (
             <p className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">
               Waiting for your bank to confirm. Your wallet will be credited automatically. Please don&apos;t pay again.
             </p>
@@ -498,3 +519,89 @@ function DrawerRow({ label, children }) {
     </div>
   );
 }
+
+// ── Refund pieces (shared by applicant wallet + Traffic approvals) ─────────
+
+const REFUND_PILL = {
+  PENDING_TRAFFIC: "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20",
+  SENT_TO_EBS: "bg-sky-50 text-sky-800 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/20",
+  REFUNDED: "bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20",
+  REJECTED: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/20",
+  CANCELLED: "bg-stone-100 text-stone-600 ring-stone-200 dark:bg-white/5 dark:text-stone-300 dark:ring-white/10",
+};
+
+export function RefundStatusPill({ status, long = false }) {
+  const meta = REFUND_STATUS[status];
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ring-1", REFUND_PILL[status])}>
+      {status === "SENT_TO_EBS" && <Loader2 className="h-3 w-3 animate-spin" />}
+      {long ? meta.label : meta.short}
+    </span>
+  );
+}
+
+const TIMELINE_LABEL = {
+  REQUESTED: "Refund requested",
+  TRAFFIC_APPROVED: "Approved by Traffic department",
+  SENT_TO_EBS: "Sent to EBS for payment",
+  REFUNDED: "Paid to bank by EBS",
+  REJECTED: "Rejected by Traffic department",
+  CANCELLED: "Cancelled",
+};
+
+/** Four-step progress (Requested → Traffic → EBS → Paid) plus the dated history. */
+export function RefundTracker({ refund, showHistory = true }) {
+  const stopped = refund.status === "REJECTED" || refund.status === "CANCELLED";
+  const current = REFUND_STATUS[refund.status].step; // index of the step in progress
+  return (
+    <div>
+      <ol className="grid grid-cols-4 gap-1" aria-label="Refund progress">
+        {REFUND_STEPS.map((step, i) => {
+          const done = refund.status === "REFUNDED" ? true : i < current;
+          const active = !stopped && i === current && refund.status !== "REFUNDED";
+          const failed = stopped && i === current;
+          return (
+            <li key={step.key} className="flex flex-col items-center text-center">
+              <div className="flex w-full items-center">
+                <span className={cn("h-0.5 flex-1", i === 0 ? "bg-transparent" : done || active || failed ? "bg-emerald-400" : "bg-stone-200 dark:bg-white/10")} />
+                <span
+                  className={cn(
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-2",
+                    failed
+                      ? "bg-red-500 text-white ring-red-500"
+                      : done
+                        ? "bg-emerald-500 text-white ring-emerald-500"
+                        : active
+                          ? "bg-white dark:bg-[#1f232d] text-amber-600 ring-amber-400"
+                          : "bg-white dark:bg-[#1f232d] text-stone-400 ring-stone-200 dark:ring-white/10",
+                  )}
+                >
+                  {failed ? (refund.status === "REJECTED" ? <X className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />) : done ? <CheckCheck className="h-3.5 w-3.5" /> : active ? <Clock className="h-3.5 w-3.5" /> : i + 1}
+                </span>
+                <span className={cn("h-0.5 flex-1", i === REFUND_STEPS.length - 1 ? "bg-transparent" : done ? "bg-emerald-400" : "bg-stone-200 dark:bg-white/10")} />
+              </div>
+              <span className={cn("mt-1.5 text-[11px] font-bold leading-tight", failed ? "text-red-600" : done || active ? "text-[#1f1f1f] dark:text-white" : "text-stone-400")}>
+                {failed ? (refund.status === "REJECTED" ? "Rejected" : "Cancelled") : step.label}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+
+      {showHistory && (
+        <ul className="mt-4 space-y-3 border-l-2 border-stone-100 dark:border-white/10 pl-4">
+          {[...refund.timeline].reverse().map((t, i) => (
+            <li key={i} className="relative">
+              <span className={cn("absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-[#1f232d]", t.status === "REJECTED" ? "bg-red-500" : t.status === "CANCELLED" ? "bg-stone-400" : "bg-emerald-500")} />
+              <p className="text-sm font-bold text-[#1f1f1f] dark:text-white">{TIMELINE_LABEL[t.status] || t.status}</p>
+              <p className="text-xs text-stone-500">{formatDateTime(t.at)} · {t.by}</p>
+              {t.note && <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-300">{t.note}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export { Undo2 as RefundIcon };

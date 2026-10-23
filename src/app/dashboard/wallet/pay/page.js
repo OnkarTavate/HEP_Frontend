@@ -35,14 +35,13 @@ import {
   simulatePassPayment,
   priceBreakup,
   sumBreakup,
-  daysUntil,
   maskMobile,
   round2,
   formatINR,
   formatDateTime,
 } from "@/lib/walletMock";
 import { downloadTaxInvoice, downloadQrSheet } from "@/lib/walletDocs";
-import { CARD, GatewayMethodPicker, validityLabel } from "@/components/wallet/WalletUI";
+import { CARD, GatewayMethodPicker, validityLabel, urgency } from "@/components/wallet/WalletUI";
 
 function affordableIds(passes, balance) {
   let left = balance;
@@ -55,14 +54,6 @@ function affordableIds(passes, balance) {
     }
   }
   return ids.length ? ids : passes.slice(0, 1).map((p) => p.id);
-}
-
-function urgency(p) {
-  const d = daysUntil(p.validFrom);
-  if (d <= 0) return { label: "Starts today", cls: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/20" };
-  if (d === 1) return { label: "Starts tomorrow", cls: "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20" };
-  if (d <= 3) return { label: `Starts in ${d} days`, cls: "bg-stone-100 text-stone-700 ring-stone-200 dark:bg-white/5 dark:text-stone-300 dark:ring-white/10" };
-  return null;
 }
 
 export default function PayApprovedPassesPage() {

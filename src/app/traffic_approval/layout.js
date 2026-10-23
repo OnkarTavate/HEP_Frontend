@@ -60,6 +60,7 @@ import {
   CheckCircle,
   HelpCircle,
   Container as CargoIcon,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -624,6 +625,7 @@ export default function TrafficLayout({ children }) {
           icon: ShieldBan,
         },
         { name: "Bulk Pass", href: "/traffic_approval/bulk-pass", icon: Users },
+        { name: "Wallet Refunds", href: "/traffic_approval/wallet-refunds", icon: Wallet },
         { name: "Reports", href: "/traffic_approval/reports", icon: BarChart3 },
         { name: "Cargo Analytics", href: "/traffic_approval/cargo-analytics", icon: CargoIcon },
       ];
