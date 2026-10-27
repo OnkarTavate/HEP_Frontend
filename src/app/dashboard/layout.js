@@ -461,6 +461,19 @@ export default function DashboardLayout({ children }) {
   }, []);
 
   useEffect(() => {
+    // Keep window scroll strictly at 0 in dashboard; all scrolling is contained in <main>
+    window.scrollTo(0, 0);
+    const origHtmlOverflow = document.documentElement.style.overflow;
+    const origBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.documentElement.style.overflow = origHtmlOverflow;
+      document.body.style.overflow = origBodyOverflow;
+    };
+  }, [pathname]);
+
+  useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
       try {
@@ -872,7 +885,7 @@ export default function DashboardLayout({ children }) {
   return (
     <div
       className={cn(
-        "h-screen w-screen overflow-hidden flex transition-colors duration-300 bg-[#d8d0c8] dark:bg-[#0d0f17]",
+        "fixed inset-0 w-full h-full overflow-hidden flex transition-colors duration-300 bg-[#d8d0c8] dark:bg-[#0d0f17]",
         darkMode && "dark",
       )}
       style={{ fontFamily: "'Montserrat', 'Inter', Arial, sans-serif" }}

@@ -24,6 +24,8 @@ import {
   Minimize,
   FileCheck2,
   MessageSquareWarning,
+  Flame,
+  ShieldCheck,
 } from "lucide-react";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:5001/api";
@@ -48,6 +50,12 @@ const PASS_TYPE_META = {
 };
 
 const STATUS_STYLES = {
+  COMPLETED: {
+    badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    border: "border-emerald-300",
+    bar: "border-l-emerald-400",
+    icon: CheckCircle2,
+  },
   APPROVED: {
     badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
     border: "border-emerald-300",
@@ -78,6 +86,18 @@ const STATUS_STYLES = {
     bar: "border-l-indigo-400",
     icon: Clock,
   },
+  "UNDER REVIEW": {
+    badge: "bg-sky-50 text-sky-700 border-sky-200",
+    border: "border-sky-200",
+    bar: "border-l-sky-400",
+    icon: Clock,
+  },
+  "PENDING APPROVAL": {
+    badge: "bg-sky-50 text-sky-700 border-sky-200",
+    border: "border-sky-200",
+    bar: "border-l-sky-400",
+    icon: Clock,
+  },
 };
 
 const DEPARTMENT_DISPLAY_NAMES = {
@@ -92,24 +112,64 @@ const DEPARTMENT_DISPLAY_NAMES = {
 const getStatusStyle = (status) =>
   STATUS_STYLES[(status || "").toUpperCase()] || STATUS_STYLES.SUBMITTED;
 
+export function cleanRemarks(raw) {
+  if (!raw || typeof raw !== "string") return "";
+  const parts = raw
+    .split(/\s*\|\s*|\s*\n+\s*/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const cleaned = [];
+  for (const part of parts) {
+    const stripped = part.replace(/^(RETURNABLE|NON[-_]RETURNABLE)\s*:\s*/i, "").trim();
+    if (stripped && !cleaned.includes(stripped)) {
+      cleaned.push(stripped);
+    }
+  }
+
+  return cleaned.length > 0
+    ? cleaned.join(" | ")
+    : raw.replace(/^(RETURNABLE|NON[-_]RETURNABLE)\s*:\s*/i, "").trim();
+}
+
 // Rows beyond this count trigger a scrollable table body inside the detail modal.
 const MAX_VISIBLE_ROWS = 5;
 
 // --- Compact, always-visible summary row for a pass type. Clicking it (or
 // its "View details" button) opens the full material read-only review in a
 // separate modal stacked on top — it never expands inline anymore. ---
-function MaterialPassSummaryRow({ meta, passData, onOpen, onPrintQR, isPrinting }) {
+function MaterialPassSummaryRow({ meta, passData, onOpen, onPrintQR, isPrinting, isRequestCompleted }) {
   if (!passData) return null;
 
   const Icon = meta.icon;
-  const materials = passData.materials || [];
-  const status = (passData.status || "SUBMITTED").toUpperCase();
+  const materials = (passData.materials || [])
+    .slice()
+    .sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+  const rawStatus = (passData.status || "SUBMITTED").toUpperCase();
+  const isReverted = rawStatus === "REVERTED";
+  const isRejected = rawStatus === "REJECTED";
+  const isApproved = isRequestCompleted && rawStatus === "APPROVED";
+
+  const status = isReverted
+    ? "REVERTED"
+    : isRejected
+    ? "REJECTED"
+    : isApproved
+    ? "APPROVED"
+    : "UNDER REVIEW";
+
   const style = getStatusStyle(status);
   const StatusIcon = style.icon;
-  const isReverted = status === "REVERTED";
-  const isRejected = status === "REJECTED";
-  const isApproved = status === "APPROVED";
   const hasRemarks = (isReverted || isRejected) && (passData.remarks || passData.rejectedReason);
+  const hasHazardous = materials.some((m) => Boolean(m.isHazardous ?? m.is_hazardous));
+  const excludedCount = materials.filter(
+    (m) =>
+      (m.approvedQty !== null &&
+        m.approvedQty !== undefined &&
+        m.approvedQty !== "" &&
+        Number(m.approvedQty) === 0) ||
+      m.approved === false
+  ).length;
 
   return (
     <div
@@ -130,9 +190,19 @@ function MaterialPassSummaryRow({ meta, passData, onOpen, onPrintQR, isPrinting 
           <div className="text-sm font-bold text-[#0a1e4d] truncate">
             {meta.label}
           </div>
-          <div className="text-xs text-slate-500">
-            {materials.length} item{materials.length === 1 ? "" : "s"}
-            {hasRemarks ? " · has remarks" : ""}
+          <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
+            <span>{materials.length} item{materials.length === 1 ? "" : "s"}</span>
+            {hasHazardous && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+                <Flame className="h-3 w-3 text-red-600" /> Hazardous items
+              </span>
+            )}
+            {excludedCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-300">
+                <XCircle className="h-3 w-3 text-rose-500" /> {excludedCount} excluded
+              </span>
+            )}
+            {hasRemarks ? <span>· has remarks</span> : null}
           </div>
         </div>
       </div>
@@ -143,28 +213,6 @@ function MaterialPassSummaryRow({ meta, passData, onOpen, onPrintQR, isPrinting 
           <StatusIcon className="h-3.5 w-3.5" />
           {status}
         </span>
-
-        {isApproved ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onPrintQR();
-            }}
-            disabled={isPrinting}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100"
-          >
-            {isPrinting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <QrCode className="h-3.5 w-3.5" />
-            )}
-            Print QR
-          </button>
-        ) : (
-          <span className="text-[11px] font-semibold text-slate-400 italic px-1 hidden sm:inline">
-            QR available after approval
-          </span>
-        )}
 
         <button
           onClick={(e) => {
@@ -183,7 +231,7 @@ function MaterialPassSummaryRow({ meta, passData, onOpen, onPrintQR, isPrinting 
 // --- Secondary modal: opened on top of the main details modal when a pass
 // summary row is clicked. Read-only — full materials table, remarks, and a
 // Print QR action for approved passes. ---
-function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPrinting, onViewDoc }) {
+function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPrinting, onViewDoc, isRequestCompleted }) {
   const [expandedDesc, setExpandedDesc] = useState({});
   const [expandedRemarks, setExpandedRemarks] = useState({});
 
@@ -195,15 +243,41 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
     setExpandedRemarks((prev) => ({ ...prev, [i]: !prev[i] }));
 
   const Icon = meta.icon;
-  const materials = passData.materials || [];
-  const status = (passData.status || "SUBMITTED").toUpperCase();
+  const materials = (passData.materials || [])
+    .slice()
+    .sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+  const rawStatus = (passData.status || "SUBMITTED").toUpperCase();
+  const isReverted = rawStatus === "REVERTED";
+  const isRejected = rawStatus === "REJECTED";
+  const isApproved = isRequestCompleted && rawStatus === "APPROVED";
+
+  const status = isReverted
+    ? "REVERTED"
+    : isRejected
+    ? "REJECTED"
+    : isApproved
+    ? "APPROVED"
+    : "UNDER REVIEW";
+
   const style = getStatusStyle(status);
   const StatusIcon = style.icon;
-  const isReverted = status === "REVERTED";
-  const isRejected = status === "REJECTED";
-  const isApproved = status === "APPROVED";
   const hasRemarks = (isReverted || isRejected) && (passData.remarks || passData.rejectedReason);
   const isScrollable = materials.length > MAX_VISIBLE_ROWS;
+  const excludedCount = materials.filter(
+    (m) =>
+      (m.approvedQty !== null &&
+        m.approvedQty !== undefined &&
+        m.approvedQty !== "" &&
+        Number(m.approvedQty) === 0) ||
+      m.approved === false
+  ).length;
+  const approvedCount = materials.filter(
+    (m) =>
+      m.approvedQty !== null &&
+      m.approvedQty !== undefined &&
+      m.approvedQty !== "" &&
+      Number(m.approvedQty) > 0
+  ).length;
 
   // Heuristic threshold for showing "show more" — avoids needing a DOM
   // measurement just to decide if text overflows a single line.
@@ -228,10 +302,18 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
 
         {/* Sub-header: item count + status + optional document link */}
         <div className="px-5 py-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between shrink-0">
-          <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest flex items-center gap-2">
-            <Icon className="h-4 w-4" />
-            {materials.length} item{materials.length === 1 ? "" : "s"}
-          </h4>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest flex items-center gap-2">
+              <Icon className="h-4 w-4" />
+              {materials.length} item{materials.length === 1 ? "" : "s"}
+            </h4>
+            {excludedCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-300">
+                <XCircle className="h-3.5 w-3.5 text-rose-500" />
+                {excludedCount} Excluded ({approvedCount} Approved)
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {passData.documentUrl && (
               <button
@@ -251,21 +333,22 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
         {/* Scrollable body: table + remarks */}
         <div className="overflow-y-auto flex-1">
           <div className={`overflow-x-auto ${isScrollable ? "max-h-72 overflow-y-auto" : ""}`}>
-            <table className="w-full table-fixed text-left text-sm min-w-[760px]">
+            <table className="w-full table-fixed text-left text-sm min-w-[850px]">
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                 <tr>
                   <th className="w-14 p-3 font-semibold text-slate-600 uppercase text-xs">S.No.</th>
-                  <th className="w-[22%] p-3 font-semibold text-slate-600 uppercase text-xs">Item Name</th>
+                  <th className="w-[20%] p-3 font-semibold text-slate-600 uppercase text-xs">Item Name</th>
+                  <th className="w-36 p-3 font-semibold text-slate-600 uppercase text-xs text-center">Hazardous Status</th>
                   <th className="w-20 p-3 font-semibold text-slate-600 uppercase text-xs">Quantity</th>
                   <th className="w-24 p-3 font-semibold text-slate-600 uppercase text-xs">Unit</th>
-                  <th className="w-[28%] p-3 font-semibold text-slate-600 uppercase text-xs">Description</th>
-                  <th className="w-[22%] p-3 font-semibold text-slate-600 uppercase text-xs">Approved Qty</th>
+                  <th className="w-[24%] p-3 font-semibold text-slate-600 uppercase text-xs">Description</th>
+                  <th className="w-[18%] p-3 font-semibold text-slate-600 uppercase text-xs">Approved Qty</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {materials.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-4 text-center text-sm text-slate-400 italic">
+                    <td colSpan={7} className="p-4 text-center text-sm text-slate-400 italic">
                       No materials listed.
                     </td>
                   </tr>
@@ -276,8 +359,15 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
                     // so they're no longer mutually exclusive with approval.
                     const approvedQtyNum = Number(item.approvedQty) || 0;
                     const isItemApproved = isApproved && approvedQtyNum > 0;
+                    const isItemExcluded =
+                      (item.approvedQty !== null &&
+                        item.approvedQty !== undefined &&
+                        item.approvedQty !== "" &&
+                        approvedQtyNum === 0) ||
+                      item.approved === false;
                     const isItemShort =
-                      isApproved && item.approvedQty != null && approvedQtyNum < Number(item.quantity);
+                      isApproved && item.approvedQty != null && approvedQtyNum < Number(item.quantity) && approvedQtyNum > 0;
+                    const isItemHazardous = Boolean(item.isHazardous ?? item.is_hazardous);
 
                     const descText = item.description || "";
                     const isDescLong = descText.length > DESC_TRUNCATE_LEN;
@@ -288,11 +378,24 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
                     const isRemarkExpanded = !!expandedRemarks[index];
 
                     return (
-                      <tr key={index} className={isApproved && !isItemApproved ? "bg-red-50/40" : ""}>
+                      <tr key={index} className={isItemExcluded ? "bg-rose-50/40" : (isApproved && !isItemApproved ? "bg-red-50/40" : "")}>
                         <td className="p-3 align-top text-slate-800 font-mono font-bold text-xs">
                           {index + 1}
                         </td>
                         <td className="p-3 align-top font-bold text-[#0a1e4d]">{item.name}</td>
+                        <td className="p-3 align-top text-center whitespace-nowrap">
+                          {isItemHazardous ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-300">
+                              <Flame className="h-3.5 w-3.5 text-red-600" />
+                              Hazardous
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-50 text-slate-600 border border-slate-200">
+                              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                              Non-Hazardous
+                            </span>
+                          )}
+                        </td>
                         <td className="p-3 align-top text-slate-600 font-mono font-bold text-xs">{item.quantity}</td>
                         <td className="p-3 align-top text-slate-800 font-mono text-xs">{item.unit}</td>
 
@@ -347,11 +450,16 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
                                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                                   </>
                                 ) : (
-                                  <>
-                                    <span className="text-slate-400 font-bold">0</span>
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
                                     <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                  </>
+                                    <span>0 (Excluded)</span>
+                                  </span>
                                 )
+                              ) : isItemExcluded ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                  <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                  <span>0 (Excluded)</span>
+                                </span>
                               ) : (
                                 <span className="text-slate-400 font-bold">-</span>
                               )}
@@ -404,30 +512,40 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
                 {isReverted ? "Reviewer remarks — action required" : "Rejection reason"}
               </p>
               <p className={`text-sm ${isReverted ? "text-amber-700" : "text-red-700"}`}>
-                {passData.remarks || passData.rejectedReason}
+                {cleanRemarks(passData.remarks || passData.rejectedReason)}
               </p>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 p-5 border-t border-slate-200 bg-white shrink-0">
-          {isApproved ? (
+        <div className="flex justify-between items-center gap-3 p-5 border-t border-slate-200 bg-white shrink-0">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl font-bold border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors text-sm"
+          >
+            Close
+          </button>
+          {isApproved && !isRejected ? (
             <button
               onClick={onPrintQR}
               disabled={isPrinting}
-              className="px-6 py-3 rounded-xl font-bold flex items-center gap-2 bg-orange-600 text-white hover:bg-orange-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 bg-orange-600 text-white hover:bg-orange-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
             >
               {isPrinting ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <QrCode className="h-5 w-5" />
+                <QrCode className="h-4 w-4" />
               )}
-              Print QR
+              Print Material Pass (QR)
             </button>
+          ) : isRejected ? (
+            <span className="text-xs font-semibold text-rose-500 italic self-center">
+              Pass rejected — QR not available
+            </span>
           ) : (
             <span className="text-xs font-semibold text-slate-400 italic self-center">
-              QR available after approval
+              QR available after CISF Assistant Commandant approval
             </span>
           )}
         </div>
@@ -485,44 +603,104 @@ export default function MaterialPassDetailsModal({
     .map((meta) => meta.key);
 
   const overallStatus = (pass.status || "SUBMITTED").toUpperCase();
-  const displayStatus = pass.isResubmitted ? "RESUBMITTED" : overallStatus;
+  const currentStage = (pass.currentStage || "").toUpperCase();
+  const passList = [pass.returnablePass, pass.nonReturnablePass].filter(Boolean);
+  const hasRejectedPass = passList.some(
+    (p) => String(p?.status || "").toUpperCase() === "REJECTED"
+  );
+  const isOverallRejected =
+    overallStatus === "REJECTED" || currentStage === "REJECTED" || hasRejectedPass;
+  const isRequestCompleted =
+    (overallStatus === "COMPLETED" || currentStage === "COMPLETED") && !isOverallRejected;
+
+  const displayStatus = pass.isResubmitted
+    ? "RESUBMITTED"
+    : isOverallRejected
+    ? "REJECTED"
+    : overallStatus;
   const overallStyle = getStatusStyle(displayStatus);
-  const isReverted = pass.hasRevertedPass;
+  const isReverted = Boolean(
+    pass.hasRevertedPass ||
+      String(pass.returnablePass?.status || "").toUpperCase() === "REVERTED" ||
+      String(pass.nonReturnablePass?.status || "").toUpperCase() === "REVERTED"
+  );
+  const overallRevertRemarks = cleanRemarks(
+    pass.revertRemarks ||
+      pass.returnablePass?.rejectedReason ||
+      pass.nonReturnablePass?.rejectedReason ||
+      pass.returnablePass?.remarks ||
+      pass.nonReturnablePass?.remarks ||
+      pass.remarks ||
+      pass.rejectedReason
+  );
 
   const createdAtStr = pass.createdAt || pass.submittedAt;
   const passIdStr = pass.referenceNo || (pass.id ? `REQ-${pass.id}` : "MREQ-0001");
+
+  // Calculate excluded and approved item counts separately for Returnable & Non-Returnable passes
+  const getExcludedCount = (passData) => {
+    if (!passData?.materials || !Array.isArray(passData.materials)) return 0;
+    return passData.materials.filter(
+      (m) =>
+        (m.approvedQty !== null &&
+          m.approvedQty !== undefined &&
+          m.approvedQty !== "" &&
+          Number(m.approvedQty) === 0) ||
+        m.approved === false
+    ).length;
+  };
+
+  const getApprovedCount = (passData) => {
+    if (!passData?.materials || !Array.isArray(passData.materials)) return 0;
+    return passData.materials.filter(
+      (m) =>
+        m.approvedQty !== null &&
+        m.approvedQty !== undefined &&
+        m.approvedQty !== "" &&
+        Number(m.approvedQty) > 0
+    ).length;
+  };
+
+  const retExcludedCount = getExcludedCount(pass.returnablePass);
+  const nonRetExcludedCount = getExcludedCount(pass.nonReturnablePass);
+  const totalExcludedCount = retExcludedCount + nonRetExcludedCount;
+
+  const retTotalCount = pass.returnablePass?.materials?.length || 0;
+  const nonRetTotalCount = pass.nonReturnablePass?.materials?.length || 0;
 
   // Opens the secondary detail modal for a given pass type.
   const openPassDetail = (key) => setActivePassKey(key);
   const closePassDetail = () => setActivePassKey(null);
 
-  // Generates and prints the QR/pass PDF for a given material pass type
-  // (returnable / nonReturnable). Only ever called for APPROVED passes —
-  // the button itself is hidden otherwise, but we double-check here too.
-  const handlePrintQR = async (meta) => {
-    const passData = pass[meta.dataKey];
+  // Generates and prints the unified QR/pass PDF for the entire material pass request
+  // (covering both returnable & non-returnable materials). Strictly only available
+  // after CISF Assistant Commandant completes the approval.
+  const handlePrintQR = async () => {
     const passRequestId = pass.id || pass.passId;
-    const passId = passData?.id;
 
-    if ((passData?.status || "").toUpperCase() !== "APPROVED") {
-      toast.error("QR can only be generated for an approved pass.");
+    if (!isRequestCompleted || isOverallRejected) {
+      toast.error(
+        isOverallRejected
+          ? "Pass has been rejected. QR cannot be generated for rejected passes."
+          : "QR can only be generated after CISF Assistant Commandant approval."
+      );
       return;
     }
 
-    if (!passRequestId || !passId) {
-      toast.error("Missing pass or reference ID. Cannot generate QR.");
+    if (!passRequestId) {
+      toast.error("Missing pass reference ID. Cannot generate QR.");
       return;
     }
 
-    setPrintingKey(meta.key);
-    toast.info(`Generating QR for ${meta.label}...`);
+    setPrintingKey("unified");
+    toast.info("Generating unified Material Movement Pass QR...");
 
     try {
       let token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
       if (token) token = token.replace(/^["']|["']$/g, "");
 
       const response = await axios.get(
-        `${QR_SERVICE_URL}/qr/generate-material-pass/${passRequestId}?type=${meta.key}&passId=${passId}`,
+        `${QR_SERVICE_URL}/qr/generate-material-pass/${passRequestId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
           responseType: "blob", // handle a PDF file, not JSON
@@ -604,6 +782,14 @@ export default function MaterialPassDetailsModal({
                     One or more materials on this request need correction. Review the remarks
                     below on each affected pass type, then edit and resubmit.
                   </p>
+                  {overallRevertRemarks && (
+                    <div className="mt-3 bg-white/90 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+                      <span className="font-bold uppercase tracking-wider text-[10px] text-amber-800 block mb-1">
+                        Reviewer Remarks:
+                      </span>
+                      {overallRevertRemarks}
+                    </div>
+                  )}
                   {onEditReverted && (
                     <button
                       onClick={() => onEditReverted(pass)}
@@ -760,9 +946,62 @@ export default function MaterialPassDetailsModal({
             {/* Material review: compact clickable rows, each opens its own modal */}
             {applicablePassKeys.length > 0 && (
               <div>
-                <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest flex items-center gap-2 mb-3 px-1">
-                  <Package className="h-4 w-4" /> Material Details
-                </h4>
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <h4 className="text-xs font-black text-[#0a1e4d] uppercase tracking-widest flex items-center gap-2">
+                    <Package className="h-4 w-4" /> Material Details
+                  </h4>
+                  {isRequestCompleted && !isOverallRejected && (
+                    <button
+                      onClick={handlePrintQR}
+                      disabled={printingKey === "unified"}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-orange-600 text-white hover:bg-orange-700 shadow-sm"
+                    >
+                      {printingKey === "unified" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <QrCode className="h-3.5 w-3.5" />
+                      )}
+                      Print Material Pass (QR)
+                    </button>
+                  )}
+                </div>
+
+                {/* Excluded items banner with separate counts for Returnable and Non-Returnable */}
+                {totalExcludedCount > 0 && (
+                  <div className="mb-3.5 p-3.5 rounded-xl bg-rose-50/90 border border-rose-200 flex items-center justify-between gap-3 flex-wrap shadow-2xs">
+                    <div className="flex items-center gap-2.5">
+                      <XCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                      <div className="text-xs text-rose-950 font-medium flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-rose-900">Items Excluded by Department:</span>
+                        {pass.returnablePass && (
+                          <span className="inline-flex items-center gap-1 bg-white/80 px-2 py-0.5 rounded-md border border-rose-200 text-slate-700">
+                            <span className="font-semibold text-slate-600">Returnable Pass:</span>
+                            <span className={`font-bold ${
+                              retExcludedCount > 0 ? "text-rose-700" : "text-emerald-700"
+                            }`}>
+                              {retExcludedCount} excluded
+                            </span>
+                            <span className="text-slate-400 font-normal text-[11px]">({retTotalCount} items)</span>
+                          </span>
+                        )}
+                        {pass.nonReturnablePass && (
+                          <span className="inline-flex items-center gap-1 bg-white/80 px-2 py-0.5 rounded-md border border-rose-200 text-slate-700">
+                            <span className="font-semibold text-slate-600">Non-Returnable Pass:</span>
+                            <span className={`font-bold ${
+                              nonRetExcludedCount > 0 ? "text-rose-700" : "text-emerald-700"
+                            }`}>
+                              {nonRetExcludedCount} excluded
+                            </span>
+                            <span className="text-slate-400 font-normal text-[11px]">({nonRetTotalCount} items)</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
+                      {totalExcludedCount} Total Excluded
+                    </span>
+                  </div>
+                )}
                 {applicablePassKeys.map((key) => {
                   const meta = PASS_TYPE_META[key];
                   return (
@@ -771,8 +1010,9 @@ export default function MaterialPassDetailsModal({
                       meta={meta}
                       passData={pass[meta.dataKey]}
                       onOpen={openPassDetail}
-                      onPrintQR={() => handlePrintQR(meta)}
-                      isPrinting={printingKey === key}
+                      onPrintQR={handlePrintQR}
+                      isPrinting={printingKey === "unified"}
+                      isRequestCompleted={isRequestCompleted}
                     />
                   );
                 })}
@@ -798,9 +1038,10 @@ export default function MaterialPassDetailsModal({
           meta={activeMeta}
           passData={activePassData}
           onClose={closePassDetail}
-          onPrintQR={() => handlePrintQR(activeMeta)}
-          isPrinting={printingKey === activeMeta.key}
+          onPrintQR={handlePrintQR}
+          isPrinting={printingKey === "unified"}
           onViewDoc={handleViewDoc}
+          isRequestCompleted={isRequestCompleted}
         />
       )}
 

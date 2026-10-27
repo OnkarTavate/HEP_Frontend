@@ -1,367 +1,657 @@
 "use client";
 
-import React, { useState, useRef } from "react";
-import { Trash2 } from "lucide-react";
+import React, { useState, useMemo, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { toast } from "sonner";
+import {
+  Boxes,
+  Check,
+  PackagePlus,
+  Pencil,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 
-import { materialSchema } from "./materialValidations";
+const rowInputCls =
+  "w-full min-w-0 rounded-lg border border-slate-300 " +
+  "bg-white px-3 py-2 text-xs text-slate-900 " +
+  "outline-none transition placeholder:text-slate-400 " +
+  "focus:border-orange-500 focus:ring-4 " +
+  "focus:ring-orange-500/10 disabled:bg-slate-100 " +
+  "disabled:cursor-not-allowed";
 
-const initialMaterialForm = {
-	name: "",
-	unit: null,
-	quantity: null,
-	description: ""
-};
-
-const inputClass =
-	"w-full h-10 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 px-3 shadow-sm bg-white outline-none transition-all";
-
-const newRowInputClass =
-	"w-full h-10 px-3 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none";
+const secondaryButtonCls =
+  "inline-flex items-center justify-center gap-2 rounded-xl " +
+  "border border-slate-300 bg-white px-4 py-2 text-sm " +
+  "font-semibold text-slate-700 transition hover:bg-slate-50 " +
+  "focus-visible:outline-none focus-visible:ring-4 " +
+  "focus-visible:ring-orange-500/15 " +
+  "disabled:cursor-not-allowed disabled:opacity-50";
 
 /**
  * Reusable Returnable / Non-Returnable materials table.
- *
- * The parent owns the source-of-truth list (`materials` / `setMaterials`);
- * this component only owns the ephemeral "adding a new row" / "editing a
- * row" UI state, so two independent instances (Returnable, Non-Returnable)
- * never interfere with each other.
+ * Matches the design and user experience of vendor-material-pass.
  */
-export default function MaterialTable({
-	title,
-	materials,
-	setMaterials,
-	units,
-	getLabelById
-}) {
-	const tableRef = useRef(null);
+export const MaterialTable = forwardRef(function MaterialTable({
+  type,
+  title,
+  materials = [],
+  setMaterials,
+  units = [],
+  unitsLoading = false,
+  getLabelById,
+  onDraftChange,
+}, ref) {
+  const [draft, setDraft] = useState(null);
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [errors, setErrors] = useState({});
 
-	const [editingIndex, setEditingIndex] = useState(null);
-	const [editingMaterial, setEditingMaterial] = useState(null);
-	const [newMaterial, setNewMaterial] = useState(null);
+  const editorRowRef = useRef(null);
+  const scrollContainerRef = useRef(null);
 
-	const isNewMaterialValid = materialSchema.safeParse(newMaterial).success;
-	const isEditingMaterialValid =
-		materialSchema.safeParse(editingMaterial).success;
+  const totalRowCount = materials.length + (draft && editingIndex === null ? 1 : 0);
+  const isScrollable = totalRowCount > 15;
 
-	const closeRows = () => {
-		setEditingIndex(null);
-		setEditingMaterial(null);
-		setNewMaterial(null);
-	};
+  // Auto-scroll newly added or edited row into view within the table container only
+  useEffect(() => {
+    if (draft && editorRowRef.current && scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const row = editorRowRef.current;
+      const cTop = container.scrollTop;
+      const cHeight = container.clientHeight;
+      const rTop = row.offsetTop;
+      const rHeight = row.offsetHeight;
 
-	const openNewRow = () => {
-		setEditingIndex(null);
-		setEditingMaterial(null);
-		setNewMaterial(initialMaterialForm);
+      if (rTop + rHeight > cTop + cHeight) {
+        container.scrollTo({ top: rTop + rHeight - cHeight + 20, behavior: "smooth" });
+      } else if (rTop < cTop) {
+        container.scrollTo({ top: Math.max(0, rTop - 10), behavior: "smooth" });
+      }
+    }
+  }, [draft, editingIndex]);
 
-		requestAnimationFrame(() => {
-			tableRef.current?.scrollTo({
-				top: tableRef.current.scrollHeight,
-				behavior: "smooth",
-			});
-		});
-	};
+  const computedType =
+    type ||
+    (title?.toLowerCase().includes("non")
+      ? "NON_RETURNABLE"
+      : "RETURNABLE");
 
-	const openEditRow = (index) => {
-		setNewMaterial(null);
-		setEditingIndex(index);
-		setEditingMaterial({ ...materials[index] });
-	};
+  const returnable = computedType === "RETURNABLE";
 
-	const addMaterial = () => {
-		if (!newMaterial) return;
-		setMaterials((prev) => [...prev, newMaterial]);
-		closeRows();
-	};
+  const displayTitle =
+    title ||
+    (returnable ? "Returnable materials" : "Non-returnable materials");
 
-	const saveEdit = () => {
-		if (editingIndex === null) return;
-		setMaterials((prev) => {
-			const updated = [...prev];
-			updated[editingIndex] = { ...editingMaterial };
-			return updated;
-		});
-		closeRows();
-	};
+  const unitNames = useMemo(
+    () =>
+      new Map(
+        (Array.isArray(units) ? units : []).map((unit) => [
+          Number(unit.id),
+          unit.unitName || unit.name || unit.label,
+        ])
+      ),
+    [units]
+  );
 
-	const deleteRow = (index) => {
-		closeRows();
-		setMaterials((prev) => {
-			const updated = [...prev];
-			updated.splice(index, 1);
-			return updated;
-		});
-	};
+  const editorId = `material-editor-${computedType}`;
 
-	return (
-		<section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
-			<div className="px-6 py-4 flex justify-between items-center bg-slate-50 border-b border-slate-100">
-				<h3 className="text-sm font-black text-[#0a1e4d] uppercase tracking-wide flex items-center gap-2">
-					{title}:
-				</h3>
-				<span className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-[#0a1e4d] font-black shadow-sm">
-					Total: {materials.length}
-				</span>
-			</div>
-			<div
-				ref={tableRef} 
-				className="overflow-x-auto max-h-[420px] overflow-y-auto"
-			>
-				<table className="w-full min-w-[720px] table-fixed text-left">
-					<thead className="bg-[#0a1e4d] text-white">
-						<tr>
-							<th className="w-16 px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-								SNo.
-							</th>
-							<th className="w-[25%] px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-								Item Name
-							</th>
-							<th className="w-24 px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-								Quantity
-							</th>
-							<th className="w-32 px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-								Unit
-							</th>
-							<th className="w-[35%] px-4 py-3 text-xs font-semibold border-r border-white/10 uppercase tracking-wider">
-								Description
-							</th>
-							<th className="w-28 px-4 py-3 text-xs font-semibold text-center">
-								Action
-							</th>
-						</tr>
-					</thead>
-					<tbody className="divide-y divide-slate-100">
-						{materials.length === 0 && !newMaterial && (
-							<tr>
-								<td
-									colSpan="6"
-									className="p-10 text-center text-sm text-slate-400 italic bg-white"
-								>
-									No Materials added yet. Click "Add Material" below.
-								</td>
-							</tr>
-						)}
+  function startAdd() {
+    if (draft) {
+      return;
+    }
 
-						{materials.map((m, i) =>
-							editingIndex !== i ? (
-								<tr
-									key={i}
-									onClick={() => openEditRow(i)}
-									className="hover:bg-orange-50/50 transition-colors cursor-pointer"
-								>
-									<td className="px-4 py-4 text-sm text-slate-500 font-medium border-r border-slate-100">
-										{(i + 1).toString().padStart(2, "0")}
-									</td>
-									<td className="px-4 py-4 border-r border-slate-100">
-										<p className="text-sm font-semibold text-slate-800">
-											{m.name}
-										</p>
-									</td>
-									<td className="px-4 py-4 border-r border-slate-100">
-										<p className="text-sm font-semibold text-slate-800">
-											{m.quantity}
-										</p>
-									</td>
-									<td className="px-4 py-4 border-r border-slate-100">
-										<p className="text-sm font-semibold text-slate-800">
-											{getLabelById(units, m.unit)}
-										</p>
-									</td>
-									<td className="px-4 py-4 border-r border-slate-100">
-										<p className="text-sm font-semibold text-slate-800">
-											{m.description}
-										</p>
-									</td>
-									<td className="px-4 py-4 text-center">
-										<button
-											onClick={(e) => {
-												e.stopPropagation();
-												deleteRow(i);
-											}}
-											className="text-red-600 hover:text-red-800 hover:bg-red-100 p-2 rounded-lg transition-colors"
-										>
-											<Trash2 size={18} />
-										</button>
-									</td>
-								</tr>
-							) : (
-								<tr key={i} className="bg-orange-50/60 shadow-sm">
-									<td className="px-4 py-4 text-sm text-slate-500 font-medium border-r border-slate-100">
-										{(i + 1).toString().padStart(2, "0")}
-									</td>
-									<td className="px-4 py-4 border-r border-slate-100">
-										<input
-											value={editingMaterial?.name || ""}
-											onChange={(e) =>
-												setEditingMaterial((prev) => ({
-													...prev,
-													name: e.target.value
-												}))
-											}
-											className={inputClass}
-										/>
-									</td>
-									<td className="px-4 py-4 border-r border-slate-100">
-										<input
-											type="number"
-											min="1"
-											value={editingMaterial?.quantity || ""}
-											onChange={(e) =>
-												setEditingMaterial({
-													...editingMaterial,
-													quantity: e.target.value
-														? Number(e.target.value)
-														: null
-												})
-											}
-											className={inputClass}
-										/>
-									</td>
-									<td className="px-4 py-4 border-r border-slate-100">
-										<select
-											value={editingMaterial?.unit || ""}
-											onChange={(e) =>
-												setEditingMaterial({
-													...editingMaterial,
-													unit: e.target.value ? Number(e.target.value) : null
-												})
-											}
-											className={inputClass}
-										>
-											<option value="">Select Unit</option>
-											{units.map((u) => (
-												<option key={u.id} value={u.id}>
-													{u.name}
-												</option>
-											))}
-										</select>
-									</td>
-									<td className="px-4 py-4 border-r border-slate-100">
-										<input
-											value={editingMaterial?.description || ""}
-											onChange={(e) =>
-												setEditingMaterial({
-													...editingMaterial,
-													description: e.target.value
-												})
-											}
-											className={inputClass}
-										/>
-									</td>
-									<td className="px-4 py-4 text-center">
-										<button
-											disabled={!isEditingMaterialValid}
-											onClick={saveEdit}
-											className={`p-2 rounded-lg transition-colors ${
-												isEditingMaterialValid
-													? "text-green-600 hover:text-green-800 hover:bg-green-100"
-													: "text-slate-400 bg-slate-100 cursor-not-allowed"
-											}`}
-										>
-											Save
-										</button>
-										<button
-											onClick={closeRows}
-											className="text-red-600 hover:text-red-800 hover:bg-red-100 p-2 rounded-lg transition-colors"
-										>
-											Cancel
-										</button>
-									</td>
-								</tr>
-							)
-						)}
+    if (materials.length >= 30) {
+      toast.error("Add no more than 30 materials in this category.");
+      return;
+    }
 
-						{newMaterial && (
-							<tr className="bg-green-50/60 shadow-sm">
-								<td className="px-4 py-4 text-sm text-slate-500 font-medium border-r border-slate-100">
-									{(materials.length + 1).toString().padStart(2, "0")}
-								</td>
-								<td className="px-4 py-4 border-r border-slate-100">
-									<input
-										value={newMaterial.name}
-										onChange={(e) =>
-											setNewMaterial({ ...newMaterial, name: e.target.value })
-										}
-										className={newRowInputClass}
-									/>
-								</td>
-								<td className="px-4 py-4 border-r border-slate-100">
-									<input
-										type="number"
-										min="1"
-										value={newMaterial.quantity ?? ""}
-										onChange={(e) =>
-											setNewMaterial({
-												...newMaterial,
-												quantity: e.target.value ? Number(e.target.value) : null
-											})
-										}
-										className={newRowInputClass}
-									/>
-								</td>
-								<td className="px-4 py-4 border-r border-slate-100">
-									<select
-										value={newMaterial.unit ?? ""}
-										onChange={(e) =>
-											setNewMaterial({
-												...newMaterial,
-												unit: e.target.value ? Number(e.target.value) : null
-											})
-										}
-										className={newRowInputClass}
-									>
-										<option value="">Select Unit</option>
-										{units.map((u) => (
-											<option key={u.id} value={u.id}>
-												{u.name}
-											</option>
-										))}
-									</select>
-								</td>
-								<td className="px-4 py-4 border-r border-slate-100">
-									<input
-										value={newMaterial.description}
-										onChange={(e) =>
-											setNewMaterial({
-												...newMaterial,
-												description: e.target.value
-											})
-										}
-										className={newRowInputClass}
-									/>
-								</td>
-								<td className="px-4 py-4 text-center">
-									<button
-										disabled={!isNewMaterialValid}
-										onClick={addMaterial}
-										className={`p-2 rounded-lg transition-colors ${
-											isNewMaterialValid
-												? "text-green-600 hover:text-green-800 hover:bg-green-100"
-												: "text-slate-400 bg-slate-100 cursor-not-allowed"
-										}`}
-									>
-										Add
-									</button>
-									<button
-										onClick={closeRows}
-										className="text-red-600 hover:text-red-800 hover:bg-red-100 p-2 rounded-lg transition-colors"
-									>
-										Cancel
-									</button>
-								</td>
-							</tr>
-						)}
-					</tbody>
-				</table>
-			</div>
-			<div className="p-4 bg-white border-t border-slate-200 flex justify-end">
-				<button
-					onClick={openNewRow}
-					className="bg-orange-600 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-orange-700 transition-all uppercase tracking-wider"
-				>
-					Add Material
-				</button>
-			</div>
-		</section>
-	);
-}
+    setEditingIndex(null);
+    setDraft({
+      name: "",
+      isHazardous: false,
+      quantity: "",
+      unit: null,
+      description: "",
+    });
+    setErrors({});
+    onDraftChange?.(computedType, true);
+  }
+
+  function startEdit(item, index) {
+    if (draft) {
+      return;
+    }
+
+    setEditingIndex(index);
+    setDraft({
+      name: item.name || "",
+      isHazardous: Boolean(item.isHazardous),
+      quantity:
+        item.quantity !== null && item.quantity !== undefined
+          ? String(item.quantity)
+          : item.requestedQty !== null && item.requestedQty !== undefined
+            ? String(item.requestedQty)
+            : "",
+      unit:
+        item.unit !== null && item.unit !== undefined
+          ? Number(item.unit)
+          : item.unitId !== null && item.unitId !== undefined
+            ? Number(item.unitId)
+            : null,
+      description: item.description || "",
+    });
+    setErrors({});
+    onDraftChange?.(computedType, true);
+  }
+
+  function closeEditor() {
+    setDraft(null);
+    setEditingIndex(null);
+    setErrors({});
+    onDraftChange?.(computedType, false);
+  }
+
+  function update(name, value) {
+    onDraftChange?.(computedType, true);
+
+    setDraft((current) => ({
+      ...current,
+      [name]: value,
+    }));
+
+    setErrors((current) => ({
+      ...current,
+      [name]: undefined,
+    }));
+  }
+
+  function save() {
+    if (!draft) {
+      return true;
+    }
+
+    const nextErrors = {};
+    const trimmedName = (draft.name || "").trim();
+
+    if (!trimmedName) {
+      nextErrors.name = "Enter the material name.";
+    } else if (trimmedName.length > 255) {
+      nextErrors.name = "Material name must be 255 characters or fewer.";
+    }
+
+    const isDuplicate = materials.some((existing, idx) => {
+      if (editingIndex !== null && idx === editingIndex) {
+        return false;
+      }
+      return (
+        existing.name?.trim().toLowerCase() === trimmedName.toLowerCase()
+      );
+    });
+
+    if (isDuplicate) {
+      nextErrors.name = "This material is already listed in this category.";
+    }
+
+    const qtyStr = String(draft.quantity ?? "").trim();
+    const qtyNum = Number(qtyStr);
+
+    if (!qtyStr || isNaN(qtyNum) || qtyNum <= 0) {
+      nextErrors.quantity = "Please enter a valid quantity.";
+    }
+
+    const unitId =
+      draft.unit !== null && draft.unit !== undefined && draft.unit !== ""
+        ? Number(draft.unit)
+        : null;
+
+    if (!unitId || !unitNames.has(unitId)) {
+      nextErrors.unit = "Please select a unit.";
+    }
+
+    const desc = (draft.description || "").trim();
+    if (desc.length > 250) {
+      nextErrors.description = "Use 250 characters or fewer.";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return false;
+    }
+
+    const savedItem = {
+      name: trimmedName,
+      isHazardous: Boolean(draft.isHazardous),
+      quantity: qtyNum,
+      unit: unitId,
+      description: desc,
+    };
+
+    setMaterials((prev) => {
+      const list = Array.isArray(prev) ? prev : [];
+      if (editingIndex !== null) {
+        return list.map((item, idx) =>
+          idx === editingIndex ? { ...item, ...savedItem } : item
+        );
+      }
+      return [...list, savedItem];
+    });
+
+    if (editingIndex === null) {
+      const nextCount = materials.length + 1;
+      if (nextCount < 30) {
+        // Automatically produce next row of fields
+        setDraft({
+          name: "",
+          isHazardous: false,
+          quantity: "",
+          unit: null,
+          description: "",
+        });
+        setEditingIndex(null);
+        setErrors({});
+        onDraftChange?.(computedType, false);
+      } else {
+        closeEditor();
+        toast.info("Maximum of 30 materials reached for this category.");
+      }
+    } else {
+      closeEditor();
+    }
+    return true;
+  }
+
+  useImperativeHandle(ref, () => ({
+    commitDraft: () => {
+      if (!draft) return true;
+      const trimmedName = (draft.name || "").trim();
+      const qtyStr = String(draft.quantity ?? "").trim();
+      if (editingIndex === null && !trimmedName && !qtyStr && !draft.unit && !draft.description) {
+        closeEditor();
+        return true;
+      }
+      return save();
+    },
+    isEditing: Boolean(draft),
+  }));
+
+  function deleteRow(index) {
+    closeEditor();
+    setMaterials((prev) => {
+      const list = Array.isArray(prev) ? prev : [];
+      return list.filter((_, idx) => idx !== index);
+    });
+  }
+
+  function renderError(name) {
+    if (!errors[name]) {
+      return null;
+    }
+
+    return (
+      <p
+        id={`${editorId}-${name}-error`}
+        role="alert"
+        className="mt-1.5 text-[11px] leading-4 text-rose-600"
+      >
+        {errors[name]}
+      </p>
+    );
+  }
+
+  function renderEditorRow(number) {
+    return (
+      <tr ref={editorRowRef} className="bg-orange-50/50 align-top">
+        <td className="border-b border-orange-200/70 px-4 py-4 text-xs font-semibold text-orange-700">
+          {number}
+        </td>
+
+        <td className="border-b border-orange-200/70 px-4 py-4">
+          <input
+            id={`${editorId}-name`}
+            aria-label="Material name"
+            ref={(el) => {
+              if (el && draft && !draft.name) {
+                el.focus({ preventScroll: true });
+              }
+            }}
+            value={draft.name}
+            maxLength={255}
+            placeholder="Enter item name"
+            className={rowInputCls}
+            aria-invalid={Boolean(errors.name)}
+            aria-describedby={
+              errors.name ? `${editorId}-name-error` : undefined
+            }
+            onChange={(event) => update("name", event.target.value)}
+          />
+
+          {renderError("name")}
+
+          <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-[11px] font-medium text-slate-600">
+            <input
+              type="checkbox"
+              checked={Boolean(draft.isHazardous)}
+              onChange={(event) =>
+                update("isHazardous", event.target.checked)
+              }
+              className="h-3.5 w-3.5 shrink-0 accent-orange-600"
+            />
+            Hazardous material
+          </label>
+        </td>
+
+        <td className="border-b border-orange-200/70 px-4 py-4">
+          <input
+            id={`${editorId}-quantity`}
+            aria-label="Material quantity"
+            type="number"
+            min="1"
+            value={draft.quantity}
+            placeholder="e.g. 10"
+            className={rowInputCls}
+            aria-invalid={Boolean(errors.quantity)}
+            aria-describedby={
+              errors.quantity ? `${editorId}-quantity-error` : undefined
+            }
+            onChange={(event) => update("quantity", event.target.value)}
+          />
+
+          {renderError("quantity")}
+        </td>
+
+        <td className="border-b border-orange-200/70 px-4 py-4">
+          <select
+            id={`${editorId}-unit`}
+            aria-label="Material unit"
+            value={draft.unit ?? ""}
+            disabled={unitsLoading || units.length === 0}
+            className={rowInputCls}
+            aria-invalid={Boolean(errors.unit)}
+            aria-describedby={
+              errors.unit ? `${editorId}-unit-error` : undefined
+            }
+            onChange={(event) =>
+              update(
+                "unit",
+                event.target.value ? Number(event.target.value) : null
+              )
+            }
+          >
+            <option value="">
+              {unitsLoading ? "Loading…" : "Select unit"}
+            </option>
+
+            {units.map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.unitName || unit.name || unit.label}
+              </option>
+            ))}
+          </select>
+
+          {renderError("unit")}
+        </td>
+
+        <td className="border-b border-orange-200/70 px-4 py-4">
+          <textarea
+            id={`${editorId}-description`}
+            aria-label="Material description"
+            rows={2}
+            maxLength={250}
+            value={draft.description}
+            placeholder="Additional details"
+            className={`${rowInputCls} min-h-[72px] resize-y`}
+            aria-invalid={Boolean(errors.description)}
+            aria-describedby={
+              errors.description ? `${editorId}-description-error` : undefined
+            }
+            onChange={(event) =>
+              update("description", event.target.value)
+            }
+          />
+
+          {renderError("description")}
+        </td>
+
+        <td className="border-b border-orange-200/70 px-4 py-4">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={save}
+              aria-label={
+                editingIndex !== null
+                  ? "Save material changes"
+                  : "Save material"
+              }
+              title={
+                editingIndex !== null
+                  ? "Save changes"
+                  : "Save material"
+              }
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-600 text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-500/20"
+            >
+              <Check size={17} />
+            </button>
+
+            <button
+              type="button"
+              onClick={closeEditor}
+              aria-label="Cancel material editing"
+              title="Cancel"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-500/15"
+            >
+              <X size={17} />
+            </button>
+          </div>
+
+          <p className="mt-2 text-[10px] text-slate-400">Save / Cancel</p>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm mb-8">
+      <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50/70 to-white p-5">
+        <div className="flex items-start gap-3">
+          <span className="rounded-xl bg-orange-100 p-2.5 text-orange-700">
+            {returnable ? (
+              <RefreshCw size={19} aria-hidden="true" />
+            ) : (
+              <Boxes size={19} aria-hidden="true" />
+            )}
+          </span>
+
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-bold text-[#0a1e4d]">
+                {displayTitle}
+              </h2>
+
+              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200">
+                {materials.length}/30
+              </span>
+
+              {isScrollable && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-100/80 px-2 py-0.5 text-[10px] font-medium text-orange-700 ring-1 ring-orange-200/60">
+                  Scroll enabled (15+ items)
+                </span>
+              )}
+            </div>
+
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              {returnable
+                ? "Materials that will be taken out later. Quantity and unit are required."
+                : "Materials that will remain or be consumed. Quantity and unit are required."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        ref={scrollContainerRef}
+        tabIndex={isScrollable ? 0 : undefined}
+        aria-label={isScrollable ? `${displayTitle} scrollable list` : undefined}
+        className={`max-w-full overflow-x-auto transition-all ${
+          isScrollable
+            ? "max-h-[600px] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-orange-500/20"
+            : ""
+        }`}
+      >
+        <table className="w-full min-w-[920px] table-fixed border-separate border-spacing-0 text-left">
+          <caption className="sr-only">{displayTitle}</caption>
+
+          <colgroup>
+            <col className="w-[6%]" />
+            <col className="w-[25%]" />
+            <col className="w-[13%]" />
+            <col className="w-[14%]" />
+            <col className="w-[28%]" />
+            <col className="w-[14%]" />
+          </colgroup>
+
+          <thead className="sticky top-0 z-10 text-[11px] font-semibold text-slate-500 shadow-sm">
+            <tr>
+              {[
+                "S.No.",
+                "Item name",
+                "Qty",
+                "Unit",
+                "Description",
+                "Actions",
+              ].map((heading) => (
+                <th
+                  key={heading}
+                  scope="col"
+                  className="border-b border-slate-200 bg-slate-50/95 backdrop-blur-sm px-4 py-3 font-semibold text-slate-600"
+                >
+                  {heading}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody className="text-xs text-slate-700">
+            {materials.length === 0 && !draft && (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="border-b border-slate-100 px-4 py-8 text-center text-slate-400"
+                >
+                  No materials added. Use “Add material” below to begin.
+                </td>
+              </tr>
+            )}
+
+            {materials.map((item, index) => {
+              if (draft && editingIndex === index) {
+                return (
+                  <React.Fragment key={index}>
+                    {renderEditorRow(index + 1)}
+                  </React.Fragment>
+                );
+              }
+
+              return (
+                <tr
+                  key={index}
+                  className="align-top transition hover:bg-orange-50/25"
+                >
+                  <td className="border-b border-slate-100 px-4 py-4 text-slate-400">
+                    {index + 1}
+                  </td>
+
+                  <td className="border-b border-slate-100 px-4 py-4">
+                    <p className="break-words font-semibold text-slate-900">
+                      {item.name}
+                    </p>
+
+                    {item.isHazardous && (
+                      <span className="mt-1.5 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200">
+                        Hazardous
+                      </span>
+                    )}
+                  </td>
+
+                  <td className="border-b border-slate-100 break-words px-4 py-4">
+                    {item.quantity ?? item.requestedQty ?? "—"}
+                  </td>
+
+                  <td className="border-b border-slate-100 break-words px-4 py-4">
+                    {unitNames.get(Number(item.unit || item.unitId)) ||
+                      getLabelById?.(units, item.unit) ||
+                      "—"}
+                  </td>
+
+                  <td className="border-b border-slate-100 px-4 py-4">
+                    <p className="whitespace-pre-wrap break-words leading-5 text-slate-500">
+                      {item.description || "—"}
+                    </p>
+                  </td>
+
+                  <td className="border-b border-slate-100 px-4 py-4">
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        disabled={Boolean(draft)}
+                        onClick={() => startEdit(item, index)}
+                        aria-label={`Edit ${item.name}`}
+                        title="Edit material"
+                        className="rounded-lg p-2 text-slate-500 transition hover:bg-orange-50 hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Pencil size={15} />
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={Boolean(draft)}
+                        onClick={() => deleteRow(index)}
+                        aria-label={`Delete ${item.name}`}
+                        title="Delete material"
+                        className="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+
+            {draft &&
+              editingIndex === null &&
+              renderEditorRow(materials.length + 1)}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/50 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <p>
+            {draft
+              ? "Save or cancel this row before adding another material."
+              : materials.length >= 30
+                ? "Maximum of 30 materials reached."
+                : "Add materials one row at a time."}
+          </p>
+          {isScrollable && (
+            <span className="text-[11px] font-medium text-slate-400">
+              • Showing all {materials.length} items (scroll enabled)
+            </span>
+          )}
+        </div>
+
+        <button
+          type="button"
+          disabled={Boolean(draft) || materials.length >= 30}
+          onClick={startAdd}
+          className={secondaryButtonCls}
+        >
+          <PackagePlus size={16} aria-hidden="true" />
+          Add material
+        </button>
+      </div>
+    </section>
+  );
+});
+
+export default MaterialTable;

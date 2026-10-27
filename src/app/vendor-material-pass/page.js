@@ -283,6 +283,22 @@ function MaterialTable({
   const [editingId, setEditingId] = useState(null);
   const [errors, setErrors] = useState({});
 
+  const editorRowRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+
+  const totalRowCount = items.length + (draft && editingId === null ? 1 : 0);
+  const isScrollable = totalRowCount > 15;
+
+  // Auto-scroll newly added or edited row into view smoothly
+  useEffect(() => {
+    if (draft && editorRowRef.current) {
+      editorRowRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [draft, editingId]);
+
   const returnable = type === "RETURNABLE";
 
   const title = returnable
@@ -420,8 +436,8 @@ function MaterialTable({
 
   function renderEditorRow(number) {
     return (
-      <tr className="bg-orange-50/40 align-top">
-        <td className="px-4 py-4 text-xs text-orange-700">
+      <tr ref={editorRowRef} className="bg-orange-50/50 align-top">
+        <td className="border-b border-orange-200/70 px-4 py-4 text-xs font-semibold text-orange-700">
           {number}
         </td>
 
@@ -624,13 +640,21 @@ function MaterialTable({
           </span>
 
           <div>
-            <h2 className="text-sm font-bold text-[#0a1e4d]">
-              {title}
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-bold text-[#0a1e4d]">
+                {title}
+              </h2>
 
-              <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200">
+              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200">
                 {items.length}/30
               </span>
-            </h2>
+
+              {isScrollable && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-100/80 px-2 py-0.5 text-[10px] font-medium text-orange-700 ring-1 ring-orange-200/60">
+                  Scroll enabled (15+ items)
+                </span>
+              )}
+            </div>
 
             <p className="mt-1 text-xs leading-5 text-slate-500">
               {returnable
@@ -641,8 +665,17 @@ function MaterialTable({
         </div>
       </div>
 
-      <div className="max-w-full overflow-x-auto">
-        <table className="w-full min-w-[920px] table-fixed text-left">
+      <div
+        ref={scrollContainerRef}
+        tabIndex={isScrollable ? 0 : undefined}
+        aria-label={isScrollable ? `${title} scrollable list` : undefined}
+        className={`max-w-full overflow-x-auto transition-all ${
+          isScrollable
+            ? "max-h-[600px] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-orange-500/20"
+            : ""
+        }`}
+      >
+        <table className="w-full min-w-[920px] table-fixed border-separate border-spacing-0 text-left">
           <caption className="sr-only">
             {title}
           </caption>
@@ -656,7 +689,7 @@ function MaterialTable({
             <col className="w-[14%]" />
           </colgroup>
 
-          <thead className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium text-slate-500">
+          <thead className="sticky top-0 z-10 text-[11px] font-semibold text-slate-500 shadow-sm">
             <tr>
               {[
                 "S.No.",
@@ -669,7 +702,7 @@ function MaterialTable({
                 <th
                   key={heading}
                   scope="col"
-                  className="px-4 py-3"
+                  className="border-b border-slate-200 bg-slate-50/95 backdrop-blur-sm px-4 py-3 font-semibold text-slate-600"
                 >
                   {heading}
                 </th>
@@ -677,12 +710,12 @@ function MaterialTable({
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+          <tbody className="text-xs text-slate-700">
             {items.length === 0 && !draft && (
               <tr>
                 <td
                   colSpan={6}
-                  className="px-4 py-8 text-center text-slate-400"
+                  className="border-b border-slate-100 px-4 py-8 text-center text-slate-400"
                 >
                   No materials added. Use “Add material”
                   below to begin.
@@ -707,11 +740,11 @@ function MaterialTable({
                   key={item.clientId}
                   className="align-top transition hover:bg-orange-50/25"
                 >
-                  <td className="px-4 py-4 text-slate-400">
+                  <td className="border-b border-slate-100 px-4 py-4 text-slate-400">
                     {index + 1}
                   </td>
 
-                  <td className="px-4 py-4">
+                  <td className="border-b border-slate-100 px-4 py-4">
                     <p className="break-words font-semibold text-slate-900">
                       {item.name}
                     </p>
@@ -723,21 +756,21 @@ function MaterialTable({
                     )}
                   </td>
 
-                  <td className="break-words px-4 py-4">
+                  <td className="border-b border-slate-100 break-words px-4 py-4">
                     {item.requestedQty || "Unspecified"}
                   </td>
 
-                  <td className="break-words px-4 py-4">
+                  <td className="border-b border-slate-100 break-words px-4 py-4">
                     {unitNames.get(item.unitId) || "—"}
                   </td>
 
-                  <td className="px-4 py-4">
+                  <td className="border-b border-slate-100 px-4 py-4">
                     <p className="whitespace-pre-wrap break-words leading-5 text-slate-500">
                       {item.description || "—"}
                     </p>
                   </td>
 
-                  <td className="px-4 py-4">
+                  <td className="border-b border-slate-100 px-4 py-4">
                     <div className="flex gap-1">
                       <button
                         type="button"
@@ -776,13 +809,20 @@ function MaterialTable({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/50 px-5 py-4">
-        <p className="text-xs text-slate-500">
-          {draft
-            ? "Save or cancel this row before adding another material."
-            : items.length >= 30
-              ? "Maximum of 30 materials reached."
-              : "Add materials one row at a time."}
-        </p>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <p>
+            {draft
+              ? "Save or cancel this row before adding another material."
+              : items.length >= 30
+                ? "Maximum of 30 materials reached."
+                : "Add materials one row at a time."}
+          </p>
+          {isScrollable && (
+            <span className="text-[11px] font-medium text-slate-400">
+              • Showing all {items.length} items (scroll enabled)
+            </span>
+          )}
+        </div>
 
         <button
           type="button"

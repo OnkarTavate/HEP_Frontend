@@ -37,6 +37,7 @@ import {
   BarChart3,
   BadgeCheck as VvipIcon,
   Building2,
+  PackageCheck,
   ChevronLeft,
   ChevronRight,
   ShieldBan,
@@ -594,9 +595,14 @@ export default function TrafficLayout({ children }) {
   if (!user) return <div className="p-12 text-center">Loading...</div>;
 
   const isSpecialApprover =
-    ["safety officer", "fire safety officer", "dy. conservator", "cisf.assistant commandant"].includes(
-      user?.role?.toLowerCase(),
-    );
+    [
+      "safety officer",
+      "fire safety officer",
+      "dy. conservator",
+      "dy conservator",
+      "deputy conservator",
+      "cisf.assistant commandant",
+    ].includes(user?.role?.toLowerCase());
 
   const navigationItems = isSpecialApprover
     ? [
@@ -605,6 +611,11 @@ export default function TrafficLayout({ children }) {
           href: "/traffic_approval/passes",
           icon: FileText,
         },
+        {
+          name: "Material Pass Approvals",
+          href: "/traffic_approval/material-pass",
+          icon: PackageCheck,
+        },
       ]
     : [
         { name: "Dashboard", href: "/traffic_approval/dashboard", icon: BarChart3 },
@@ -612,6 +623,11 @@ export default function TrafficLayout({ children }) {
           name: "Pass Approvals",
           href: "/traffic_approval/passes",
           icon: FileText,
+        },
+        {
+          name: "Material Pass Approvals",
+          href: "/traffic_approval/material-pass",
+          icon: PackageCheck,
         },
         { name: "VVIP Pass", href: "/traffic_approval/vvip-pass", icon: VvipIcon },
         {

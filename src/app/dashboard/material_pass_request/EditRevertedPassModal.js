@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -28,7 +28,7 @@ const getLabelById = (arr, val, key = "label") => {
   const item = arr.find(
     (x) => String(x.id) === String(val) || String(x.value) === String(val)
   );
-  return item ? item[key] || item.name : val;
+  return item ? item[key] || item.unitName || item.name : val;
 };
 
 // Best-effort mapping of whatever the backend sent back for `unit`
@@ -38,9 +38,9 @@ const resolveUnitId = (units, val) => {
   const match = units.find(
     (u) =>
       String(u.id) === String(val) ||
-      String(u.name || "").toLowerCase() === String(val).toLowerCase()
+      String(u.unitName || u.name || u.label || "").toLowerCase() === String(val).toLowerCase()
   );
-  return match ? match.id : val;
+  return match ? Number(match.id) : (Number(val) || val);
 };
 
 const TYPE_META = {
@@ -58,6 +58,19 @@ const TYPE_META = {
   },
 };
 
+const cleanRemarks = (raw) => {
+  if (!raw || typeof raw !== "string") return "";
+  const parts = raw.split(/\s*\|\s*/);
+  const cleaned = [];
+  for (let part of parts) {
+    const stripped = part.replace(/^(RETURNABLE|NON[-_]RETURNABLE)\s*:\s*/i, "").trim();
+    if (stripped && !cleaned.includes(stripped)) {
+      cleaned.push(stripped);
+    }
+  }
+  return cleaned.join(" | ") || raw.trim();
+};
+
 export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess }) {
   const [units, setUnits] = useState([]);
   const [unitsLoading, setUnitsLoading] = useState(true);
@@ -68,6 +81,7 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
   const [editingType, setEditingType] = useState(null); // null | 'returnable' | 'nonReturnable'
   const [draft, setDraft] = useState(null); // { passId, status, remarks, materials } — scratch copy
   const [submitting, setSubmitting] = useState(false);
+  const tableRef = useRef(null);
 
   // --- Fetch units master data (needed by MaterialTable) ---
   useEffect(() => {
@@ -107,11 +121,21 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
           passId: data.id,
           status: "reverted",
           remarks: data.remarks || data.rejectedReason || "",
-          materials: (data.materials || []).map((m) => ({
+          materials: (data.materials || [])
+            .slice()
+            .sort((a, b) => Number(a.id || 0) - Number(b.id || 0))
+            .map((m) => ({
             name: m.name || "",
-            quantity: m.quantity ?? null,
-            unit: resolveUnitId(units, m.unit),
+            isHazardous: Boolean(m.isHazardous),
+            quantity:
+              m.quantity !== null && m.quantity !== undefined
+                ? Number(m.quantity)
+                : m.requestedQty !== null && m.requestedQty !== undefined
+                  ? Number(m.requestedQty)
+                  : null,
+            unit: m.unitId ? Number(m.unitId) : resolveUnitId(units, m.unit),
             description: m.description || "",
+            approverRemarks: m.approverRemarks || "",
           })),
         };
       }
@@ -125,12 +149,19 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
   const createdAtStr = pass.createdAt || pass.submittedAt;
 
   const typeKeys = Object.keys(edits);
-  // const totalItemsAcross = typeKeys.reduce(
-  //   (sum, t) => sum + (edits[t]?.materials?.length || 0),
-  //   0
-  // );
   const updatedCount = typeKeys.filter((t) => edits[t].status === "updated").length;
   const allUpdated = typeKeys.length > 0 && updatedCount === typeKeys.length;
+
+  const overallRevertRemarks = cleanRemarks(
+    pass.rejectedReason ||
+    pass.remarks ||
+    pass.returnablePass?.rejectedReason ||
+    pass.returnablePass?.remarks ||
+    pass.nonReturnablePass?.rejectedReason ||
+    pass.nonReturnablePass?.remarks ||
+    Object.values(edits).map((e) => e.remarks).filter(Boolean).join(" | ") ||
+    ""
+  );
 
   const openEditingType = (type) => {
     setDraft({
@@ -147,27 +178,46 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
 
   const handleDoneEditing = () => {
     if (!draft) return;
+    if (tableRef.current?.isEditing) {
+      const ok = tableRef.current.commitDraft();
+      if (!ok) {
+        toast.warning("Please complete or fix the active material row before updating.");
+        return;
+      }
+    }
     if (!draft.materials.length) {
       toast.warning(`Please add at least one material to ${TYPE_META[editingType].label}.`);
       return;
     }
-    const allValid = draft.materials.every((m) => materialSchema.safeParse(m).success);
+    const cleanMaterials = draft.materials.map((m) => ({
+      ...m,
+      name: (m.name || "").trim(),
+      quantity: Number(m.quantity),
+      unit: Number(m.unit),
+      isHazardous: Boolean(m.isHazardous),
+      description: (m.description || "").trim(),
+    }));
+    const allValid = cleanMaterials.every((m) => materialSchema.safeParse(m).success);
     if (!allValid) {
       toast.warning("Please fix incomplete material rows before continuing.");
       return;
     }
     setEdits((prev) => ({
       ...prev,
-      [editingType]: { ...prev[editingType], materials: draft.materials, status: "updated" },
+      [editingType]: { ...prev[editingType], materials: cleanMaterials, status: "updated" },
     }));
     setEditingType(null);
     setDraft(null);
     toast.success(`${TYPE_META[editingType].label} updated.`);
   };
 
-  // NOTE: adjust these two endpoints to match your backend routes —
-  // they follow the same shape/convention used by the person/vehicle
-  // reverted-pass flow (update entity, then resubmit the parent request).
+  const handleViewRequestDoc = (passRequestId, documentType) => {
+    window.open(
+      `${AGENT_API}/material-pass/viewMaterialPassDocument?passRequestId=${passRequestId}&documentType=${documentType}`,
+      "_blank"
+    );
+  };
+
   const handleResubmit = async () => {
     if (!allUpdated) {
       toast.warning("Please update all reverted material lists before resubmitting.");
@@ -183,11 +233,12 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
         const entry = edits[type];
         acc[type] = {
           passId: entry.passId,
-          materials: entry.materials.map(({ name, unit, quantity, description }) => ({
-            name,
-            unit,
-            quantity,
-            description,
+          materials: entry.materials.map(({ name, unit, quantity, description, isHazardous }) => ({
+            name: (name || "").trim(),
+            unit: Number(unit),
+            quantity: Number(quantity),
+            description: description || null,
+            isHazardous: Boolean(isHazardous),
           })),
         };
         return acc;
@@ -199,7 +250,9 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
         config
       );
 
-      toast.success("Material pass resubmitted successfully!");
+      toast.success(
+        "Material pass resubmitted successfully! The approval workflow has restarted from the beginning (Concerned Department)."
+      );
       onResubmitSuccess?.(res.data?.data);
       onClose?.();
     } catch (error) {
@@ -214,7 +267,7 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in zoom-in-95 duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
         {/* Header */}
         <div className="flex justify-between items-center gap-2 px-4 sm:px-6 py-4 bg-[#0a1e4d] text-white shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -240,6 +293,47 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
           >
             <X className="h-5 w-5" />
           </button>
+        </div>
+
+        {/* Pre-filled pass overview & Attached Documents */}
+        <div className="px-4 sm:px-6 py-2.5 bg-slate-100/90 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+          <div className="flex flex-wrap items-center gap-4 text-slate-600">
+            {pass.companyName && (
+              <span>
+                <strong className="text-slate-800">Company:</strong> {pass.companyName}
+              </span>
+            )}
+            {pass.concernedDepartment && (
+              <span>
+                <strong className="text-slate-800">Department:</strong> {pass.concernedDepartment}
+              </span>
+            )}
+            {pass.purpose && (
+              <span>
+                <strong className="text-slate-800">Purpose:</strong> {pass.purpose}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {pass.requisitionLetterFilePath && (
+              <button
+                type="button"
+                onClick={() => handleViewRequestDoc(pass.id, "requisitionLetter")}
+                className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <FileText className="h-3.5 w-3.5 text-blue-600" /> View Requisition Letter
+              </button>
+            )}
+            {pass.workOrderFilePath && (
+              <button
+                type="button"
+                onClick={() => handleViewRequestDoc(pass.id, "workOrder")}
+                className="bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <FileText className="h-3.5 w-3.5 text-orange-600" /> View Work Order
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Meta / progress bar — becomes a sticky "Back to Summary" bar while editing */}
@@ -302,12 +396,34 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
                     <p className="text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
                       Reviewer Remarks — Action Required
                     </p>
-                    <p className="text-sm text-amber-700">{edits[editingType].remarks}</p>
+                    <p className="text-sm text-amber-700">{cleanRemarks(edits[editingType].remarks)}</p>
+                  </div>
+                </div>
+              )}
+
+              {draft.materials.some((m) => m.approverRemarks) && (
+                <div className="bg-amber-50/90 border border-amber-300 rounded-xl p-3.5 flex items-start gap-2.5 text-xs shadow-sm">
+                  <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-bold uppercase tracking-wider text-[10px] text-amber-900 mb-1">
+                      Item-Level Reviewer Remarks:
+                    </p>
+                    <div className="space-y-1">
+                      {draft.materials
+                        .filter((m) => m.approverRemarks)
+                        .map((m, i) => (
+                          <div key={i} className="text-amber-800">
+                            <span className="font-bold underline">{m.name}:</span>{" "}
+                            {m.approverRemarks}
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 </div>
               )}
 
               <MaterialTable
+                ref={tableRef}
                 title={TYPE_META[editingType].label}
                 materials={draft.materials}
                 setMaterials={(updater) =>
@@ -335,6 +451,18 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
                   </p>
                 </div>
               </div>
+
+              {overallRevertRemarks && (
+                <div className="bg-amber-50/90 border border-amber-300 p-4 rounded-xl shadow-xs">
+                  <p className="text-[11px] font-bold text-amber-900 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <FileText className="h-4 w-4 text-amber-600" />
+                    Reviewer Remarks
+                  </p>
+                  <p className="text-sm font-semibold text-amber-950 bg-white/90 p-3 rounded-lg border border-amber-200">
+                    {overallRevertRemarks}
+                  </p>
+                </div>
+              )}
 
               {typeKeys.map((type) => {
                 const meta = TYPE_META[type];
@@ -399,12 +527,12 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
                       </div>
                     </div>
 
-                    {entry.remarks && (
+                    {entry.remarks && cleanRemarks(entry.remarks) !== overallRevertRemarks && (
                       <div className="px-5 py-3 bg-amber-50/70 border-t border-amber-100">
                         <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-1">
                           Reviewer Remarks
                         </p>
-                        <p className="text-sm text-amber-700">{entry.remarks}</p>
+                        <p className="text-sm text-amber-700">{cleanRemarks(entry.remarks)}</p>
                       </div>
                     )}
                   </div>
