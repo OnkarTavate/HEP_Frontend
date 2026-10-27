@@ -198,18 +198,21 @@ function MaterialItemRow({
   const remarkText = item.approverRemarks || "";
   const isRemarkLong = remarkText.length > REMARK_TRUNCATE_LEN;
 
-  const qtyApplicable = item.approvedQty !== null && item.approvedQty !== undefined;
-  const requestedQty = Number(item.quantity) || 0;
+  const hasRequestedQty = item.quantity !== null && item.quantity !== undefined && item.quantity !== "" && Number(item.quantity) > 0;
+  const requestedQty = hasRequestedQty ? Number(item.quantity) : null;
+  const qtyApplicable = hasRequestedQty && item.approvedQty !== null && item.approvedQty !== undefined;
 
   const itemError = !item.approved
     ? null
-    : item.approvedQty === "" || item.approvedQty === null || item.approvedQty === undefined
-      ? "Invalid approved qty"
-      : numericApprovedQty < 1
-        ? "Approved qty must be at least 1"
-        : numericApprovedQty > requestedQty
-          ? "Exceeds requested qty"
-          : null;
+    : !hasRequestedQty
+      ? null
+      : item.approvedQty === "" || item.approvedQty === null || item.approvedQty === undefined
+        ? "Invalid approved qty"
+        : numericApprovedQty < 1
+          ? "Approved qty must be at least 1"
+          : numericApprovedQty > requestedQty
+            ? "Exceeds requested qty"
+            : null;
 
   return (
     <tr className={item.approved ? "bg-white hover:bg-slate-50/70" : "bg-slate-50/70"}>
@@ -288,12 +291,12 @@ function MaterialItemRow({
 
       {/* Requested Qty (read-only for all approver roles) */}
       <td className="p-3.5 align-middle text-center whitespace-nowrap">
-        <span className="text-sm font-bold text-[#0a1e4d] tabular-nums">{item.quantity}</span>
+        <span className="text-sm font-bold text-[#0a1e4d] tabular-nums">{item.quantity != null && item.quantity !== "" ? item.quantity : "—"}</span>
       </td>
 
       {/* Approved Qty (Editable ONLY by Concerned Department; read-only for others and view mode) */}
       <td className="p-3.5 align-middle text-center whitespace-nowrap">
-        {!canExclude ? (
+        {!canExclude || !hasRequestedQty ? (
           qtyApplicable ? (
             <span
               className={`inline-flex items-center justify-center min-w-[2.5rem] px-2.5 py-1 text-sm font-bold tabular-nums rounded-lg border ${
@@ -1508,6 +1511,8 @@ export default function MaterialPassPage() {
       }
 
       const hasBadQty = approvedItems.some((m) => {
+        const hasReq = m.quantity !== null && m.quantity !== undefined && m.quantity !== "" && Number(m.quantity) > 0;
+        if (!hasReq) return false;
         const q = m.approvedQty;
         if (q === "" || q === null || q === undefined) return true;
         const numQ = Number(q);
@@ -1818,9 +1823,10 @@ export default function MaterialPassPage() {
       const isApprovedStatus = status === "APPROVED";
 
       return materials.map((m) => {
-        const qty = Number(m.quantity) || 0;
+        const hasReqQty = m.quantity !== null && m.quantity !== undefined && m.quantity !== "" && Number(m.quantity) > 0;
+        const qty = hasReqQty ? Number(m.quantity) : null;
         const hasExistingApprovedQty =
-          m.approvedQty !== null && m.approvedQty !== undefined;
+          m.approvedQty !== null && m.approvedQty !== undefined && m.approvedQty !== "";
         const appQty = hasExistingApprovedQty
           ? Number(m.approvedQty)
           : isDecided
@@ -1839,8 +1845,8 @@ export default function MaterialPassPage() {
           requestedQty: qty,
           approvedQty: appQty,
           approved: app,
-          unit: m.unit,
-          unitId: m.unitId || 1,
+          unit: m.unit || null,
+          unitId: m.unitId || null,
           description: m.description || "",
           isHazardous: Boolean(m.isHazardous),
           approverRemarks: m.approverRemarks || "",
@@ -2551,6 +2557,18 @@ export default function MaterialPassPage() {
                       <span className="text-sm font-medium text-slate-800 sm:text-right">
                         {selectedRequest.entryDate
                           ? new Date(selectedRequest.entryDate).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "-"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                      <span className="text-xs font-semibold text-slate-500">Valid Till</span>
+                      <span className="text-sm font-semibold text-emerald-700 sm:text-right">
+                        {selectedRequest.expiryDate || selectedRequest.validTillDate || selectedRequest.validTill
+                          ? new Date(selectedRequest.expiryDate || selectedRequest.validTillDate || selectedRequest.validTill).toLocaleDateString("en-IN", {
                             day: "2-digit",
                             month: "short",
                             year: "numeric",
