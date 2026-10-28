@@ -107,7 +107,6 @@ export default function MaterialPassApplySection({
     location: [],
     locationOther: "",
     entryDate: getTodayString(),
-    validTillDate: calculateValidTillDate(getTodayString(), VALIDITY_MONTHS),
     requisitionLetter: null, // NEW
     workOrder: null, // NEW
   });
@@ -325,119 +324,9 @@ export default function MaterialPassApplySection({
       .includes(locationSearch.trim().toLowerCase()),
   );
 
-  const todayStr = getTodayString();
-  const maxEntryDateStr = getMaxEntryDateString(MAX_ENTRY_DAYS_AHEAD);
-  const maxValidTillForCurrentEntry = generalForm.entryDate
+  const validTillDate = generalForm.entryDate
     ? calculateValidTillDate(generalForm.entryDate, VALIDITY_MONTHS)
-    : calculateValidTillDate(todayStr, VALIDITY_MONTHS);
-
-  const clampEntryDate = (val) => {
-    if (!val) return todayStr;
-    if (val > maxEntryDateStr) {
-      toast.warning(`Entry Date cannot be more than ${MAX_ENTRY_DAYS_AHEAD} days from today (max ${formatDisplayDate(maxEntryDateStr)}).`);
-      return maxEntryDateStr;
-    }
-    if (val < todayStr) {
-      toast.warning(`Entry Date cannot be before today.`);
-      return todayStr;
-    }
-    return val;
-  };
-
-  const handleEntryDateChange = (rawDate) => {
-    if (!rawDate) {
-      setGeneralForm((prev) => ({ ...prev, entryDate: "" }));
-      return;
-    }
-
-    let clampedDate = rawDate;
-    const year = parseInt(rawDate.split("-")[0], 10);
-    const maxYear = parseInt(maxEntryDateStr.split("-")[0], 10);
-
-    // If year is typed beyond max allowed year or full date exceeds max
-    if ((!isNaN(year) && year > maxYear) || (rawDate.length === 10 && rawDate > maxEntryDateStr)) {
-      clampedDate = clampEntryDate(rawDate);
-    } else if (rawDate.length === 10 && rawDate < todayStr) {
-      clampedDate = clampEntryDate(rawDate);
-    }
-
-    const nextMaxValidTill = calculateValidTillDate(clampedDate, VALIDITY_MONTHS);
-    setGeneralForm((prev) => {
-      let nextValidTill = prev.validTillDate;
-      if (!nextValidTill || nextValidTill < clampedDate || nextValidTill > nextMaxValidTill) {
-        nextValidTill = nextMaxValidTill;
-      }
-      return {
-        ...prev,
-        entryDate: clampedDate,
-        validTillDate: nextValidTill,
-      };
-    });
-  };
-
-  const handleEntryDateBlur = (e) => {
-    const rawVal = e?.target?.value || generalForm.entryDate;
-    if (!rawVal) {
-      handleEntryDateChange(todayStr);
-      if (e?.target) e.target.value = todayStr;
-      return;
-    }
-    const clamped = clampEntryDate(rawVal);
-    handleEntryDateChange(clamped);
-    if (e?.target) {
-      e.target.value = clamped;
-    }
-  };
-
-  const clampValidTillDate = (val, currentEntryDate) => {
-    const minValid = currentEntryDate || todayStr;
-    const maxValid = calculateValidTillDate(minValid, VALIDITY_MONTHS);
-    if (!val) return maxValid;
-    if (val > maxValid) {
-      toast.warning(`Valid Till date cannot exceed 6 months from Entry Date (max ${formatDisplayDate(maxValid)}).`);
-      return maxValid;
-    }
-    if (val < minValid) {
-      toast.warning(`Valid Till date cannot be before Entry Date.`);
-      return minValid;
-    }
-    return val;
-  };
-
-  const handleValidTillDateChange = (rawDate) => {
-    if (!rawDate) {
-      setGeneralForm((prev) => ({ ...prev, validTillDate: "" }));
-      return;
-    }
-
-    const minValid = generalForm.entryDate || todayStr;
-    const maxValid = calculateValidTillDate(minValid, VALIDITY_MONTHS);
-    let clampedDate = rawDate;
-
-    const year = parseInt(rawDate.split("-")[0], 10);
-    const maxYear = parseInt(maxValid.split("-")[0], 10);
-
-    // If year is typed beyond 6 months max year or full date exceeds max
-    if ((!isNaN(year) && year > maxYear) || (rawDate.length === 10 && rawDate > maxValid)) {
-      clampedDate = clampValidTillDate(rawDate, generalForm.entryDate);
-    } else if (rawDate.length === 10 && rawDate < minValid) {
-      clampedDate = clampValidTillDate(rawDate, generalForm.entryDate);
-    }
-
-    setGeneralForm((prev) => ({
-      ...prev,
-      validTillDate: clampedDate,
-    }));
-  };
-
-  const handleValidTillDateBlur = (e) => {
-    const rawVal = e?.target?.value || generalForm.validTillDate;
-    const clamped = clampValidTillDate(rawVal, generalForm.entryDate);
-    setGeneralForm((prev) => ({ ...prev, validTillDate: clamped }));
-    if (e?.target) {
-      e.target.value = clamped;
-    }
-  };
+    : "";
 
   const handleSubmitRequest = async () => {
     if (Object.values(materialDrafts).some(Boolean)) {
@@ -467,9 +356,10 @@ export default function MaterialPassApplySection({
       return;
     }
 
-    const validTill =
-      generalForm.validTillDate ||
-      calculateValidTillDate(generalForm.entryDate, VALIDITY_MONTHS);
+    const validTill = calculateValidTillDate(
+      generalForm.entryDate,
+      VALIDITY_MONTHS
+    );
 
     const selectedLocIds = Array.isArray(generalForm.location)
       ? generalForm.location
@@ -513,21 +403,15 @@ export default function MaterialPassApplySection({
       .map(Number)
       .filter((n) => !isNaN(n) && n > 0);
 
-    const finalEntryDate = clampEntryDate(generalForm.entryDate);
-    const finalValidTill = clampValidTillDate(
-      generalForm.validTillDate || maxValidTillForCurrentEntry,
-      finalEntryDate
-    );
-
     const payload = {
       ...result.data,
       location: backendLocationId,
       locations: validLocationIds.length > 0 ? validLocationIds : [backendLocationId],
       locationOther: locationOtherPayload || undefined,
-      entryDate: finalEntryDate,
-      entryFromDate: finalEntryDate,
-      validTillDate: finalValidTill,
-      validTill: finalValidTill,
+      entryDate: generalForm.entryDate,
+      entryFromDate: generalForm.entryDate,
+      validTillDate: validTill,
+      validTill: validTill,
       returnables: (result.data.returnables || []).map((item) => ({
         ...item,
         isHazardous: Boolean(item.isHazardous),
@@ -946,35 +830,39 @@ export default function MaterialPassApplySection({
                   <input
                     type="date"
                     value={generalForm.entryDate || ""}
-                    onChange={(e) => handleEntryDateChange(e.target.value)}
-                    onInput={(e) => handleEntryDateChange(e.target.value)}
-                    onBlur={handleEntryDateBlur}
+                    onChange={(e) =>
+                      setGeneralForm({
+                        ...generalForm,
+                        entryDate: e.target.value,
+                      })
+                    }
                     className="w-full h-8 text-sm bg-transparent outline-none font-medium text-slate-800 cursor-pointer"
-                    min={todayStr}
-                    max={maxEntryDateStr}
+                    min={getTodayString()}
+                    max={getMaxEntryDateString(MAX_ENTRY_DAYS_AHEAD)}
                   />
                 </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 sm:py-0 bg-slate-50 border-t sm:border-t-0 sm:border-l border-slate-200 shrink-0">
-                  <label htmlFor="material-pass-valid-till" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <div className="flex items-center gap-1.5 px-3 py-2 sm:py-0 bg-slate-50 border-t sm:border-t-0 sm:border-l border-slate-200 select-none shrink-0">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     Valid Till:
-                  </label>
-                  <input
-                    id="material-pass-valid-till"
-                    type="date"
-                    value={generalForm.validTillDate || ""}
-                    min={generalForm.entryDate || todayStr}
-                    max={maxValidTillForCurrentEntry}
-                    onChange={(e) => handleValidTillDateChange(e.target.value)}
-                    onInput={(e) => handleValidTillDateChange(e.target.value)}
-                    onBlur={handleValidTillDateBlur}
-                    className="h-7 text-xs font-semibold text-emerald-800 bg-white border border-emerald-300 rounded px-2 py-0.5 outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer shadow-2xs"
-                  />
+                  </span>
+                  {validTillDate ? (
+                    <span className="font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">
+                      {formatDisplayDate(validTillDate)}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-400 font-medium whitespace-nowrap">
+                      —
+                    </span>
+                  )}
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    (Read-only)
+                  </span>
                 </div>
               </div>
 
               <p className="text-[10px] text-slate-400 px-1">
                 {generalForm.entryDate
-                  ? `Select any validity date up to 6 months from entry date (max ${formatDisplayDate(maxValidTillForCurrentEntry)}).`
+                  ? `Valid for ${VALIDITY_MONTHS} months from selected entry date.`
                   : `Please select an entry date within ${MAX_ENTRY_DAYS_AHEAD} days from today.`}
               </p>
             </div>
@@ -1091,10 +979,6 @@ export default function MaterialPassApplySection({
                 <div>
                   <p className="text-slate-400 font-medium">Entry Date:</p>
                   <p className="font-bold text-slate-800">{formatDisplayDate(generalForm.entryDate) || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 font-medium">Valid Till:</p>
-                  <p className="font-bold text-emerald-700">{formatDisplayDate(generalForm.validTillDate || maxValidTillForCurrentEntry) || "—"}</p>
                 </div>
                 <div>
                   <p className="text-slate-400 font-medium">Requisition Letter:</p>

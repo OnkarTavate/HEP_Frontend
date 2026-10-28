@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -65,53 +65,22 @@ export default function TrafficManagerLogin() {
         }
       } catch {}
     }
-  const captchaTimerRef = useRef(null);
-  const captchaFetchedAtRef = useRef(0);
+    fetchCaptcha();
+  }, [router]);
 
-  const fetchCaptcha = useCallback(async () => {
+  const fetchCaptcha = async () => {
     setIsCaptchaLoading(true);
     try {
       const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
       if (res.data?.question && res.data?.token) {
         setCaptchaData({ question: res.data.question, token: res.data.token });
-        setFormData((p) => ({ ...p, captcha: "" }));
-        captchaFetchedAtRef.current = Date.now();
-
-        if (captchaTimerRef.current) clearTimeout(captchaTimerRef.current);
-        const ttlSec = res.data.expiresIn || 180;
-        const autoRefreshMs = Math.max(15, ttlSec - 5) * 1000;
-        captchaTimerRef.current = setTimeout(() => {
-          fetchCaptcha();
-        }, autoRefreshMs);
       }
     } catch {
       toast.error("Failed to load captcha");
     } finally {
       setIsCaptchaLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    fetchCaptcha();
-
-    const handleFocusOrVisible = () => {
-      if (document.visibilityState === "visible") {
-        const elapsed = Date.now() - captchaFetchedAtRef.current;
-        if (elapsed >= 170 * 1000) {
-          fetchCaptcha();
-        }
-      }
-    };
-
-    window.addEventListener("focus", handleFocusOrVisible);
-    document.addEventListener("visibilitychange", handleFocusOrVisible);
-
-    return () => {
-      if (captchaTimerRef.current) clearTimeout(captchaTimerRef.current);
-      window.removeEventListener("focus", handleFocusOrVisible);
-      document.removeEventListener("visibilitychange", handleFocusOrVisible);
-    };
-  }, [fetchCaptcha]);
+  };
 
   const handleChange = (e) => {
     setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));

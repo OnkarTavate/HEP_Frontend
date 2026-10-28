@@ -396,37 +396,15 @@ export default function AdminLayout({ children }) {
         const parsedUser = JSON.parse(storedUser);
         // Access control: Admin OR Approval OR CISF Assistant Commandant
         const role = String(parsedUser.role || "").toLowerCase().trim();
-        const deptName = String(parsedUser.departmentName || "").toLowerCase().trim();
-        const deptId = Number(parsedUser.departmentId);
         const isAdmin = role === "admin" || role === "administrator";
         const isApproval = role === "approval";
-        const isCisfAssistantCommandant = Boolean(
-          role === "cisf.assistant commandant" ||
-          role === "cisf assistant commandant" ||
-          role.includes("cisf.assistant") ||
-          (role.includes("cisf") && role.includes("commandant")) ||
-          (deptName.includes("cisf") && (role.includes("commandant") || role.includes("asst") || role.includes("cisf"))) ||
-          (deptId === 1 && (role.includes("commandant") || role.includes("cisf") || role.includes("assistant")))
-        );
+        const isCisfAssistantCommandant = role === "cisf.assistant commandant";
 
         if (!isAdmin && !isApproval && !isCisfAssistantCommandant) {
           router.push("/");
           return;
         }
-
-        if (isCisfAssistantCommandant) {
-          const allowedCisfPrefixes = [
-            "/admin/pass-approvals",
-            "/admin/material-pass",
-          ];
-          const isAllowed = allowedCisfPrefixes.some(
-            (route) => pathname === route || pathname?.startsWith(route + "/")
-          );
-          if (!isAllowed && pathname?.startsWith("/admin")) {
-            router.push("/admin/pass-approvals");
-            return;
-          }
-        } else if (!isAdmin && pathname?.startsWith("/admin/reports")) {
+        if (!isAdmin && pathname?.startsWith("/admin/reports")) {
           router.push("/admin/vendor_pass");
           return;
         }
@@ -621,29 +599,19 @@ export default function AdminLayout({ children }) {
     user &&
     (user.role?.toLowerCase() === "admin" ||
       user.role?.toLowerCase() === "administrator");
-
-  const userDeptId = Number(user?.departmentId);
-  const userDeptName = String(user?.departmentName || "").toLowerCase().trim();
-  const userRoleNorm = String(user?.role || "").toLowerCase().trim();
-
-  // CISF Assistant Commandant: strictly Pass Approvals and Material Approvals only
-  const isCisfAssistantCommandant = Boolean(
-    userRoleNorm === "cisf.assistant commandant" ||
-    userRoleNorm === "cisf assistant commandant" ||
-    userRoleNorm.includes("cisf.assistant") ||
-    (userRoleNorm.includes("cisf") && userRoleNorm.includes("commandant")) ||
-    (userDeptName.includes("cisf") && (userRoleNorm.includes("commandant") || userRoleNorm.includes("asst") || userRoleNorm.includes("cisf"))) ||
-    (userDeptId === 1 && (userRoleNorm.includes("commandant") || userRoleNorm.includes("cisf") || userRoleNorm.includes("assistant")))
-  );
+  const consoleHref = isAdmin ? "/admin" : "/admin/vendor_pass";
 
   // Departments allowed to see Bulk Pass (General Administration = 6, Traffic = 9–15)
   const BULK_PASS_DEPT_IDS = [6, 9, 10, 11, 12, 13, 14, 15];
   const canSeeBulkPass =
-    isAdmin || (!isCisfAssistantCommandant && BULK_PASS_DEPT_IDS.includes(Number(user?.departmentId)));
+    isAdmin || BULK_PASS_DEPT_IDS.includes(Number(user?.departmentId));
 
   const isSafetyOfficer =
     user?.role?.toLowerCase() === "safety officer" ||
     user?.role?.toLowerCase() === "fire safety officer";
+
+  const userDeptId = Number(user?.departmentId);
+  const userDeptName = String(user?.departmentName || "").toLowerCase();
 
   const isCivilOrMechanicalDept =
     [3, 4].includes(userDeptId) ||
@@ -658,18 +626,11 @@ export default function AdminLayout({ children }) {
 
   const baseConsoleHref = isAdmin
     ? "/admin"
-    : (isCisfAssistantCommandant || isSafetyOfficer || (isDepartmental && isCivilOrMechanicalDept))
+    : (isSafetyOfficer || (isDepartmental && isCivilOrMechanicalDept))
       ? "/admin/pass-approvals"
       : "/admin/vendor_pass";
 
-  const consoleHref = baseConsoleHref;
-
-  const navigationItems = isCisfAssistantCommandant
-    ? [
-        { name: "Pass Approvals", href: "/admin/pass-approvals", icon: FileText },
-        { name: "Material Approvals", href: "/admin/material-pass", icon: FileText },
-      ]
-    : [
+  const navigationItems = [
     ...(!isSafetyOfficer ? [{
       name: isAdmin ? "Admin Console" : "Vendor Pass",
       href: isAdmin ? "/admin" : "/admin/vendor_pass",

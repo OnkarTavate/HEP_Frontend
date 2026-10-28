@@ -710,32 +710,16 @@ export default function MaterialPassDetailsModal({
       const pdfBlob = new Blob([response.data], { type: "application/pdf" });
       const pdfUrl = URL.createObjectURL(pdfBlob);
 
-      const originalTitle = document.title;
-      const passNo = pass.passNo || pass.returnablePassNo || pass.nonReturnablePassNo || pass.referenceNo || "MaterialPass";
-      document.title = `${passNo}`;
-
       // Print seamlessly via a hidden iframe, same pattern as person/vehicle QR.
       const iframe = document.createElement("iframe");
-      iframe.title = `${passNo}`;
       iframe.style.display = "none";
       iframe.src = pdfUrl;
       document.body.appendChild(iframe);
 
       iframe.onload = () => {
-        iframe.contentWindow.focus();
         iframe.contentWindow.print();
-        const restore = () => {
-          document.title = originalTitle;
-          window.removeEventListener("afterprint", restore);
-        };
-        window.addEventListener("afterprint", restore);
-        setTimeout(restore, 5000);
         setTimeout(() => {
-          try {
-            if (document.body.contains(iframe)) {
-              document.body.removeChild(iframe);
-            }
-          } catch {}
+          document.body.removeChild(iframe);
           URL.revokeObjectURL(pdfUrl);
         }, 60000);
       };
@@ -905,18 +889,6 @@ export default function MaterialPassDetailsModal({
                     <span className="text-sm font-medium text-slate-800 sm:text-right">
                       {pass.entryDate
                         ? new Date(pass.entryDate).toLocaleDateString("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "-"}
-                    </span>
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                    <span className="text-xs font-semibold text-slate-500">Valid Till</span>
-                    <span className="text-sm font-semibold text-emerald-700 sm:text-right">
-                      {pass.expiryDate || pass.validTillDate || pass.validTill
-                        ? new Date(pass.expiryDate || pass.validTillDate || pass.validTill).toLocaleDateString("en-IN", {
                             day: "2-digit",
                             month: "short",
                             year: "numeric",

@@ -1,17 +1,10 @@
 import { z } from "zod";
 
-export const returnableMaterialSchema = z.object({
+export const materialSchema = z.object({
     name: z
         .string()
         .trim()
-        .min(1, "Please enter an item.")
-        .refine((val) => {
-            if (!val) return true;
-            const words = val.trim().split(/\s+/).filter(Boolean);
-            return words.length <= 25;
-        }, {
-            message: "Item name cannot exceed 25 words.",
-        }),
+        .min(1, "Please enter an item."),
 
     isHazardous: z.boolean().default(false).optional(),
 
@@ -29,93 +22,8 @@ export const returnableMaterialSchema = z.object({
             message: "Please select a Unit.",
         }),
 
-    description: z
-        .string()
-        .trim()
-        .refine((val) => {
-            if (!val) return true;
-            const words = val.trim().split(/\s+/).filter(Boolean);
-            return words.length <= 150;
-        }, {
-            message: "Description cannot exceed 150 words.",
-        })
-        .optional()
+    description: z.string().trim().max(250).optional()
 });
-
-export const nonReturnableMaterialSchema = z.object({
-    name: z
-        .string()
-        .trim()
-        .min(1, "Please enter an item.")
-        .refine((val) => {
-            if (!val) return true;
-            const words = val.trim().split(/\s+/).filter(Boolean);
-            return words.length <= 25;
-        }, {
-            message: "Item name cannot exceed 25 words.",
-        }),
-
-    isHazardous: z.boolean().default(false).optional(),
-
-    quantity: z
-        .union([z.number(), z.string(), z.null()])
-        .optional()
-        .transform((val) => {
-            if (val === null || val === undefined || val === "") return null;
-            const num = Number(val);
-            return isNaN(num) ? null : num;
-        }),
-
-    unit: z
-        .union([z.number(), z.string(), z.null()])
-        .optional()
-        .transform((val) => {
-            if (val === null || val === undefined || val === "") return null;
-            const num = Number(val);
-            return isNaN(num) ? null : num;
-        }),
-
-    description: z
-        .string()
-        .trim()
-        .refine((val) => {
-            if (!val) return true;
-            const words = val.trim().split(/\s+/).filter(Boolean);
-            return words.length <= 150;
-        }, {
-            message: "Description cannot exceed 150 words.",
-        })
-        .optional()
-}).superRefine((data, ctx) => {
-    const hasQty = data.quantity !== null && data.quantity !== undefined;
-    const hasUnit = data.unit !== null && data.unit !== undefined && Number(data.unit) > 0;
-
-    if (hasQty && data.quantity <= 0) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["quantity"],
-            message: "Please enter a valid quantity."
-        });
-    }
-
-    if (hasUnit && (!hasQty || data.quantity <= 0)) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["quantity"],
-            message: "Please enter quantity for the selected unit."
-        });
-    }
-
-    if (hasQty && !hasUnit) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["unit"],
-            message: "Please select a unit."
-        });
-    }
-});
-
-export const materialSchema = returnableMaterialSchema;
 
 
 export const MAX_ENTRY_DAYS_AHEAD = 60;
@@ -240,39 +148,13 @@ export const createMaterialPassSchema = (othersPurposeId, othersLocationId) =>
             }),
 
         entryFromDate: z.string().optional(),
-        validTillDate: z.string().nullable().optional(),
-        validTill: z.string().nullable().optional(),
+        validTillDate: z.string().optional(),
+        validTill: z.string().optional(),
 
-        returnables: z.array(returnableMaterialSchema),
-        nonReturnables: z.array(nonReturnableMaterialSchema)
+        returnables: z.array(materialSchema),
+        nonReturnables: z.array(materialSchema)
     })
     .superRefine((data, ctx) => {
-        if (data.entryDate && data.validTillDate) {
-            const entry = new Date(data.entryDate);
-            const validTill = new Date(data.validTillDate);
-            entry.setHours(0, 0, 0, 0);
-            validTill.setHours(0, 0, 0, 0);
-
-            if (validTill < entry) {
-                ctx.addIssue({
-                    code: z.ZodIssueCode.custom,
-                    path: ["validTillDate"],
-                    message: "Valid Till date cannot be before Entry Date."
-                });
-            }
-
-            const maxAllowed = new Date(entry);
-            maxAllowed.setMonth(maxAllowed.getMonth() + VALIDITY_MONTHS);
-            maxAllowed.setHours(23, 59, 59, 999);
-
-            if (validTill > maxAllowed) {
-                ctx.addIssue({
-                    code: z.ZodIssueCode.custom,
-                    path: ["validTillDate"],
-                    message: "Valid Till date cannot exceed 6 months from Entry Date."
-                });
-            }
-        }
         if (
             data.purpose === othersPurposeId &&
             (!data.purposeOther || data.purposeOther.trim().length < 5)

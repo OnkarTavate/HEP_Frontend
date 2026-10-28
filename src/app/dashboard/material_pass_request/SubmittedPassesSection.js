@@ -79,31 +79,15 @@ export default function SubmittedPassesSection({
       const pdfBlob = new Blob([response.data], { type: "application/pdf" });
       const pdfUrl = URL.createObjectURL(pdfBlob);
 
-      const originalTitle = document.title;
-      const passNo = pass.passNo || pass.returnablePassNo || pass.nonReturnablePassNo || pass.referenceNo || "MaterialPass";
-      document.title = `${passNo}`;
-
       const iframe = document.createElement("iframe");
-      iframe.title = `${passNo}`;
       iframe.style.display = "none";
       iframe.src = pdfUrl;
       document.body.appendChild(iframe);
 
       iframe.onload = () => {
-        iframe.contentWindow.focus();
         iframe.contentWindow.print();
-        const restore = () => {
-          document.title = originalTitle;
-          window.removeEventListener("afterprint", restore);
-        };
-        window.addEventListener("afterprint", restore);
-        setTimeout(restore, 5000);
         setTimeout(() => {
-          try {
-            if (document.body.contains(iframe)) {
-              document.body.removeChild(iframe);
-            }
-          } catch {}
+          document.body.removeChild(iframe);
           URL.revokeObjectURL(pdfUrl);
         }, 60000);
       };

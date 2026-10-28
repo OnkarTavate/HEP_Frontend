@@ -5,11 +5,9 @@ import { toast } from "sonner";
 import {
   Boxes,
   Check,
-  Flame,
   PackagePlus,
   Pencil,
   RefreshCw,
-  ShieldCheck,
   Trash2,
   X,
 } from "lucide-react";
@@ -29,111 +27,6 @@ const secondaryButtonCls =
   "focus-visible:outline-none focus-visible:ring-4 " +
   "focus-visible:ring-orange-500/15 " +
   "disabled:cursor-not-allowed disabled:opacity-50";
-
-function isAllowedNavKey(e) {
-  if (e.ctrlKey || e.metaKey) {
-    // Allow standard keyboard shortcuts (Ctrl+A, Ctrl+C, Ctrl+X, Ctrl+Z, Ctrl+V)
-    return ["a", "c", "x", "z", "v", "A", "C", "X", "Z", "V"].includes(e.key);
-  }
-  if (e.altKey) return false;
-
-  const allowed = [
-    "Backspace",
-    "Delete",
-    "ArrowLeft",
-    "ArrowRight",
-    "ArrowUp",
-    "ArrowDown",
-    "Home",
-    "End",
-    "PageUp",
-    "PageDown",
-    "Tab",
-    "Escape",
-  ];
-  return allowed.includes(e.key);
-}
-
-function clampText(text, maxWords, maxChars, maxSingleWordLen = 35) {
-  if (!text) return "";
-  let s = String(text);
-
-  // 1. Initial character length clamp
-  if (maxChars && s.length > maxChars) {
-    s = s.slice(0, maxChars);
-  }
-
-  // 2. Prevent unbroken gibberish words from ballooning without spaces
-  const tokens = s.split(/(\s+)/);
-  let reconstructed = "";
-  for (let token of tokens) {
-    if (/\S/.test(token) && token.length > maxSingleWordLen) {
-      token = token.slice(0, maxSingleWordLen);
-    }
-    reconstructed += token;
-  }
-  s = reconstructed;
-
-  // 3. Word count clamp
-  const words = s.trimStart().split(/\s+/).filter(Boolean);
-  if (words.length > maxWords) {
-    let count = 0;
-    let cutIndex = s.length;
-    const regex = /\S+/g;
-    let match;
-    while ((match = regex.exec(s)) !== null) {
-      count++;
-      if (count === maxWords) {
-        cutIndex = match.index + match[0].length;
-        break;
-      }
-    }
-    s = s.slice(0, cutIndex);
-  }
-
-  // 4. Final character boundary check
-  if (maxChars && s.length > maxChars) {
-    s = s.slice(0, maxChars);
-  }
-
-  return s;
-}
-
-function handleWordLimitKeyDown(e, text, maxWords, maxChars) {
-  if (isAllowedNavKey(e)) return;
-  const target = e.target;
-  if (target && target.selectionStart !== target.selectionEnd) {
-    return; // text is highlighted/selected, will be replaced
-  }
-  const str = text || "";
-  const words = str.trim().split(/\s+/).filter(Boolean);
-  if (words.length >= maxWords || (maxChars && str.length >= maxChars)) {
-    e.preventDefault();
-  }
-}
-
-function handleWordLimitPaste(e, currentText, maxWords, maxChars, updateFn) {
-  e.preventDefault();
-  const pasted = e.clipboardData ? e.clipboardData.getData("text") : "";
-  if (!pasted) return;
-
-  const target = e.target;
-  const start =
-    target && typeof target.selectionStart === "number"
-      ? target.selectionStart
-      : (currentText || "").length;
-  const end =
-    target && typeof target.selectionEnd === "number"
-      ? target.selectionEnd
-      : (currentText || "").length;
-
-  const textBefore = (currentText || "").slice(0, start);
-  const textAfter = (currentText || "").slice(end);
-  const combined = textBefore + pasted + textAfter;
-
-  const clamped = clampText(combined, maxWords, maxChars);
-  updateFn(clamped);
-}
 
 /**
  * Reusable Returnable / Non-Returnable materials table.
@@ -261,16 +154,9 @@ export const MaterialTable = forwardRef(function MaterialTable({
   function update(name, value) {
     onDraftChange?.(computedType, true);
 
-    let processedValue = value;
-    if (name === "name" && typeof value === "string") {
-      processedValue = clampText(value, 25, 150);
-    } else if (name === "description" && typeof value === "string") {
-      processedValue = clampText(value, 150, 1200);
-    }
-
     setDraft((current) => ({
       ...current,
-      [name]: processedValue,
+      [name]: value,
     }));
 
     setErrors((current) => ({
@@ -286,12 +172,9 @@ export const MaterialTable = forwardRef(function MaterialTable({
 
     const nextErrors = {};
     const trimmedName = (draft.name || "").trim();
-    const nameWords = trimmedName ? trimmedName.split(/\s+/).filter(Boolean).length : 0;
 
     if (!trimmedName) {
       nextErrors.name = "Enter the material name.";
-    } else if (nameWords > 25) {
-      nextErrors.name = "Material name cannot exceed 25 words.";
     } else if (trimmedName.length > 255) {
       nextErrors.name = "Material name must be 255 characters or fewer.";
     }
@@ -309,41 +192,25 @@ export const MaterialTable = forwardRef(function MaterialTable({
       nextErrors.name = "This material is already listed in this category.";
     }
 
-    const isNonReturnable = !returnable;
     const qtyStr = String(draft.quantity ?? "").trim();
-    const hasQty = qtyStr !== "";
-    const qtyNum = hasQty ? Number(qtyStr) : null;
+    const qtyNum = Number(qtyStr);
+
+    if (!qtyStr || isNaN(qtyNum) || qtyNum <= 0) {
+      nextErrors.quantity = "Please enter a valid quantity.";
+    }
 
     const unitId =
       draft.unit !== null && draft.unit !== undefined && draft.unit !== ""
         ? Number(draft.unit)
         : null;
-    const hasUnit = unitId !== null && unitNames.has(unitId);
 
-    if (returnable) {
-      if (!hasQty || isNaN(qtyNum) || qtyNum <= 0) {
-        nextErrors.quantity = "Please enter a valid quantity.";
-      }
-      if (!hasUnit) {
-        nextErrors.unit = "Please select a unit.";
-      }
-    } else {
-      // Non-returnables: quantity and unit are optional when omitted, but co-dependent if either is entered
-      if (hasUnit && (!hasQty || isNaN(qtyNum) || qtyNum <= 0)) {
-        nextErrors.quantity = "Please enter quantity for the selected unit.";
-      } else if (hasQty && (isNaN(qtyNum) || qtyNum <= 0)) {
-        nextErrors.quantity = "Please enter a valid quantity.";
-      }
-
-      if (hasQty && !hasUnit) {
-        nextErrors.unit = "Please select a unit.";
-      }
+    if (!unitId || !unitNames.has(unitId)) {
+      nextErrors.unit = "Please select a unit.";
     }
 
     const desc = (draft.description || "").trim();
-    const descWords = desc ? desc.split(/\s+/).filter(Boolean).length : 0;
-    if (descWords > 150) {
-      nextErrors.description = "Description cannot exceed 150 words.";
+    if (desc.length > 250) {
+      nextErrors.description = "Use 250 characters or fewer.";
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -354,8 +221,8 @@ export const MaterialTable = forwardRef(function MaterialTable({
     const savedItem = {
       name: trimmedName,
       isHazardous: Boolean(draft.isHazardous),
-      quantity: hasQty && qtyNum > 0 ? qtyNum : null,
-      unit: hasUnit ? unitId : null,
+      quantity: qtyNum,
+      unit: unitId,
       description: desc,
     };
 
@@ -434,11 +301,11 @@ export const MaterialTable = forwardRef(function MaterialTable({
   function renderEditorRow(number) {
     return (
       <tr ref={editorRowRef} className="bg-orange-50/50 align-top">
-        <td className="border-b border-orange-200/70 px-3 py-4 text-center text-xs font-semibold text-orange-700">
+        <td className="border-b border-orange-200/70 px-4 py-4 text-xs font-semibold text-orange-700">
           {number}
         </td>
 
-        <td className="border-b border-orange-200/70 px-4 py-4 text-left">
+        <td className="border-b border-orange-200/70 px-4 py-4">
           <input
             id={`${editorId}-name`}
             aria-label="Material name"
@@ -447,91 +314,41 @@ export const MaterialTable = forwardRef(function MaterialTable({
                 el.focus({ preventScroll: true });
               }
             }}
-            value={draft.name || ""}
-            maxLength={150}
-            placeholder="Enter item name (max 25 words)"
+            value={draft.name}
+            maxLength={255}
+            placeholder="Enter item name"
             className={rowInputCls}
             aria-invalid={Boolean(errors.name)}
             aria-describedby={
               errors.name ? `${editorId}-name-error` : undefined
             }
-            onKeyDown={(event) =>
-              handleWordLimitKeyDown(event, draft.name, 25, 150)
-            }
-            onPaste={(event) =>
-              handleWordLimitPaste(event, draft.name, 25, 150, (val) =>
-                update("name", val)
-              )
-            }
             onChange={(event) => update("name", event.target.value)}
           />
 
-          <div className="mt-1 flex items-center justify-between text-[10px]">
-            <div>{renderError("name")}</div>
-            {(() => {
-              const words = (draft.name || "").trim()
-                ? (draft.name || "").trim().split(/\s+/).filter(Boolean).length
-                : 0;
-              return (
-                <span
-                  className={`ml-auto font-medium ${
-                    words >= 25 ? "text-amber-600 font-bold" : "text-slate-400"
-                  }`}
-                >
-                  {words}/25 words
-                </span>
-              );
-            })()}
-          </div>
+          {renderError("name")}
+
+          <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-[11px] font-medium text-slate-600">
+            <input
+              type="checkbox"
+              checked={Boolean(draft.isHazardous)}
+              onChange={(event) =>
+                update("isHazardous", event.target.checked)
+              }
+              className="h-3.5 w-3.5 shrink-0 accent-orange-600"
+            />
+            Hazardous material
+          </label>
         </td>
 
-        <td className="border-b border-orange-200/70 px-2 py-4 text-center">
-          <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={() => update("isHazardous", !draft.isHazardous)}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 ${
-                draft.isHazardous
-                  ? "bg-red-50 text-red-700 border-red-300 ring-2 ring-red-500/20"
-                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
-              }`}
-              title={draft.isHazardous ? "Click to set Non-Hazardous" : "Click to set Hazardous"}
-            >
-              <span
-                className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out ${
-                  draft.isHazardous ? "bg-red-600" : "bg-slate-300"
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition duration-200 ease-in-out mt-0.5 ${
-                    draft.isHazardous ? "translate-x-3.5 ml-0" : "translate-x-0.5"
-                  }`}
-                />
-              </span>
-              {draft.isHazardous ? (
-                <span className="flex items-center gap-1 text-red-700">
-                  <Flame size={13} className="text-red-600 animate-pulse" />
-                  <span>Hazardous</span>
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 text-slate-600 font-semibold">
-                  <ShieldCheck size={13} className="text-emerald-600" />
-                  <span>Non-Hazardous</span>
-                </span>
-              )}
-            </button>
-          </div>
-        </td>
-
-        <td className="border-b border-orange-200/70 px-3 py-4 text-center">
+        <td className="border-b border-orange-200/70 px-4 py-4">
           <input
             id={`${editorId}-quantity`}
             aria-label="Material quantity"
             type="number"
             min="1"
             value={draft.quantity}
-            placeholder={returnable ? "e.g. 10" : "Optional"}
-            className={`${rowInputCls} text-center`}
+            placeholder="e.g. 10"
+            className={rowInputCls}
             aria-invalid={Boolean(errors.quantity)}
             aria-describedby={
               errors.quantity ? `${editorId}-quantity-error` : undefined
@@ -542,7 +359,7 @@ export const MaterialTable = forwardRef(function MaterialTable({
           {renderError("quantity")}
         </td>
 
-        <td className="border-b border-orange-200/70 px-3 py-4 text-left">
+        <td className="border-b border-orange-200/70 px-4 py-4">
           <select
             id={`${editorId}-unit`}
             aria-label="Material unit"
@@ -561,11 +378,7 @@ export const MaterialTable = forwardRef(function MaterialTable({
             }
           >
             <option value="">
-              {unitsLoading
-                ? "Loading…"
-                : returnable
-                ? "Select unit"
-                : "Select unit (optional)"}
+              {unitsLoading ? "Loading…" : "Select unit"}
             </option>
 
             {units.map((unit) => (
@@ -578,79 +391,59 @@ export const MaterialTable = forwardRef(function MaterialTable({
           {renderError("unit")}
         </td>
 
-        <td className="border-b border-orange-200/70 px-4 py-4 text-left">
+        <td className="border-b border-orange-200/70 px-4 py-4">
           <textarea
             id={`${editorId}-description`}
             aria-label="Material description"
             rows={2}
+            maxLength={250}
             value={draft.description}
-            maxLength={1200}
-            placeholder="Additional details (max 150 words)"
+            placeholder="Additional details"
             className={`${rowInputCls} min-h-[72px] resize-y`}
             aria-invalid={Boolean(errors.description)}
             aria-describedby={
               errors.description ? `${editorId}-description-error` : undefined
-            }
-            onKeyDown={(event) =>
-              handleWordLimitKeyDown(event, draft.description, 150, 1200)
-            }
-            onPaste={(event) =>
-              handleWordLimitPaste(event, draft.description, 150, 1200, (val) =>
-                update("description", val)
-              )
             }
             onChange={(event) =>
               update("description", event.target.value)
             }
           />
 
-          <div className="mt-1 flex items-center justify-between text-[10px]">
-            <div>{renderError("description")}</div>
-            {(() => {
-              const words = (draft.description || "").trim() ? (draft.description || "").trim().split(/\s+/).filter(Boolean).length : 0;
-              return (
-                <span className={`ml-auto font-medium ${words >= 150 ? "text-amber-600 font-bold" : "text-slate-400"}`}>
-                  {words}/150 words
-                </span>
-              );
-            })()}
-          </div>
+          {renderError("description")}
         </td>
 
-        <td className="border-b border-orange-200/70 px-2 py-4 text-center">
-          <div className="flex flex-col items-center justify-center gap-1">
-            <div className="flex items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={save}
-                aria-label={
-                  editingIndex !== null
-                    ? "Save material changes"
-                    : "Save material"
-                }
-                title={
-                  editingIndex !== null
-                    ? "Save changes"
-                    : "Save material"
-                }
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-600 text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-500/20"
-              >
-                <Check size={17} />
-              </button>
+        <td className="border-b border-orange-200/70 px-4 py-4">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={save}
+              aria-label={
+                editingIndex !== null
+                  ? "Save material changes"
+                  : "Save material"
+              }
+              title={
+                editingIndex !== null
+                  ? "Save changes"
+                  : "Save material"
+              }
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-600 text-white shadow-sm transition hover:bg-orange-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-500/20"
+            >
+              <Check size={17} />
+            </button>
 
-              <button
-                type="button"
-                onClick={closeEditor}
-                aria-label="Cancel material editing"
-                title="Cancel"
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-500/15"
-              >
-                <X size={17} />
-              </button>
-            </div>
-
-            <p className="text-[10px] text-slate-400">Save / Cancel</p>
+            <button
+              type="button"
+              onClick={closeEditor}
+              aria-label="Cancel material editing"
+              title="Cancel"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-500/15"
+            >
+              <X size={17} />
+            </button>
           </div>
+
+          <p className="mt-2 text-[10px] text-slate-400">Save / Cancel</p>
         </td>
       </tr>
     );
@@ -688,7 +481,7 @@ export const MaterialTable = forwardRef(function MaterialTable({
             <p className="mt-1 text-xs leading-5 text-slate-500">
               {returnable
                 ? "Materials that will be taken out later. Quantity and unit are required."
-                : "Materials that will remain or be consumed. Quantity and unit are optional."}
+                : "Materials that will remain or be consumed. Quantity and unit are required."}
             </p>
           </div>
         </div>
@@ -709,58 +502,31 @@ export const MaterialTable = forwardRef(function MaterialTable({
 
           <colgroup>
             <col className="w-[6%]" />
-            <col className="w-[23%]" />
-            <col className="w-[16%]" />
-            <col className="w-[10%]" />
+            <col className="w-[25%]" />
             <col className="w-[13%]" />
-            <col className="w-[22%]" />
-            <col className="w-[10%]" />
+            <col className="w-[14%]" />
+            <col className="w-[28%]" />
+            <col className="w-[14%]" />
           </colgroup>
 
           <thead className="sticky top-0 z-10 text-[11px] font-semibold text-slate-500 shadow-sm">
             <tr>
-              <th
-                scope="col"
-                className="border-b border-slate-200 bg-slate-50/95 backdrop-blur-sm px-3 py-3 font-semibold text-slate-600 text-center"
-              >
-                S.No.
-              </th>
-              <th
-                scope="col"
-                className="border-b border-slate-200 bg-slate-50/95 backdrop-blur-sm px-4 py-3 font-semibold text-slate-600 text-left"
-              >
-                Item name
-              </th>
-              <th
-                scope="col"
-                className="border-b border-slate-200 bg-slate-50/95 backdrop-blur-sm px-2 py-3 font-semibold text-slate-600 text-center"
-              >
-                Hazardous
-              </th>
-              <th
-                scope="col"
-                className="border-b border-slate-200 bg-slate-50/95 backdrop-blur-sm px-3 py-3 font-semibold text-slate-600 text-center"
-              >
-                Qty
-              </th>
-              <th
-                scope="col"
-                className="border-b border-slate-200 bg-slate-50/95 backdrop-blur-sm px-3 py-3 font-semibold text-slate-600 text-left"
-              >
-                Unit
-              </th>
-              <th
-                scope="col"
-                className="border-b border-slate-200 bg-slate-50/95 backdrop-blur-sm px-4 py-3 font-semibold text-slate-600 text-left"
-              >
-                Description
-              </th>
-              <th
-                scope="col"
-                className="border-b border-slate-200 bg-slate-50/95 backdrop-blur-sm px-2 py-3 font-semibold text-slate-600 text-center"
-              >
-                Actions
-              </th>
+              {[
+                "S.No.",
+                "Item name",
+                "Qty",
+                "Unit",
+                "Description",
+                "Actions",
+              ].map((heading) => (
+                <th
+                  key={heading}
+                  scope="col"
+                  className="border-b border-slate-200 bg-slate-50/95 backdrop-blur-sm px-4 py-3 font-semibold text-slate-600"
+                >
+                  {heading}
+                </th>
+              ))}
             </tr>
           </thead>
 
@@ -768,7 +534,7 @@ export const MaterialTable = forwardRef(function MaterialTable({
             {materials.length === 0 && !draft && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={6}
                   className="border-b border-slate-100 px-4 py-8 text-center text-slate-400"
                 >
                   No materials added. Use “Add material” below to begin.
@@ -790,50 +556,40 @@ export const MaterialTable = forwardRef(function MaterialTable({
                   key={index}
                   className="align-top transition hover:bg-orange-50/25"
                 >
-                  <td className="border-b border-slate-100 px-3 py-4 text-center text-slate-400 font-mono text-xs font-semibold">
+                  <td className="border-b border-slate-100 px-4 py-4 text-slate-400">
                     {index + 1}
                   </td>
 
-                  <td className="border-b border-slate-100 px-4 py-4 text-left">
+                  <td className="border-b border-slate-100 px-4 py-4">
                     <p className="break-words font-semibold text-slate-900">
                       {item.name}
                     </p>
+
+                    {item.isHazardous && (
+                      <span className="mt-1.5 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200">
+                        Hazardous
+                      </span>
+                    )}
                   </td>
 
-                  <td className="border-b border-slate-100 px-2 py-4 text-center whitespace-nowrap">
-                    <div className="flex justify-center">
-                      {item.isHazardous ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-[11px] font-bold text-red-700 border border-red-200 shadow-2xs">
-                          <Flame size={12} className="text-red-500" />
-                          <span>Hazardous</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600 border border-slate-200">
-                          <ShieldCheck size={12} className="text-emerald-600" />
-                          <span>Non-Hazardous</span>
-                        </span>
-                      )}
-                    </div>
-                  </td>
-
-                  <td className="border-b border-slate-100 px-3 py-4 text-center font-bold text-slate-800 tabular-nums">
+                  <td className="border-b border-slate-100 break-words px-4 py-4">
                     {item.quantity ?? item.requestedQty ?? "—"}
                   </td>
 
-                  <td className="border-b border-slate-100 px-3 py-4 text-left font-medium text-slate-700">
+                  <td className="border-b border-slate-100 break-words px-4 py-4">
                     {unitNames.get(Number(item.unit || item.unitId)) ||
                       getLabelById?.(units, item.unit) ||
                       "—"}
                   </td>
 
-                  <td className="border-b border-slate-100 px-4 py-4 text-left">
+                  <td className="border-b border-slate-100 px-4 py-4">
                     <p className="whitespace-pre-wrap break-words leading-5 text-slate-500">
                       {item.description || "—"}
                     </p>
                   </td>
 
-                  <td className="border-b border-slate-100 px-2 py-4 text-center">
-                    <div className="flex items-center justify-center gap-1">
+                  <td className="border-b border-slate-100 px-4 py-4">
+                    <div className="flex gap-1">
                       <button
                         type="button"
                         disabled={Boolean(draft)}

@@ -1,6 +1,6 @@
 "use client"; // Required in Next.js for hooks like useState
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -52,8 +52,6 @@ const LoginPage = () => {
     token: "",
   });
   const [isCaptchaLoading, setIsCaptchaLoading] = useState(false);
-  const captchaTimerRef = useRef(null);
-  const captchaFetchedAtRef = useRef(0);
   const [isTrackModalOpen, setIsTrackModalOpen] = useState(false);
   const [trackReference, setTrackReference] = useState("");
   const [trackResult, setTrackResult] = useState(null);
@@ -247,14 +245,14 @@ const LoginPage = () => {
     }
   };
 
-  const fetchCaptcha = useCallback(async () => {
+  const fetchCaptcha = async () => {
     setIsCaptchaLoading(true);
 
     try {
       const api = AGENT_API || "http://localhost:5001/api";
       const res = await axios.get(`${api}/captcha/get-captcha`);
 
-      if (res.data?.success) {
+      if (res.data.success) {
         setCaptchaData({
           question: res.data.captchaQuestion,
           token: res.data.captchaToken,
@@ -265,25 +263,13 @@ const LoginPage = () => {
           ...prev,
           captcha: "",
         }));
-
-        captchaFetchedAtRef.current = Date.now();
-
-        // Auto-refresh before captcha expires (standard 3-minute/180s expiry, refreshed at 2m 55s / 175s)
-        if (captchaTimerRef.current) {
-          clearTimeout(captchaTimerRef.current);
-        }
-        const ttlSec = res.data.expiresIn || 180;
-        const autoRefreshMs = Math.max(15, ttlSec - 5) * 1000; // 175,000ms = 2min 55s
-        captchaTimerRef.current = setTimeout(() => {
-          fetchCaptcha();
-        }, autoRefreshMs);
       }
     } catch (error) {
       console.error("Failed to fetch captcha", error);
     } finally {
       setIsCaptchaLoading(false);
     }
-  }, []);
+  };
 
   const fetchForgotCaptcha = async () => {
     setForgotCaptchaLoading(true);
@@ -306,31 +292,63 @@ const LoginPage = () => {
     }
   };
 
-  // Fetch captcha on mount and setup auto-refresh / focus revalidation
-  useEffect(() => {
-    fetchCaptcha();
+  // const fetchCaptcha = async () => {
+  //   setIsCaptchaLoading(true);
+  //   try {
+  //     const res = await axios.get(`${AGENT_API}/captcha/get-captcha`);
+  //     if (res.data.success) {
+  //       setCaptchaData({
+  //         svg: res.data.captchaSvg,
+  //         token: res.data.captchaToken,
+  //       });
+  //       // Clear the user's previous input when captcha refreshes
+  //       setFormData((prev) => ({ ...prev, captcha: "" }));
+  //     }
+  //   } catch (error) {
+  //     console.error("Failed to fetch captcha", error);
+  //   } finally {
+  //     setIsCaptchaLoading(false);
+  //   }
+  // };
 
-    // If tab was idle or backgrounded and user refocuses after 170+ seconds, refresh immediately
-    const handleFocusOrVisible = () => {
-      if (document.visibilityState === "visible") {
-        const elapsed = Date.now() - captchaFetchedAtRef.current;
-        if (elapsed >= 170 * 1000) {
-          fetchCaptcha();
+  // Fetch on component mount — uses ignore flag for React 18 Strict Mode compatibility
+  useEffect(() => {
+    let ignore = false;
+
+    const loadCaptcha = async (attempt = 0) => {
+      setIsCaptchaLoading(true);
+      try {
+        const api = AGENT_API || "http://localhost:5001/api";
+        const res = await axios.get(`${api}/captcha/get-captcha`);
+        if (!ignore && res.data?.success) {
+          setCaptchaData({
+            question: res.data.captchaQuestion,
+            token: res.data.captchaToken,
+          });
+          setFormData((prev) => ({ ...prev, captcha: "" }));
+        }
+      } catch (error) {
+        if (!ignore) {
+          console.error("Failed to fetch captcha", error);
+          if (attempt < 3) {
+            setTimeout(() => {
+              if (!ignore) loadCaptcha(attempt + 1);
+            }, 1500);
+          }
+        }
+      } finally {
+        if (!ignore) {
+          setIsCaptchaLoading(false);
         }
       }
     };
 
-    window.addEventListener("focus", handleFocusOrVisible);
-    document.addEventListener("visibilitychange", handleFocusOrVisible);
+    loadCaptcha();
 
     return () => {
-      if (captchaTimerRef.current) {
-        clearTimeout(captchaTimerRef.current);
-      }
-      window.removeEventListener("focus", handleFocusOrVisible);
-      document.removeEventListener("visibilitychange", handleFocusOrVisible);
+      ignore = true;
     };
-  }, [fetchCaptcha]);
+  }, []);
 
   const handleTrackSubmit = async (e) => {
     e.preventDefault();
