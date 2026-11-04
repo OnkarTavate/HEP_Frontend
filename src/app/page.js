@@ -546,8 +546,10 @@ const LoginPage = () => {
         const user = {
           username: formData.username,
           role: tokenClaims.role,
+          roleId: tokenClaims.roleId ?? null,
           departmentName: tokenClaims.departmentName || null,
           departmentId: tokenClaims.departmentId || null,
+          userId: tokenClaims.userId ?? null,
           isPasswordChanged: data.isPasswordChanged,
         };
 

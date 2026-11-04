@@ -106,8 +106,19 @@ export default function TrafficManagerLogin() {
       );
 
       if (res.data?.success) {
-        const { accessToken, refreshToken, role, departmentId, departmentName, isPasswordChanged } = res.data;
-        const roleLower = (role || "").toLowerCase();
+        const { accessToken, refreshToken, isPasswordChanged } = res.data;
+
+        // Decode ALL role/dept info from the JWT - auth-service response body only contains
+        // accessToken, refreshToken, isPasswordChanged (brain.md §5.1).
+        // role, roleId, departmentId, departmentName live exclusively in the JWT payload.
+        let decoded = {};
+        try { decoded = jwtDecode(accessToken); } catch {}
+
+        const role = decoded.role || "";
+        const roleLower = role.toLowerCase().trim();
+        const roleId = decoded.roleId;
+        const departmentId = decoded.departmentId;
+        const departmentName = decoded.departmentName;
 
         // Only allow Traffic Manager role
         if (!TRAFFIC_MANAGER_ROLES.includes(roleLower)) {
@@ -121,13 +132,11 @@ export default function TrafficManagerLogin() {
         localStorage.setItem("accessToken", accessToken);
         localStorage.setItem("refreshToken", refreshToken);
 
-        let decoded = {};
-        try { decoded = jwtDecode(accessToken); } catch {}
-
         localStorage.setItem(
           "user",
           JSON.stringify({
             role: roleLower,
+            roleId,
             departmentId,
             departmentName,
             isPasswordChanged,

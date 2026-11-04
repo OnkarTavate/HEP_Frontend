@@ -456,6 +456,13 @@ export default function TrafficLayout({ children }) {
           normalizedRole,
         );
 
+      /* ---------- SHIPPING CONTROL (SS / SM / ASM) ----------
+       * These roles are in Traffic dept (9) and route to /traffic_approval/dashboard
+       * They must be allowed by name since roleId may not be stored from TM login page
+       */
+      const isShippingControlRole =
+        ["ss", "sm", "asm"].includes(normalizedRole);
+
       /*
        * ============================================================
        * FINAL ACCESS DECISION
@@ -470,7 +477,8 @@ export default function TrafficLayout({ children }) {
         isApprovalRoleByName ||
         isSafetyOfficerTrafficByName ||
         isMarineWorkflowRoleByName ||
-        isCisfWorkflowRoleByName;
+        isCisfWorkflowRoleByName ||
+        isShippingControlRole;
 
       console.log("TRAFFIC APPROVAL ACCESS CHECK:", {
         username: parsedUser.username,
@@ -488,6 +496,7 @@ export default function TrafficLayout({ children }) {
         isSafetyOfficerTrafficByName,
         isMarineWorkflowRoleByName,
         isCisfWorkflowRoleByName,
+        isShippingControlRole,
         isTrafficApprover,
       });
       if (!isTrafficApprover) {

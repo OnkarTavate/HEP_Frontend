@@ -280,7 +280,6 @@
      * Everything feels tight yet readable, like macOS.
      */
     font-size: 13px;
-    scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
