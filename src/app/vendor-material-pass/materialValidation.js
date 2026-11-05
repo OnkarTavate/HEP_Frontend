@@ -33,48 +33,65 @@ export const materialItemSchema = z
   })
   .strict()
   .superRefine((item, ctx) => {
+    const isHazardous = Boolean(item.isHazardous);
     const hasQuantity = item.requestedQty !== "";
     const hasUnit = item.unitId !== null;
 
-    if (
-      item.materialType === "RETURNABLE" ||
-      hasQuantity
-    ) {
-      const result = positiveQuantity.safeParse(
-        item.requestedQty
-      );
-
-      if (!result.success) {
+    if (item.materialType === "RETURNABLE" || isHazardous) {
+      if (!hasQuantity) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["requestedQty"],
-          message: result.error.issues[0].message,
+          message: isHazardous
+            ? "Enter quantity for hazardous material."
+            : "Enter a positive quantity.",
+        });
+      } else {
+        const result = positiveQuantity.safeParse(item.requestedQty);
+        if (!result.success) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["requestedQty"],
+            message: result.error.issues[0].message,
+          });
+        }
+      }
+
+      if (!hasUnit) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["unitId"],
+          message: isHazardous
+            ? "Select a unit for hazardous material."
+            : "Select a unit.",
         });
       }
-    }
+    } else {
+      if (hasQuantity) {
+        const result = positiveQuantity.safeParse(item.requestedQty);
+        if (!result.success) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["requestedQty"],
+            message: result.error.issues[0].message,
+          });
+        }
+        if (!hasUnit) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["unitId"],
+            message: "Select a unit.",
+          });
+        }
+      }
 
-    if (
-      (item.materialType === "RETURNABLE" || hasQuantity) &&
-      !hasUnit
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["unitId"],
-        message: "Select a unit.",
-      });
-    }
-
-    if (
-      item.materialType === "NON_RETURNABLE" &&
-      hasUnit &&
-      !hasQuantity
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["requestedQty"],
-        message:
-          "Enter a quantity for the selected unit.",
-      });
+      if (hasUnit && !hasQuantity) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["requestedQty"],
+          message: "Enter a quantity for the selected unit.",
+        });
+      }
     }
   });
 

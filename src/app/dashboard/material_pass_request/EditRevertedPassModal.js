@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import MaterialTable from "./Materialtable";
-import { materialSchema } from "./materialValidations";
+import { returnableMaterialSchema, nonReturnableMaterialSchema } from "./materialValidations";
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 
@@ -189,15 +189,28 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
       toast.warning(`Please add at least one material to ${TYPE_META[editingType].label}.`);
       return;
     }
-    const cleanMaterials = draft.materials.map((m) => ({
-      ...m,
-      name: (m.name || "").trim(),
-      quantity: Number(m.quantity),
-      unit: Number(m.unit),
-      isHazardous: Boolean(m.isHazardous),
-      description: (m.description || "").trim(),
-    }));
-    const allValid = cleanMaterials.every((m) => materialSchema.safeParse(m).success);
+
+    const isNonReturnable = editingType === "nonReturnable";
+    const schema = isNonReturnable ? nonReturnableMaterialSchema : returnableMaterialSchema;
+
+    const cleanMaterials = draft.materials.map((m) => {
+      const trimmedName = (m.name || "").trim();
+      const hasQty = m.quantity !== null && m.quantity !== undefined && m.quantity !== "" && !isNaN(Number(m.quantity));
+      const numQty = hasQty ? Number(m.quantity) : null;
+      const hasUnit = m.unit !== null && m.unit !== undefined && m.unit !== "" && !isNaN(Number(m.unit));
+      const numUnit = hasUnit ? Number(m.unit) : null;
+
+      return {
+        ...m,
+        name: trimmedName,
+        quantity: numQty && numQty > 0 ? numQty : null,
+        unit: numUnit && numUnit > 0 ? numUnit : null,
+        isHazardous: Boolean(m.isHazardous),
+        description: (m.description || "").trim(),
+      };
+    });
+
+    const allValid = cleanMaterials.every((m) => schema.safeParse(m).success);
     if (!allValid) {
       toast.warning("Please fix incomplete material rows before continuing.");
       return;
@@ -231,15 +244,31 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
 
       const payload = typeKeys.reduce((acc, type) => {
         const entry = edits[type];
+        const isNonReturnable = type === "nonReturnable";
+
         acc[type] = {
           passId: entry.passId,
-          materials: entry.materials.map(({ name, unit, quantity, description, isHazardous }) => ({
-            name: (name || "").trim(),
-            unit: Number(unit),
-            quantity: Number(quantity),
-            description: description || null,
-            isHazardous: Boolean(isHazardous),
-          })),
+          materials: entry.materials.map(({ name, unit, quantity, description, isHazardous }) => {
+            const hasQty = quantity !== null && quantity !== undefined && quantity !== "" && !isNaN(Number(quantity));
+            const numQty = hasQty && Number(quantity) > 0 ? Number(quantity) : null;
+            const hasUnit = unit !== null && unit !== undefined && unit !== "" && !isNaN(Number(unit));
+            const numUnit = hasUnit && Number(unit) > 0 ? Number(unit) : null;
+
+            const trimmedDesc = (description || "").trim();
+
+            const item = {
+              name: (name || "").trim(),
+              unit: numUnit,
+              quantity: numQty,
+              isHazardous: Boolean(isHazardous),
+            };
+
+            if (trimmedDesc) {
+              item.description = trimmedDesc;
+            }
+
+            return item;
+          }),
         };
         return acc;
       }, {});

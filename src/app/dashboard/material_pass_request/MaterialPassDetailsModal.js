@@ -273,10 +273,11 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
   ).length;
   const approvedCount = materials.filter(
     (m) =>
-      m.approvedQty !== null &&
-      m.approvedQty !== undefined &&
-      m.approvedQty !== "" &&
-      Number(m.approvedQty) > 0
+      !((m.approvedQty !== null &&
+        m.approvedQty !== undefined &&
+        m.approvedQty !== "" &&
+        Number(m.approvedQty) === 0) ||
+      m.approved === false)
   ).length;
 
   // Heuristic threshold for showing "show more" — avoids needing a DOM
@@ -357,16 +358,17 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
                     // "Approved" is purely a function of approvedQty now — remarks can
                     // legitimately exist on an approved item (e.g. a reduced-qty note),
                     // so they're no longer mutually exclusive with approval.
+                    const hasReqQty = item.quantity !== null && item.quantity !== undefined && item.quantity !== "" && Number(item.quantity) > 0;
                     const approvedQtyNum = Number(item.approvedQty) || 0;
-                    const isItemApproved = isApproved && approvedQtyNum > 0;
                     const isItemExcluded =
                       (item.approvedQty !== null &&
                         item.approvedQty !== undefined &&
                         item.approvedQty !== "" &&
                         approvedQtyNum === 0) ||
                       item.approved === false;
+                    const isItemApproved = isApproved && !isItemExcluded;
                     const isItemShort =
-                      isApproved && item.approvedQty != null && approvedQtyNum < Number(item.quantity) && approvedQtyNum > 0;
+                      isApproved && hasReqQty && item.approvedQty != null && approvedQtyNum < Number(item.quantity) && approvedQtyNum > 0;
                     const isItemHazardous = Boolean(item.isHazardous ?? item.is_hazardous);
 
                     const descText = item.description || "";
@@ -396,8 +398,12 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
                             </span>
                           )}
                         </td>
-                        <td className="p-3 align-top text-slate-600 font-mono font-bold text-xs">{item.quantity}</td>
-                        <td className="p-3 align-top text-slate-800 font-mono text-xs">{item.unit}</td>
+                        <td className="p-3 align-top text-slate-600 font-mono font-bold text-xs">
+                          {hasReqQty ? item.quantity : "NA"}
+                        </td>
+                        <td className="p-3 align-top text-slate-800 font-mono text-xs">
+                          {item.unit || "NA"}
+                        </td>
 
                         {/* Description — reserved height even when empty, subtle show more/less */}
                         <td className="p-3 align-top text-slate-600">
@@ -449,6 +455,11 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
                                     </span>
                                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                                   </>
+                                ) : isItemApproved && !hasReqQty ? (
+                                  <>
+                                    <span className="font-bold text-emerald-700">NA</span>
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                  </>
                                 ) : (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
                                     <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
@@ -460,8 +471,10 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
                                   <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
                                   <span>0 (Excluded)</span>
                                 </span>
+                              ) : !hasReqQty ? (
+                                <span className="text-slate-400 font-bold font-mono">NA</span>
                               ) : (
-                                <span className="text-slate-400 font-bold">-</span>
+                                <span className="text-slate-400">{item.quantity}</span>
                               )}
                             </div>
 
@@ -654,10 +667,11 @@ export default function MaterialPassDetailsModal({
     if (!passData?.materials || !Array.isArray(passData.materials)) return 0;
     return passData.materials.filter(
       (m) =>
-        m.approvedQty !== null &&
-        m.approvedQty !== undefined &&
-        m.approvedQty !== "" &&
-        Number(m.approvedQty) > 0
+        !((m.approvedQty !== null &&
+          m.approvedQty !== undefined &&
+          m.approvedQty !== "" &&
+          Number(m.approvedQty) === 0) ||
+        m.approved === false)
     ).length;
   };
 
@@ -710,16 +724,32 @@ export default function MaterialPassDetailsModal({
       const pdfBlob = new Blob([response.data], { type: "application/pdf" });
       const pdfUrl = URL.createObjectURL(pdfBlob);
 
+      const originalTitle = document.title;
+      const passNo = pass.passNo || pass.returnablePassNo || pass.nonReturnablePassNo || pass.referenceNo || "MaterialPass";
+      document.title = `${passNo}`;
+
       // Print seamlessly via a hidden iframe, same pattern as person/vehicle QR.
       const iframe = document.createElement("iframe");
+      iframe.title = `${passNo}`;
       iframe.style.display = "none";
       iframe.src = pdfUrl;
       document.body.appendChild(iframe);
 
       iframe.onload = () => {
+        iframe.contentWindow.focus();
         iframe.contentWindow.print();
+        const restore = () => {
+          document.title = originalTitle;
+          window.removeEventListener("afterprint", restore);
+        };
+        window.addEventListener("afterprint", restore);
+        setTimeout(restore, 5000);
         setTimeout(() => {
-          document.body.removeChild(iframe);
+          try {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          } catch {}
           URL.revokeObjectURL(pdfUrl);
         }, 60000);
       };
@@ -889,6 +919,18 @@ export default function MaterialPassDetailsModal({
                     <span className="text-sm font-medium text-slate-800 sm:text-right">
                       {pass.entryDate
                         ? new Date(pass.entryDate).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "-"}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                    <span className="text-xs font-semibold text-slate-500">Valid Till</span>
+                    <span className="text-sm font-semibold text-emerald-700 sm:text-right">
+                      {pass.expiryDate || pass.validTillDate || pass.validTill
+                        ? new Date(pass.expiryDate || pass.validTillDate || pass.validTill).toLocaleDateString("en-IN", {
                             day: "2-digit",
                             month: "short",
                             year: "numeric",

@@ -488,7 +488,7 @@ function MaterialTable({
             value={draft.requestedQty}
             maxLength={19}
             placeholder={
-              returnable ? "e.g. 10" : "Optional"
+              returnable || draft.isHazardous ? "e.g. 10" : "Optional"
             }
             className={rowInputCls}
             aria-invalid={Boolean(
@@ -538,7 +538,9 @@ function MaterialTable({
             <option value="">
               {unitsLoading
                 ? "Loading…"
-                : "Select unit"}
+                : returnable || draft.isHazardous
+                ? "Select unit"
+                : "Select unit (optional)"}
             </option>
 
             {units.map((unit) => (
@@ -757,11 +759,11 @@ function MaterialTable({
                   </td>
 
                   <td className="border-b border-slate-100 break-words px-4 py-4">
-                    {item.requestedQty || "Unspecified"}
+                    {item.requestedQty || "NA"}
                   </td>
 
                   <td className="border-b border-slate-100 break-words px-4 py-4">
-                    {unitNames.get(item.unitId) || "—"}
+                    {unitNames.get(item.unitId) || "NA"}
                   </td>
 
                   <td className="border-b border-slate-100 px-4 py-4">

@@ -198,18 +198,21 @@ function MaterialItemRow({
   const remarkText = item.approverRemarks || "";
   const isRemarkLong = remarkText.length > REMARK_TRUNCATE_LEN;
 
-  const qtyApplicable = item.approvedQty !== null && item.approvedQty !== undefined;
-  const requestedQty = Number(item.quantity) || 0;
+  const hasRequestedQty = item.quantity !== null && item.quantity !== undefined && item.quantity !== "" && Number(item.quantity) > 0;
+  const requestedQty = hasRequestedQty ? Number(item.quantity) : null;
+  const qtyApplicable = hasRequestedQty && item.approvedQty !== null && item.approvedQty !== undefined;
 
   const itemError = !item.approved
     ? null
-    : item.approvedQty === "" || item.approvedQty === null || item.approvedQty === undefined
-      ? "Invalid approved qty"
-      : numericApprovedQty < 1
-        ? "Approved qty must be at least 1"
-        : numericApprovedQty > requestedQty
-          ? "Exceeds requested qty"
-          : null;
+    : !hasRequestedQty
+      ? (item.isHazardous ? "Quantity required for hazardous item" : null)
+      : item.approvedQty === "" || item.approvedQty === null || item.approvedQty === undefined
+        ? "Invalid approved qty"
+        : numericApprovedQty < 1
+          ? "Approved qty must be at least 1"
+          : numericApprovedQty > requestedQty
+            ? "Exceeds requested qty"
+            : null;
 
   return (
     <tr className={item.approved ? "bg-white hover:bg-slate-50/70" : "bg-slate-50/70"}>
@@ -282,18 +285,20 @@ function MaterialItemRow({
       {/* Dedicated Unit Column */}
       <td className="p-3.5 align-middle text-center whitespace-nowrap">
         <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs">
-          {item.unit || "—"}
+          {item.unit || "NA"}
         </span>
       </td>
 
       {/* Requested Qty (read-only for all approver roles) */}
       <td className="p-3.5 align-middle text-center whitespace-nowrap">
-        <span className="text-sm font-bold text-[#0a1e4d] tabular-nums">{item.quantity}</span>
+        <span className="text-sm font-bold text-[#0a1e4d] tabular-nums">
+          {item.quantity != null && item.quantity !== "" ? item.quantity : "NA"}
+        </span>
       </td>
 
       {/* Approved Qty (Editable ONLY by Concerned Department; read-only for others and view mode) */}
       <td className="p-3.5 align-middle text-center whitespace-nowrap">
-        {!canExclude ? (
+        {!canExclude || !hasRequestedQty ? (
           qtyApplicable ? (
             <span
               className={`inline-flex items-center justify-center min-w-[2.5rem] px-2.5 py-1 text-sm font-bold tabular-nums rounded-lg border ${
@@ -305,7 +310,9 @@ function MaterialItemRow({
               {item.approvedQty}
             </span>
           ) : (
-            <span className="text-sm font-bold text-slate-300">—</span>
+            <span className="text-sm font-bold text-slate-400 font-mono">
+              {item.approved ? "NA" : "—"}
+            </span>
           )
         ) : (
           <div className="flex flex-col items-center">
@@ -404,9 +411,7 @@ function MaterialItemRow({
       <td className="p-3.5 align-middle text-center whitespace-nowrap">
         <div className="flex items-center justify-center gap-2">
           {!canExclude ? (
-            !qtyApplicable ? (
-              <span className="text-sm font-black text-slate-300">—</span>
-            ) : item.approved ? (
+            item.approved ? (
               <span className="inline-flex items-center gap-1.5 text-emerald-700 font-bold text-xs bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 shadow-2xs">
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                 <span>Approved</span>
@@ -649,6 +654,7 @@ function MaterialPassDetailModal({
   unitsList = DEFAULT_UNITS,
   isVerified,
   isViewMode,
+  isLocked: propIsLocked,
   isCisfApprover,
   isTrafficApprover,
   canEditHazardous,
@@ -661,6 +667,8 @@ function MaterialPassDetailModal({
   onItemRemarksChange,
   onAddItem,
 }) {
+  const isLocked = Boolean(isViewMode || propIsLocked);
+
   // Add Material Form State
   const [showAddForm, setShowAddForm] = useState(false);
   const [newItemName, setNewItemName] = useState("");
@@ -683,25 +691,41 @@ function MaterialPassDetailModal({
       toast.error("Item name is required");
       return;
     }
-    const q = Number(newItemQty);
-    if (!q || q <= 0) {
-      toast.error("Please enter a valid positive quantity");
-      return;
+    const isNonRet = meta.key === "nonReturnable";
+    const qtyStr = String(newItemQty || "").trim();
+    const hasQty = qtyStr !== "";
+    const q = hasQty ? Number(qtyStr) : null;
+
+    if (newItemHazardous || !isNonRet) {
+      if (!hasQty || !q || q <= 0) {
+        toast.error(`Please enter a valid positive quantity${newItemHazardous ? " for hazardous material" : ""}`);
+        return;
+      }
+      if (!newItemUnitId) {
+        toast.error(`Please select a unit${newItemHazardous ? " for hazardous material" : ""}`);
+        return;
+      }
+    } else {
+      if (hasQty && (!q || q <= 0)) {
+        toast.error("Please enter a valid positive quantity");
+        return;
+      }
     }
 
-    const selUnit = unitsList.find((u) => String(u.id) === String(newItemUnitId)) || unitsList[0];
+    const selUnit = unitsList.find((u) => String(u.id) === String(newItemUnitId));
 
     onAddItem(meta.key, {
       name: newItemName.trim(),
       quantity: q,
-      unitId: selUnit ? selUnit.id : 7,
-      unitName: selUnit ? (selUnit.name || selUnit.unitName) : "Piece",
+      unitId: selUnit ? selUnit.id : null,
+      unitName: selUnit ? (selUnit.name || selUnit.unitName) : "NA",
       description: newItemDesc.trim(),
       isHazardous: newItemHazardous,
     });
 
     setNewItemName("");
     setNewItemQty("");
+    setNewItemUnitId(unitsList[0]?.id || "");
     setNewItemDesc("");
     setNewItemHazardous(false);
     setShowAddForm(false);
@@ -798,24 +822,31 @@ function MaterialPassDetailModal({
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-slate-700 mb-1 block">Quantity *</label>
+                <label className="text-[11px] font-bold text-slate-700 mb-1 block">
+                  Quantity {newItemHazardous || meta.key !== "nonReturnable" ? "*" : "(Optional)"}
+                </label>
                 <input
                   type="number"
                   min={1}
-                  required
+                  required={newItemHazardous || meta.key !== "nonReturnable"}
                   value={newItemQty}
                   onChange={(e) => setNewItemQty(e.target.value)}
-                  placeholder="1"
+                  placeholder={newItemHazardous || meta.key !== "nonReturnable" ? "1" : "Optional"}
                   className="w-full h-9 px-3 rounded-lg border border-slate-300 bg-white text-xs outline-none focus:border-orange-500 font-bold"
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-slate-700 mb-1 block">Unit *</label>
+                <label className="text-[11px] font-bold text-slate-700 mb-1 block">
+                  Unit {newItemHazardous || meta.key !== "nonReturnable" ? "*" : "(Optional)"}
+                </label>
                 <select
                   value={newItemUnitId}
                   onChange={(e) => setNewItemUnitId(e.target.value)}
                   className="w-full h-9 px-2 rounded-lg border border-slate-300 bg-white text-xs outline-none focus:border-orange-500 font-medium"
                 >
+                  {!newItemHazardous && meta.key === "nonReturnable" && (
+                    <option value="">Select unit (optional)</option>
+                  )}
                   {unitsList.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name || u.unitName}
@@ -925,25 +956,47 @@ function MaterialPassDetailModal({
             <button
               type="button"
               onClick={() => {
-                const invalidItems = activeMaterials.filter(
-                  (m) =>
-                    !m.isDeleted &&
-                    m.approved &&
-                    (m.approvedQty === "" ||
+                const invalidItems = activeMaterials.filter((m) => {
+                  if (m.isDeleted || !m.approved) return false;
+                  const hasReqQty =
+                    m.quantity !== null &&
+                    m.quantity !== undefined &&
+                    m.quantity !== "" &&
+                    Number(m.quantity) > 0;
+                  if (hasReqQty) {
+                    return (
+                      m.approvedQty === "" ||
                       m.approvedQty === null ||
                       m.approvedQty === undefined ||
-                      Number(m.approvedQty) < 1)
-                );
+                      Number(m.approvedQty) < 1
+                    );
+                  }
+                  // If item is hazardous, quantity is mandatory
+                  if (m.isHazardous) {
+                    return (
+                      m.approvedQty === "" ||
+                      m.approvedQty === null ||
+                      m.approvedQty === undefined ||
+                      Number(m.approvedQty) < 1
+                    );
+                  }
+                  // Non-hazardous items without requested quantity are non-mandatory (NA)
+                  return false;
+                });
                 if (invalidItems.length > 0) {
-                  toast.error("Approved quantity must be at least 1 for all approved items.");
+                  toast.error("Approved quantity must be at least 1 for all approved items requiring quantity.");
                   return;
                 }
-                const exceedingItems = activeMaterials.filter(
-                  (m) =>
-                    !m.isDeleted &&
-                    m.approved &&
-                    Number(m.approvedQty) > Number(m.quantity)
-                );
+                const exceedingItems = activeMaterials.filter((m) => {
+                  if (m.isDeleted || !m.approved) return false;
+                  const hasReqQty =
+                    m.quantity !== null &&
+                    m.quantity !== undefined &&
+                    m.quantity !== "" &&
+                    Number(m.quantity) > 0;
+                  if (!hasReqQty) return false;
+                  return Number(m.approvedQty) > Number(m.quantity);
+                });
                 if (exceedingItems.length > 0) {
                   toast.error("Approved quantity cannot exceed requested quantity.");
                   return;
@@ -1449,15 +1502,21 @@ export default function MaterialPassPage() {
 
   const handleAddItem = (passKey, newItemData) => {
     if (!isConcernedDeptApprover) return;
+    const hasQty =
+      newItemData.quantity !== null &&
+      newItemData.quantity !== undefined &&
+      newItemData.quantity !== "" &&
+      Number(newItemData.quantity) > 0;
+    const qtyVal = hasQty ? Number(newItemData.quantity) : null;
     const newItem = {
       id: `new-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       name: newItemData.name.trim(),
-      quantity: Number(newItemData.quantity) || 1,
-      requestedQty: Number(newItemData.quantity) || 1,
-      approvedQty: Number(newItemData.quantity) || 1,
+      quantity: qtyVal,
+      requestedQty: qtyVal,
+      approvedQty: qtyVal,
       approved: true,
-      unit: newItemData.unitName || "Piece",
-      unitId: Number(newItemData.unitId) || 7,
+      unit: newItemData.unitName || (hasQty ? "Piece" : "NA"),
+      unitId: newItemData.unitId ? Number(newItemData.unitId) : null,
       description: newItemData.description?.trim() || "",
       isHazardous: Boolean(newItemData.isHazardous),
       approverRemarks: "",
@@ -1508,6 +1567,8 @@ export default function MaterialPassPage() {
       }
 
       const hasBadQty = approvedItems.some((m) => {
+        const hasReq = m.quantity !== null && m.quantity !== undefined && m.quantity !== "" && Number(m.quantity) > 0;
+        if (!hasReq) return false;
         const q = m.approvedQty;
         if (q === "" || q === null || q === undefined) return true;
         const numQ = Number(q);
@@ -1587,10 +1648,22 @@ export default function MaterialPassPage() {
           return;
         }
 
-        const approvedItems = activeItems.filter((m) => m.approved && Number(m.approvedQty) > 0);
+        const approvedItems = activeItems.filter((m) => {
+          if (!m.approved) return false;
+          const hasReqQty =
+            m.quantity !== null &&
+            m.quantity !== undefined &&
+            m.quantity !== "" &&
+            Number(m.quantity) > 0;
+          if (hasReqQty) {
+            return Number(m.approvedQty) > 0;
+          }
+          return !m.isHazardous || Number(m.approvedQty) > 0;
+        });
+
         if (approvedItems.length === 0) {
           toast.error("Validation Error", {
-            description: `${PASS_TYPE_META[key].label} must have at least one approved item with quantity greater than 0.`,
+            description: `${PASS_TYPE_META[key].label} must have at least one approved item.`,
           });
           return;
         }
@@ -1598,9 +1671,21 @@ export default function MaterialPassPage() {
         const hasInvalidQty = activeItems
           .filter((m) => m.approved)
           .some((m) => {
-            const appQ = Number(m.approvedQty);
-            const reqQ = Number(m.quantity);
-            return appQ <= 0 || appQ > reqQ;
+            const hasReqQty =
+              m.quantity !== null &&
+              m.quantity !== undefined &&
+              m.quantity !== "" &&
+              Number(m.quantity) > 0;
+            if (hasReqQty) {
+              const appQ = Number(m.approvedQty);
+              const reqQ = Number(m.quantity);
+              return isNaN(appQ) || appQ <= 0 || appQ > reqQ;
+            }
+            if (m.isHazardous) {
+              const appQ = Number(m.approvedQty);
+              return isNaN(appQ) || appQ <= 0;
+            }
+            return false;
           });
 
         if (hasInvalidQty) {
@@ -1628,15 +1713,23 @@ export default function MaterialPassPage() {
     if (decision === "APPROVED") {
       for (const key of applicablePassKeys) {
         const materials = passMaterials[key] || [];
-        const invalid = materials.find(
-          (m) =>
-            !m.isDeleted &&
-            m.approved &&
-            (m.approvedQty === "" ||
+        const invalid = materials.find((m) => {
+          if (m.isDeleted || !m.approved) return false;
+          const hasReqQty =
+            m.quantity !== null &&
+            m.quantity !== undefined &&
+            m.quantity !== "" &&
+            Number(m.quantity) > 0;
+          if (hasReqQty || m.isHazardous) {
+            return (
+              m.approvedQty === "" ||
               m.approvedQty === null ||
               m.approvedQty === undefined ||
-              Number(m.approvedQty) < 1)
-        );
+              Number(m.approvedQty) < 1
+            );
+          }
+          return false;
+        });
         if (invalid) {
           toast.error(
             `Approved quantity for "${invalid.name}" must be at least 1. Please update the verified quantity.`
@@ -1663,10 +1756,25 @@ export default function MaterialPassPage() {
               if (m.isDeleted) {
                 return typeof m.id === "number" ? { materialId: m.id, isDeleted: true } : null;
               }
-              const itemQty = Number(m.quantity);
+              const hasQty =
+                m.quantity !== null &&
+                m.quantity !== undefined &&
+                m.quantity !== "" &&
+                Number(m.quantity) > 0;
+              const itemQty = hasQty ? Number(m.quantity) : null;
               const itemApproved = Boolean(m.approved);
               const itemApprovedQty =
-                decision === "APPROVED" ? (itemApproved ? Number(m.approvedQty) : 0) : null;
+                decision === "APPROVED"
+                  ? itemApproved
+                    ? hasQty
+                      ? Number(m.approvedQty) || itemQty
+                      : null
+                    : 0
+                  : null;
+              const itemUnitId =
+                m.unitId !== null && m.unitId !== undefined && m.unitId !== "" && Number(m.unitId) > 0
+                  ? Number(m.unitId)
+                  : null;
 
               if (m.isNew) {
                 return {
@@ -1675,7 +1783,7 @@ export default function MaterialPassPage() {
                   requestedQty: itemQty,
                   approvedQty: itemApprovedQty,
                   approved: itemApproved,
-                  unitId: Number(m.unitId) || 1,
+                  unitId: itemUnitId,
                   description: m.description || null,
                   isHazardous: Boolean(m.isHazardous),
                   approverRemarks: m.approverRemarks?.trim() || null,
@@ -1686,7 +1794,7 @@ export default function MaterialPassPage() {
                 requestedQty: itemQty,
                 approvedQty: itemApprovedQty,
                 approved: itemApproved,
-                unitId: Number(m.unitId) || 1,
+                unitId: itemUnitId,
                 isHazardous: Boolean(m.isHazardous),
                 approverRemarks: m.approverRemarks?.trim() || null,
               };
@@ -1818,9 +1926,10 @@ export default function MaterialPassPage() {
       const isApprovedStatus = status === "APPROVED";
 
       return materials.map((m) => {
-        const qty = Number(m.quantity) || 0;
+        const hasReqQty = m.quantity !== null && m.quantity !== undefined && m.quantity !== "" && Number(m.quantity) > 0;
+        const qty = hasReqQty ? Number(m.quantity) : null;
         const hasExistingApprovedQty =
-          m.approvedQty !== null && m.approvedQty !== undefined;
+          m.approvedQty !== null && m.approvedQty !== undefined && m.approvedQty !== "";
         const appQty = hasExistingApprovedQty
           ? Number(m.approvedQty)
           : isDecided
@@ -1839,8 +1948,8 @@ export default function MaterialPassPage() {
           requestedQty: qty,
           approvedQty: appQty,
           approved: app,
-          unit: m.unit,
-          unitId: m.unitId || 1,
+          unit: m.unit || null,
+          unitId: m.unitId || null,
           description: m.description || "",
           isHazardous: Boolean(m.isHazardous),
           approverRemarks: m.approverRemarks || "",
@@ -2558,6 +2667,18 @@ export default function MaterialPassPage() {
                         : "-"}
                       </span>
                     </div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                      <span className="text-xs font-semibold text-slate-500">Valid Till</span>
+                      <span className="text-sm font-semibold text-emerald-700 sm:text-right">
+                        {selectedRequest.expiryDate || selectedRequest.validTillDate || selectedRequest.validTill
+                          ? new Date(selectedRequest.expiryDate || selectedRequest.validTillDate || selectedRequest.validTill).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "-"}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -3251,6 +3372,7 @@ export default function MaterialPassPage() {
           materials={passMaterials[activePassKey]}
           unitsList={unitsList}
           isViewMode={isViewMode || activePassViewOnly}
+          isLocked={isViewMode || activePassViewOnly}
           isCisfApprover={isCisfApprover}
           isTrafficApprover={isTrafficApprover}
           canEditHazardous={!isViewMode && !activePassViewOnly && !isCisfApprover && !isTrafficApprover}

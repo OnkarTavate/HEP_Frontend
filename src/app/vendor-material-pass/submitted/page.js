@@ -340,13 +340,13 @@ function MaterialItemsTable({ title, items, approved }) {
                   </td>
 
                   <td className="px-4 py-4">
-                    {item.quantityMode === "UNSPECIFIED"
-                      ? "Unspecified"
+                    {item.quantityMode === "UNSPECIFIED" || !item.requestedQty
+                      ? "NA"
                       : formatQuantity(item.requestedQty)}
                   </td>
 
                   <td className="px-4 py-4">
-                    {item.unitName || "—"}
+                    {item.unitName || "NA"}
                   </td>
 
                   <td className="px-4 py-4">
@@ -357,8 +357,12 @@ function MaterialItemsTable({ title, items, approved }) {
 
                   <td className="px-4 py-4 font-semibold text-emerald-800">
                     {approved &&
-                    item.quantityMode !== "UNSPECIFIED"
+                    item.quantityMode !== "UNSPECIFIED" &&
+                    item.approvedQty != null &&
+                    item.approvedQty !== ""
                       ? formatQuantity(item.approvedQty)
+                      : approved && (item.quantityMode === "UNSPECIFIED" || !item.requestedQty)
+                      ? "NA"
                       : "—"}
                   </td>
                 </tr>

@@ -72,7 +72,12 @@ export function resolveHome(user) {
   }
 
   // 7b. CISF Assistant Commandant → admin pass-approvals page
-  if (role === "cisf.assistant commandant" && deptId === 1) {
+  if (
+    role === "cisf.assistant commandant" ||
+    role === "cisf assistant commandant" ||
+    (role.includes("cisf") && role.includes("commandant")) ||
+    (deptName.includes("cisf") && (role.includes("commandant") || role.includes("asst")))
+  ) {
     return "/admin/pass-approvals";
   }
 
@@ -163,8 +168,15 @@ export function canAccess(portalKey, user) {
       return role === "atm" || role.includes("pass") || isAdmin;
 
     case "admin":
-      // Super Admin, or Approval department user on /admin/vendor_pass
-      return isAdmin || role === "approval";
+      // Super Admin, Approval department user, or CISF Assistant Commandant
+      return (
+        isAdmin ||
+        role === "approval" ||
+        role === "cisf.assistant commandant" ||
+        role === "cisf assistant commandant" ||
+        (role.includes("cisf") && role.includes("commandant")) ||
+        (deptName.includes("cisf") && (role.includes("commandant") || role.includes("asst")))
+      );
 
     case "dashboard":
       // Strictly external Agents / Companies (loginId starts with 190, or role agent/applicant)
