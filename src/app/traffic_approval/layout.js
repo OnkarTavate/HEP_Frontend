@@ -62,6 +62,7 @@ import {
   HelpCircle,
   Container as CargoIcon,
   Wallet,
+  Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -637,6 +638,11 @@ export default function TrafficLayout({ children }) {
           name: "Material Pass Approvals",
           href: "/traffic_approval/material-pass",
           icon: PackageCheck,
+        },
+        {
+          name: "Vendor Material Links",
+          href: "/traffic_approval/vendor-material-pass",
+          icon: Link2,
         },
         { name: "VVIP Pass", href: "/traffic_approval/vvip-pass", icon: VvipIcon },
         {

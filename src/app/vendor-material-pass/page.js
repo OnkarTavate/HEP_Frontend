@@ -19,6 +19,7 @@ import {
   Check,
   ClipboardCheck,
   FileText,
+  Flame,
   Loader2,
   LockKeyhole,
   PackagePlus,
@@ -28,6 +29,7 @@ import {
   Trash2,
   Truck,
   X,
+  XCircle,
 } from "lucide-react";
 
 import {
@@ -57,6 +59,15 @@ const LINK_URL =
   `${API_BASE}/vendor-material-pass/public/vendor-links`;
 
 const UNITS_URL = `${API_BASE}/material-pass/units`;
+
+const EXCLUDED_UNIT_NAMES = new Set([
+  "milligram",
+  "millimeter",
+  "centimeter",
+  "gram",
+  "millilitre",
+  "milliliter",
+]);
 
 const inputCls =
   "w-full min-w-0 rounded-xl border border-slate-300 bg-white " +
@@ -96,9 +107,16 @@ function initialForm() {
   };
 }
 
+function createClientId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "id-" + Math.random().toString(36).slice(2, 11) + "-" + Date.now().toString(36);
+}
+
 function blankItem(materialType) {
   return {
-    clientId: crypto.randomUUID(),
+    clientId: createClientId(),
     materialType,
     name: "",
     isHazardous: false,
@@ -278,6 +296,7 @@ function MaterialTable({
   onSave,
   onDelete,
   onDraftChange,
+  onToggleHazardous,
 }) {
   const [draft, setDraft] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -447,7 +466,7 @@ function MaterialTable({
             aria-label="Material name"
             autoFocus
             value={draft.name}
-            maxLength={255}
+            maxLength={250}
             placeholder="Enter item name"
             className={rowInputCls}
             aria-invalid={Boolean(errors.name)}
@@ -462,21 +481,40 @@ function MaterialTable({
           />
 
           {renderError("name")}
+          {(draft.name || "").length > 200 && (
+            <p className="mt-1 text-right text-[10px] text-slate-400">
+              {(draft.name || "").length}/250
+            </p>
+          )}
+        </td>
 
-          <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-[11px] font-medium text-slate-600">
-            <input
-              type="checkbox"
-              checked={draft.isHazardous}
-              onChange={(event) =>
-                update(
-                  "isHazardous",
-                  event.target.checked
-                )
-              }
-              className="h-3.5 w-3.5 shrink-0 accent-orange-600"
-            />
-            Hazardous material
-          </label>
+        <td className="px-4 py-4">
+          <div className="flex flex-col gap-1.5 pt-1">
+            <button
+              type="button"
+              id={`${editorId}-isHazardous`}
+              role="switch"
+              aria-checked={draft.isHazardous}
+              onClick={() => update("isHazardous", !draft.isHazardous)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/20 ${
+                draft.isHazardous ? "bg-amber-600" : "bg-slate-200"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  draft.isHazardous ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+            <span
+              className={`text-[11px] font-semibold ${
+                draft.isHazardous ? "text-amber-700" : "text-slate-400"
+              }`}
+            >
+              {draft.isHazardous ? "Hazardous" : "Non-hazardous"}
+            </span>
+          </div>
         </td>
 
         <td className="px-4 py-4">
@@ -539,8 +577,8 @@ function MaterialTable({
               {unitsLoading
                 ? "Loading…"
                 : returnable || draft.isHazardous
-                ? "Select unit"
-                : "Select unit (optional)"}
+                  ? "Select unit"
+                  : "Select unit (optional)"}
             </option>
 
             {units.map((unit) => (
@@ -561,7 +599,7 @@ function MaterialTable({
             id={`${editorId}-description`}
             aria-label="Material description"
             rows={2}
-            maxLength={1000}
+            maxLength={500}
             value={draft.description}
             placeholder="Additional details"
             className={`${rowInputCls} min-h-[72px] resize-y`}
@@ -582,6 +620,9 @@ function MaterialTable({
           />
 
           {renderError("description")}
+          <p className="mt-1 text-right text-[10px] text-slate-400">
+            {(draft.description || "").length}/500
+          </p>
         </td>
 
         <td className="px-4 py-4">
@@ -661,7 +702,7 @@ function MaterialTable({
             <p className="mt-1 text-xs leading-5 text-slate-500">
               {returnable
                 ? "Materials that will be taken out later. Quantity and unit are required."
-                : "Materials that will remain or be consumed. Quantity and unit may both be left empty."}
+                : "Materials that will remain or be consumed. Quantity and unit are mandatory for hazardous materials, and optional otherwise."}
             </p>
           </div>
         </div>
@@ -683,12 +724,13 @@ function MaterialTable({
           </caption>
 
           <colgroup>
-            <col className="w-[6%]" />
-            <col className="w-[25%]" />
-            <col className="w-[13%]" />
+            <col className="w-[5%]" />
+            <col className="w-[22%]" />
             <col className="w-[14%]" />
-            <col className="w-[28%]" />
-            <col className="w-[14%]" />
+            <col className="w-[11%]" />
+            <col className="w-[12%]" />
+            <col className="w-[24%]" />
+            <col className="w-[12%]" />
           </colgroup>
 
           <thead className="sticky top-0 z-10 text-[11px] font-semibold text-slate-500 shadow-sm">
@@ -696,6 +738,7 @@ function MaterialTable({
               {[
                 "S.No.",
                 "Item name",
+                "Hazardous",
                 "Qty",
                 "Unit",
                 "Description",
@@ -716,7 +759,7 @@ function MaterialTable({
             {items.length === 0 && !draft && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="border-b border-slate-100 px-4 py-8 text-center text-slate-400"
                 >
                   No materials added. Use “Add material”
@@ -750,10 +793,18 @@ function MaterialTable({
                     <p className="break-words font-semibold text-slate-900">
                       {item.name}
                     </p>
+                  </td>
 
-                    {item.isHazardous && (
-                      <span className="mt-1.5 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200">
-                        Hazardous
+                  <td className="border-b border-slate-100 px-4 py-4">
+                    {item.isHazardous ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 border border-red-200 shadow-2xs">
+                        <Flame size={13} className="text-red-500 shrink-0" />
+                        <span>Hazardous</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 border border-slate-200 shadow-2xs">
+                        <ShieldCheck size={13} className="text-emerald-600 shrink-0" />
+                        <span>Non-hazardous</span>
                       </span>
                     )}
                   </td>
@@ -870,6 +921,8 @@ export default function VendorMaterialApplyPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [submittedRequest, setSubmittedRequest] = useState(null);
+  const [editingRequestInfo, setEditingRequestInfo] = useState(null);
+  const [latestSubmittedReq, setLatestSubmittedReq] = useState(null);
 
   const submitLock = useRef(false);
   const formRef = useRef(null);
@@ -965,9 +1018,9 @@ export default function VendorMaterialApplyPage() {
             ? current.permittedGateIds.filter(
                 (id) =>
                   normalized.availableGates.some(
-                    (gate) => gate.id === id
+                    (gate) => Number(gate.id) === Number(id)
                   )
-              )
+              ).map(Number)
             : [],
       }));
 
@@ -978,7 +1031,7 @@ export default function VendorMaterialApplyPage() {
         setMessage(
           `This link opens for applications on ${
             displayDate(details.validFrom)
-          }.`
+          } at 12:00 AM.`
         );
       } else if (to < today) {
         setStatus("unavailable");
@@ -1055,10 +1108,20 @@ export default function VendorMaterialApplyPage() {
       }
 
       const availableUnits = normalizeOptions(
-        list.map((unit) => ({
-          id: unit?.id,
-          name: unit?.name ?? unit?.unitName,
-        }))
+        list
+          .map((unit) => ({
+            id: unit?.id,
+            name: unit?.name ?? unit?.unitName,
+            code: unit?.code ?? unit?.unitCode,
+          }))
+          .filter((unit) => {
+            const name = String(unit.name || "").toLowerCase().trim();
+            const code = String(unit.code || "").toLowerCase().trim();
+            return (
+              !EXCLUDED_UNIT_NAMES.has(name) &&
+              !["mg", "mm", "cm", "g", "ml"].includes(code)
+            );
+          })
       );
 
       if (availableUnits.length === 0) {
@@ -1137,9 +1200,106 @@ export default function VendorMaterialApplyPage() {
     Number(link?.totalVendorSubmissions) > 0 ||
     Boolean(submittedRequest);
 
+
+  useEffect(() => {
+    if (typeof window === "undefined" || status !== "ready") return;
+    const params = new URLSearchParams(window.location.search);
+    const editReqId = params.get("editRequestId");
+    const token = readToken();
+    if (!token) return;
+
+    if (editReqId) {
+      axios
+        .get(`${LINK_URL}/${encodeURIComponent(token)}/requests/${editReqId}`)
+        .then((res) => {
+          const reqData = res.data?.data;
+          if (reqData && reqData.status === "REVERTED") {
+            setEditingRequestInfo({
+              id: reqData.id,
+              referenceNumber: reqData.referenceNumber,
+              revertRemarks: reqData.revertRemarks,
+            });
+
+            setForm((prev) => ({
+              ...prev,
+              vehicleNumber: reqData.vehicleNumber || "",
+              personName: reqData.personName || "",
+              aadhaarNumber: reqData.aadhaarNumber || "",
+              vendorRemarks: reqData.vendorRemarks || "",
+              permittedGateIds: reqData.permittedGateIds?.length ? reqData.permittedGateIds.map(Number) : prev.permittedGateIds,
+              agreed: true,
+              items: (reqData.items || []).map((it) => ({
+                clientId: createClientId(),
+                materialType: it.materialType,
+                name: it.name,
+                isHazardous: Boolean(it.isHazardous),
+                requestedQty: it.requestedQty !== null && it.requestedQty !== undefined ? String(it.requestedQty) : "",
+                unitId: it.unitId ? Number(it.unitId) : null,
+                description: it.description || "",
+              })),
+            }));
+
+            toast.info(`Loaded reverted request ${reqData.referenceNumber} for editing.`, {
+              description: reqData.revertRemarks ? `Remarks: ${reqData.revertRemarks}` : undefined,
+            });
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load request for editing:", err);
+        });
+    } else if (Number(link?.totalVendorSubmissions) > 0 && !submittedRequest) {
+      // Automatically load latest submitted request when vendor clicks email link
+      axios
+        .get(`${LINK_URL}/${encodeURIComponent(token)}/requests?limit=1&page=1`)
+        .then((res) => {
+          const rows = res.data?.data?.rows || [];
+          if (rows.length > 0) {
+            const req = rows[0];
+            setLatestSubmittedReq(req);
+
+            if (req.status === "REVERTED") {
+              setEditingRequestInfo({
+                id: req.id,
+                referenceNumber: req.referenceNumber,
+                revertRemarks: req.revertRemarks,
+              });
+
+              axios
+                .get(`${LINK_URL}/${encodeURIComponent(token)}/requests/${req.id}`)
+                .then((detRes) => {
+                  const reqData = detRes.data?.data || req;
+                  setForm((prev) => ({
+                    ...prev,
+                    vehicleNumber: reqData.vehicleNumber || "",
+                    personName: reqData.personName || "",
+                    aadhaarNumber: reqData.aadhaarNumber || "",
+                    vendorRemarks: reqData.vendorRemarks || "",
+                    permittedGateIds: reqData.permittedGateIds?.length ? reqData.permittedGateIds.map(Number) : prev.permittedGateIds,
+                    agreed: true,
+                    items: (reqData.items || []).map((it) => ({
+                      clientId: createClientId(),
+                      materialType: it.materialType,
+                      name: it.name,
+                      isHazardous: Boolean(it.isHazardous),
+                      requestedQty: it.requestedQty !== null && it.requestedQty !== undefined ? String(it.requestedQty) : "",
+                      unitId: it.unitId ? Number(it.unitId) : null,
+                      description: it.description || "",
+                    })),
+                  }));
+                })
+                .catch((err) => console.error("Error loading reverted request details:", err));
+            }
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to fetch submitted requests for link:", err);
+        });
+    }
+  }, [status, link?.totalVendorSubmissions, submittedRequest]);
+
   const canApply =
     status === "ready" &&
-    link?.canSubmit === true &&
+    (link?.canSubmit === true || Boolean(editingRequestInfo)) &&
     !submittedRequest;
 
   const onDraftChange = useCallback((type, open) => {
@@ -1161,20 +1321,24 @@ export default function VendorMaterialApplyPage() {
     }));
   }
 
-  function toggleGate(id) {
+  function toggleGate(rawId) {
     if (!vendorSelectsGates) {
       return;
     }
+    const id = Number(rawId);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return;
+    }
 
-    setForm((current) => ({
-      ...current,
-      permittedGateIds:
-        current.permittedGateIds.includes(id)
-          ? current.permittedGateIds.filter(
-              (gateId) => gateId !== id
-            )
-          : [...current.permittedGateIds, id],
-    }));
+    setForm((current) => {
+      const currentIds = (current.permittedGateIds || []).map(Number);
+      return {
+        ...current,
+        permittedGateIds: currentIds.includes(id)
+          ? currentIds.filter((gateId) => gateId !== id)
+          : [...currentIds, id],
+      };
+    });
 
     setErrors((current) => ({
       ...current,
@@ -1204,6 +1368,34 @@ export default function VendorMaterialApplyPage() {
     setErrors((current) => ({
       ...current,
       items: undefined,
+    }));
+  }
+
+  function toggleItemHazardous(clientId) {
+    const target = form.items.find((item) => item.clientId === clientId);
+    if (!target) return;
+
+    // If making an existing non-returnable row hazardous when it lacks quantity,
+    // open the editor for this row so the vendor can fill in the mandatory quantity and unit.
+    if (
+      !target.isHazardous &&
+      target.materialType === "NON_RETURNABLE" &&
+      (!target.requestedQty || String(target.requestedQty).trim() === "")
+    ) {
+      startEditItem(clientId);
+      setDraft((current) =>
+        current ? { ...current, isHazardous: true } : current
+      );
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      items: current.items.map((item) =>
+        item.clientId === clientId
+          ? { ...item, isHazardous: !item.isHazardous }
+          : item
+      ),
     }));
   }
 
@@ -1273,13 +1465,13 @@ export default function VendorMaterialApplyPage() {
     }
 
     const availableGateIds = new Set(
-      link.availableGates.map((gate) => gate.id)
+      link.availableGates.map((gate) => Number(gate.id))
     );
 
     if (
       vendorSelectsGates &&
       result.data.permittedGateIds.some(
-        (id) => !availableGateIds.has(id)
+        (id) => !availableGateIds.has(Number(id))
       )
     ) {
       setErrors({
@@ -1311,7 +1503,7 @@ export default function VendorMaterialApplyPage() {
       )
     ) {
       toast.error(
-        "Select a valid unit for every material with a quantity."
+        "Select a valid unit."
       );
       return;
     }
@@ -1338,7 +1530,7 @@ export default function VendorMaterialApplyPage() {
 
       ...(vendorSelectsGates
         ? {
-            permittedGateIds: data.permittedGateIds,
+            permittedGateIds: (data.permittedGateIds || []).map(Number),
           }
         : {}),
 
@@ -1357,16 +1549,18 @@ export default function VendorMaterialApplyPage() {
     setErrors({});
 
     try {
-      const response = await axios.post(
-        `${LINK_URL}/${encodeURIComponent(token)}/requests`,
-        payload,
-        { withCredentials: false }
-      );
+      const endpoint = editingRequestInfo
+        ? `${LINK_URL}/${encodeURIComponent(token)}/requests/${editingRequestInfo.id}`
+        : `${LINK_URL}/${encodeURIComponent(token)}/requests`;
+
+      const response = editingRequestInfo
+        ? await axios.put(endpoint, payload, { withCredentials: false })
+        : await axios.post(endpoint, payload, { withCredentials: false });
 
       const saved = response.data?.data;
 
       if (
-        response.status !== 201 ||
+        (response.status !== 200 && response.status !== 201) ||
         !response.data?.success ||
         !saved?.referenceNumber
       ) {
@@ -1377,7 +1571,9 @@ export default function VendorMaterialApplyPage() {
 
       setSubmittedRequest(saved);
       toast.success(
-        "Material pass request submitted successfully."
+        editingRequestInfo
+          ? "Reverted material pass request resubmitted successfully."
+          : "Material pass request submitted successfully."
       );
     } catch (error) {
       const code = error.response?.status;
@@ -1442,7 +1638,7 @@ export default function VendorMaterialApplyPage() {
                     Valid till
                   </p>
                   <p className="mt-1 text-base font-bold">
-                    {displayDate(link.validTo)}
+                    {displayDate(link.validTo)} at 11:59 PM
                   </p>
                 </div>
               )}
@@ -1573,14 +1769,63 @@ export default function VendorMaterialApplyPage() {
                 label="Document reference"
                 value={link.referenceDocumentNo}
               />
+
+              {link.remarks && (
+                <div className="sm:col-span-2 lg:col-span-3 rounded-xl bg-orange-50/70 border border-orange-200/80 p-4">
+                  <dt className="text-[11px] font-bold uppercase tracking-wider text-orange-950 flex items-center gap-1.5">
+                    Department Remarks / Instructions
+                  </dt>
+                  <dd className="mt-1.5 text-sm font-medium text-slate-800 whitespace-pre-wrap leading-relaxed">
+                    {link.remarks}
+                  </dd>
+                </div>
+              )}
             </dl>
+          </section>
+        )}
+
+        {latestSubmittedReq?.status === "REJECTED" && (
+          <section
+            role="status"
+            className="rounded-2xl border border-rose-300 bg-rose-50/95 p-6 text-rose-950 shadow-sm"
+          >
+            <div className="flex items-start gap-4">
+              <div className="h-10 w-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-600 shrink-0 mt-0.5">
+                <XCircle className="h-6 w-6" />
+              </div>
+              <div className="space-y-2 flex-1 min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-base font-bold text-rose-950">
+                    Material Pass Request Rejected (#{latestSubmittedReq.referenceNumber})
+                  </h3>
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-rose-200 text-rose-900 border border-rose-300">
+                    REJECTED
+                  </span>
+                </div>
+                <p className="text-sm text-rose-900 leading-relaxed font-medium">
+                  This material pass request has been rejected by the department. Further modifications to this application are not permitted.
+                </p>
+                {(latestSubmittedReq.rejectRemarks || latestSubmittedReq.rejectionRemarks || latestSubmittedReq.remarks) && (
+                  <div className="mt-3 p-4 rounded-xl bg-white border border-rose-200 shadow-xs">
+                    <span className="font-bold text-rose-950 block text-xs uppercase tracking-wider mb-1">
+                      Department Rejection Reason:
+                    </span>
+                    <span className="text-rose-900 text-sm whitespace-pre-wrap leading-relaxed font-medium">
+                      {latestSubmittedReq.rejectRemarks || latestSubmittedReq.rejectionRemarks || latestSubmittedReq.remarks}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
           </section>
         )}
 
         {status === "ready" &&
           link &&
           !link.canSubmit &&
-          !submittedRequest && (
+          !submittedRequest &&
+          latestSubmittedReq?.status !== "REJECTED" &&
+          latestSubmittedReq?.status !== "REVERTED" && (
             <section
               role="status"
               className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-emerald-900"
@@ -1605,6 +1850,24 @@ export default function VendorMaterialApplyPage() {
             noValidate
             className="space-y-5"
           >
+            {editingRequestInfo && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50/95 p-5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-700 shrink-0 mt-0.5">
+                    <Pencil className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-amber-900">
+                      Modifying Reverted Request #{editingRequestInfo.referenceNumber}
+                    </h3>
+                    <p className="mt-1 text-xs text-amber-800 leading-relaxed font-medium">
+                      <span className="font-bold">Remarks from Department: </span>
+                      {editingRequestInfo.revertRemarks || "Please make the requested modifications and submit your revised pass."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <fieldset
               disabled={submitting}
               className="min-w-0 space-y-5"
@@ -1659,8 +1922,9 @@ export default function VendorMaterialApplyPage() {
                         ) : (
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                             {link.availableGates.map((gate) => {
+                              const gateId = Number(gate.id);
                               const selected =
-                                form.permittedGateIds.includes(gate.id);
+                                (form.permittedGateIds || []).map(Number).includes(gateId);
 
                               return (
                                 <label
@@ -1677,7 +1941,7 @@ export default function VendorMaterialApplyPage() {
                                   <input
                                     type="checkbox"
                                     checked={selected}
-                                    onChange={() => toggleGate(gate.id)}
+                                    onChange={() => toggleGate(gateId)}
                                     aria-invalid={Boolean(errors.permittedGateIds)}
                                     className="h-4 w-4 shrink-0 accent-orange-600"
                                   />
@@ -1832,6 +2096,7 @@ export default function VendorMaterialApplyPage() {
                 onSave={saveItem}
                 onDelete={removeItem}
                 onDraftChange={onDraftChange}
+                onToggleHazardous={toggleItemHazardous}
               />
 
               <MaterialTable
@@ -1842,6 +2107,7 @@ export default function VendorMaterialApplyPage() {
                 onSave={saveItem}
                 onDelete={removeItem}
                 onDraftChange={onDraftChange}
+                onToggleHazardous={toggleItemHazardous}
               />
 
               {Object.entries(errors)
@@ -1983,7 +2249,7 @@ export default function VendorMaterialApplyPage() {
                           aria-hidden="true"
                         />
                       )}
-                      {submitting ? "Submitting…" : "Submit request"}
+                      {submitting ? "Submitting…" : editingRequestInfo ? "Resubmit revised request" : "Submit request"}
                     </button>
                   </div>
                 </div>

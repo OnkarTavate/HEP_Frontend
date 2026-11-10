@@ -42,6 +42,7 @@ import {
   CheckCheck,
   Copy,
   CheckCircle,
+  Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -290,6 +291,7 @@ export default function MarineLayout({ children }) {
   const navigationItems = [
     { name: "Pass Approvals", href: "/marine_approval", icon: FileText },
     { name: "Material Approvals", href: "/marine_approval/material-pass", icon: FileText},
+    { name: "Vendor Material Links", href: "/marine_approval/vendor-material-pass", icon: Link2 },
   ];
 
   const SidebarContent = ({ onNavigate, expanded = sidebarExpanded, showCollapseToggle = true }) => (

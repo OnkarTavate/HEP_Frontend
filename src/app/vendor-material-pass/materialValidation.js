@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-const text = (max) => z.string().trim().max(max);
+const text = (max, label) =>
+  label
+    ? z.string().trim().max(max, `${label} must be ${max} characters or fewer.`)
+    : z.string().trim().max(max);
 
 const positiveQuantity = z
   .string()
@@ -25,11 +28,11 @@ export const materialItemSchema = z
       "RETURNABLE",
       "NON_RETURNABLE",
     ]),
-    name: text(255).min(1, "Enter the material name."),
+    name: text(250, "Item name").min(1, "Enter the material name."),
     isHazardous: z.boolean(),
     requestedQty: z.string().trim(),
     unitId: z.union([positiveId, z.null()]),
-    description: text(1000),
+    description: text(500, "Description"),
   })
   .strict()
   .superRefine((item, ctx) => {

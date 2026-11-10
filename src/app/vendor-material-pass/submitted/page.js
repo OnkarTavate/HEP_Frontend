@@ -22,6 +22,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  Printer,
   ShieldCheck,
   X,
   XCircle,
@@ -40,11 +41,16 @@ const API_BASE = (
   process.env.NEXT_PUBLIC_AGENT_API || ""
 ).replace(/\/+$/, "");
 
+const QR_API = (
+  process.env.NEXT_PUBLIC_QR_API || "http://localhost:5007/api"
+).replace(/\/+$/, "");
+
 const PAGE_SIZE = 10;
 
 const EMPTY_COUNTS = {
   total: 0,
   pending: 0,
+  processing: 0,
   approved: 0,
   reverted: 0,
   rejected: 0,
@@ -53,6 +59,7 @@ const EMPTY_COUNTS = {
 const FILTERS = [
   { value: "ALL", label: "All requests", countKey: "total" },
   { value: "PENDING", label: "Pending", countKey: "pending" },
+  { value: "PROCESSING", label: "Processing", countKey: "processing" },
   { value: "APPROVED", label: "Approved", countKey: "approved" },
   { value: "REVERTED", label: "Reverted", countKey: "reverted" },
   { value: "REJECTED", label: "Rejected", countKey: "rejected" },
@@ -63,6 +70,11 @@ const STATUS_STYLES = {
     label: "Pending",
     Icon: Clock3,
     className: "bg-amber-50 text-amber-800 ring-amber-200",
+  },
+  PROCESSING: {
+    label: "Processing",
+    Icon: RefreshCw,
+    className: "bg-blue-50 text-blue-800 ring-blue-200",
   },
   APPROVED: {
     label: "Approved",
@@ -193,7 +205,7 @@ function StatusBadge({ status }) {
   const normalized =
     status === "SUBMITTED"
       ? "PENDING"
-      : status;
+      : (status || "").toUpperCase();
 
   const style = STATUS_STYLES[normalized] || {
     label: "Unknown",
@@ -318,55 +330,93 @@ function MaterialItemsTable({ title, items, approved }) {
                 </td>
               </tr>
             ) : (
-              items.map((item, index) => (
-                <tr
-                  key={String(item.id ?? index)}
-                  className="align-top transition hover:bg-orange-50/25"
-                >
-                  <td className="w-16 px-4 py-4 text-slate-400">
-                    {index + 1}
-                  </td>
+              items.map((item, index) => {
+                const isItemExcluded = Boolean(
+                  item.isExcluded || item.departmentDecision === "REJECTED"
+                );
+                return (
+                  <tr
+                    key={String(item.id ?? index)}
+                    className={`align-top transition ${
+                      approved && isItemExcluded
+                        ? "bg-rose-50/30 hover:bg-rose-50/50"
+                        : "hover:bg-orange-50/25"
+                    }`}
+                  >
+                    <td className="w-16 px-4 py-4 text-slate-400">
+                      {index + 1}
+                    </td>
 
-                  <td className="min-w-[170px] px-4 py-4">
-                    <p className="max-w-56 break-words font-semibold text-slate-900">
-                      {item.name || "—"}
-                    </p>
+                    <td className="min-w-[170px] px-4 py-4">
+                      <p
+                        className={`max-w-56 break-words font-semibold ${
+                          approved && isItemExcluded
+                            ? "text-slate-600"
+                            : "text-slate-900"
+                        }`}
+                      >
+                        {item.name || "—"}
+                      </p>
 
-                    {item.isHazardous && (
-                      <span className="mt-1.5 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200">
-                        Hazardous
-                      </span>
-                    )}
-                  </td>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        {approved && isItemExcluded && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-rose-200">
+                            Excluded
+                          </span>
+                        )}
+                        {item.isHazardous && (
+                          <span className="inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200">
+                            Hazardous
+                          </span>
+                        )}
+                      </div>
+                      {approved && isItemExcluded && item.departmentRemarks && (
+                        <p className="mt-1 text-[11px] text-rose-600 italic leading-snug">
+                          {item.departmentRemarks}
+                        </p>
+                      )}
+                    </td>
 
-                  <td className="px-4 py-4">
-                    {item.quantityMode === "UNSPECIFIED" || !item.requestedQty
-                      ? "NA"
-                      : formatQuantity(item.requestedQty)}
-                  </td>
+                    <td className="px-4 py-4">
+                      {item.quantityMode === "UNSPECIFIED" || !item.requestedQty
+                        ? "NA"
+                        : formatQuantity(item.requestedQty)}
+                    </td>
 
-                  <td className="px-4 py-4">
-                    {item.unitName || "NA"}
-                  </td>
+                    <td className="px-4 py-4">
+                      {item.unitName || "NA"}
+                    </td>
 
-                  <td className="px-4 py-4">
-                    <p className="max-w-64 whitespace-pre-wrap break-words leading-5 text-slate-500">
-                      {item.description || "—"}
-                    </p>
-                  </td>
+                    <td className="px-4 py-4">
+                      <p className="max-w-64 whitespace-pre-wrap break-words leading-5 text-slate-500">
+                        {item.description || "—"}
+                      </p>
+                    </td>
 
-                  <td className="px-4 py-4 font-semibold text-emerald-800">
-                    {approved &&
-                    item.quantityMode !== "UNSPECIFIED" &&
-                    item.approvedQty != null &&
-                    item.approvedQty !== ""
-                      ? formatQuantity(item.approvedQty)
-                      : approved && (item.quantityMode === "UNSPECIFIED" || !item.requestedQty)
-                      ? "NA"
-                      : "—"}
-                  </td>
-                </tr>
-              ))
+                    <td className="px-4 py-4 font-semibold">
+                      {approved ? (
+                        isItemExcluded ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-700 border border-rose-200">
+                            Excluded
+                          </span>
+                        ) : item.quantityMode !== "UNSPECIFIED" &&
+                          item.approvedQty != null &&
+                          item.approvedQty !== "" ? (
+                          <span className="text-emerald-800">
+                            {formatQuantity(item.approvedQty)}
+                          </span>
+                        ) : item.quantityMode === "UNSPECIFIED" || !item.requestedQty ? (
+                          "NA"
+                        ) : (
+                          "—"
+                        )
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -379,7 +429,7 @@ function MaterialItemsTable({ title, items, approved }) {
    Accessible request details dialog
 ------------------------------------------------------------------- */
 
-function RequestDetailsModal({ request, onClose }) {
+function RequestDetailsModal({ request, onClose, onPrintQr, printingId }) {
   const dialogRef = useRef(null);
   const closeButtonRef = useRef(null);
 
@@ -392,6 +442,11 @@ function RequestDetailsModal({ request, onClose }) {
   const nonReturnableItems = items.filter(
     (item) => item.materialType === "NON_RETURNABLE"
   );
+
+  const excludedItems = items.filter(
+    (item) => item.isExcluded || item.departmentDecision === "REJECTED"
+  );
+  const hasExcludedItems = request.status === "APPROVED" && excludedItems.length > 0;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -486,7 +541,24 @@ function RequestDetailsModal({ request, onClose }) {
                 />
               </div>
 
-              <StatusBadge status={request.status} />
+              <div className="flex items-center gap-3">
+                {request.status === "APPROVED" && (
+                  <button
+                    type="button"
+                    onClick={() => onPrintQr?.(request)}
+                    disabled={printingId === request.id}
+                    className="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-orange-700 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {printingId === request.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Printer size={14} />
+                    )}
+                    Print QR
+                  </button>
+                )}
+                <StatusBadge status={request.status} />
+              </div>
             </div>
 
             <dl className="mt-5 grid gap-5 border-t border-slate-100 pt-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -507,7 +579,16 @@ function RequestDetailsModal({ request, onClose }) {
               )}
 
               <Detail label="Materials included">
-                {items.length}
+                {request.status === "APPROVED" && excludedItems.length > 0 ? (
+                  <span>
+                    {items.length - excludedItems.length} approved{" "}
+                    <span className="text-xs font-semibold text-rose-600">
+                      ({excludedItems.length} excluded)
+                    </span>
+                  </span>
+                ) : (
+                  items.length
+                )}
               </Detail>
             </dl>
 
@@ -534,6 +615,49 @@ function RequestDetailsModal({ request, onClose }) {
             )}
           </section>
 
+          {request.status === "REVERTED" && (
+            <section className="rounded-xl border border-amber-300 bg-amber-50/90 p-5 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                    Department Revert Remarks
+                  </h3>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-6 text-amber-900 font-medium">
+                    {request.revertRemarks || "The department has reverted this request for modifications. Please review and update the required information."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = `/vendor-material-pass?editRequestId=${request.id}`;
+                  }}
+                  className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all"
+                >
+                  Edit & Resubmit Request
+                </button>
+              </div>
+            </section>
+          )}
+
+          {request.status === "REJECTED" && (
+            <section className="rounded-xl border border-rose-300 bg-rose-50/90 p-5 shadow-sm">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-rose-500" />
+                Department Rejection Remarks
+              </h3>
+              <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-6 text-rose-900 font-medium">
+                {request.rejectRemarks ||
+                request.rejectionRemarks ||
+                request.remarks ||
+                request.rejectedReason ||
+                (Array.isArray(request.items) &&
+                  request.items.find((it) => it.departmentRemarks)?.departmentRemarks) ||
+                "This request was rejected by the department."}
+              </p>
+            </section>
+          )}
+
           {request.vendorRemarks && (
             <section className="rounded-xl border border-slate-200 bg-white p-5">
               <h3 className="text-xs font-semibold text-[#0a1e4d]">
@@ -544,6 +668,15 @@ function RequestDetailsModal({ request, onClose }) {
                 {request.vendorRemarks}
               </p>
             </section>
+          )}
+
+          {hasExcludedItems && (
+            <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50/80 p-3.5 text-rose-900">
+              <AlertCircle size={18} className="shrink-0 text-rose-600 mt-0.5" />
+              <div className="text-xs leading-5">
+                <span className="font-bold">Item Exclusion Notice:</span> One or more items in this request were excluded by the port department during approval and are not permitted for entry. Only approved items are authorized on this pass.
+              </div>
+            </div>
           )}
 
           <MaterialItemsTable
@@ -602,6 +735,71 @@ export default function VendorSubmittedRequestsPage() {
   const [state, setState] = useState("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [printingId, setPrintingId] = useState(null);
+
+  const handlePrintQr = async (request, event) => {
+    if (event) {
+      event.stopPropagation();
+    }
+    if (!request?.id) return;
+
+    setPrintingId(request.id);
+    try {
+      const token = readToken();
+      const qrUrl = token
+        ? `${API_BASE}/public/vendor-links/${token}/requests/${request.id}/qr-pdf`
+        : `${QR_API}/qr/vendor-material-pass-qr/${request.id}`;
+
+      const response = await axios.get(qrUrl, {
+        responseType: "blob",
+      });
+
+      const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+
+      // Print seamlessly in the same window via an invisible iframe
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      iframe.src = pdfUrl;
+
+      document.body.appendChild(iframe);
+
+      iframe.onload = () => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          console.error("Print dialog error:", e);
+        }
+        setTimeout(() => {
+          try {
+            document.body.removeChild(iframe);
+          } catch (e) {}
+          URL.revokeObjectURL(pdfUrl);
+        }, 60000);
+      };
+    } catch (err) {
+      console.error("Print QR error:", err);
+      let errMsg = "Failed to generate or download the QR pass PDF. Please try again.";
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const json = JSON.parse(text);
+          errMsg = json.message || errMsg;
+        } catch (e) {}
+      } else if (err.response?.data?.message) {
+        errMsg = err.response.data.message;
+      }
+      alert(errMsg);
+    } finally {
+      setPrintingId(null);
+    }
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1095,10 +1293,29 @@ export default function VendorSubmittedRequestsPage() {
                         </td>
 
                         <td className="px-4 py-5">
-                          <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-600">
-                            <Package size={13} aria-hidden="true" />
-                            {items.length}
-                          </span>
+                          {(() => {
+                            const reqItems = requestItems(request);
+                            const excl = reqItems.filter(
+                              (it) => it.isExcluded || it.departmentDecision === "REJECTED"
+                            );
+                            if (request.status === "APPROVED" && excl.length > 0) {
+                              return (
+                                <span
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700"
+                                  title={`${excl.length} item${excl.length > 1 ? "s" : ""} excluded by department`}
+                                >
+                                  <Package size={13} aria-hidden="true" />
+                                  {reqItems.length - excl.length} / {reqItems.length}
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-600">
+                                <Package size={13} aria-hidden="true" />
+                                {items.length}
+                              </span>
+                            );
+                          })()}
                         </td>
 
                         <td className="px-4 py-5">
@@ -1106,12 +1323,30 @@ export default function VendorSubmittedRequestsPage() {
                         </td>
 
                         <td className="px-4 py-5 text-right">
-                          <span
-                            aria-hidden="true"
-                            className="inline-flex rounded-lg bg-slate-50 p-2 text-slate-400 transition group-hover:bg-orange-100 group-hover:text-orange-700 group-focus-within:bg-orange-100 group-focus-within:text-orange-700"
-                          >
-                            <ArrowUpRight size={17} />
-                          </span>
+                          <div className="flex items-center justify-end gap-2">
+                            {request.status === "APPROVED" && (
+                              <button
+                                type="button"
+                                onClick={(e) => handlePrintQr(request, e)}
+                                disabled={printingId === request.id}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-orange-700 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                title="Print Material Pass with QR Code"
+                              >
+                                {printingId === request.id ? (
+                                  <Loader2 size={13} className="animate-spin" />
+                                ) : (
+                                  <Printer size={13} />
+                                )}
+                                Print QR
+                              </button>
+                            )}
+                            <span
+                              aria-hidden="true"
+                              className="inline-flex rounded-lg bg-slate-50 p-2 text-slate-400 transition group-hover:bg-orange-100 group-hover:text-orange-700 group-focus-within:bg-orange-100 group-focus-within:text-orange-700"
+                            >
+                              <ArrowUpRight size={17} />
+                            </span>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1141,6 +1376,8 @@ export default function VendorSubmittedRequestsPage() {
         <RequestDetailsModal
           request={selectedRequest}
           onClose={closeDetails}
+          onPrintQr={handlePrintQr}
+          printingId={printingId}
         />
       )}
     </div>

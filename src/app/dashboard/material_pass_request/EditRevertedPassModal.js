@@ -22,6 +22,15 @@ import { returnableMaterialSchema, nonReturnableMaterialSchema } from "./materia
 
 const AGENT_API = process.env.NEXT_PUBLIC_AGENT_API;
 
+const EXCLUDED_UNIT_NAMES = new Set([
+  "milligram",
+  "millimeter",
+  "centimeter",
+  "gram",
+  "millilitre",
+  "milliliter",
+]);
+
 const getLabelById = (arr, val, key = "label") => {
   if (!val) return "";
   if (!Array.isArray(arr)) return val;
@@ -98,7 +107,12 @@ export default function EditRevertedPassModal({ pass, onClose, onResubmitSuccess
           : Array.isArray(res?.data)
             ? res.data
             : [];
-        setUnits(list);
+        const filtered = list.filter((u) => {
+          const name = String(u?.name || u?.unitName || "").toLowerCase().trim();
+          const code = String(u?.code || u?.unitCode || "").toLowerCase().trim();
+          return !EXCLUDED_UNIT_NAMES.has(name) && !["mg", "mm", "cm", "g", "ml"].includes(code);
+        });
+        setUnits(filtered);
       } catch (error) {
         console.error("Error loading units", error);
         setUnits([]);

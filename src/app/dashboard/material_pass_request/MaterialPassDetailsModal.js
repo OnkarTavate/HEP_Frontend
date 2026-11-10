@@ -135,6 +135,20 @@ export function cleanRemarks(raw) {
 // Rows beyond this count trigger a scrollable table body inside the detail modal.
 const MAX_VISIBLE_ROWS = 5;
 
+// Helper to determine if an item has been excluded by the concerned department or during approval
+const isMaterialExcluded = (m) =>
+  Boolean(
+    m &&
+      (m.isExcluded === true ||
+        m.approved === false ||
+        m.departmentDecision === "REJECTED" ||
+        (m.approvedQty !== null &&
+          m.approvedQty !== undefined &&
+          m.approvedQty !== "" &&
+          !isNaN(Number(m.approvedQty)) &&
+          Number(m.approvedQty) === 0))
+  );
+
 // --- Compact, always-visible summary row for a pass type. Clicking it (or
 // its "View details" button) opens the full material read-only review in a
 // separate modal stacked on top — it never expands inline anymore. ---
@@ -161,15 +175,11 @@ function MaterialPassSummaryRow({ meta, passData, onOpen, onPrintQR, isPrinting,
   const style = getStatusStyle(status);
   const StatusIcon = style.icon;
   const hasRemarks = (isReverted || isRejected) && (passData.remarks || passData.rejectedReason);
-  const hasHazardous = materials.some((m) => Boolean(m.isHazardous ?? m.is_hazardous));
-  const excludedCount = materials.filter(
-    (m) =>
-      (m.approvedQty !== null &&
-        m.approvedQty !== undefined &&
-        m.approvedQty !== "" &&
-        Number(m.approvedQty) === 0) ||
-      m.approved === false
-  ).length;
+
+  const hasHazardous = materials.some(
+    (m) => !isMaterialExcluded(m) && Boolean(m.isHazardous ?? m.is_hazardous)
+  );
+  const excludedCount = materials.filter(isMaterialExcluded).length;
 
   return (
     <div
@@ -263,22 +273,9 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
   const StatusIcon = style.icon;
   const hasRemarks = (isReverted || isRejected) && (passData.remarks || passData.rejectedReason);
   const isScrollable = materials.length > MAX_VISIBLE_ROWS;
-  const excludedCount = materials.filter(
-    (m) =>
-      (m.approvedQty !== null &&
-        m.approvedQty !== undefined &&
-        m.approvedQty !== "" &&
-        Number(m.approvedQty) === 0) ||
-      m.approved === false
-  ).length;
-  const approvedCount = materials.filter(
-    (m) =>
-      !((m.approvedQty !== null &&
-        m.approvedQty !== undefined &&
-        m.approvedQty !== "" &&
-        Number(m.approvedQty) === 0) ||
-      m.approved === false)
-  ).length;
+
+  const excludedCount = materials.filter(isMaterialExcluded).length;
+  const approvedCount = materials.filter((m) => !isMaterialExcluded(m)).length;
 
   // Heuristic threshold for showing "show more" — avoids needing a DOM
   // measurement just to decide if text overflows a single line.
@@ -355,20 +352,34 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
                   </tr>
                 ) : (
                   materials.map((item, index) => {
-                    // "Approved" is purely a function of approvedQty now — remarks can
-                    // legitimately exist on an approved item (e.g. a reduced-qty note),
-                    // so they're no longer mutually exclusive with approval.
-                    const hasReqQty = item.quantity !== null && item.quantity !== undefined && item.quantity !== "" && Number(item.quantity) > 0;
-                    const approvedQtyNum = Number(item.approvedQty) || 0;
-                    const isItemExcluded =
-                      (item.approvedQty !== null &&
-                        item.approvedQty !== undefined &&
-                        item.approvedQty !== "" &&
-                        approvedQtyNum === 0) ||
-                      item.approved === false;
-                    const isItemApproved = isApproved && !isItemExcluded;
+                    const isQtyUnspecified =
+                      item.quantity === null ||
+                      item.quantity === undefined ||
+                      item.quantity === "" ||
+                      item.quantityMode === "UNSPECIFIED";
+                    const hasReqQty = !isQtyUnspecified && Number(item.quantity) > 0;
+                    const hasApprovedQty =
+                      item.approvedQty !== null &&
+                      item.approvedQty !== undefined &&
+                      item.approvedQty !== "" &&
+                      !isNaN(Number(item.approvedQty));
+                    const approvedQtyNum = hasApprovedQty ? Number(item.approvedQty) : 0;
+
+                    const isItemExcluded = isMaterialExcluded(item);
+                    const isItemApproved =
+                      isApproved &&
+                      !isItemExcluded &&
+                      (isQtyUnspecified
+                        ? (item.departmentDecision === "APPROVED" || item.departmentDecision == null) && !item.isExcluded && item.approved !== false
+                        : approvedQtyNum > 0);
                     const isItemShort =
-                      isApproved && hasReqQty && item.approvedQty != null && approvedQtyNum < Number(item.quantity) && approvedQtyNum > 0;
+                      isApproved &&
+                      !isItemExcluded &&
+                      !isQtyUnspecified &&
+                      hasReqQty &&
+                      hasApprovedQty &&
+                      approvedQtyNum < Number(item.quantity) &&
+                      approvedQtyNum > 0;
                     const isItemHazardous = Boolean(item.isHazardous ?? item.is_hazardous);
 
                     const descText = item.description || "";
@@ -384,7 +395,17 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
                         <td className="p-3 align-top text-slate-800 font-mono font-bold text-xs">
                           {index + 1}
                         </td>
-                        <td className="p-3 align-top font-bold text-[#0a1e4d]">{item.name}</td>
+                        <td className="p-3 align-top font-bold text-[#0a1e4d]">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span>{item.name}</span>
+                            {isItemExcluded && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-rose-200 border border-rose-300">
+                                <XCircle className="h-3 w-3 text-rose-500 shrink-0" />
+                                Excluded
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="p-3 align-top text-center whitespace-nowrap">
                           {isItemHazardous ? (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-300">
@@ -442,34 +463,27 @@ function MaterialPassDetailViewModal({ meta, passData, onClose, onPrintQR, isPri
                         <td className="p-3 align-top">
                           <div className="min-h-[34px] flex flex-col justify-center gap-1">
                             <div className="flex items-center justify-between gap-1.5 font-mono text-xs">
-                              {isApproved ? (
-                                approvedQtyNum > 0 ? (
-                                  <>
-                                    <span className="flex items-center gap-1">
-                                      <span className="font-bold text-emerald-700">
-                                        {approvedQtyNum}
-                                      </span>
-                                      {isItemShort && (
-                                        <span className="text-slate-400 font-normal">/ {item.quantity}</span>
-                                      )}
-                                    </span>
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                                  </>
-                                ) : isItemApproved && !hasReqQty ? (
-                                  <>
-                                    <span className="font-bold text-emerald-700">NA</span>
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                                  </>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                    <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                    <span>0 (Excluded)</span>
-                                  </span>
-                                )
-                              ) : isItemExcluded ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                              {isItemExcluded ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
                                   <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                  <span>0 (Excluded)</span>
+                                  <span>{isQtyUnspecified ? "Excluded" : "0 (Excluded)"}</span>
+                                </span>
+                              ) : isApproved && isItemApproved ? (
+                                <>
+                                  <span className="flex items-center gap-1">
+                                    <span className="font-bold text-emerald-700">
+                                      {isQtyUnspecified ? "Permitted" : approvedQtyNum}
+                                    </span>
+                                    {isItemShort && (
+                                      <span className="text-slate-400 font-normal">/ {item.quantity}</span>
+                                    )}
+                                  </span>
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                </>
+                              ) : isApproved ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
+                                  <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                  <span>{isQtyUnspecified ? "Excluded" : "0 (Excluded)"}</span>
                                 </span>
                               ) : !hasReqQty ? (
                                 <span className="text-slate-400 font-bold font-mono">NA</span>
@@ -653,27 +667,14 @@ export default function MaterialPassDetailsModal({
   // Calculate excluded and approved item counts separately for Returnable & Non-Returnable passes
   const getExcludedCount = (passData) => {
     if (!passData?.materials || !Array.isArray(passData.materials)) return 0;
-    return passData.materials.filter(
-      (m) =>
-        (m.approvedQty !== null &&
-          m.approvedQty !== undefined &&
-          m.approvedQty !== "" &&
-          Number(m.approvedQty) === 0) ||
-        m.approved === false
-    ).length;
+    return passData.materials.filter(isMaterialExcluded).length;
   };
 
   const getApprovedCount = (passData) => {
     if (!passData?.materials || !Array.isArray(passData.materials)) return 0;
-    return passData.materials.filter(
-      (m) =>
-        !((m.approvedQty !== null &&
-          m.approvedQty !== undefined &&
-          m.approvedQty !== "" &&
-          Number(m.approvedQty) === 0) ||
-        m.approved === false)
-    ).length;
+    return passData.materials.filter((m) => !isMaterialExcluded(m)).length;
   };
+
 
   const retExcludedCount = getExcludedCount(pass.returnablePass);
   const nonRetExcludedCount = getExcludedCount(pass.nonReturnablePass);
@@ -849,6 +850,14 @@ export default function MaterialPassDetailsModal({
                       {pass.companyName || "N/A"}
                     </span>
                   </div>
+                  {(pass.referenceDocumentNo || pass.workOrderNumber) && (
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                      <span className="text-xs font-semibold text-slate-500">Ref / Work Order No</span>
+                      <span className="text-sm font-bold text-slate-800 sm:text-right">
+                        {pass.referenceDocumentNo || pass.workOrderNumber}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
                     <span className="text-xs font-semibold text-slate-500">Application Date</span>
                     <span className="text-sm font-medium text-slate-800 sm:text-right">
@@ -899,7 +908,9 @@ export default function MaterialPassDetailsModal({
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
                     <span className="text-xs font-semibold text-slate-500">Location</span>
                     <span className="text-sm font-medium text-slate-800 sm:text-right">
-                      {pass.locationOther || pass.locationFrom || pass.locationTo || "N/A"}
+                      {Array.isArray(pass.permittedGates) && pass.permittedGates.length > 0
+                        ? pass.permittedGates.map((g) => g.name || g.code || g).join(", ")
+                        : (pass.locationOther || pass.locationFrom || pass.locationTo || "N/A")}
                     </span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
@@ -915,27 +926,41 @@ export default function MaterialPassDetailsModal({
                     </span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
-                    <span className="text-xs font-semibold text-slate-500">Entry Date</span>
+                    <span className="text-xs font-semibold text-slate-500">Valid From</span>
                     <span className="text-sm font-medium text-slate-800 sm:text-right">
-                      {pass.entryDate
-                        ? new Date(pass.entryDate).toLocaleDateString("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "-"}
+                      {(() => {
+                        const val = pass.validFrom || pass.entryDate;
+                        if (!val) return "-";
+                        if (typeof val === "string" && (val.includes("am") || val.includes("pm") || val.includes("AM") || val.includes("PM"))) {
+                          return val;
+                        }
+                        try {
+                          const d = new Date(val);
+                          if (!isNaN(d.getTime())) {
+                            return `${d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })}, 12:00 AM`;
+                          }
+                        } catch (_) {}
+                        return String(val);
+                      })()}
                     </span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
                     <span className="text-xs font-semibold text-slate-500">Valid Till</span>
                     <span className="text-sm font-semibold text-emerald-700 sm:text-right">
-                      {pass.expiryDate || pass.validTillDate || pass.validTill
-                        ? new Date(pass.expiryDate || pass.validTillDate || pass.validTill).toLocaleDateString("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "-"}
+                      {(() => {
+                        const val = pass.validTo || pass.expiryDate || pass.validTillDate || pass.validTill;
+                        if (!val) return "-";
+                        if (typeof val === "string" && (val.includes("am") || val.includes("pm") || val.includes("AM") || val.includes("PM"))) {
+                          return val;
+                        }
+                        try {
+                          const d = new Date(val);
+                          if (!isNaN(d.getTime())) {
+                            return `${d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })}, 11:59 PM`;
+                          }
+                        } catch (_) {}
+                        return String(val);
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -943,14 +968,24 @@ export default function MaterialPassDetailsModal({
 
             </div>
 
-            {/* Attached Documents — Requisition Letter & Work Order (request-level) */}
-            {(pass.requisitionLetterFilePath || pass.workOrderFilePath) && (
+            {/* Attached Documents — Requisition Letter & Work Order / Reference Document */}
+            {(pass.requisitionLetterFilePath ||
+              pass.workOrderFilePath ||
+              pass.referenceDocumentNo ||
+              pass.workOrderNumber) && (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <FileText className="h-5 w-5 text-blue-600 shrink-0" />
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
-                    Attached Documents
-                  </h3>
+                <div className="flex items-center justify-between gap-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-blue-600 shrink-0" />
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                      Attached Documents
+                    </h3>
+                  </div>
+                  {(pass.referenceDocumentNo || pass.workOrderNumber) && (
+                    <span className="text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
+                      Ref / Work Order No: <span className="font-bold text-[#0a1e4d]">{pass.referenceDocumentNo || pass.workOrderNumber}</span>
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   {pass.requisitionLetterFilePath && (
@@ -978,7 +1013,7 @@ export default function MaterialPassDetailsModal({
                       }
                       className="bg-orange-50 text-orange-700 border border-orange-200 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-orange-100 transition-colors shadow-sm"
                     >
-                      <FileCheck2 className="h-4 w-4 text-orange-600" /> View Work Order
+                      <FileCheck2 className="h-4 w-4 text-orange-600" /> View Reference Document
                     </button>
                   )}
                 </div>

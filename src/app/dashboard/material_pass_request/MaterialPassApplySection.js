@@ -80,6 +80,15 @@ const ALLOWED_DEPARTMENTS = {
   "General Administration": "General Administration",
 };
 
+const EXCLUDED_UNIT_NAMES = new Set([
+  "milligram",
+  "millimeter",
+  "centimeter",
+  "gram",
+  "millilitre",
+  "milliliter",
+]);
+
 export default function MaterialPassApplySection({
   getLabelById,
   onSubmitSuccess,
@@ -213,7 +222,11 @@ export default function MaterialPassApplySection({
         departments: extractArray(deprtmentRes),
         locations: locationList,
         passTypes: extractArray(passTypeRes),
-        units: extractArray(unitRes),
+        units: extractArray(unitRes).filter((u) => {
+          const name = String(u?.name || u?.unitName || "").toLowerCase().trim();
+          const code = String(u?.code || u?.unitCode || "").toLowerCase().trim();
+          return !EXCLUDED_UNIT_NAMES.has(name) && !["mg", "mm", "cm", "g", "ml"].includes(code);
+        }),
       }));
     } catch (error) {
       console.error("Error loading API master data", error);
@@ -974,7 +987,7 @@ export default function MaterialPassApplySection({
 
               <p className="text-[10px] text-slate-400 px-1">
                 {generalForm.entryDate
-                  ? `Select any validity date up to 6 months from entry date (max ${formatDisplayDate(maxValidTillForCurrentEntry)}).`
+                  ? `Select any validity date up to 6 months from entry date (max ${formatDisplayDate(maxValidTillForCurrentEntry)}). Pass validity begins at 12:00 AM on entry date and ends at 11:59 PM on valid till date.`
                   : `Please select an entry date within ${MAX_ENTRY_DAYS_AHEAD} days from today.`}
               </p>
             </div>

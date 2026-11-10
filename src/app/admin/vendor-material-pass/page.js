@@ -24,6 +24,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  ShieldAlert,
   ShieldCheck,
   Upload,
   X,
@@ -451,8 +452,14 @@ function validateForm(form, masters) {
    Create link form
 ------------------------------------------------------------------- */
 
-function CreateLinkForm({ onCreated }) {
+function CreateLinkForm({ onCreated, isTrafficDeptUser = false }) {
   const [form, setForm] = useState(initialForm);
+
+  useEffect(() => {
+    if (isTrafficDeptUser && form.requiresTrafficApproval) {
+      setForm((prev) => ({ ...prev, requiresTrafficApproval: false }));
+    }
+  }, [isTrafficDeptUser, form.requiresTrafficApproval]);
   const [masters, setMasters] = useState({
     gates: [],
     purposes: [],
@@ -1112,7 +1119,7 @@ function CreateLinkForm({ onCreated }) {
               <SectionTitle
                 number="3"
                 title="Validity and reference"
-                description="The vendor can submit within this validity period, up to six months."
+                description="The vendor can submit within this validity period, up to six months. Pass validity begins at 12:00 AM (midnight) on the starting date and ends at 11:59 PM on the ending date."
               />
 
               <div className="grid gap-5 md:grid-cols-2">
@@ -1121,10 +1128,12 @@ function CreateLinkForm({ onCreated }) {
                   label="Valid from"
                   required
                   error={errors.validFrom}
+                  hint="Validity begins at 12:00 AM (midnight) on this date."
                 >
                   {textInput("validFrom", {
                     type: "date",
                     min: todayInIndia(),
+                    hint: true,
                   })}
                 </Field>
 
@@ -1133,7 +1142,7 @@ function CreateLinkForm({ onCreated }) {
                   label="Valid till"
                   required
                   error={errors.validTo}
-                  hint="Dates are based on Indian Standard Time."
+                  hint="Validity ends at 11:59 PM on this date (IST)."
                 >
                   {textInput("validTo", {
                     type: "date",
@@ -1248,71 +1257,70 @@ function CreateLinkForm({ onCreated }) {
             <section className="border-t border-slate-100 pt-6">
               <SectionTitle
                 number="4"
-                title="Approval flow"
-                description="Choose whether Traffic approval is required for requests submitted through this link."
+                title="Further Approval Process"
+                description={
+                  isTrafficDeptUser
+                    ? "Approval sequence for vendor requests submitted through this link."
+                    : "Choose whether Traffic approval is required for requests submitted through this link."
+                }
               />
 
-              <div
-                className={
-                  "rounded-xl border p-4 transition " +
-                  (form.requiresTrafficApproval
-                    ? "border-orange-300 bg-orange-50"
-                    : "border-slate-200 bg-slate-50")
-                }
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p
-                      id="material-traffic-label"
-                      className="text-sm font-semibold text-slate-900"
-                    >
-                      Include Traffic in the flow
-                    </p>
-                    <p
-                      id="material-traffic-hint"
-                      className="mt-1 text-xs leading-5 text-slate-600"
-                    >
-                      {form.requiresTrafficApproval
-                        ? "Traffic approval is included before CISF approval."
-                        : "Requests proceed to CISF after the other required approvals."}
-                    </p>
-                  </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 transition">
+                {!isTrafficDeptUser && (
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p
+                        id="material-traffic-label"
+                        className="text-sm font-semibold text-slate-900"
+                      >
+                        Include Traffic in the flow
+                      </p>
+                      <p
+                        id="material-traffic-hint"
+                        className="mt-1 text-xs leading-5 text-slate-600"
+                      >
+                        {form.requiresTrafficApproval
+                          ? "Traffic approval is included before CISF approval."
+                          : "Requests proceed to CISF after the other required approvals."}
+                      </p>
+                    </div>
 
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={form.requiresTrafficApproval}
-                    aria-labelledby="material-traffic-label"
-                    aria-describedby="material-traffic-hint"
-                    onClick={() =>
-                      update(
-                        "requiresTrafficApproval",
-                        !form.requiresTrafficApproval
-                      )
-                    }
-                    className={
-                      "relative inline-flex h-7 w-12 shrink-0 items-center " +
-                      "rounded-full transition focus-visible:outline-none " +
-                      "focus-visible:ring-4 focus-visible:ring-orange-500/25 " +
-                      "disabled:cursor-not-allowed " +
-                      (form.requiresTrafficApproval
-                        ? "bg-orange-600"
-                        : "bg-slate-300")
-                    }
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={
-                        "h-5 w-5 rounded-full bg-white shadow-sm transition-transform " +
-                        (form.requiresTrafficApproval
-                          ? "translate-x-6"
-                          : "translate-x-1")
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={form.requiresTrafficApproval}
+                      aria-labelledby="material-traffic-label"
+                      aria-describedby="material-traffic-hint"
+                      onClick={() =>
+                        update(
+                          "requiresTrafficApproval",
+                          !form.requiresTrafficApproval
+                        )
                       }
-                    />
-                  </button>
-                </div>
+                      className={
+                        "relative inline-flex h-7 w-12 shrink-0 items-center " +
+                        "rounded-full transition focus-visible:outline-none " +
+                        "focus-visible:ring-4 focus-visible:ring-orange-500/25 " +
+                        "disabled:cursor-not-allowed " +
+                        (form.requiresTrafficApproval
+                          ? "bg-orange-600"
+                          : "bg-slate-300")
+                      }
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={
+                          "h-5 w-5 rounded-full bg-white shadow-sm transition-transform " +
+                          (form.requiresTrafficApproval
+                            ? "translate-x-6"
+                            : "translate-x-1")
+                        }
+                      />
+                    </button>
+                  </div>
+                )}
 
-                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200/70 pt-3 text-[11px] font-medium">
+                <div className={`flex flex-wrap items-center gap-2 text-[11px] font-medium ${isTrafficDeptUser ? "" : "mt-4 border-t border-slate-200/70 pt-3"}`}>
                   <span className="rounded-md bg-white px-2 py-1 text-slate-700 ring-1 ring-slate-200">
                     Department
                   </span>
@@ -1322,9 +1330,9 @@ function CreateLinkForm({ onCreated }) {
                   </span>
                   <span className="text-slate-400" aria-hidden="true">→</span>
 
-                  {form.requiresTrafficApproval && (
+                  {!isTrafficDeptUser && form.requiresTrafficApproval && (
                     <>
-                      <span className="rounded-md bg-orange-100 px-2 py-1 text-orange-800 ring-1 ring-orange-200">
+                      <span className="rounded-md bg-white px-2 py-1 text-slate-700 ring-1 ring-slate-200">
                         Traffic
                       </span>
                       <span className="text-slate-400" aria-hidden="true">→</span>
@@ -1802,9 +1810,9 @@ function GeneratedLinks({ refreshKey }) {
                     </td>
 
                     <td className="whitespace-nowrap px-4 py-4">
-                      <p>{fmtDate(row.validFrom)}</p>
+                      <p>{fmtDate(row.validFrom)} (12:00 AM)</p>
                       <p className="mt-1 text-slate-400">to</p>
-                      <p className="mt-1">{fmtDate(row.validTo)}</p>
+                      <p className="mt-1">{fmtDate(row.validTo)} (11:59 PM)</p>
                     </td>
 
                     <td className="px-4 py-4">
@@ -2013,6 +2021,84 @@ function GeneratedLinks({ refreshKey }) {
 export default function MaterialMovementLinkPage() {
   const [activeTab, setActiveTab] = useState("create");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("user");
+      if (raw) {
+        setCurrentUser(JSON.parse(raw));
+      } else {
+        const token = localStorage.getItem("accessToken");
+        if (token && token.split(".").length === 3) {
+          const decoded = JSON.parse(atob(token.split(".")[1]));
+          setCurrentUser(decoded);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse user in MaterialMovementLinkPage", e);
+    } finally {
+      setIsAuthChecked(true);
+    }
+  }, []);
+
+  const ALLOWED_MATERIAL_PASS_DEPT_IDS = [3, 4, 5, 6, 7, 8, 9];
+  const ALLOWED_MATERIAL_PASS_DEPT_NAMES = [
+    "engineering civil",
+    "engineering mechanical",
+    "finance",
+    "general administration",
+    "marine",
+    "medical",
+    "traffic",
+  ];
+
+  const userDeptId = Number(currentUser?.departmentId);
+  const userDeptName = String(currentUser?.departmentName || "").toLowerCase().trim();
+  const userRole = String(currentUser?.role || "").toLowerCase().trim();
+  const userRoleId = Number(currentUser?.roleId);
+
+  const isCisf =
+    userDeptId === 1 ||
+    userRole.includes("cisf") ||
+    userDeptName.includes("cisf");
+
+  const isAllowedDept =
+    ALLOWED_MATERIAL_PASS_DEPT_IDS.includes(userDeptId) ||
+    ALLOWED_MATERIAL_PASS_DEPT_NAMES.some((d) => userDeptName.includes(d));
+
+  const isApprovalRole =
+    userRoleId === 4 ||
+    userRole === "approval" ||
+    userRole === "department";
+
+  const isTrafficDeptUser = Boolean(
+    userDeptId === 9 ||
+    userDeptName.includes("traffic") ||
+    userRole.includes("traffic")
+  );
+
+  const hasAccess = Boolean(
+    currentUser && !isCisf && isAllowedDept && isApprovalRole
+  );
+
+  if (isAuthChecked && currentUser && !hasAccess) {
+    return (
+      <div className="w-full min-w-0 max-w-2xl mx-auto space-y-5 font-sans my-12 text-center">
+        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-rose-600 mb-4">
+            <ShieldAlert className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">Access Restricted</h2>
+          <p className="text-sm text-slate-600 leading-relaxed">
+            Material pass vendor link generation is restricted to designated approval users of permitted departments:
+            Engineering Civil, Engineering Mechanical, Finance, General Administration, Marine, Traffic, and Medical.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Preserve the existing route-specific scroll behavior.
   // useEffect(() => {
@@ -2127,6 +2213,7 @@ export default function MaterialMovementLinkPage() {
           onCreated={() =>
             setRefreshKey((current) => current + 1)
           }
+          isTrafficDeptUser={isTrafficDeptUser}
         />
       </div>
 
