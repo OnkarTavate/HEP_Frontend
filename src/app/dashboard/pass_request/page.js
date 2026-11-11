@@ -5008,6 +5008,7 @@ export default function PassRequestPage() {
 
         // Preserve newly uploaded files
         photo: entity.newPhoto || null,
+        livePhoto: entity.newLivePhoto || null,
         aadharFile: entity.newAadhar || null,
         driverLicence: entity.newDriverLicence || null,
         requisitionLetter: entity.newRequisitionLetter || null,
@@ -5285,6 +5286,8 @@ export default function PassRequestPage() {
 
           // Carry File objects from personForm for resubmission
           newPhoto: personForm.photo || currentEntity.newPhoto || null,
+          newLivePhoto:
+            personForm.livePhoto || currentEntity.newLivePhoto || null,
           newAadhar: personForm.aadharFile || currentEntity.newAadhar || null,
           newIdProof:
             personForm.idProofFile || currentEntity.newIdProof || null,
@@ -5628,6 +5631,8 @@ export default function PassRequestPage() {
 
           // Append actual File objects if re-uploaded
           if (person.newPhoto) formData.append("personPhoto", person.newPhoto);
+          if (person.newLivePhoto)
+            formData.append("personLivePhoto", person.newLivePhoto);
           if (person.newAadhar)
             formData.append("personAadhar", person.newAadhar);
           if (person.newIdProof)
@@ -8514,30 +8519,30 @@ export default function PassRequestPage() {
                           </div>
                         </div>
                       )}
-                      {(personForm.photo || personForm.existingPhotoName) && (
-                        <div className="pt-1 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setFaceCaptureOpen(true)}
-                            className="inline-flex h-8 items-center justify-center rounded-md border border-[#0a1e4d] bg-white px-3 text-xs font-bold text-[#0a1e4d] transition-colors hover:bg-[#0a1e4d] hover:text-white"
-                          >
-                            Capture Photo
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setShareLinkOpen(true)}
-                            className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-3 text-xs font-bold text-slate-600 transition-colors hover:border-[#0a1e4d] hover:text-[#0a1e4d]"
-                          >
-                            <Link2 className="h-3 w-3" />
-                            Share Link
-                          </button>
-                        </div>
-                      )}
-                      {personErrors.photo && (
-                        <p className="text-xs text-red-500 mt-1 font-medium">
-                          {personErrors.photo}
-                        </p>
-                      )}
+                    {(personForm.photo || personForm.existingPhotoName) && (
+                      <div className="pt-1 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setFaceCaptureOpen(true)}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-[#0a1e4d] bg-white px-3 text-xs font-bold text-[#0a1e4d] transition-colors hover:bg-[#0a1e4d] hover:text-white"
+                        >
+                          Capture Photo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShareLinkOpen(true)}
+                          className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-3 text-xs font-bold text-slate-600 transition-colors hover:border-[#0a1e4d] hover:text-[#0a1e4d]"
+                        >
+                          <Link2 className="h-3 w-3" />
+                          Share Link
+                        </button>
+                      </div>
+                    )}
+                    {personErrors.photo && (
+                      <p className="text-xs text-red-500 mt-1 font-medium">
+                        {personErrors.photo}
+                      </p>
+                    )}
                       {livePhotoUrl && (
                         <div className="space-y-1">
                           <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">

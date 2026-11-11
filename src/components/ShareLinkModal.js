@@ -8,7 +8,7 @@ import { toast } from "sonner";
 // The email is sent by face_verify, which checks that the link belongs to this
 // capture session before mailing it. The email service itself is internal and
 // is not reachable from the browser.
-const FACE_API = process.env.NEXT_PUBLIC_FACE_API || "http://localhost:5011/api";
+const FACE_API = process.env.NEXT_PUBLIC_FACE_API || "http://localhost:5013/api";
 
 /**
  * ShareLinkModal
