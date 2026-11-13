@@ -8,7 +8,8 @@
     "dev": "next dev --hostname 0.0.0.0 --webpack",
     "build": "npm run sync:mediapipe && next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "eslint src/components/wallet/WalletUI.js src/app/dashboard/wallet/page.js src/app/traffic_manager/login/page.js next.config.mjs"
   },
   "dependencies": {
     "@mediapipe/selfie_segmentation": "^0.1.1675465747",

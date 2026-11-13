@@ -23,7 +23,18 @@ const connectSrc = isDev
     ].join(" ")
   : "'self'";
 
+const razorpayMode = (process.env.NEXT_PUBLIC_RAZORPAY_MODE || process.env.RAZORPAY_MODE || "").trim().toLowerCase();
+
+if (!razorpayMode || (razorpayMode !== "test" && razorpayMode !== "live")) {
+  throw new Error(
+    `[FATAL CONFIG] NEXT_PUBLIC_RAZORPAY_MODE must be explicitly set to 'test' or 'live'. Received: '${razorpayMode || "undefined"}'. Silent defaulting is disabled.`
+  );
+}
+
 const nextConfig = {
+  env: {
+    NEXT_PUBLIC_RAZORPAY_MODE: razorpayMode,
+  },
   outputFileTracingRoot: process.cwd(),
   allowedDevOrigins: ['10.184.3.133', '14.139.180.47','apacs.bosschn.in','10.184.3.129', '127.0.0.1'],
 
@@ -241,16 +252,16 @@ const nextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://checkout.razorpay.com https://*.razorpay.com https://cdn.razorpay.com blob:",
               "worker-src 'self' blob: https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "img-src 'self' data: blob: http: https:",
+              "img-src 'self' data: blob: http: https: https://*.razorpay.com",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' http://localhost:* http://127.0.0.1:* http://10.184.38.219:* http://10.184.3.133:* http://14.139.180.41:* https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://tessdata.projectnaptha.com ws: wss:",
-              "frame-src 'self' http://localhost:* http://127.0.0.1:* http://10.184.38.219:* http://10.184.3.133:* http://14.139.180.41:* blob: data:",
+              "connect-src 'self' http://localhost:* http://127.0.0.1:* http://10.184.38.219:* http://10.184.3.133:* http://14.139.180.41:* https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://tessdata.projectnaptha.com https://api.razorpay.com https://checkout.razorpay.com https://*.razorpay.com https://lumberjack.razorpay.com https://lumberjack-metrics.razorpay.com ws: wss:",
+              "frame-src 'self' http://localhost:* http://127.0.0.1:* http://10.184.38.219:* http://10.184.3.133:* http://14.139.180.41:* https://api.razorpay.com https://checkout.razorpay.com https://*.razorpay.com blob: data:",
               "object-src 'none'",
               "base-uri 'self'",
-              "form-action 'self'",
+              "form-action 'self' https://api.razorpay.com https://checkout.razorpay.com https://*.razorpay.com",
               "frame-ancestors 'none'",
               ...(forceHttps ? ["upgrade-insecure-requests"] : []),
             ].join("; "),
@@ -264,7 +275,7 @@ const nextConfig = {
               "microphone=()",
               "geolocation=()",
               "fullscreen=(self)",
-              "payment=()",
+              "payment=(self \"https://checkout.razorpay.com\" \"https://api.razorpay.com\")",
               "usb=()",
             ].join(", "),
           },

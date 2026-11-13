@@ -65,8 +65,10 @@ export default function TrafficManagerLogin() {
         }
       } catch {}
     }
+  }, [router]);
   const captchaTimerRef = useRef(null);
   const captchaFetchedAtRef = useRef(0);
+  const fetchCaptchaRef = useRef(null);
 
   const fetchCaptcha = useCallback(async () => {
     setIsCaptchaLoading(true);
@@ -81,7 +83,7 @@ export default function TrafficManagerLogin() {
         const ttlSec = res.data.expiresIn || 180;
         const autoRefreshMs = Math.max(15, ttlSec - 5) * 1000;
         captchaTimerRef.current = setTimeout(() => {
-          fetchCaptcha();
+          fetchCaptchaRef.current?.();
         }, autoRefreshMs);
       }
     } catch {
@@ -92,7 +94,13 @@ export default function TrafficManagerLogin() {
   }, []);
 
   useEffect(() => {
-    fetchCaptcha();
+    fetchCaptchaRef.current = fetchCaptcha;
+  }, [fetchCaptcha]);
+
+  useEffect(() => {
+    const initTimer = setTimeout(() => {
+      fetchCaptcha();
+    }, 0);
 
     const handleFocusOrVisible = () => {
       if (document.visibilityState === "visible") {
@@ -107,6 +115,7 @@ export default function TrafficManagerLogin() {
     document.addEventListener("visibilitychange", handleFocusOrVisible);
 
     return () => {
+      clearTimeout(initTimer);
       if (captchaTimerRef.current) clearTimeout(captchaTimerRef.current);
       window.removeEventListener("focus", handleFocusOrVisible);
       document.removeEventListener("visibilitychange", handleFocusOrVisible);

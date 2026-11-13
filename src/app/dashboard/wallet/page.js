@@ -1,7 +1,8 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import axios from "axios";
 import { useSearchParams } from "next/navigation";
 import {
   Wallet,
@@ -52,6 +53,7 @@ import {
   AmountText,
   TopUpGatewayModal,
   TransactionDrawer,
+  ActivityPagination,
   urgency,
   RefundStatusPill,
   RefundTracker,
@@ -60,22 +62,19 @@ import {
 import RefundRequestModal from "@/components/wallet/RefundRequestModal";
 
 const FILTERS = [
-  { key: "all", label: "All", test: () => true },
-  { key: "credit", label: "Top-ups", test: (a) => a.type === "TOPUP" && a.status === "SUCCESS" },
-  { key: "debit", label: "Payments", test: (a) => a.type === "PASS_PAYMENT" },
-  { key: "refund", label: "Refunds", test: (a) => a.type === "REFUND" },
-  { key: "pending", label: "Pending", test: (a) => a.status === "PENDING" },
-  { key: "failed", label: "Failed", test: (a) => a.status === "FAILED" },
+  { key: "all", label: "All" },
+  { key: "topups", label: "Top-ups" },
+  { key: "payments", label: "Payments" },
+  { key: "failed", label: "Failed" },
 ];
 
 const STATEMENT_RANGES = [
-  { key: "month", label: "This month" },
-  { key: "30", label: "Last 30 days" },
-  { key: "90", label: "Last 90 days" },
   { key: "all", label: "All time" },
+  { key: "30days", label: "Last 30 days" },
+  { key: "90days", label: "Last 90 days" },
 ];
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 20;
 
 const parseAmount = (str) => Number(String(str).replace(/[^\d]/g, "")) || 0;
 const groupDigits = (n) => (n ? n.toLocaleString("en-IN") : "");
@@ -112,17 +111,152 @@ function WalletPage() {
   // Deep-links like /dashboard/wallet?amount=1180 (from the pay screen) prefill the amount.
   const presetAmount = parseAmount(useSearchParams().get("amount") || "");
   const [amountText, setAmountText] = useState(() =>
-    groupDigits(presetAmount ? Math.min(presetAmount, TOPUP_LIMITS.max) : 2000),
+    groupDigits(presetAmount ? Math.min(presetAmount, TOPUP_LIMITS.max) : 10),
   );
   const [touched, setTouched] = useState(false);
   const [gatewayAmount, setGatewayAmount] = useState(null); // frozen while the gateway modal is open
+  const [liveBalance, setLiveBalance] = useState(null);
+  const WALLET_API = process.env.NEXT_PUBLIC_WALLET_API || "http://localhost:5010/api";
+
+  const fetchLiveBalance = useCallback(async () => {
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      if (!token) return;
+      const res = await axios.get(`${WALLET_API}/wallet/balance`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = res.data?.data ?? res.data;
+      if (data?.availableBalanceMinor != null) {
+        setLiveBalance(Number(data.availableBalanceMinor) / 100);
+      } else if (typeof data?.availableBalance === "number") {
+        setLiveBalance(data.availableBalance);
+      }
+    } catch (e) {
+      console.warn("Could not fetch live balance:", e.message);
+    }
+  }, [WALLET_API]);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+        if (!token) return;
+        const res = await axios.get(`${WALLET_API}/wallet/balance`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!active) return;
+        const data = res.data?.data ?? res.data;
+        if (data?.availableBalanceMinor != null) {
+          setLiveBalance(Number(data.availableBalanceMinor) / 100);
+        } else if (typeof data?.availableBalance === "number") {
+          setLiveBalance(data.availableBalance);
+        }
+      } catch (e) {
+        console.warn("Could not fetch live balance:", e.message);
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [WALLET_API]);
 
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
-  const [visible, setVisible] = useState(PAGE_SIZE);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const [statementRange, setStatementRange] = useState("all");
   const [openTxnId, setOpenTxnId] = useState(null);
-  const [statementRange, setStatementRange] = useState("month");
   const [refundOpen, setRefundOpen] = useState(false);
+
+  // Backend Activity state
+  const [activityItems, setActivityItems] = useState([]);
+  const [counts, setCounts] = useState({ all: 0, topups: 0, payments: 0, failed: 0 });
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    pageSize: PAGE_SIZE,
+    totalRecords: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [downloadingStatement, setDownloadingStatement] = useState(false);
+
+  // Debounce search query by 350ms
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [query]);
+
+  // Reset page when filter, date range or search changes
+  const handleFilterChange = (newFilter) => {
+    setFilter(newFilter);
+    setPage(1);
+  };
+
+  const handleRangeChange = (newRange) => {
+    setStatementRange(newRange);
+    setPage(1);
+  };
+
+  const handleSearchChange = (val) => {
+    setQuery(val);
+    setPage(1);
+  };
+
+  // Fetch paginated backend wallet activity
+  const fetchActivity = useCallback(async () => {
+    setIsLoading(true);
+    setIsError(false);
+    setErrorMessage("");
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") || localStorage.getItem("token") : null;
+      const res = await axios.get(`${WALLET_API}/wallet/activity`, {
+        params: {
+          type: filter,
+          range: statementRange,
+          page,
+          limit: pageSize,
+          search: debouncedQuery.trim() || undefined,
+        },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      const payload = res.data?.data;
+      if (payload) {
+        setActivityItems(payload.items || []);
+        if (payload.pagination) setPagination(payload.pagination);
+        if (payload.counts) setCounts(payload.counts);
+      }
+    } catch (err) {
+      if (axios.isCancel(err) || err.name === "CanceledError" || err.name === "AbortError") {
+        return;
+      }
+      console.error("Failed to load wallet activity:", err);
+      setIsError(true);
+      setErrorMessage(err.response?.data?.message || err.message || "Failed to load activity");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [WALLET_API, filter, statementRange, page, pageSize, debouncedQuery]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!cancelled) fetchActivity();
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [fetchActivity]);
 
   const amount = parseAmount(amountText);
   const amountError =
@@ -134,43 +268,76 @@ function WalletPage() {
           ? `Maximum top-up is ${formatINR(TOPUP_LIMITS.max)} per transaction`
           : null;
 
+  const effectiveBalance = liveBalance !== null ? liveBalance : wallet.balance;
   const payable = useMemo(() => wallet.approvedPasses.filter((p) => !p.paymentPending), [wallet.approvedPasses]);
   const pending = useMemo(() => sumBreakup(payable), [payable]);
-  const shortfall = Math.max(0, Math.ceil(pending.total - wallet.balance));
-  const lowBalance = wallet.balance < wallet.lowBalanceThreshold;
+  const shortfall = Math.max(0, Math.ceil(pending.total - effectiveBalance));
+  const lowBalance = effectiveBalance < wallet.lowBalanceThreshold;
 
-  const rows = useMemo(() => withRunningBalance(wallet.activity, wallet.balance), [wallet.activity, wallet.balance]);
-  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.key, rows.filter(f.test).length])), [rows]);
+  // Restrict Wallet Activity height equal to the Review & Pay / Add Money sidebar on desktop
+  const heroRef = useRef(null);
+  const asideRef = useRef(null);
+  const [activityHeight, setActivityHeight] = useState(null);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const test = FILTERS.find((f) => f.key === filter).test;
-    return rows.filter(
-      (a) =>
-        test(a) &&
-        (!q || [a.id, a.description, a.method, a.invoiceNo].some((v) => v?.toLowerCase().includes(q))),
-    );
-  }, [rows, filter, query]);
+  useEffect(() => {
+    const updateHeight = () => {
+      if (typeof window === "undefined") return;
+      if (window.innerWidth >= 1280 && asideRef.current && heroRef.current) {
+        const asideH = asideRef.current.offsetHeight;
+        const heroH = heroRef.current.offsetHeight;
+        const gap = 20; // 1.25rem = 20px (gap-5)
+        const targetH = Math.max(asideH - heroH - gap, 480);
+        setActivityHeight(targetH);
+      } else {
+        setActivityHeight(null);
+      }
+    };
 
+    updateHeight();
+
+    const ro = new ResizeObserver(() => {
+      updateHeight();
+    });
+
+    if (asideRef.current) ro.observe(asideRef.current);
+    if (heroRef.current) ro.observe(heroRef.current);
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [activityItems.length, wallet.approvedPasses, pending.total]);
+
+  // Day grouping for visual display
   const groups = useMemo(() => {
     const out = [];
-    for (const a of filtered.slice(0, visible)) {
-      const label = dayGroup(a.at);
+    for (const a of activityItems) {
+      const label = dayGroup(a.at || a.createdAt);
       if (out.at(-1)?.label !== label) out.push({ label, items: [] });
       out.at(-1).items.push(a);
     }
     return out;
-  }, [filtered, visible]);
+  }, [activityItems]);
+
+  const openTxn = useMemo(() => {
+    if (!openTxnId) return null;
+    return activityItems.find((a) => a.id === openTxnId || a.referenceNo === openTxnId) || null;
+  }, [activityItems, openTxnId]);
 
   const monthStats = useMemo(() => {
-    const inMonth = rows.filter((a) => a.status === "SUCCESS" && inRange(a.at, "month"));
+    const list = activityItems && activityItems.length > 0 ? activityItems : (wallet.activity || []);
+    const inMonth = list.filter((a) => (a.status === "SUCCESS" || a.status === "POSTED") && inRange(a.at || a.createdAt, "month"));
     return {
-      added: inMonth.filter((a) => a.amount > 0).reduce((s, a) => s + a.amount, 0),
-      spent: inMonth.filter((a) => a.type === "PASS_PAYMENT").reduce((s, a) => s + (a.totalPaid ?? -a.amount), 0),
+      added: inMonth
+        .filter((a) => a.amount > 0 || a.activityCategory === "topups" || a.type === "TOPUP")
+        .reduce((s, a) => s + (a.amountRupees || Math.abs(a.amount || 0) || Number(a.amountMinor || 0) / 100), 0),
+      spent: inMonth
+        .filter((a) => a.type === "PASS_PAYMENT" || a.activityCategory === "payments" || (a.amount < 0 && a.type !== "TOPUP"))
+        .reduce((s, a) => s + (a.amountRupees || Math.abs(a.amount || 0) || Number(a.amountMinor || 0) / 100), 0),
     };
-  }, [rows]);
+  }, [activityItems, wallet.activity]);
 
-  const openTxn = rows.find((a) => a.id === openTxnId) || null;
   const mine = useMemo(() => myRefunds(wallet.refunds), [wallet.refunds]);
   const onHold = amountOnHold(wallet.refunds);
   const refundAwaiting = mine.some((r) => r.status === "PENDING_TRAFFIC");
@@ -186,11 +353,36 @@ function WalletPage() {
     setGatewayAmount(amount);
   };
 
-  const downloadStatement = () => {
-    const list = rows.filter((a) => inRange(a.at, statementRange));
-    if (!list.length) return toast.error("No transactions in this period");
-    downloadStatementCsv(list, STATEMENT_RANGES.find((r) => r.key === statementRange).label);
-    toast.success("Statement downloaded", { description: `${list.length} transactions · opens in Excel` });
+  const downloadStatement = async () => {
+    setDownloadingStatement(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") || localStorage.getItem("token") : null;
+      const res = await axios.get(`${WALLET_API}/wallet/statement`, {
+        params: {
+          range: statementRange,
+          search: debouncedQuery.trim() || undefined,
+          format: "csv",
+        },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        responseType: "blob",
+      });
+
+      const blob = new Blob([res.data], { type: "text/csv;charset=utf-8;" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `APACS-Wallet-Statement-${statementRange}-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("Statement downloaded", { description: "Complete range exported · opens in Excel" });
+    } catch (err) {
+      console.error("Statement download failed:", err);
+      toast.error("Failed to download statement", {
+        description: err.response?.data?.message || err.message || "Network error",
+      });
+    } finally {
+      setDownloadingStatement(false);
+    }
   };
 
   return (
@@ -219,9 +411,9 @@ function WalletPage() {
         </div>
       </div>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_400px] xl:grid-rows-[auto_1fr] 2xl:grid-cols-[minmax(0,1fr)_440px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px] xl:grid-rows-[auto_1fr] 2xl:grid-cols-[minmax(0,1fr)_440px] xl:items-start">
       {/* Balance hero */}
-      <section className="xl:col-start-1 relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#1a1d27] via-[#252836] to-[#1a1d27] dark:from-black dark:via-[#1a1d27] dark:to-black text-white ring-1 ring-white/5 shadow-[0_24px_56px_-20px_rgba(15,23,42,0.40)]">
+      <section ref={heroRef} className="xl:col-start-1 xl:row-start-1 relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#1a1d27] via-[#252836] to-[#1a1d27] dark:from-black dark:via-[#1a1d27] dark:to-black text-white ring-1 ring-white/5 shadow-[0_24px_56px_-20px_rgba(15,23,42,0.40)]">
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" />
         <div className="relative grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] xl:grid-cols-1 2xl:grid-cols-[1fr_auto] lg:items-center">
           <div className="flex items-center gap-5">
@@ -231,7 +423,7 @@ function WalletPage() {
             <div className="min-w-0">
               <p className="text-sm font-semibold text-stone-300">Available Balance</p>
               <p className="text-3xl sm:text-5xl font-extrabold tracking-tight tabular-nums" aria-live="polite">
-                {formatINR(wallet.balance)}
+                {formatINR(effectiveBalance)}
               </p>
               <LowBalanceSetting threshold={wallet.lowBalanceThreshold} low={lowBalance} />
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -267,7 +459,7 @@ function WalletPage() {
       </section>
 
       {/* Right column on wide screens: primary action + what's due */}
-      <aside className="space-y-5 xl:col-start-2 xl:row-start-1 xl:row-span-2">
+      <aside ref={asideRef} className="space-y-5 xl:col-start-2 xl:row-start-1 xl:row-span-2">
       {/* Add money */}
       <section className={cn(CARD, "p-6 sm:p-7")}>
         <div className="grid gap-6 md:grid-cols-2 md:gap-8 xl:grid-cols-1 xl:gap-6">
@@ -289,8 +481,17 @@ function WalletPage() {
                 id="topup-amount"
                 inputMode="numeric"
                 autoComplete="off"
+                max={TOPUP_LIMITS.max}
                 value={amountText}
-                onChange={(e) => setAmountText(groupDigits(parseAmount(e.target.value)))}
+                onChange={(e) => {
+                  const raw = parseAmount(e.target.value);
+                  if (raw > TOPUP_LIMITS.max) {
+                    setAmountText(groupDigits(TOPUP_LIMITS.max));
+                    setTouched(true);
+                  } else {
+                    setAmountText(raw === 0 && e.target.value.trim() === "" ? "" : groupDigits(raw));
+                  }
+                }}
                 onBlur={() => setTouched(true)}
                 onKeyDown={(e) => e.key === "Enter" && handleContinue()}
                 placeholder="0"
@@ -340,16 +541,16 @@ function WalletPage() {
               })}
             </div>
 
-            {shortfall > 0 && amount !== Math.max(shortfall, TOPUP_LIMITS.min) && (
+            {shortfall > 0 && amount !== Math.min(Math.max(shortfall, TOPUP_LIMITS.min), TOPUP_LIMITS.max) && (
               <button
                 type="button"
                 onClick={() => {
-                  setAmountText(groupDigits(Math.max(shortfall, TOPUP_LIMITS.min)));
+                  setAmountText(groupDigits(Math.min(Math.max(shortfall, TOPUP_LIMITS.min), TOPUP_LIMITS.max)));
                   setTouched(false);
                 }}
                 className="mt-3 inline-flex items-center gap-1.5 text-sm font-bold text-orange-600 dark:text-orange-400 hover:underline"
               >
-                <Receipt className="h-4 w-4" /> Add exactly {formatINR(Math.max(shortfall, TOPUP_LIMITS.min))} to cover pending passes
+                <Receipt className="h-4 w-4" /> Add exactly {formatINR(Math.min(Math.max(shortfall, TOPUP_LIMITS.min), TOPUP_LIMITS.max))} to cover pending passes
               </button>
             )}
           </div>
@@ -370,7 +571,7 @@ function WalletPage() {
             <dl className="mt-6 space-y-2.5 rounded-2xl bg-stone-50 dark:bg-white/5 p-4 text-sm">
               <div className="flex justify-between">
                 <dt className="text-stone-500 dark:text-stone-400">Current balance</dt>
-                <dd className="font-semibold tabular-nums text-stone-700 dark:text-stone-200">{formatINR(wallet.balance)}</dd>
+                <dd className="font-semibold tabular-nums text-stone-700 dark:text-stone-200">{formatINR(effectiveBalance)}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-stone-500 dark:text-stone-400">Adding</dt>
@@ -379,7 +580,7 @@ function WalletPage() {
               <div className="flex justify-between border-t border-stone-200 dark:border-white/10 pt-2.5">
                 <dt className="font-bold text-stone-700 dark:text-stone-200">Balance after top-up</dt>
                 <dd className="font-extrabold tabular-nums text-[#1f1f1f] dark:text-white">
-                  {formatINR(wallet.balance + (amountError ? 0 : amount))}
+                  {formatINR(effectiveBalance + (amountError ? 0 : amount))}
                 </dd>
               </div>
             </dl>
@@ -405,8 +606,11 @@ function WalletPage() {
       </aside>
 
       {/* Activity */}
-      <section className={cn(CARD, "@container xl:col-start-1 min-w-0 p-6 sm:p-7")}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section
+        style={activityHeight ? { height: `${activityHeight}px`, maxHeight: `${activityHeight}px` } : undefined}
+        className={cn(CARD, "@container xl:col-start-1 xl:row-start-2 min-w-0 p-6 sm:p-7 flex flex-col h-full xl:min-h-[480px]")}
+      >
+        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-extrabold text-[#1f1f1f] dark:text-white">Wallet Activity</h2>
             <p className="text-xs text-stone-500 mt-0.5">Tap a transaction for details, GST invoice or to report an issue.</p>
@@ -416,10 +620,7 @@ function WalletPage() {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
               <input
                 value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setVisible(PAGE_SIZE);
-                }}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder="Search reference, pass or invoice"
                 aria-label="Search wallet activity"
                 className="w-full rounded-xl bg-stone-50 dark:bg-white/5 ring-1 ring-stone-200 dark:ring-white/10 py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-amber-400 dark:text-white"
@@ -428,7 +629,7 @@ function WalletPage() {
             <div className="flex items-stretch overflow-hidden rounded-xl ring-1 ring-stone-200 dark:ring-white/10">
               <select
                 value={statementRange}
-                onChange={(e) => setStatementRange(e.target.value)}
+                onChange={(e) => handleRangeChange(e.target.value)}
                 aria-label="Statement period"
                 className="bg-stone-50 dark:bg-white/5 px-2.5 text-sm font-semibold text-stone-700 dark:text-stone-200 outline-none"
               >
@@ -438,24 +639,22 @@ function WalletPage() {
               </select>
               <button
                 onClick={downloadStatement}
-                className="inline-flex items-center gap-1.5 bg-[#1f1f1f] dark:bg-amber-400 px-3.5 py-2.5 text-sm font-bold text-white dark:text-black hover:opacity-90"
+                disabled={downloadingStatement}
+                className="inline-flex items-center gap-1.5 bg-[#1f1f1f] dark:bg-amber-400 px-3.5 py-2.5 text-sm font-bold text-white dark:text-black hover:opacity-90 disabled:opacity-50"
               >
-                <Download className="h-4 w-4" /> Statement
+                {downloadingStatement ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Statement
               </button>
             </div>
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Filter activity">
-          {FILTERS.filter((f) => f.key === "all" || counts[f.key] > 0).map((f) => (
+        <div className="shrink-0 mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Filter activity">
+          {FILTERS.map((f) => (
             <button
               key={f.key}
               role="tab"
               aria-selected={filter === f.key}
-              onClick={() => {
-                setFilter(f.key);
-                setVisible(PAGE_SIZE);
-              }}
+              onClick={() => handleFilterChange(f.key)}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-bold transition-colors",
                 filter === f.key
@@ -464,22 +663,43 @@ function WalletPage() {
               )}
             >
               {f.label}
-              <span className={cn("text-xs tabular-nums", filter === f.key ? "opacity-70" : "text-stone-400")}>{counts[f.key]}</span>
+              <span className={cn("text-xs tabular-nums", filter === f.key ? "opacity-70" : "text-stone-400")}>
+                {counts[f.key] ?? 0}
+              </span>
             </button>
           ))}
         </div>
 
-        {filtered.length === 0 ? (
-          <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-stone-200 dark:border-white/10 py-12 text-center">
+        {isLoading ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+            <p className="mt-3 text-sm font-semibold text-stone-500">Loading wallet activity...</p>
+          </div>
+        ) : isError ? (
+          <div className="flex-1 mt-6 flex flex-col items-center justify-center rounded-2xl border border-red-200 bg-red-50/50 dark:border-red-500/20 dark:bg-red-500/10 py-10 text-center">
+            <AlertCircle className="h-8 w-8 text-red-500" />
+            <p className="mt-2 text-sm font-bold text-red-800 dark:text-red-300">Unable to load wallet activity</p>
+            <p className="text-xs text-stone-500 mt-1">{errorMessage || "Network error. Please try again."}</p>
+            <button
+              onClick={() => fetchActivity()}
+              className="mt-4 rounded-xl bg-red-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-red-700"
+            >
+              Retry
+            </button>
+          </div>
+        ) : activityItems.length === 0 ? (
+          <div className="flex-1 mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-stone-200 dark:border-white/10 py-12 text-center">
             <Inbox className="h-8 w-8 text-stone-300" />
-            <p className="mt-2 text-sm font-semibold text-stone-500">No transactions match your filters.</p>
+            <p className="mt-2 text-sm font-semibold text-stone-500">
+              {debouncedQuery ? `No transactions match "${debouncedQuery}"` : "No transactions match your filters."}
+            </p>
           </div>
         ) : (
-          <>
-            {/* Desktop table */}
-            <div className="mt-5 hidden @min-[860px]:block overflow-hidden rounded-2xl ring-1 ring-stone-100 dark:ring-white/5">
+          <div className="mt-4 flex-1 min-h-0 flex flex-col">
+            {/* Desktop table with internal scrolling and sticky header */}
+            <div className="hidden @min-[860px]:block flex-1 min-h-0 overflow-y-auto rounded-2xl ring-1 ring-stone-100 dark:ring-white/5 [scrollbar-width:thin] [scrollbar-color:#d6d3d1_transparent] dark:[scrollbar-color:#44403c_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300 dark:[&::-webkit-scrollbar-thumb]:bg-stone-600 hover:[&::-webkit-scrollbar-thumb]:bg-stone-400">
               <table className="w-full text-sm">
-                <thead className="bg-stone-50 dark:bg-white/5 text-left text-xs font-bold uppercase tracking-wider text-stone-500">
+                <thead className="sticky top-0 z-20 bg-stone-50/95 dark:bg-[#1a1d27]/95 backdrop-blur-sm text-left text-xs font-bold uppercase tracking-wider text-stone-500 shadow-sm">
                   <tr>
                     <th className="px-5 py-3">Description</th>
                     <th className="px-5 py-3">Reference No.</th>
@@ -492,19 +712,19 @@ function WalletPage() {
                 {groups.map((g) => (
                   <tbody key={g.label} className="divide-y divide-stone-100 dark:divide-white/5">
                     <tr>
-                      <th colSpan={6} className="bg-white dark:bg-[#1f232d] px-5 pt-4 pb-1.5 text-left text-xs font-extrabold uppercase tracking-wider text-stone-400">
+                      <th colSpan={6} className="sticky top-[37px] z-10 bg-white/95 dark:bg-[#1f232d]/95 backdrop-blur-sm px-5 pt-3 pb-1 text-left text-xs font-extrabold uppercase tracking-wider text-stone-400">
                         {g.label}
                       </th>
                     </tr>
                     {g.items.map((a) => (
                       <tr
-                        key={a.id}
+                        key={a.id || a.referenceNo}
                         tabIndex={0}
-                        onClick={() => setOpenTxnId(a.id)}
+                        onClick={() => setOpenTxnId(a.id || a.referenceNo)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            setOpenTxnId(a.id);
+                            setOpenTxnId(a.id || a.referenceNo);
                           }
                         }}
                         className="group cursor-pointer hover:bg-amber-50/40 dark:hover:bg-white/[0.03] focus:outline-none focus-visible:bg-amber-50 dark:focus-visible:bg-white/5"
@@ -515,15 +735,15 @@ function WalletPage() {
                             <div className="min-w-0">
                               <p className="font-bold text-[#1f1f1f] dark:text-white truncate max-w-[300px]">{a.description}</p>
                               <p className="text-xs text-stone-500">
-                                {g.label === "Today" || g.label === "Yesterday" ? formatTime(a.at) : formatDateTime(a.at)} · {a.method}
+                                {g.label === "Today" || g.label === "Yesterday" ? formatTime(a.at || a.createdAt) : formatDateTime(a.at || a.createdAt)} · {a.method || a.paymentMethod || "WALLET"}
                               </p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-3.5"><CopyRef value={a.id} /></td>
+                        <td className="px-5 py-3.5"><CopyRef value={a.id || a.referenceNo} /></td>
                         <td className="px-5 py-3.5 text-right"><AmountText item={a} /></td>
                         <td className="px-5 py-3.5 text-right tabular-nums text-stone-500 dark:text-stone-400">
-                          {a.balanceAfter != null ? formatINR(a.balanceAfter) : "—"}
+                          {a.balanceAfter != null ? formatINR(a.balanceAfter) : a.balanceAfterMinor != null ? formatINR(Number(a.balanceAfterMinor) / 100) : "—"}
                         </td>
                         <td className="px-5 py-3.5"><StatusPill status={a.status} /></td>
                         <td className="pr-4"><ChevronRight className="h-4 w-4 text-stone-300 group-hover:text-stone-500" /></td>
@@ -535,15 +755,15 @@ function WalletPage() {
             </div>
 
             {/* Mobile cards */}
-            <div className="mt-5 space-y-5 @min-[860px]:hidden">
+            <div className="space-y-4 @min-[860px]:hidden flex-1 min-h-0 overflow-y-auto pt-1 [scrollbar-width:thin] [scrollbar-color:#d6d3d1_transparent] dark:[scrollbar-color:#44403c_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300 dark:[&::-webkit-scrollbar-thumb]:bg-stone-600 hover:[&::-webkit-scrollbar-thumb]:bg-stone-400">
               {groups.map((g) => (
                 <div key={g.label}>
                   <p className="mb-2 text-xs font-extrabold uppercase tracking-wider text-stone-400">{g.label}</p>
                   <ul className="grid gap-2.5 @min-[560px]:grid-cols-2">
                     {g.items.map((a) => (
-                      <li key={a.id}>
+                      <li key={a.id || a.referenceNo}>
                         <button
-                          onClick={() => setOpenTxnId(a.id)}
+                          onClick={() => setOpenTxnId(a.id || a.referenceNo)}
                           className="w-full rounded-2xl ring-1 ring-stone-100 dark:ring-white/5 p-4 text-left active:bg-stone-50 dark:active:bg-white/5"
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -551,13 +771,17 @@ function WalletPage() {
                               <ActivityIcon item={a} />
                               <div className="min-w-0">
                                 <p className="font-bold text-[#1f1f1f] dark:text-white truncate">{a.description}</p>
-                                <p className="text-xs text-stone-500">{g.label === "Today" || g.label === "Yesterday" ? formatTime(a.at) : formatDateTime(a.at)} · {a.method}</p>
+                                <p className="text-xs text-stone-500">
+                                  {g.label === "Today" || g.label === "Yesterday" ? formatTime(a.at || a.createdAt) : formatDateTime(a.at || a.createdAt)} · {a.method || a.paymentMethod || "WALLET"}
+                                </p>
                               </div>
                             </div>
                             <AmountText item={a} />
                           </div>
                           <div className="mt-3 flex items-center justify-between gap-2 text-xs text-stone-500">
-                            <span className="tabular-nums">{a.balanceAfter != null ? `Balance ${formatINR(a.balanceAfter)}` : a.id}</span>
+                            <span className="tabular-nums">
+                              {a.balanceAfter != null ? `Balance ${formatINR(a.balanceAfter)}` : a.balanceAfterMinor != null ? `Balance ${formatINR(Number(a.balanceAfterMinor) / 100)}` : (a.id || a.referenceNo)}
+                            </span>
                             <StatusPill status={a.status} />
                           </div>
                         </button>
@@ -568,17 +792,23 @@ function WalletPage() {
               ))}
             </div>
 
-            {filtered.length > visible && (
-              <div className="mt-4 text-center">
-                <button
-                  onClick={() => setVisible((v) => v + PAGE_SIZE)}
-                  className="rounded-full px-5 py-2 text-sm font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-500/10"
-                >
-                  Show {Math.min(PAGE_SIZE, filtered.length - visible)} more
-                </button>
-              </div>
-            )}
-          </>
+            {/* Fixed Bottom Pagination */}
+            <div className="shrink-0 pt-3 border-t border-stone-100 dark:border-white/5 mt-auto">
+              <ActivityPagination
+                currentPage={pagination.currentPage || page}
+                pageSize={pagination.pageSize || pageSize}
+                totalRecords={pagination.totalRecords || 0}
+                totalPages={pagination.totalPages || 0}
+                hasNextPage={pagination.hasNextPage}
+                hasPreviousPage={pagination.hasPreviousPage}
+                onPageChange={(newPage) => setPage(newPage)}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setPage(1);
+                }}
+              />
+            </div>
+          </div>
         )}
       </section>
       </div>
@@ -587,10 +817,24 @@ function WalletPage() {
         <TopUpGatewayModal
           amount={gatewayAmount}
           defaultMethod={wallet.lastGatewayMethod}
-          onClose={() => setGatewayAmount(null)}
+          onClose={() => {
+            setGatewayAmount(null);
+            fetchLiveBalance();
+            fetchActivity();
+          }}
           onDone={() => {
             setAmountText("");
             setTouched(false);
+            setGatewayAmount(null);
+            fetchLiveBalance();
+            if (filter === "payments") {
+              setFilter("all");
+            }
+            if (page !== 1) {
+              setPage(1);
+            } else {
+              fetchActivity();
+            }
           }}
         />
       )}
@@ -600,6 +844,10 @@ function WalletPage() {
         item={openTxn}
         refund={openTxn?.refundId ? wallet.refunds.find((r) => r.id === openTxn.refundId) : null}
         onClose={() => setOpenTxnId(null)}
+        onStatusUpdated={(data) => {
+          fetchLiveBalance();
+          fetchActivity();
+        }}
       />
 
       {refundOpen && (

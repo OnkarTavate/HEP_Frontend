@@ -532,6 +532,7 @@ const LoginPage = () => {
           departmentName: tokenClaims.departmentName || null,
           departmentId: tokenClaims.departmentId || null,
           userId: tokenClaims.userId ?? null,
+          agentId: tokenClaims.agentId ?? (tokenClaims.source === "agent" ? tokenClaims.userId : null),
           isPasswordChanged: data.isPasswordChanged,
         };
 

@@ -10,8 +10,8 @@ import { useSyncExternalStore } from "react";
 const STORAGE_KEY = "apacs_wallet_demo_v3";
 
 export const GST_RATE = { cgst: 0.09, sgst: 0.09 };
-export const TOPUP_LIMITS = { min: 100, max: 100000 };
-export const QUICK_AMOUNTS = [500, 1000, 2000, 5000];
+export const TOPUP_LIMITS = { min: 10, max: 100000 };
+export const QUICK_AMOUNTS = [10, 100, 500, 1000, 2000];
 export const GATEWAY_METHODS = ["UPI", "Debit / Credit Card", "Net Banking"];
 // SAC heading 9967: supporting services in transport (demo invoice only).
 export const SAC_CODE = "9967";
